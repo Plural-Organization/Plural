@@ -1,0 +1,40 @@
+import os
+from typing import Final
+
+from pydantic import Field
+
+from plural.agent.tools.base import ToolArgs, ToolCtx, ToolResult, ToolSpec, TypedTool
+from plural.agent.tools.truncation import truncate_tail
+from plural.protocol.models import ToolRisk
+
+SAFE_ENV_KEYS: Final = ("PATH", "HOME", "LANG", "LC_ALL", "TERM", "USER", "SHELL", "TMPDIR")
+
+
+def sandbox_env() -> dict[str, str]:
+    return {key: value for key in SAFE_ENV_KEYS if (value := os.environ.get(key)) is not None}
+
+
+class BashArgs(ToolArgs):
+    command: str = Field(min_length=1, description="Shell command run in the workspace root.")
+    timeout_s: float = Field(default=120, gt=0, le=600, description="Timeout in seconds.")
+
+
+class BashTool(TypedTool[BashArgs]):
+    spec = ToolSpec(
+        name="bash",
+        description="Run a shell command in the workspace. Output is tail-truncated.",
+        risk=ToolRisk.EXEC,
+        args_model=BashArgs,
+    )
+
+    def subject(self, args: BashArgs) -> str:
+        return args.command
+
+    async def run(self, args: BashArgs, ctx: ToolCtx) -> ToolResult:
+        result = await ctx.backend.run(
+            args.command, cwd=ctx.workspace.root, env=sandbox_env(), timeout=args.timeout_s
+        )
+        if result.timed_out:
+            return ToolResult(f"[timed out after {args.timeout_s:g}s]", is_error=True)
+        body = truncate_tail(result.output)
+        return ToolResult(f"{body}\n[exit {result.exit_code}]", is_error=result.exit_code != 0)

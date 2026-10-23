@@ -1,0 +1,120 @@
+[project]
+name = "plural"
+version = "0.1.0"
+description = "Multiplayer sessions for one AI agent: shared context, host approvals, attribution, isolation."
+readme = "README.md"
+license = "Apache-2.0"
+requires-python = ">=3.12"
+authors = [{ name = "Plural team" }]
+dependencies = [
+  "aiosqlite>=0.21",
+  "cryptography>=44",
+  "pydantic>=2.11",
+  "pydantic-settings>=2.8",
+  "rich>=13.9",
+  "starlette>=0.46",
+  "structlog>=25.1",
+  "textual>=2.1",
+  "typer>=0.15",
+  "uvicorn>=0.34",
+  "websockets>=15",
+]
+
+[project.scripts]
+plural = "plural.cli.main:app"
+
+[dependency-groups]
+dev = [
+  "coverage>=7.6",
+  "hypothesis>=6.125",
+  "import-linter>=2.2",
+  "pip-audit>=2.8",
+  "pyright>=1.1.395",
+  "pytest>=8.3",
+  "pytest-asyncio>=0.25",
+  "ruff>=0.9",
+]
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/plural"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RET", "PT", "ASYNC", "RUF"]
+ignore = ["ASYNC109", "RUF001", "N818"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ASYNC110"]
+
+[tool.pyright]
+include = ["src", "tests", "scripts"]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+
+[tool.coverage.run]
+source = ["plural"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 70
+skip_covered = true
+
+[tool.importlinter]
+root_package = "plural"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "core and protocol are pure"
+type = "forbidden"
+source_modules = ["plural.core", "plural.protocol"]
+forbidden_modules = [
+  "plural.agent", "plural.host", "plural.relay", "plural.storage",
+  "plural.client", "plural.cli", "plural.tui", "plural.security",
+  "websockets", "aiosqlite", "starlette", "textual",
+]
+
+[[tool.importlinter.contracts]]
+name = "security depends only on protocol"
+type = "forbidden"
+source_modules = ["plural.security"]
+forbidden_modules = [
+  "plural.core", "plural.agent", "plural.host", "plural.relay",
+  "plural.storage", "plural.client", "plural.cli", "plural.tui",
+]
+
+[[tool.importlinter.contracts]]
+name = "harness is transport-agnostic"
+type = "forbidden"
+source_modules = ["plural.agent"]
+forbidden_modules = [
+  "plural.host", "plural.relay", "plural.client", "plural.cli", "plural.tui", "plural.storage",
+  "websockets", "aiosqlite", "starlette",
+]
+
+[[tool.importlinter.contracts]]
+name = "relay is dumb"
+type = "forbidden"
+source_modules = ["plural.relay"]
+forbidden_modules = ["plural.core", "plural.agent", "plural.host", "plural.storage", "plural.client"]
+
+[[tool.importlinter.contracts]]
+name = "client knows nothing about the host"
+type = "forbidden"
+source_modules = ["plural.client"]
+forbidden_modules = ["plural.agent", "plural.host", "plural.relay", "plural.storage", "plural.tui", "plural.cli"]

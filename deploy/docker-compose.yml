@@ -1,0 +1,17 @@
+services:
+  relay:
+    build:
+      context: ..
+      dockerfile: deploy/relay.Dockerfile
+    restart: unless-stopped
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      RELAY_DOMAIN: ${RELAY_DOMAIN:?set RELAY_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+volumes:
+  caddy_data:

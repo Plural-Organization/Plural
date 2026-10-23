@@ -1,0 +1,62 @@
+from collections.abc import Mapping
+from enum import StrEnum
+from fnmatch import fnmatchcase
+from typing import Final, Self
+
+from plural.protocol.models import Model
+
+
+class Action(StrEnum):
+    ALLOW = "allow"
+    ASK = "ask"
+    DENY = "deny"
+
+
+class Rule(Model):
+    tool: str
+    pattern: str
+    action: Action
+
+    def matches(self, tool: str, subject: str) -> bool:
+        return fnmatchcase(tool, self.tool) and fnmatchcase(subject, self.pattern)
+
+
+class RuleSet(Model):
+    rules: tuple[Rule, ...] = ()
+
+    def resolve(self, tool: str, subject: str) -> Action | None:
+        for rule in reversed(self.rules):
+            if rule.matches(tool, subject):
+                return rule.action
+        return None
+
+    def extended(self, *rules: Rule) -> Self:
+        return self.model_copy(update={"rules": (*self.rules, *rules)})
+
+    @classmethod
+    def from_mapping(cls, spec: Mapping[str, Mapping[str, str]]) -> Self:
+        rules = tuple(
+            Rule(tool=tool, pattern=pattern, action=Action(action))
+            for tool, patterns in spec.items()
+            for pattern, action in patterns.items()
+        )
+        return cls(rules=rules)
+
+
+DEFAULT_RULES: Final = RuleSet.from_mapping(
+    {
+        "read": {"*": "allow", "*.env*": "deny", "*.pem": "deny", "*.key": "deny"},
+        "grep": {"*": "allow"},
+        "glob": {"*": "allow"},
+        "ls": {"*": "allow"},
+        "write": {"*": "ask"},
+        "edit": {"*": "ask"},
+        "bash": {
+            "*": "ask",
+            "git status*": "allow",
+            "git diff*": "allow",
+            "ls*": "allow",
+            "rm -rf*": "deny",
+        },
+    }
+)

@@ -1,0 +1,1843 @@
+{
+  "$defs": {
+    "ApprovalDecision": {
+      "enum": [
+        "once",
+        "always",
+        "reject"
+      ],
+      "title": "ApprovalDecision",
+      "type": "string"
+    },
+    "ApprovalRequested": {
+      "properties": {
+        "approval": {
+          "$ref": "#/$defs/ApprovalView"
+        },
+        "type": {
+          "const": "approval.requested",
+          "default": "approval.requested",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approval"
+      ],
+      "title": "ApprovalRequested",
+      "type": "object"
+    },
+    "ApprovalResolved": {
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "decision": {
+          "$ref": "#/$defs/ApprovalDecision"
+        },
+        "resolved_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Resolved By"
+        },
+        "type": {
+          "const": "approval.resolved",
+          "default": "approval.resolved",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approval_id",
+        "decision"
+      ],
+      "title": "ApprovalResolved",
+      "type": "object"
+    },
+    "ApprovalRespond": {
+      "properties": {
+        "approval_id": {
+          "title": "Approval Id",
+          "type": "string"
+        },
+        "decision": {
+          "$ref": "#/$defs/ApprovalDecision"
+        },
+        "type": {
+          "const": "approval.respond",
+          "default": "approval.respond",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approval_id",
+        "decision"
+      ],
+      "title": "ApprovalRespond",
+      "type": "object"
+    },
+    "ApprovalView": {
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/ToolCallView"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "suggested_patterns": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Suggested Patterns",
+          "type": "array"
+        },
+        "timeout_at": {
+          "format": "date-time",
+          "title": "Timeout At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "call",
+        "provenance",
+        "timeout_at"
+      ],
+      "title": "ApprovalView",
+      "type": "object"
+    },
+    "AttachmentAdded": {
+      "properties": {
+        "attachment": {
+          "$ref": "#/$defs/AttachmentMeta"
+        },
+        "type": {
+          "const": "attachment.added",
+          "default": "attachment.added",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachment"
+      ],
+      "title": "AttachmentAdded",
+      "type": "object"
+    },
+    "AttachmentMeta": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "owner_id": {
+          "title": "Owner Id",
+          "type": "string"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "size",
+        "sha256",
+        "owner_id"
+      ],
+      "title": "AttachmentMeta",
+      "type": "object"
+    },
+    "ClientInfo": {
+      "properties": {
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "version"
+      ],
+      "title": "ClientInfo",
+      "type": "object"
+    },
+    "Delivery": {
+      "enum": [
+        "now",
+        "steer",
+        "follow_up"
+      ],
+      "title": "Delivery",
+      "type": "string"
+    },
+    "EntryKind": {
+      "enum": [
+        "prompt",
+        "assistant",
+        "tool"
+      ],
+      "title": "EntryKind",
+      "type": "string"
+    },
+    "Envelope": {
+      "properties": {
+        "actor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actor"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ErrorInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/Kind"
+        },
+        "ok": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ok"
+        },
+        "payload": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Payload",
+          "type": "object"
+        },
+        "re": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Re"
+        },
+        "room": {
+          "title": "Room",
+          "type": "string"
+        },
+        "seq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Seq"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "To"
+        },
+        "token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Type"
+        },
+        "v": {
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "room",
+        "ts"
+      ],
+      "title": "Envelope",
+      "type": "object"
+    },
+    "ErrorCode": {
+      "enum": [
+        "unauthorized",
+        "forbidden",
+        "invalid",
+        "conflict",
+        "not_found",
+        "rate_limited",
+        "version_mismatch",
+        "internal"
+      ],
+      "title": "ErrorCode",
+      "type": "string"
+    },
+    "ErrorInfo": {
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ErrorInfo",
+      "type": "object"
+    },
+    "ErrorRaised": {
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ErrorCode"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "type": {
+          "const": "error",
+          "default": "error",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "ErrorRaised",
+      "type": "object"
+    },
+    "EventRecord": {
+      "properties": {
+        "actor_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Actor Id"
+        },
+        "event": {
+          "discriminator": {
+            "mapping": {
+              "approval.requested": "#/$defs/ApprovalRequested",
+              "approval.resolved": "#/$defs/ApprovalResolved",
+              "attachment.added": "#/$defs/AttachmentAdded",
+              "error": "#/$defs/ErrorRaised",
+              "invite.created": "#/$defs/InviteCreated",
+              "message.delta": "#/$defs/MessageDelta",
+              "message.ended": "#/$defs/MessageEnded",
+              "message.started": "#/$defs/MessageStarted",
+              "participant.joined": "#/$defs/ParticipantJoined",
+              "participant.left": "#/$defs/ParticipantLeft",
+              "participant.revoked": "#/$defs/ParticipantRevoked",
+              "participant.role_changed": "#/$defs/ParticipantRoleChanged",
+              "prompt.accepted": "#/$defs/PromptAccepted",
+              "proposal.approved": "#/$defs/ProposalApproved",
+              "proposal.created": "#/$defs/ProposalCreated",
+              "proposal.rejected": "#/$defs/ProposalRejected",
+              "run.ended": "#/$defs/RunEnded",
+              "run.started": "#/$defs/RunStarted",
+              "session.snapshot": "#/$defs/SessionSnapshot",
+              "session.welcome": "#/$defs/SessionWelcome",
+              "tool.ended": "#/$defs/ToolEnded",
+              "tool.output": "#/$defs/ToolOutput",
+              "tool.started": "#/$defs/ToolStarted"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ParticipantJoined"
+            },
+            {
+              "$ref": "#/$defs/ParticipantLeft"
+            },
+            {
+              "$ref": "#/$defs/ParticipantRoleChanged"
+            },
+            {
+              "$ref": "#/$defs/ParticipantRevoked"
+            },
+            {
+              "$ref": "#/$defs/ProposalCreated"
+            },
+            {
+              "$ref": "#/$defs/ProposalApproved"
+            },
+            {
+              "$ref": "#/$defs/ProposalRejected"
+            },
+            {
+              "$ref": "#/$defs/PromptAccepted"
+            },
+            {
+              "$ref": "#/$defs/RunStarted"
+            },
+            {
+              "$ref": "#/$defs/RunEnded"
+            },
+            {
+              "$ref": "#/$defs/MessageStarted"
+            },
+            {
+              "$ref": "#/$defs/MessageDelta"
+            },
+            {
+              "$ref": "#/$defs/MessageEnded"
+            },
+            {
+              "$ref": "#/$defs/ToolStarted"
+            },
+            {
+              "$ref": "#/$defs/ToolOutput"
+            },
+            {
+              "$ref": "#/$defs/ToolEnded"
+            },
+            {
+              "$ref": "#/$defs/ApprovalRequested"
+            },
+            {
+              "$ref": "#/$defs/ApprovalResolved"
+            },
+            {
+              "$ref": "#/$defs/AttachmentAdded"
+            },
+            {
+              "$ref": "#/$defs/SessionWelcome"
+            },
+            {
+              "$ref": "#/$defs/SessionSnapshot"
+            },
+            {
+              "$ref": "#/$defs/InviteCreated"
+            },
+            {
+              "$ref": "#/$defs/ErrorRaised"
+            }
+          ],
+          "title": "Event"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "seq": {
+          "title": "Seq",
+          "type": "integer"
+        },
+        "ts": {
+          "format": "date-time",
+          "title": "Ts",
+          "type": "string"
+        }
+      },
+      "required": [
+        "seq",
+        "id",
+        "ts",
+        "actor_id",
+        "event"
+      ],
+      "title": "EventRecord",
+      "type": "object"
+    },
+    "FileAttach": {
+      "properties": {
+        "content_b64": {
+          "title": "Content B64",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "type": {
+          "const": "file.attach",
+          "default": "file.attach",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "content_b64",
+        "sha256"
+      ],
+      "title": "FileAttach",
+      "type": "object"
+    },
+    "HistoryGet": {
+      "properties": {
+        "before_seq": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before Seq"
+        },
+        "limit": {
+          "default": 100,
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        },
+        "type": {
+          "const": "history.get",
+          "default": "history.get",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "HistoryGet",
+      "type": "object"
+    },
+    "InviteCreate": {
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/Role",
+          "default": "participant"
+        },
+        "ttl_s": {
+          "default": 3600,
+          "maximum": 86400,
+          "minimum": 60,
+          "title": "Ttl S",
+          "type": "integer"
+        },
+        "type": {
+          "const": "invite.create",
+          "default": "invite.create",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "InviteCreate",
+      "type": "object"
+    },
+    "InviteCreated": {
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "expires_at": {
+          "format": "date-time",
+          "title": "Expires At",
+          "type": "string"
+        },
+        "link": {
+          "title": "Link",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        },
+        "type": {
+          "const": "invite.created",
+          "default": "invite.created",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "role",
+        "expires_at",
+        "link"
+      ],
+      "title": "InviteCreated",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "Kind": {
+      "enum": [
+        "cmd",
+        "evt",
+        "ack"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "MessageDelta": {
+      "properties": {
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "thinking": {
+          "default": false,
+          "title": "Thinking",
+          "type": "boolean"
+        },
+        "type": {
+          "const": "message.delta",
+          "default": "message.delta",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "message_id",
+        "text"
+      ],
+      "title": "MessageDelta",
+      "type": "object"
+    },
+    "MessageEnded": {
+      "properties": {
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "thinking": {
+          "default": "",
+          "title": "Thinking",
+          "type": "string"
+        },
+        "type": {
+          "const": "message.ended",
+          "default": "message.ended",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "message_id",
+        "text"
+      ],
+      "title": "MessageEnded",
+      "type": "object"
+    },
+    "MessageStarted": {
+      "properties": {
+        "message_id": {
+          "title": "Message Id",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "message.started",
+          "default": "message.started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "message_id"
+      ],
+      "title": "MessageStarted",
+      "type": "object"
+    },
+    "Origin": {
+      "enum": [
+        "direct",
+        "proposal"
+      ],
+      "title": "Origin",
+      "type": "string"
+    },
+    "Participant": {
+      "properties": {
+        "connected": {
+          "default": false,
+          "title": "Connected",
+          "type": "boolean"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "role"
+      ],
+      "title": "Participant",
+      "type": "object"
+    },
+    "ParticipantJoined": {
+      "properties": {
+        "participant": {
+          "$ref": "#/$defs/Participant"
+        },
+        "type": {
+          "const": "participant.joined",
+          "default": "participant.joined",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant"
+      ],
+      "title": "ParticipantJoined",
+      "type": "object"
+    },
+    "ParticipantLeft": {
+      "properties": {
+        "participant_id": {
+          "title": "Participant Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "participant.left",
+          "default": "participant.left",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id"
+      ],
+      "title": "ParticipantLeft",
+      "type": "object"
+    },
+    "ParticipantRevoke": {
+      "properties": {
+        "participant_id": {
+          "title": "Participant Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "participant.revoke",
+          "default": "participant.revoke",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id"
+      ],
+      "title": "ParticipantRevoke",
+      "type": "object"
+    },
+    "ParticipantRevoked": {
+      "properties": {
+        "participant_id": {
+          "title": "Participant Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "participant.revoked",
+          "default": "participant.revoked",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id"
+      ],
+      "title": "ParticipantRevoked",
+      "type": "object"
+    },
+    "ParticipantRoleChanged": {
+      "properties": {
+        "participant_id": {
+          "title": "Participant Id",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        },
+        "type": {
+          "const": "participant.role_changed",
+          "default": "participant.role_changed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id",
+        "role"
+      ],
+      "title": "ParticipantRoleChanged",
+      "type": "object"
+    },
+    "ParticipantSetRole": {
+      "properties": {
+        "participant_id": {
+          "title": "Participant Id",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        },
+        "type": {
+          "const": "participant.set_role",
+          "default": "participant.set_role",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id",
+        "role"
+      ],
+      "title": "ParticipantSetRole",
+      "type": "object"
+    },
+    "PromptAccepted": {
+      "properties": {
+        "attachments": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Attachments",
+          "type": "array"
+        },
+        "author_id": {
+          "title": "Author Id",
+          "type": "string"
+        },
+        "delivery": {
+          "$ref": "#/$defs/Delivery"
+        },
+        "prompt_id": {
+          "title": "Prompt Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "prompt.accepted",
+          "default": "prompt.accepted",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "prompt_id",
+        "author_id",
+        "text",
+        "delivery",
+        "provenance"
+      ],
+      "title": "PromptAccepted",
+      "type": "object"
+    },
+    "PromptSubmit": {
+      "properties": {
+        "attachments": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Attachments",
+          "type": "array"
+        },
+        "delivery": {
+          "$ref": "#/$defs/Delivery",
+          "default": "now"
+        },
+        "text": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "prompt.submit",
+          "default": "prompt.submit",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "PromptSubmit",
+      "type": "object"
+    },
+    "ProposalApproved": {
+      "properties": {
+        "decided_by": {
+          "title": "Decided By",
+          "type": "string"
+        },
+        "proposal_id": {
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "proposal.approved",
+          "default": "proposal.approved",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "decided_by",
+        "text"
+      ],
+      "title": "ProposalApproved",
+      "type": "object"
+    },
+    "ProposalCreated": {
+      "properties": {
+        "proposal": {
+          "$ref": "#/$defs/ProposalView"
+        },
+        "type": {
+          "const": "proposal.created",
+          "default": "proposal.created",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal"
+      ],
+      "title": "ProposalCreated",
+      "type": "object"
+    },
+    "ProposalDecide": {
+      "properties": {
+        "decision": {
+          "$ref": "#/$defs/ProposalDecision"
+        },
+        "edited_text": {
+          "anyOf": [
+            {
+              "maxLength": 32000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Edited Text"
+        },
+        "proposal_id": {
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "proposal.decide",
+          "default": "proposal.decide",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "decision"
+      ],
+      "title": "ProposalDecide",
+      "type": "object"
+    },
+    "ProposalDecision": {
+      "enum": [
+        "approve",
+        "reject"
+      ],
+      "title": "ProposalDecision",
+      "type": "string"
+    },
+    "ProposalRejected": {
+      "properties": {
+        "decided_by": {
+          "title": "Decided By",
+          "type": "string"
+        },
+        "proposal_id": {
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "proposal.rejected",
+          "default": "proposal.rejected",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "decided_by"
+      ],
+      "title": "ProposalRejected",
+      "type": "object"
+    },
+    "ProposalView": {
+      "properties": {
+        "attachments": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Attachments",
+          "type": "array"
+        },
+        "author_id": {
+          "title": "Author Id",
+          "type": "string"
+        },
+        "delivery": {
+          "$ref": "#/$defs/Delivery"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "author_id",
+        "text",
+        "delivery"
+      ],
+      "title": "ProposalView",
+      "type": "object"
+    },
+    "Provenance": {
+      "properties": {
+        "initiator_id": {
+          "title": "Initiator Id",
+          "type": "string"
+        },
+        "initiator_role": {
+          "$ref": "#/$defs/Role"
+        },
+        "origin": {
+          "$ref": "#/$defs/Origin"
+        }
+      },
+      "required": [
+        "initiator_id",
+        "initiator_role",
+        "origin"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "Role": {
+      "enum": [
+        "host",
+        "participant",
+        "viewer"
+      ],
+      "title": "Role",
+      "type": "string"
+    },
+    "RunAbort": {
+      "properties": {
+        "type": {
+          "const": "run.abort",
+          "default": "run.abort",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "RunAbort",
+      "type": "object"
+    },
+    "RunEndReason": {
+      "enum": [
+        "stop",
+        "aborted",
+        "error",
+        "limit"
+      ],
+      "title": "RunEndReason",
+      "type": "string"
+    },
+    "RunEnded": {
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Error"
+        },
+        "reason": {
+          "$ref": "#/$defs/RunEndReason"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "run.ended",
+          "default": "run.ended",
+          "title": "Type",
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/Usage",
+          "default": {
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        }
+      },
+      "required": [
+        "run_id",
+        "reason"
+      ],
+      "title": "RunEnded",
+      "type": "object"
+    },
+    "RunStarted": {
+      "properties": {
+        "prompt_id": {
+          "title": "Prompt Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "run.started",
+          "default": "run.started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "prompt_id",
+        "provenance"
+      ],
+      "title": "RunStarted",
+      "type": "object"
+    },
+    "RunView": {
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "prompt_id": {
+          "title": "Prompt Id",
+          "type": "string"
+        },
+        "provenance": {
+          "$ref": "#/$defs/Provenance"
+        }
+      },
+      "required": [
+        "id",
+        "prompt_id",
+        "provenance"
+      ],
+      "title": "RunView",
+      "type": "object"
+    },
+    "SessionHello": {
+      "properties": {
+        "client": {
+          "$ref": "#/$defs/ClientInfo"
+        },
+        "invite": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Invite"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "since": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Since"
+        },
+        "token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Token"
+        },
+        "type": {
+          "const": "session.hello",
+          "default": "session.hello",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "client"
+      ],
+      "title": "SessionHello",
+      "type": "object"
+    },
+    "SessionSnapshot": {
+      "properties": {
+        "state": {
+          "$ref": "#/$defs/SessionState"
+        },
+        "streaming": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "Streaming",
+          "type": "object"
+        },
+        "type": {
+          "const": "session.snapshot",
+          "default": "session.snapshot",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "SessionSnapshot",
+      "type": "object"
+    },
+    "SessionState": {
+      "properties": {
+        "approvals": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ApprovalView"
+          },
+          "title": "Approvals",
+          "type": "object"
+        },
+        "attachments": {
+          "additionalProperties": {
+            "$ref": "#/$defs/AttachmentMeta"
+          },
+          "title": "Attachments",
+          "type": "object"
+        },
+        "last_seq": {
+          "default": 0,
+          "title": "Last Seq",
+          "type": "integer"
+        },
+        "participants": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Participant"
+          },
+          "title": "Participants",
+          "type": "object"
+        },
+        "proposals": {
+          "additionalProperties": {
+            "$ref": "#/$defs/ProposalView"
+          },
+          "title": "Proposals",
+          "type": "object"
+        },
+        "run": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RunView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "transcript": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/TranscriptEntry"
+          },
+          "title": "Transcript",
+          "type": "array"
+        }
+      },
+      "title": "SessionState",
+      "type": "object"
+    },
+    "SessionWelcome": {
+      "properties": {
+        "participant": {
+          "$ref": "#/$defs/Participant"
+        },
+        "room": {
+          "title": "Room",
+          "type": "string"
+        },
+        "token": {
+          "title": "Token",
+          "type": "string"
+        },
+        "type": {
+          "const": "session.welcome",
+          "default": "session.welcome",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "room",
+        "token",
+        "participant"
+      ],
+      "title": "SessionWelcome",
+      "type": "object"
+    },
+    "ToolCallView": {
+      "properties": {
+        "args": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "title": "Args",
+          "type": "object"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "risk": {
+          "$ref": "#/$defs/ToolRisk"
+        },
+        "subject": {
+          "default": "",
+          "title": "Subject",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "risk"
+      ],
+      "title": "ToolCallView",
+      "type": "object"
+    },
+    "ToolEnded": {
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "diff": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Diff"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "output": {
+          "title": "Output",
+          "type": "string"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "tool.ended",
+          "default": "tool.ended",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "call_id",
+        "ok",
+        "output"
+      ],
+      "title": "ToolEnded",
+      "type": "object"
+    },
+    "ToolOutput": {
+      "properties": {
+        "call_id": {
+          "title": "Call Id",
+          "type": "string"
+        },
+        "chunk": {
+          "title": "Chunk",
+          "type": "string"
+        },
+        "type": {
+          "const": "tool.output",
+          "default": "tool.output",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "call_id",
+        "chunk"
+      ],
+      "title": "ToolOutput",
+      "type": "object"
+    },
+    "ToolRisk": {
+      "enum": [
+        "read",
+        "write",
+        "exec"
+      ],
+      "title": "ToolRisk",
+      "type": "string"
+    },
+    "ToolStarted": {
+      "properties": {
+        "call": {
+          "$ref": "#/$defs/ToolCallView"
+        },
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "tool.started",
+          "default": "tool.started",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "call"
+      ],
+      "title": "ToolStarted",
+      "type": "object"
+    },
+    "TranscriptEntry": {
+      "properties": {
+        "author_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Author Id"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/EntryKind"
+        },
+        "ok": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Ok"
+        },
+        "text": {
+          "default": "",
+          "title": "Text",
+          "type": "string"
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolCallView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "TranscriptEntry",
+      "type": "object"
+    },
+    "Usage": {
+      "properties": {
+        "input_tokens": {
+          "default": 0,
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "output_tokens": {
+          "default": 0,
+          "title": "Output Tokens",
+          "type": "integer"
+        }
+      },
+      "title": "Usage",
+      "type": "object"
+    }
+  },
+  "properties": {
+    "command": {
+      "discriminator": {
+        "mapping": {
+          "approval.respond": "#/$defs/ApprovalRespond",
+          "file.attach": "#/$defs/FileAttach",
+          "history.get": "#/$defs/HistoryGet",
+          "invite.create": "#/$defs/InviteCreate",
+          "participant.revoke": "#/$defs/ParticipantRevoke",
+          "participant.set_role": "#/$defs/ParticipantSetRole",
+          "prompt.submit": "#/$defs/PromptSubmit",
+          "proposal.decide": "#/$defs/ProposalDecide",
+          "run.abort": "#/$defs/RunAbort",
+          "session.hello": "#/$defs/SessionHello"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SessionHello"
+        },
+        {
+          "$ref": "#/$defs/HistoryGet"
+        },
+        {
+          "$ref": "#/$defs/PromptSubmit"
+        },
+        {
+          "$ref": "#/$defs/ProposalDecide"
+        },
+        {
+          "$ref": "#/$defs/ApprovalRespond"
+        },
+        {
+          "$ref": "#/$defs/RunAbort"
+        },
+        {
+          "$ref": "#/$defs/InviteCreate"
+        },
+        {
+          "$ref": "#/$defs/ParticipantSetRole"
+        },
+        {
+          "$ref": "#/$defs/ParticipantRevoke"
+        },
+        {
+          "$ref": "#/$defs/FileAttach"
+        }
+      ],
+      "title": "Command"
+    },
+    "envelope": {
+      "$ref": "#/$defs/Envelope"
+    },
+    "event": {
+      "discriminator": {
+        "mapping": {
+          "approval.requested": "#/$defs/ApprovalRequested",
+          "approval.resolved": "#/$defs/ApprovalResolved",
+          "attachment.added": "#/$defs/AttachmentAdded",
+          "error": "#/$defs/ErrorRaised",
+          "invite.created": "#/$defs/InviteCreated",
+          "message.delta": "#/$defs/MessageDelta",
+          "message.ended": "#/$defs/MessageEnded",
+          "message.started": "#/$defs/MessageStarted",
+          "participant.joined": "#/$defs/ParticipantJoined",
+          "participant.left": "#/$defs/ParticipantLeft",
+          "participant.revoked": "#/$defs/ParticipantRevoked",
+          "participant.role_changed": "#/$defs/ParticipantRoleChanged",
+          "prompt.accepted": "#/$defs/PromptAccepted",
+          "proposal.approved": "#/$defs/ProposalApproved",
+          "proposal.created": "#/$defs/ProposalCreated",
+          "proposal.rejected": "#/$defs/ProposalRejected",
+          "run.ended": "#/$defs/RunEnded",
+          "run.started": "#/$defs/RunStarted",
+          "session.snapshot": "#/$defs/SessionSnapshot",
+          "session.welcome": "#/$defs/SessionWelcome",
+          "tool.ended": "#/$defs/ToolEnded",
+          "tool.output": "#/$defs/ToolOutput",
+          "tool.started": "#/$defs/ToolStarted"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ParticipantJoined"
+        },
+        {
+          "$ref": "#/$defs/ParticipantLeft"
+        },
+        {
+          "$ref": "#/$defs/ParticipantRoleChanged"
+        },
+        {
+          "$ref": "#/$defs/ParticipantRevoked"
+        },
+        {
+          "$ref": "#/$defs/ProposalCreated"
+        },
+        {
+          "$ref": "#/$defs/ProposalApproved"
+        },
+        {
+          "$ref": "#/$defs/ProposalRejected"
+        },
+        {
+          "$ref": "#/$defs/PromptAccepted"
+        },
+        {
+          "$ref": "#/$defs/RunStarted"
+        },
+        {
+          "$ref": "#/$defs/RunEnded"
+        },
+        {
+          "$ref": "#/$defs/MessageStarted"
+        },
+        {
+          "$ref": "#/$defs/MessageDelta"
+        },
+        {
+          "$ref": "#/$defs/MessageEnded"
+        },
+        {
+          "$ref": "#/$defs/ToolStarted"
+        },
+        {
+          "$ref": "#/$defs/ToolOutput"
+        },
+        {
+          "$ref": "#/$defs/ToolEnded"
+        },
+        {
+          "$ref": "#/$defs/ApprovalRequested"
+        },
+        {
+          "$ref": "#/$defs/ApprovalResolved"
+        },
+        {
+          "$ref": "#/$defs/AttachmentAdded"
+        },
+        {
+          "$ref": "#/$defs/SessionWelcome"
+        },
+        {
+          "$ref": "#/$defs/SessionSnapshot"
+        },
+        {
+          "$ref": "#/$defs/InviteCreated"
+        },
+        {
+          "$ref": "#/$defs/ErrorRaised"
+        }
+      ],
+      "title": "Event"
+    },
+    "record": {
+      "$ref": "#/$defs/EventRecord"
+    }
+  },
+  "required": [
+    "envelope",
+    "command",
+    "event",
+    "record"
+  ],
+  "title": "PluralProtocol",
+  "type": "object"
+}

@@ -1,0 +1,23 @@
+{
+  "name": "plural-web",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "gen:protocol": "json2ts -i src/protocol/schema.json -o src/protocol/types.ts --unreachableDefinitions",
+    "dev": "vite",
+    "build": "tsc -b && vite build"
+  },
+  "dependencies": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.12",
+    "@types/react-dom": "18.3.1",
+    "@vitejs/plugin-react": "4.3.3",
+    "json-schema-to-typescript": "15.0.2",
+    "typescript": "5.6.3",
+    "vite": "5.4.10"
+  }
+}

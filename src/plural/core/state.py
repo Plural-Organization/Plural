@@ -1,0 +1,108 @@
+from typing import Final
+
+from plural.protocol.events import (
+    ApprovalRequested,
+    ApprovalResolved,
+    AttachmentAdded,
+    EventRecord,
+    MessageEnded,
+    ParticipantJoined,
+    ParticipantLeft,
+    ParticipantRevoked,
+    ParticipantRoleChanged,
+    PromptAccepted,
+    ProposalApproved,
+    ProposalCreated,
+    ProposalRejected,
+    RunEnded,
+    RunStarted,
+    ToolEnded,
+    ToolStarted,
+)
+from plural.protocol.models import EntryKind, RunView, SessionState, TranscriptEntry
+
+TRANSCRIPT_LIMIT: Final = 200
+
+
+def reduce(state: SessionState, record: EventRecord) -> SessionState:
+    return _apply(state, record).model_copy(update={"last_seq": record.seq})
+
+
+def _apply(state: SessionState, record: EventRecord) -> SessionState:
+    event = record.event
+    match event:
+        case ParticipantJoined(participant=participant):
+            return state.model_copy(
+                update={"participants": {**state.participants, participant.id: participant}}
+            )
+        case ParticipantLeft(participant_id=participant_id):
+            return _patch_participant(state, participant_id, {"connected": False})
+        case ParticipantRoleChanged(participant_id=participant_id, role=role):
+            return _patch_participant(state, participant_id, {"role": role})
+        case ParticipantRevoked(participant_id=participant_id):
+            return state.model_copy(
+                update={"participants": _without(state.participants, participant_id)}
+            )
+        case ProposalCreated(proposal=proposal):
+            return state.model_copy(
+                update={"proposals": {**state.proposals, proposal.id: proposal}}
+            )
+        case ProposalApproved(proposal_id=proposal_id) | ProposalRejected(proposal_id=proposal_id):
+            return state.model_copy(update={"proposals": _without(state.proposals, proposal_id)})
+        case PromptAccepted():
+            entry = TranscriptEntry(
+                id=event.prompt_id,
+                kind=EntryKind.PROMPT,
+                author_id=event.author_id,
+                text=event.text,
+            )
+            return _append(state, entry)
+        case RunStarted():
+            run = RunView(id=event.run_id, prompt_id=event.prompt_id, provenance=event.provenance)
+            return state.model_copy(update={"run": run})
+        case RunEnded():
+            return state.model_copy(update={"run": None})
+        case MessageEnded(message_id=message_id, text=text):
+            return _append(
+                state, TranscriptEntry(id=message_id, kind=EntryKind.ASSISTANT, text=text)
+            )
+        case ToolStarted(call=call):
+            return _append(state, TranscriptEntry(id=call.id, kind=EntryKind.TOOL, tool=call))
+        case ToolEnded(call_id=call_id, ok=ok):
+            transcript = tuple(
+                entry.model_copy(update={"ok": ok}) if entry.id == call_id else entry
+                for entry in state.transcript
+            )
+            return state.model_copy(update={"transcript": transcript})
+        case ApprovalRequested(approval=approval):
+            return state.model_copy(
+                update={"approvals": {**state.approvals, approval.id: approval}}
+            )
+        case ApprovalResolved(approval_id=approval_id):
+            return state.model_copy(update={"approvals": _without(state.approvals, approval_id)})
+        case AttachmentAdded(attachment=attachment):
+            return state.model_copy(
+                update={"attachments": {**state.attachments, attachment.id: attachment}}
+            )
+        case _:
+            return state
+
+
+def _patch_participant(
+    state: SessionState, participant_id: str, changes: dict[str, object]
+) -> SessionState:
+    participant = state.participants.get(participant_id)
+    if participant is None:
+        return state
+    patched = participant.model_copy(update=changes)
+    return state.model_copy(
+        update={"participants": {**state.participants, participant_id: patched}}
+    )
+
+
+def _append(state: SessionState, entry: TranscriptEntry) -> SessionState:
+    return state.model_copy(update={"transcript": (*state.transcript, entry)[-TRANSCRIPT_LIMIT:]})
+
+
+def _without[V](mapping: dict[str, V], key: str) -> dict[str, V]:
+    return {k: v for k, v in mapping.items() if k != key}
