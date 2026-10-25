@@ -190,6 +190,47 @@
       "title": "ClientInfo",
       "type": "object"
     },
+    "ContextCompact": {
+      "properties": {
+        "type": {
+          "const": "context.compact",
+          "default": "context.compact",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "ContextCompact",
+      "type": "object"
+    },
+    "ContextCompacted": {
+      "properties": {
+        "run_id": {
+          "title": "Run Id",
+          "type": "string"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        },
+        "tokens_before": {
+          "title": "Tokens Before",
+          "type": "integer"
+        },
+        "type": {
+          "const": "context.compacted",
+          "default": "context.compacted",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "summary",
+        "tokens_before"
+      ],
+      "title": "ContextCompacted",
+      "type": "object"
+    },
     "Delivery": {
       "enum": [
         "now",
@@ -203,7 +244,8 @@
       "enum": [
         "prompt",
         "assistant",
-        "tool"
+        "tool",
+        "compaction"
       ],
       "title": "EntryKind",
       "type": "string"
@@ -416,6 +458,7 @@
               "approval.requested": "#/$defs/ApprovalRequested",
               "approval.resolved": "#/$defs/ApprovalResolved",
               "attachment.added": "#/$defs/AttachmentAdded",
+              "context.compacted": "#/$defs/ContextCompacted",
               "error": "#/$defs/ErrorRaised",
               "invite.created": "#/$defs/InviteCreated",
               "message.delta": "#/$defs/MessageDelta",
@@ -480,6 +523,9 @@
             },
             {
               "$ref": "#/$defs/MessageEnded"
+            },
+            {
+              "$ref": "#/$defs/ContextCompacted"
             },
             {
               "$ref": "#/$defs/ToolStarted"
@@ -1565,6 +1611,18 @@
           ],
           "default": null
         },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
         "transcript": {
           "default": [],
           "items": {
@@ -1843,6 +1901,7 @@
       "discriminator": {
         "mapping": {
           "approval.respond": "#/$defs/ApprovalRespond",
+          "context.compact": "#/$defs/ContextCompact",
           "file.attach": "#/$defs/FileAttach",
           "history.get": "#/$defs/HistoryGet",
           "invite.create": "#/$defs/InviteCreate",
@@ -1886,6 +1945,9 @@
           "$ref": "#/$defs/ParticipantRevoke"
         },
         {
+          "$ref": "#/$defs/ContextCompact"
+        },
+        {
           "$ref": "#/$defs/PolicyAdd"
         },
         {
@@ -1906,6 +1968,7 @@
           "approval.requested": "#/$defs/ApprovalRequested",
           "approval.resolved": "#/$defs/ApprovalResolved",
           "attachment.added": "#/$defs/AttachmentAdded",
+          "context.compacted": "#/$defs/ContextCompacted",
           "error": "#/$defs/ErrorRaised",
           "invite.created": "#/$defs/InviteCreated",
           "message.delta": "#/$defs/MessageDelta",
@@ -1970,6 +2033,9 @@
         },
         {
           "$ref": "#/$defs/MessageEnded"
+        },
+        {
+          "$ref": "#/$defs/ContextCompacted"
         },
         {
           "$ref": "#/$defs/ToolStarted"

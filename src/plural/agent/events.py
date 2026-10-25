@@ -35,10 +35,16 @@ class ToolEnd:
 
 
 @dataclass(frozen=True, slots=True)
+class Compacted:
+    summary: str
+    tokens_before: int
+
+
+@dataclass(frozen=True, slots=True)
 class RunEnd:
     reason: RunEndReason
     usage: Usage
     error: str | None = None
 
 
-AgentEvent = MessageStart | MessageDelta | MessageEnd | ToolStart | ToolEnd | RunEnd
+AgentEvent = MessageStart | MessageDelta | MessageEnd | ToolStart | ToolEnd | Compacted | RunEnd

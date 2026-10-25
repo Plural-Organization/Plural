@@ -130,6 +130,8 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         limits=LoopLimits(
             first_token_timeout_s=settings.first_token_timeout_s,
             idle_timeout_s=settings.idle_timeout_s,
+            context_window=settings.context_window,
+            compact_at=settings.compact_at,
         ),
     )
     room_url = settings.room_url(room)

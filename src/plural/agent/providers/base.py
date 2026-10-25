@@ -82,5 +82,9 @@ class ProviderError(Exception):
     pass
 
 
+class ContextOverflow(ProviderError):
+    pass
+
+
 class LLMProvider(Protocol):
     def stream(self, request: LlmRequest, *, cancel: asyncio.Event) -> AsyncIterator[LlmEvent]: ...

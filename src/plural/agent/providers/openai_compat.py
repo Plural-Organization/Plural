@@ -16,6 +16,7 @@ from openai.types.chat.chat_completion_chunk import ChoiceDelta, ChoiceDeltaTool
 from pydantic import JsonValue
 
 from plural.agent.providers.base import (
+    ContextOverflow,
     Effort,
     LlmEvent,
     LlmMessage,
@@ -106,6 +107,8 @@ class OpenAIProvider:
                         if choice.finish_reason is not None:
                             stop = _STOP_REASONS.get(choice.finish_reason, "end_turn")
         except openai.APIError as error:
+            if _overflows(error):
+                raise ContextOverflow(_describe(error)) from error
             raise ProviderError(_describe(error)) from error
         for index in sorted(calls):
             yield ToolCallReady(call=calls[index].request())
@@ -194,6 +197,10 @@ def _usage(usage: CompletionUsage) -> Usage:
         output_tokens=usage.completion_tokens,
         cache_read_tokens=cached,
     )
+
+
+def _overflows(error: openai.APIError) -> bool:
+    return isinstance(error, openai.BadRequestError) and error.code == "context_length_exceeded"
 
 
 def _describe(error: openai.APIError) -> str:

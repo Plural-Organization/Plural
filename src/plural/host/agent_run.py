@@ -37,6 +37,12 @@ class AgentRun:
     def follow_up(self, turn: UserTurn) -> None:
         self._loop.follow_up(turn)
 
+    def request_compaction(self) -> None:
+        self._loop.request_compaction()
+
+    def restore(self, summary: str) -> None:
+        self._loop.restore(summary)
+
     def drain_pending(self) -> list[UserTurn]:
         return self._loop.drain_pending()
 

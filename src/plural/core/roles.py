@@ -6,6 +6,7 @@ from plural.core.errors import Forbidden
 from plural.protocol.commands import (
     ApprovalRespond,
     Command,
+    ContextCompact,
     FileAttach,
     HistoryGet,
     InviteCreate,
@@ -33,6 +34,7 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         ProposalDecide: HOST_ONLY,
         ApprovalRespond: HOST_ONLY,
         RunAbort: HOST_ONLY,
+        ContextCompact: HOST_ONLY,
         InviteCreate: HOST_ONLY,
         ParticipantSetRole: HOST_ONLY,
         ParticipantRevoke: HOST_ONLY,

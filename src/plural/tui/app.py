@@ -12,6 +12,7 @@ from plural.client.slash import ShowPolicy, SlashError, parse
 from plural.protocol.commands import (
     ApprovalRespond,
     Command,
+    ContextCompact,
     InviteCreate,
     PromptSubmit,
     ProposalDecide,
@@ -138,6 +139,9 @@ class PluralApp(App[None]):
                 self._send(PromptSubmit(text=text))
             case ShowPolicy():
                 self.action_policy()
+            case ContextCompact():
+                self._send(parsed)
+                self.notify("The context will be compacted before the next prompt")
             case command:
                 self._send(command)
 

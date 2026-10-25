@@ -8,7 +8,7 @@ from plural.client.connection import CommandRejected
 from plural.client.presenter import Line, describe, history, rule_line
 from plural.client.reconnect import SessionClient
 from plural.client.slash import ShowPolicy, SlashError, parse
-from plural.protocol.commands import PromptSubmit
+from plural.protocol.commands import ContextCompact, PromptSubmit
 from plural.protocol.events import SessionSnapshot
 
 
@@ -43,6 +43,10 @@ async def _read_prompts(client: SessionClient, console: Console) -> None:
                 _print_policy(client, console)
                 continue
             await client.send(parsed or PromptSubmit(text=text))
+            if isinstance(parsed, ContextCompact):
+                console.print(
+                    Text("the context will be compacted before the next prompt", style="dim")
+                )
         except SlashError as error:
             console.print(Text(str(error), style="red"))
         except (CommandRejected, ConnectionError, TimeoutError) as error:

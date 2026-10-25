@@ -4,6 +4,7 @@ from plural.protocol.events import (
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
+    ContextCompacted,
     EventRecord,
     MessageEnded,
     ParticipantJoined,
@@ -69,6 +70,13 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             return _append(
                 state, TranscriptEntry(id=message_id, kind=EntryKind.ASSISTANT, text=text)
             )
+        case ContextCompacted(summary=summary, tokens_before=tokens_before):
+            entry = TranscriptEntry(
+                id=record.id,
+                kind=EntryKind.COMPACTION,
+                text=f"context compacted ({tokens_before} tokens summarized)",
+            )
+            return _append(state.model_copy(update={"summary": summary}), entry)
         case ToolStarted(call=call):
             return _append(state, TranscriptEntry(id=call.id, kind=EntryKind.TOOL, tool=call))
         case ToolEnded(call_id=call_id, ok=ok, output=output):

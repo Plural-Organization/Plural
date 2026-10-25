@@ -120,7 +120,7 @@ Run `plural <command> --help` for all options.
 | `esc` | Abort the current run |
 | `ctrl+q` | Quit |
 
-Prompt-line commands work in the TUI and in `plural join --plain`: `/abort`, `/policy` (list rules), `/policy allow|ask|deny <tool> <pattern>`, `/policy rm <rule id>`.
+Prompt-line commands work in the TUI and in `plural join --plain`: `/abort`, `/compact`, `/policy` (list rules), `/policy allow|ask|deny <tool> <pattern>`, `/policy rm <rule id>`.
 
 ### Configuration
 
@@ -142,6 +142,8 @@ Every setting can be passed as an environment variable with the `PLURAL_` prefix
 | `PLURAL_PUBLIC_URL` | none | Public URL used in invite links |
 | `PLURAL_FIRST_TOKEN_TIMEOUT_S` | `120` | Seconds to wait for the model's first output before the run fails |
 | `PLURAL_IDLE_TIMEOUT_S` | `60` | Seconds of silence mid-response before the run fails |
+| `PLURAL_CONTEXT_WINDOW` | `128000` | Model context size in tokens; set it to the server's real window for local models |
+| `PLURAL_COMPACT_AT` | `0.75` | Fraction of the window at which the conversation is summarized |
 | `PLURAL_APPROVAL_TIMEOUT_S` | `120` | Seconds before an approval expires |
 | `PLURAL_REJECTION_LIMIT` | `2` | Rejections of one kind of action per run before the agent stops asking the host |
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24h |
@@ -158,6 +160,9 @@ PLURAL_PROVIDER=openai PLURAL_MODEL=gpt-5 OPENAI_API_KEY=sk-... plural host
 
 PLURAL_PROVIDER=openai PLURAL_MODEL=qwen2.5-coder PLURAL_BASE_URL=http://localhost:11434/v1 plural host
 ```
+
+> [!NOTE]
+> Local servers truncate silently when a prompt exceeds their window (Ollama defaults to 4096 tokens). Start the server with a larger window (`OLLAMA_CONTEXT_LENGTH`) and set `PLURAL_CONTEXT_WINDOW` to the same value so compaction triggers in time.
 
 > [!IMPORTANT]
 > Plural uses API keys only. It never reads subscription logins or other credentials stored by vendor tools.
@@ -243,7 +248,7 @@ npm run dev
 - [x] TUI and plain clients
 - [x] Anthropic and OpenAI-compatible providers
 - [ ] Web client
-- [ ] Context compaction
+- [x] Context compaction
 - [ ] Container sandbox
 - [ ] End-to-end and load tests
 

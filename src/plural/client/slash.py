@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from plural.protocol.commands import Command, PolicyAdd, PolicyRemove, RunAbort
+from plural.protocol.commands import Command, ContextCompact, PolicyAdd, PolicyRemove, RunAbort
 from plural.protocol.models import PolicyAction
 
 USAGE = "usage: /policy | /policy allow|ask|deny <tool> <pattern> | /policy rm <rule id>"
@@ -22,6 +22,8 @@ def parse(text: str) -> Command | ShowPolicy | None:
     match name:
         case "abort":
             return RunAbort()
+        case "compact":
+            return ContextCompact()
         case "policy":
             return _policy(rest.strip())
         case _:

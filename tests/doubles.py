@@ -1,5 +1,6 @@
 import asyncio
-from collections.abc import AsyncIterator
+from collections import deque
+from collections.abc import AsyncIterator, Sequence
 
 from plural.agent.providers.base import LlmEvent, LlmRequest, Stop, TextDelta, UsageReport
 from plural.protocol.models import Usage
@@ -17,3 +18,29 @@ class StallingProvider:
             yield TextDelta(text=self.text)
         await asyncio.sleep(3600)
         yield Stop()
+
+
+class Stall:
+    pass
+
+
+STALL = Stall()
+
+
+class ScriptedProvider:
+    def __init__(self, script: Sequence[Sequence[LlmEvent] | Exception | Stall]) -> None:
+        self._script = deque(script)
+        self.requests: list[LlmRequest] = []
+
+    async def stream(
+        self, request: LlmRequest, *, cancel: asyncio.Event
+    ) -> AsyncIterator[LlmEvent]:
+        self.requests.append(request)
+        step = self._script.popleft()
+        if isinstance(step, Exception):
+            raise step
+        if isinstance(step, Stall):
+            await asyncio.sleep(3600)
+            return
+        for event in step:
+            yield event

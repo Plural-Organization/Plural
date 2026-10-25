@@ -75,6 +75,10 @@ class ParticipantRevoke(Model):
     participant_id: str
 
 
+class ContextCompact(Model):
+    type: Literal["context.compact"] = "context.compact"
+
+
 class PolicyAdd(Model):
     type: Literal["policy.add"] = "policy.add"
     tool: str = Field(min_length=1, max_length=40)
@@ -104,6 +108,7 @@ Command = Annotated[
     | InviteCreate
     | ParticipantSetRole
     | ParticipantRevoke
+    | ContextCompact
     | PolicyAdd
     | PolicyRemove
     | FileAttach,

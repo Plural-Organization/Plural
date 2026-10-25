@@ -5,6 +5,7 @@ from plural.protocol.events import (
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
+    ContextCompacted,
     ErrorRaised,
     Event,
     InviteCreated,
@@ -61,6 +62,8 @@ def _entry(entry: TranscriptEntry, state: SessionState) -> list[Line]:
             if entry.output:
                 lines.append(Line("green" if entry.ok else "red", _preview(entry.output)))
             return lines
+        case EntryKind.COMPACTION:
+            return [Line("dim", f"⟲ {entry.text}")]
 
 
 def _preview(output: str) -> str:
@@ -136,6 +139,8 @@ def describe(event: Event, state: SessionState) -> Line | None:
         case ApprovalResolved(decision=decision, resolved_by=resolved_by):
             suffix = "timeout" if resolved_by is None else name(resolved_by)
             return Line("magenta", f"! approval {decision} ({suffix})")
+        case ContextCompacted(tokens_before=tokens_before):
+            return Line("dim", f"⟲ context compacted ({tokens_before} tokens summarized)")
         case PolicyRuleAdded(rule=rule):
             return Line("magenta", f"policy + {rule_line(rule)}  [{rule.id}]")
         case PolicyRuleRemoved(rule_id=rule_id):

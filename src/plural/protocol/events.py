@@ -115,6 +115,13 @@ class MessageEnded(EventBase):
     thinking: str = ""
 
 
+class ContextCompacted(EventBase):
+    type: Literal["context.compacted"] = "context.compacted"
+    run_id: str
+    summary: str
+    tokens_before: int
+
+
 class ToolStarted(EventBase):
     type: Literal["tool.started"] = "tool.started"
     run_id: str
@@ -205,6 +212,7 @@ Event = Annotated[
     | MessageStarted
     | MessageDelta
     | MessageEnded
+    | ContextCompacted
     | ToolStarted
     | ToolOutput
     | ToolEnded

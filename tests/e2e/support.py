@@ -4,6 +4,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import uvicorn
 
@@ -84,7 +85,11 @@ class Session:
 
 @asynccontextmanager
 async def running_session(
-    tmp_path: Path, *, relayed: bool, provider: LLMProvider
+    tmp_path: Path,
+    *,
+    relayed: bool,
+    provider: LLMProvider,
+    overrides: dict[str, Any] | None = None,
 ) -> AsyncGenerator[Session]:
     workspace = tmp_path / "ws"
     workspace.mkdir(exist_ok=True)
@@ -109,6 +114,7 @@ async def running_session(
         port=free_port(),
         relay_url=relay_url,
         approval_timeout_s=30,
+        **(overrides or {}),
     )
     host = await build_host(settings, provider=provider)
     serving = asyncio.create_task(host.serve())

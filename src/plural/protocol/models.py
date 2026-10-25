@@ -67,6 +67,7 @@ class EntryKind(StrEnum):
     PROMPT = "prompt"
     ASSISTANT = "assistant"
     TOOL = "tool"
+    COMPACTION = "compaction"
 
 
 class Actor(Model):
@@ -93,6 +94,10 @@ class Usage(Model):
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_write_tokens: int = 0
+
+    @property
+    def prompt_tokens(self) -> int:
+        return self.input_tokens + self.cache_read_tokens + self.cache_write_tokens
 
     def __add__(self, other: Self) -> Self:
         return self.model_copy(
@@ -167,5 +172,6 @@ class SessionState(Model):
     approvals: dict[str, ApprovalView] = Field(default_factory=dict[str, ApprovalView])
     attachments: dict[str, AttachmentMeta] = Field(default_factory=dict[str, AttachmentMeta])
     policy: tuple[PolicyRuleView, ...] = ()
+    summary: str | None = None
     run: RunView | None = None
     transcript: tuple[TranscriptEntry, ...] = ()

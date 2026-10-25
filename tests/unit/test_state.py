@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 from plural.core.provenance import direct
 from plural.core.state import OUTPUT_PREVIEW_CHARS, reduce
 from plural.protocol.events import (
+    ContextCompacted,
     Event,
     EventRecord,
     ParticipantJoined,
@@ -17,6 +18,7 @@ from plural.protocol.events import (
 )
 from plural.protocol.models import (
     Delivery,
+    EntryKind,
     Participant,
     ProposalView,
     Role,
@@ -77,3 +79,10 @@ def test_tool_output_is_kept_as_a_bounded_preview() -> None:
         ToolEnded(run_id="run_1", call_id="c1", ok=True, output="x" * (OUTPUT_PREVIEW_CHARS * 3)),
     )
     assert state.transcript[-1].output == "x" * OUTPUT_PREVIEW_CHARS
+
+
+def test_compaction_keeps_the_summary_and_marks_the_transcript() -> None:
+    state = fold(ContextCompacted(run_id="run_1", summary="goals and files", tokens_before=900))
+    assert state.summary == "goals and files"
+    assert state.transcript[-1].kind is EntryKind.COMPACTION
+    assert "900" in state.transcript[-1].text

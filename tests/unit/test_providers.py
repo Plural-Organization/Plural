@@ -11,6 +11,7 @@ import pytest
 from plural.agent.providers.anthropic_api import FALLBACK_BETA, AnthropicProvider
 from plural.agent.providers.anthropic_api import to_messages as anthropic_messages
 from plural.agent.providers.base import (
+    ContextOverflow,
     LlmEvent,
     LlmMessage,
     LlmRequest,
@@ -204,6 +205,17 @@ async def test_anthropic_api_error_becomes_provider_error() -> None:
         await drain(provider)
 
 
+async def test_anthropic_context_overflow_is_distinguished() -> None:
+    body = json.dumps(
+        {
+            "type": "error",
+            "error": {"type": "invalid_request_error", "message": "prompt is too long: 250000"},
+        }
+    )
+    with pytest.raises(ContextOverflow):
+        await drain(anthropic_provider(Recorder(400, body)))
+
+
 def test_anthropic_replays_native_blocks_and_merges_tool_results() -> None:
     native = NativeContent(
         provider="anthropic",
@@ -320,6 +332,24 @@ async def test_openai_api_error_becomes_provider_error() -> None:
     body = json.dumps({"error": {"message": "slow down", "type": "rate_limit"}})
     with pytest.raises(ProviderError, match="openai 429"):
         await drain(openai_provider(Recorder(429, body)))
+
+
+async def test_openai_context_overflow_is_distinguished() -> None:
+    body = json.dumps(
+        {
+            "error": {
+                "message": "maximum context length exceeded",
+                "type": "invalid_request_error",
+                "code": "context_length_exceeded",
+            }
+        }
+    )
+    with pytest.raises(ContextOverflow):
+        await drain(openai_provider(Recorder(400, body)))
+    other = json.dumps({"error": {"message": "bad", "type": "invalid_request_error"}})
+    with pytest.raises(ProviderError) as plain:
+        await drain(openai_provider(Recorder(400, other)))
+    assert not isinstance(plain.value, ContextOverflow)
 
 
 def test_openai_messages_round_trip_tool_calls() -> None:

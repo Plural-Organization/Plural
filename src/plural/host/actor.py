@@ -36,6 +36,7 @@ from plural.protocol.codec import ProtocolError, decode_command
 from plural.protocol.commands import (
     ApprovalRespond,
     Command,
+    ContextCompact,
     FileAttach,
     HistoryGet,
     InviteCreate,
@@ -52,6 +53,7 @@ from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo
 from plural.protocol.events import (
     ApprovalRequested,
     AttachmentAdded,
+    ContextCompacted,
     Event,
     InviteCreated,
     MessageDelta,
@@ -135,6 +137,8 @@ class SessionActor:
         for record in await self._store.read():
             self._state = reduce(self._state, record)
         self._sync_policy()
+        if self._state.summary is not None:
+            self._agent.restore(self._state.summary)
         for resolved in approvals.abandon_all(self._state):
             await self._emit(resolved)
         if self._state.run is not None:
@@ -232,6 +236,8 @@ class SessionActor:
                 if self._state.run is None:
                     raise Conflict("no active run")
                 self._agent.abort()
+            case ContextCompact():
+                self._agent.request_compaction()
             case PolicyAdd():
                 added = policies.add(
                     self._state,
@@ -391,6 +397,10 @@ class SessionActor:
                 self._streaming.pop(message_id, None)
                 await self._emit(
                     MessageEnded(run_id=run_id, message_id=message_id, text=text, thinking=thinking)
+                )
+            case agent.Compacted(summary=summary, tokens_before=tokens_before):
+                await self._emit(
+                    ContextCompacted(run_id=run_id, summary=summary, tokens_before=tokens_before)
                 )
             case agent.ToolStart(call=call):
                 await self._emit(ToolStarted(run_id=run_id, call=call))

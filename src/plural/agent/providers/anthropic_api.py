@@ -18,6 +18,7 @@ from anthropic.types.beta import (
 from pydantic import JsonValue
 
 from plural.agent.providers.base import (
+    ContextOverflow,
     Effort,
     LlmEvent,
     LlmMessage,
@@ -99,6 +100,8 @@ class AnthropicProvider:
                             pass
                 message = await stream.get_final_message()
         except anthropic.APIError as error:
+            if _overflows(error):
+                raise ContextOverflow(_describe(error)) from error
             raise ProviderError(_describe(error)) from error
         for event in _finish(message):
             yield event
@@ -189,6 +192,10 @@ def _usage(usage: BetaUsage) -> Usage:
         cache_read_tokens=usage.cache_read_input_tokens or 0,
         cache_write_tokens=usage.cache_creation_input_tokens or 0,
     )
+
+
+def _overflows(error: anthropic.APIError) -> bool:
+    return isinstance(error, anthropic.BadRequestError) and "prompt is too long" in error.message
 
 
 def _describe(error: anthropic.APIError) -> str:

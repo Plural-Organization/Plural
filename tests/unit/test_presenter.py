@@ -4,6 +4,7 @@ from plural.client.presenter import Line, describe, history, label, live
 from plural.client.projection import Projection
 from plural.core.provenance import direct
 from plural.protocol.events import (
+    ContextCompacted,
     EventRecord,
     MessageDelta,
     MessageEnded,
@@ -112,3 +113,16 @@ def test_policy_changes_are_described() -> None:
         "magenta", "policy + allow bash make *  [pl_1]"
     )
     assert describe(PolicyRuleRemoved(rule_id="pl_1"), state) == Line("magenta", "policy - pl_1")
+
+
+def test_compaction_is_shown_in_history_and_live() -> None:
+    state = SessionState(
+        transcript=(
+            TranscriptEntry(
+                id="e1", kind=EntryKind.COMPACTION, text="context compacted (900 tokens summarized)"
+            ),
+        )
+    )
+    assert history(state) == [Line("dim", "⟲ context compacted (900 tokens summarized)")]
+    event = ContextCompacted(run_id="run_1", summary="s", tokens_before=900)
+    assert describe(event, SessionState()) == history(state)[0]
