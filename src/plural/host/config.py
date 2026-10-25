@@ -4,6 +4,8 @@ from typing import Literal
 from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from plural.agent.providers.base import Effort
+
 
 class HostSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PLURAL_", extra="ignore")
@@ -19,6 +21,9 @@ class HostSettings(BaseSettings):
     provider: Literal["fake", "anthropic", "openai"] = "fake"
     model: str | None = None
     api_key: SecretStr | None = None
+    base_url: str | None = None
+    effort: Effort | None = None
+    max_output_tokens: int | None = Field(default=None, gt=0)
     approval_timeout_s: float = Field(default=120, gt=0)
     token_ttl_s: int = Field(default=86_400, gt=0, le=86_400)
     invite_ttl_s: int = Field(default=3600, gt=0, le=86_400)

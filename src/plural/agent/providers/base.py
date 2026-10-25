@@ -11,6 +11,12 @@ class ToolCallRequest(Model):
     id: str
     name: str
     args: dict[str, JsonValue] = Field(default_factory=dict[str, JsonValue])
+    parse_error: str | None = None
+
+
+class NativeContent(Model):
+    provider: str
+    blocks: tuple[JsonValue, ...]
 
 
 class ToolSchema(Model):
@@ -25,12 +31,18 @@ class LlmMessage(Model):
     tool_calls: tuple[ToolCallRequest, ...] = ()
     tool_call_id: str | None = None
     is_error: bool = False
+    native: NativeContent | None = None
 
 
 class LlmRequest(Model):
     system: str
     messages: tuple[LlmMessage, ...]
     tools: tuple[ToolSchema, ...] = ()
+
+
+StopReason = Literal["end_turn", "tool_use", "max_tokens", "refusal"]
+
+Effort = Literal["low", "medium", "high", "xhigh", "max"]
 
 
 class TextDelta(Model):
@@ -48,6 +60,11 @@ class ToolCallReady(Model):
     call: ToolCallRequest
 
 
+class NativeReady(Model):
+    kind: Literal["native"] = "native"
+    content: NativeContent
+
+
 class UsageReport(Model):
     kind: Literal["usage"] = "usage"
     usage: Usage
@@ -55,10 +72,10 @@ class UsageReport(Model):
 
 class Stop(Model):
     kind: Literal["stop"] = "stop"
-    reason: Literal["end_turn", "tool_use", "max_tokens"] = "end_turn"
+    reason: StopReason = "end_turn"
 
 
-LlmEvent = TextDelta | ThinkingDelta | ToolCallReady | UsageReport | Stop
+LlmEvent = TextDelta | ThinkingDelta | ToolCallReady | NativeReady | UsageReport | Stop
 
 
 class ProviderError(Exception):

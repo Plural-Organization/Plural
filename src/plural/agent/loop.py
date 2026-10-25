@@ -21,7 +21,11 @@ from plural.agent.messages import AssistantTurn, Message, ToolResultTurn, UserTu
 from plural.agent.providers.base import (
     LLMProvider,
     LlmRequest,
+    NativeContent,
+    NativeReady,
+    ProviderError,
     Stop,
+    StopReason,
     TextDelta,
     ThinkingDelta,
     ToolCallReady,
@@ -49,6 +53,13 @@ class _Turn:
     text: list[str] = field(default_factory=list[str])
     thinking: list[str] = field(default_factory=list[str])
     calls: list[ToolCallRequest] = field(default_factory=list[ToolCallRequest])
+    native: NativeContent | None = None
+    stop: StopReason = "end_turn"
+
+    def assistant(self) -> AssistantTurn:
+        return AssistantTurn(
+            text="".join(self.text), tool_calls=tuple(self.calls), native=self.native
+        )
 
 
 class AgentLoop:
@@ -99,26 +110,41 @@ class AgentLoop:
             for _ in range(self._limits.max_turns):
                 turn = _Turn(self._ids.new("m_"))
                 yield MessageStart(turn.message_id)
-                async for event in self._provider.stream(self._request(), cancel=cancel):
-                    match event:
-                        case TextDelta(text=text):
-                            turn.text.append(text)
-                            yield MessageDelta(turn.message_id, text, thinking=False)
-                        case ThinkingDelta(text=text):
-                            turn.thinking.append(text)
-                            yield MessageDelta(turn.message_id, text, thinking=True)
-                        case ToolCallReady(call=call):
-                            turn.calls.append(call)
-                        case UsageReport(usage=delta):
-                            usage = usage + delta
-                        case Stop():
-                            pass
-                assistant = AssistantTurn(text="".join(turn.text), tool_calls=tuple(turn.calls))
+                try:
+                    async for event in self._provider.stream(self._request(), cancel=cancel):
+                        match event:
+                            case TextDelta(text=text):
+                                turn.text.append(text)
+                                yield MessageDelta(turn.message_id, text, thinking=False)
+                            case ThinkingDelta(text=text):
+                                turn.thinking.append(text)
+                                yield MessageDelta(turn.message_id, text, thinking=True)
+                            case ToolCallReady(call=call):
+                                turn.calls.append(call)
+                            case NativeReady(content=content):
+                                turn.native = content
+                            case UsageReport(usage=delta):
+                                usage = usage + delta
+                            case Stop(reason=reason):
+                                turn.stop = reason
+                except ProviderError as error:
+                    yield MessageEnd(turn.message_id, "".join(turn.text), "".join(turn.thinking))
+                    yield RunEnd(RunEndReason.ERROR, usage, str(error))
+                    return
+                assistant = turn.assistant()
                 self._conversation.append(assistant)
                 yield MessageEnd(turn.message_id, assistant.text, "".join(turn.thinking))
                 if cancel.is_set():
                     yield RunEnd(RunEndReason.ABORTED, usage)
                     return
+                if turn.stop in _UNFINISHED:
+                    for call in assistant.tool_calls:
+                        for event in self._skip(call, _UNFINISHED[turn.stop]):
+                            yield event
+                    if turn.stop == "refusal":
+                        yield RunEnd(RunEndReason.ERROR, usage, "model declined the request")
+                        return
+                    continue
                 for call in assistant.tool_calls:
                     recent.append(_signature(call))
                     if len(recent) == recent.maxlen and len(set(recent)) == 1:
@@ -150,21 +176,24 @@ class AgentLoop:
         return []
 
     def _request(self) -> LlmRequest:
-        messages = to_llm(self._context.compact(self._conversation))
         return LlmRequest(
-            system=self._context.system(), messages=messages, tools=self._tools.schemas()
+            system=self._context.system(),
+            messages=to_llm(self._conversation),
+            tools=self._tools.schemas(),
         )
 
     async def _execute(
         self, call: ToolCallRequest, provenance: Provenance
     ) -> AsyncIterator[AgentEvent]:
+        if call.parse_error is not None:
+            for event in self._skip(call, f"Invalid tool call: {call.parse_error}"):
+                yield event
+            return
         try:
             prepared = self._tools.prepare(call)
         except (UnknownTool, ValidationError) as error:
-            yield ToolStart(
-                ToolCallView(id=call.id, name=call.name, risk=ToolRisk.EXEC, args=call.args)
-            )
-            yield self._finish(call, ToolResult(f"Invalid tool call: {error}", is_error=True))
+            for event in self._skip(call, f"Invalid tool call: {error}"):
+                yield event
             return
         view = ToolCallView(
             id=call.id,
@@ -190,6 +219,10 @@ class AgentLoop:
             return ToolResult("Tool timed out", is_error=True)
         except (ToolError, SandboxError, OSError, UnicodeDecodeError) as error:
             return ToolResult(f"{type(error).__name__}: {error}", is_error=True)
+
+    def _skip(self, call: ToolCallRequest, reason: str) -> tuple[AgentEvent, ...]:
+        view = ToolCallView(id=call.id, name=call.name, risk=ToolRisk.EXEC, args=call.args)
+        return ToolStart(view), self._finish(call, ToolResult(reason, is_error=True))
 
     def _finish(self, call: ToolCallRequest, result: ToolResult) -> ToolEnd:
         self._conversation.append(
@@ -219,6 +252,12 @@ class AgentLoop:
                             )
                         )
                 return
+
+
+_UNFINISHED: dict[StopReason, str] = {
+    "max_tokens": "Not executed: the response hit the output limit before the call was complete",
+    "refusal": "Not executed: the model declined the request",
+}
 
 
 def _signature(call: ToolCallRequest) -> str:

@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from typing import Literal
 
-from plural.agent.providers.base import LlmMessage, ToolCallRequest
+from plural.agent.providers.base import LlmMessage, NativeContent, ToolCallRequest
 from plural.protocol.models import Actor, Model, Origin, Provenance
 
 
@@ -17,6 +17,7 @@ class AssistantTurn(Model):
     kind: Literal["assistant"] = "assistant"
     text: str = ""
     tool_calls: tuple[ToolCallRequest, ...] = ()
+    native: NativeContent | None = None
 
 
 class ToolResultTurn(Model):
@@ -45,7 +46,12 @@ def _convert(message: Message) -> LlmMessage:
         case UserTurn():
             return LlmMessage(role="user", content=attribute(message))
         case AssistantTurn():
-            return LlmMessage(role="assistant", content=message.text, tool_calls=message.tool_calls)
+            return LlmMessage(
+                role="assistant",
+                content=message.text,
+                tool_calls=message.tool_calls,
+                native=message.native,
+            )
         case ToolResultTurn():
             return LlmMessage(
                 role="tool",

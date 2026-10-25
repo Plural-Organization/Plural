@@ -1220,6 +1220,8 @@
         "usage": {
           "$ref": "#/$defs/Usage",
           "default": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
             "input_tokens": 0,
             "output_tokens": 0
           }
@@ -1631,6 +1633,11 @@
           "default": null,
           "title": "Ok"
         },
+        "output": {
+          "default": "",
+          "title": "Output",
+          "type": "string"
+        },
         "text": {
           "default": "",
           "title": "Text",
@@ -1657,6 +1664,16 @@
     },
     "Usage": {
       "properties": {
+        "cache_read_tokens": {
+          "default": 0,
+          "title": "Cache Read Tokens",
+          "type": "integer"
+        },
+        "cache_write_tokens": {
+          "default": 0,
+          "title": "Cache Write Tokens",
+          "type": "integer"
+        },
         "input_tokens": {
           "default": 0,
           "title": "Input Tokens",

@@ -1,11 +1,15 @@
 import asyncio
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from plural.agent.context import ContextBuilder
 from plural.agent.loop import AgentLoop
+from plural.agent.providers import anthropic_api
+from plural.agent.providers.anthropic_api import AnthropicProvider
 from plural.agent.providers.base import LLMProvider
 from plural.agent.providers.fake import DemoProvider
+from plural.agent.providers.openai_compat import OpenAIProvider
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import ToolCtx
@@ -32,6 +36,8 @@ from plural.security.tokens import TokenSigner
 from plural.storage.sqlite_store import SqliteEventStore
 
 HOST_PARTICIPANT_ID = "p_host"
+KEY_VARIABLES = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
+LOCAL_SERVER_KEY = "not-needed"
 
 
 class ConfigError(Exception):
@@ -58,13 +64,45 @@ class Host:
         await self.store.close()
 
 
-def build_provider(settings: HostSettings) -> LLMProvider:
-    if settings.provider == "fake":
-        return DemoProvider()
-    raise ConfigError(f"provider {settings.provider!r} is not wired yet: pending provider spike")
+def resolve_api_key(settings: HostSettings, environ: Mapping[str, str]) -> str | None:
+    if settings.api_key is not None:
+        return settings.api_key.get_secret_value()
+    variable = KEY_VARIABLES.get(settings.provider)
+    return environ.get(variable) if variable else None
+
+
+def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
+    match settings.provider:
+        case "fake":
+            return DemoProvider()
+        case "anthropic":
+            if not api_key:
+                raise ConfigError(
+                    "set PLURAL_API_KEY or ANTHROPIC_API_KEY for the anthropic provider"
+                )
+            return AnthropicProvider(
+                api_key=api_key,
+                model=settings.model or anthropic_api.DEFAULT_MODEL,
+                max_tokens=settings.max_output_tokens or anthropic_api.DEFAULT_MAX_TOKENS,
+                effort=settings.effort,
+                base_url=settings.base_url,
+            )
+        case "openai":
+            if not settings.model:
+                raise ConfigError("set PLURAL_MODEL for the openai provider")
+            if not api_key and settings.base_url is None:
+                raise ConfigError("set PLURAL_API_KEY or OPENAI_API_KEY for the openai provider")
+            return OpenAIProvider(
+                api_key=api_key or LOCAL_SERVER_KEY,
+                model=settings.model,
+                base_url=settings.base_url,
+                max_tokens=settings.max_output_tokens,
+                effort=settings.effort,
+            )
 
 
 async def build_host(settings: HostSettings, *, provider: LLMProvider | None = None) -> Host:
+    api_key = resolve_api_key(settings, os.environ)
     ids, clock = UlidGenerator(), SystemClock()
     room = settings.room or ids.new("r_")
     state_dir = settings.state_dir
@@ -82,7 +120,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         timeout_s=settings.approval_timeout_s,
     )
     loop = AgentLoop(
-        provider=provider or build_provider(settings),
+        provider=provider or build_provider(settings, api_key),
         tools=builtin_tools(),
         gate=gate,
         context=ContextBuilder(project_notes=await _project_notes(workspace)),
@@ -100,7 +138,6 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         token_ttl_s=settings.token_ttl_s,
     )
     host = Participant(id=HOST_PARTICIPANT_ID, name=settings.host_name, role=Role.HOST)
-    api_key = settings.api_key.get_secret_value() if settings.api_key else None
     actor = SessionActor(
         inbox=inbox,
         store=store,

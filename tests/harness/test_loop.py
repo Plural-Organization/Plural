@@ -1,13 +1,26 @@
 import asyncio
+import itertools
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
 
 from plural.agent.context import ContextBuilder
-from plural.agent.events import AgentEvent, RunEnd, ToolEnd
+from plural.agent.events import AgentEvent, MessageEnd, RunEnd, ToolEnd
 from plural.agent.gate import GateResult
 from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.messages import ToolResultTurn, UserTurn, attribute
+from plural.agent.providers.base import (
+    LlmEvent,
+    LlmRequest,
+    NativeContent,
+    NativeReady,
+    ProviderError,
+    Stop,
+    TextDelta,
+    ToolCallReady,
+    ToolCallRequest,
+)
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
@@ -126,3 +139,99 @@ async def test_cancel_settles_conversation(tmp_path: Path) -> None:
 
 def test_attribution() -> None:
     assert attribute(turn("hi")) == "[Host]\nhi"
+
+
+class FailingProvider:
+    async def stream(
+        self, request: LlmRequest, *, cancel: asyncio.Event
+    ) -> AsyncIterator[LlmEvent]:
+        yield TextDelta(text="partial")
+        raise ProviderError("anthropic 529: overloaded")
+
+
+async def test_truncated_tool_calls_are_not_executed(tmp_path: Path) -> None:
+    truncated = (
+        ToolCallReady(call=ToolCallRequest(id="c1", name="write", args={"path": "a.txt"})),
+        Stop(reason="max_tokens"),
+    )
+    provider = FakeProvider([truncated, reply("retrying smaller")])
+    gate = StubGate()
+    loop = make_loop(tmp_path, provider, gate)
+    events = await collect(loop, turn("write"))
+
+    assert gate.seen == []
+    assert (tmp_path / "a.txt").read_text() == "alpha\n"
+    result = next(m for m in loop.conversation if isinstance(m, ToolResultTurn))
+    assert result.is_error
+    assert "output limit" in result.content
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.STOP
+
+
+async def test_refusal_ends_run_without_tools(tmp_path: Path) -> None:
+    refused = (
+        ToolCallReady(call=ToolCallRequest(id="c1", name="bash", args={"command": "ls"})),
+        Stop(reason="refusal"),
+    )
+    gate = StubGate()
+    events = await collect(make_loop(tmp_path, FakeProvider([refused]), gate), turn("go"))
+    assert gate.seen == []
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.ERROR
+
+
+async def test_malformed_arguments_are_reported(tmp_path: Path) -> None:
+    broken = (
+        ToolCallReady(call=ToolCallRequest(id="c1", name="read", parse_error="invalid JSON")),
+        Stop(reason="tool_use"),
+    )
+    provider = FakeProvider([broken, reply("ok")])
+    gate = StubGate()
+    loop = make_loop(tmp_path, provider, gate)
+    await collect(loop, turn("read"))
+    assert gate.seen == []
+    result = next(m for m in loop.conversation if isinstance(m, ToolResultTurn))
+    assert result.is_error
+    assert "invalid JSON" in result.content
+
+
+async def test_provider_error_closes_message_and_run(tmp_path: Path) -> None:
+    loop = AgentLoop(
+        provider=FailingProvider(),
+        tools=builtin_tools(),
+        gate=StubGate(),
+        context=ContextBuilder(),
+        tool_ctx=ToolCtx(workspace=Workspace.at(tmp_path), backend=LocalBackend()),
+        ids=UlidGenerator(),
+    )
+    events = await collect(loop, turn("hi"))
+    assert isinstance(events[-2], MessageEnd)
+    assert events[-2].text == "partial"
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.ERROR
+    assert last.error == "anthropic 529: overloaded"
+
+
+async def test_native_content_is_replayed_and_history_is_append_only(tmp_path: Path) -> None:
+    native = NativeContent(provider="anthropic", blocks=({"type": "thinking", "signature": "s"},))
+    first = (*use_tool("read", path="a.txt"), NativeReady(content=native))
+    long_output = "x" * 5000
+    (tmp_path / "big.txt").write_text(long_output)
+    calls = [
+        use_tool("read", f"c{i}", path="big.txt") if i % 2 else use_tool("ls", f"c{i}", path=".")
+        for i in range(10)
+    ]
+    provider = FakeProvider([first, *calls, reply("ok")])
+    events = await collect(make_loop(tmp_path, provider, StubGate()), turn("read"))
+
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.STOP
+
+    replayed = provider.requests[1].messages[1]
+    assert replayed.native == native
+    for earlier, later in itertools.pairwise(provider.requests):
+        assert later.messages[: len(earlier.messages)] == earlier.messages

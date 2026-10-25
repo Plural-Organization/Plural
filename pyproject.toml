@@ -8,7 +8,9 @@ requires-python = ">=3.12"
 authors = [{ name = "Plural team" }]
 dependencies = [
   "aiosqlite>=0.21",
+  "anthropic>=2.3.0",
   "cryptography>=44",
+  "openai>=3.37.0",
   "pydantic>=2.11",
   "pydantic-settings>=2.8",
   "rich>=13.9",
@@ -118,3 +120,16 @@ name = "client knows nothing about the host"
 type = "forbidden"
 source_modules = ["plural.client"]
 forbidden_modules = ["plural.agent", "plural.host", "plural.relay", "plural.storage", "plural.tui", "plural.cli"]
+
+[[tool.importlinter.contracts]]
+name = "vendor SDKs live only in provider adapters"
+type = "forbidden"
+source_modules = [
+  "plural.core", "plural.protocol", "plural.security", "plural.storage", "plural.host",
+  "plural.relay", "plural.client", "plural.cli", "plural.tui",
+  "plural.agent.loop", "plural.agent.context", "plural.agent.messages", "plural.agent.gate",
+  "plural.agent.events", "plural.agent.tools", "plural.agent.sandbox",
+  "plural.agent.providers.base", "plural.agent.providers.fake",
+]
+forbidden_modules = ["anthropic", "openai"]
+allow_indirect_imports = true
