@@ -1,5 +1,6 @@
 import asyncio
 import getpass
+import os
 import sys
 from contextlib import suppress
 from pathlib import Path
@@ -15,7 +16,7 @@ from rich.table import Table
 from plural import __version__
 from plural.cli.output import stream
 from plural.client.reconnect import JoinLink, SessionClient
-from plural.host.bootstrap import ConfigError, build_host
+from plural.host.bootstrap import ConfigError, build_host, build_provider, resolve_api_key
 from plural.host.config import HostSettings
 from plural.protocol.commands import ClientInfo
 from plural.protocol.models import Role
@@ -120,15 +121,12 @@ def doctor(
     workspace: Annotated[Path, typer.Option(help="Project directory to check.")] = Path("."),
 ) -> None:
     settings = HostSettings(workspace=workspace)
+    provider_ok, provider_detail = _provider_check(settings)
     checks = [
         ("python >= 3.12", sys.version_info >= (3, 12), sys.version.split()[0]),
         ("workspace exists", settings.workspace.is_dir(), str(settings.workspace.resolve())),
         ("data dir", _writable(settings.state_dir), str(settings.state_dir)),
-        (
-            "provider",
-            settings.provider == "fake" or settings.api_key is not None,
-            f"{settings.provider}" + ("" if settings.api_key else " (no API key)"),
-        ),
+        ("provider", provider_ok, provider_detail),
     ]
     table = Table("check", "status", "detail")
     for title, ok, detail in checks:
@@ -151,6 +149,14 @@ def export(
             await store.close()
 
     console.print(f"exported {asyncio.run(run())} events to {out}")
+
+
+def _provider_check(settings: HostSettings) -> tuple[bool, str]:
+    try:
+        build_provider(settings, resolve_api_key(settings, os.environ))
+    except ConfigError as error:
+        return False, str(error)
+    return True, settings.provider + (f" · {settings.model}" if settings.model else "")
 
 
 def _writable(path: Path) -> bool:
