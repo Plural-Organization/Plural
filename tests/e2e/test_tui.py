@@ -23,6 +23,12 @@ async def until(pilot: Pilot[None], condition: Callable[[], bool], timeout: floa
     raise AssertionError("condition was not met in time")
 
 
+async def press(pilot: Pilot[None], selector: str) -> None:
+    await until(pilot, lambda: bool(pilot.app.screen.query(selector)))
+    await pilot.pause()
+    await pilot.click(selector)
+
+
 def shown_when_idle(app: PluralApp) -> str:
     return "" if isinstance(app.screen, ApprovalDialog) else shown(app)
 
@@ -43,15 +49,15 @@ async def test_host_reviews_proposal_and_approves_tool(session: Session) -> None
         await until(pilot, lambda: bool(client.projection.state.proposals))
         await pilot.press("ctrl+r")
         await until(pilot, lambda: isinstance(app.screen, ProposalDialog))
-        await pilot.click("#approve")
+        await press(pilot, "#approve")
 
         await until(pilot, lambda: isinstance(app.screen, ApprovalDialog))
         assert live(client.projection) == "… waiting for host approval"
-        await pilot.click("#once")
+        await press(pilot, "#once")
 
         await until(pilot, lambda: not isinstance(app.screen, ApprovalDialog))
         await until(pilot, lambda: "alpha" in shown(app))
-        assert "agent finished" in shown(app)
+        await until(pilot, lambda: "agent finished" in shown(app))
         assert live(client.projection) == ""
 
 
@@ -64,7 +70,7 @@ async def test_host_blocks_a_command_class_from_the_dialog(tmp_path: Path) -> No
             await until(pilot, lambda: client.projection.me is not None)
             await client.send(PromptSubmit(text="fetch"))
             await until(pilot, lambda: isinstance(app.screen, ApprovalDialog))
-            await pilot.click("#block")
+            await press(pilot, "#block")
             await until(pilot, lambda: "blocked by the host" in shown_when_idle(app))
 
 
@@ -84,12 +90,12 @@ async def test_host_edits_policy_in_the_dialog_and_with_slash_commands(session: 
         dialog = app.screen
         assert isinstance(dialog, PoliciesDialog)
         dialog.query_one("#pattern", Input).value = "make *"
-        await pilot.click("#add")
+        await press(pilot, "#add")
         await until(pilot, lambda: len(client.projection.state.policy) == 2)
         await until(pilot, lambda: dialog.query_one(OptionList).option_count == 2)
 
-        await pilot.click("#remove")
+        await press(pilot, "#remove")
         await until(pilot, lambda: len(client.projection.state.policy) == 1)
-        await pilot.click("#close")
+        await press(pilot, "#close")
         await until(pilot, lambda: not isinstance(app.screen, PoliciesDialog))
         assert [r.pattern for r in client.projection.state.policy] == ["make *"]
