@@ -41,7 +41,7 @@ Plural turns a solo AI agent session into a shared one. The agent runs on the **
 - **Event-sourced.** An append-only SQLite log is the source of truth. Reconnect, replay and audit come for free.
 - **Isolation.** Tools are confined to the workspace. Secret paths are denied and output is redacted.
 - **Direct or relayed.** Connect over LAN directly, or through a relay that never sees permissions and never stores content.
-- **Terminal and browser clients.** A Textual TUI, a plain line mode and a web client.
+- **Terminal clients.** A Textual TUI and a plain line mode. A browser client is in progress.
 - **Bring your own key.** API keys only. Plural never touches subscription credentials.
 
 ## Requirements
@@ -49,7 +49,7 @@ Plural turns a solo AI agent session into a shared one. The agent runs on the **
 - Python **3.12** or newer
 - [uv](https://docs.astral.sh/uv/) 0.5+
 - macOS or Linux (Windows through WSL)
-- Node.js 22+ (web client only)
+- Node.js 22+ (only to work on the in-progress web client)
 
 ## Installation
 
@@ -213,7 +213,7 @@ src/plural/
 ├── client/     connection, reconnect, projection
 ├── cli/        Typer entry point
 └── tui/        Textual app
-web/            browser client (Vite + React + TypeScript)
+web/            browser client (in progress)
 ```
 
 - `core` and `protocol` do no I/O.
@@ -242,7 +242,7 @@ Regenerate the protocol JSON schema for the web client:
 uv run python scripts/gen_schema.py
 ```
 
-Web client:
+Web client (in progress):
 
 ```sh
 cd web
@@ -258,7 +258,7 @@ npm run dev
 - [x] Direct and relay transports
 - [x] TUI and plain clients
 - [x] Anthropic and OpenAI-compatible providers
-- [ ] Web client
+- [ ] Web client (in progress)
 - [x] Context compaction
 - [ ] Container sandbox
 - [ ] End-to-end and load tests
