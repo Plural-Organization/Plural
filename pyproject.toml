@@ -1,11 +1,22 @@
 [project]
-name = "plural"
-version = "0.1.0"
+name = "plural-agent"
+dynamic = ["version"]
 description = "Multiplayer sessions for one AI agent: shared context, host approvals, attribution, isolation."
 readme = "README.md"
 license = "Apache-2.0"
 requires-python = ">=3.12"
 authors = [{ name = "Plural team" }]
+keywords = ["ai", "agent", "multiplayer", "coding-agent", "llm", "tui"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development",
+]
 dependencies = [
   "aiosqlite>=0.21",
   "anthropic>=2.3.0",
@@ -21,6 +32,11 @@ dependencies = [
   "uvicorn>=0.34",
   "websockets>=15",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Plural-Organization/Plural"
+Issues = "https://github.com/Plural-Organization/Plural/issues"
+Changelog = "https://github.com/Plural-Organization/Plural/releases"
 
 [project.scripts]
 plural = "plural.cli.main:app"
@@ -40,6 +56,9 @@ dev = [
 [build-system]
 requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "src/plural/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/plural"]

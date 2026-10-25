@@ -1134,8 +1134,7 @@ wheels = [
 ]
 
 [[package]]
-name = "plural"
-version = "0.1.0"
+name = "plural-agent"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },

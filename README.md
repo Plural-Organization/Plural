@@ -53,16 +53,27 @@ Plural turns a solo AI agent session into a shared one. The agent runs on the **
 
 ## Installation
 
-Clone the repository, then from its root:
+```sh
+curl -fsSL https://raw.githubusercontent.com/Plural-Organization/Plural/main/install.sh | sh
+```
+
+The script installs [uv](https://docs.astral.sh/uv/) if it is missing, then Plural. Or install it yourself:
+
+```sh
+uv tool install plural-agent
+```
+
+The package is `plural-agent`; it installs the `plural` command. Other ways:
+
+```sh
+pipx install plural-agent
+uvx --from plural-agent plural host
+```
+
+From source, clone the repository and run from its root:
 
 ```sh
 uv sync
-```
-
-As a global tool:
-
-```sh
-uv tool install .
 ```
 
 Check your environment:
