@@ -6,9 +6,11 @@ from plural.agent.events import RunEnd
 from plural.agent.loop import AgentLoop
 from plural.agent.messages import UserTurn
 from plural.host.inbox import AgentOutput, Inbox
-from plural.protocol.models import RunEndReason, Usage
+from plural.protocol.models import RunEndReason
 
 log = structlog.get_logger(__name__)
+
+ABORT_GRACE_S = 5.0
 
 
 class AgentRun:
@@ -17,6 +19,7 @@ class AgentRun:
         self._inbox = inbox
         self._task: asyncio.Task[None] | None = None
         self._cancel = asyncio.Event()
+        self._deadline: asyncio.TimerHandle | None = None
 
     @property
     def active(self) -> bool:
@@ -39,15 +42,22 @@ class AgentRun:
 
     def abort(self) -> None:
         self._cancel.set()
-        if self._task is not None:
-            self._task.cancel()
+        task = self._task
+        if task is not None and self._deadline is None:
+            self._deadline = asyncio.get_running_loop().call_later(ABORT_GRACE_S, task.cancel)
 
     async def _drive(self, run_id: str, turn: UserTurn, cancel: asyncio.Event) -> None:
         try:
             async for event in self._loop.run(turn, cancel=cancel):
                 self._inbox.put(AgentOutput(run_id, event))
         except asyncio.CancelledError:
-            self._inbox.put(AgentOutput(run_id, RunEnd(RunEndReason.ABORTED, Usage())))
+            self._inbox.put(AgentOutput(run_id, RunEnd(RunEndReason.ABORTED, self._loop.usage)))
         except Exception as error:
             log.exception("agent.run_failed", run_id=run_id)
-            self._inbox.put(AgentOutput(run_id, RunEnd(RunEndReason.ERROR, Usage(), str(error))))
+            self._inbox.put(
+                AgentOutput(run_id, RunEnd(RunEndReason.ERROR, self._loop.usage, str(error)))
+            )
+        finally:
+            if self._deadline is not None:
+                self._deadline.cancel()
+                self._deadline = None

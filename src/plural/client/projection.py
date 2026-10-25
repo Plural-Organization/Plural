@@ -39,6 +39,7 @@ class Projection:
                 self.streaming.pop(message_id, None)
                 self.reasoning = 0
             case RunEnded():
+                self.streaming.clear()
                 self.reasoning = 0
             case _:
                 pass

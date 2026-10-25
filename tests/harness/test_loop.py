@@ -4,14 +4,16 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
+from tests.doubles import StallingProvider
 
 from plural.agent.context import ContextBuilder
-from plural.agent.events import AgentEvent, MessageEnd, RunEnd, ToolEnd
+from plural.agent.events import AgentEvent, MessageEnd, RunEnd, ToolEnd, ToolStart
 from plural.agent.gate import GateResult
 from plural.agent.loop import AgentLoop, LoopLimits
-from plural.agent.messages import ToolResultTurn, UserTurn, attribute
+from plural.agent.messages import AssistantTurn, ToolResultTurn, UserTurn, attribute
 from plural.agent.providers.base import (
     LlmEvent,
+    LLMProvider,
     LlmRequest,
     NativeContent,
     NativeReady,
@@ -28,7 +30,14 @@ from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.registry import builtin_tools
 from plural.core.provenance import direct, from_proposal
 from plural.host.system import UlidGenerator
-from plural.protocol.models import Actor, ActorKind, Provenance, Role, RunEndReason, ToolCallView
+from plural.protocol.models import (
+    Actor,
+    ActorKind,
+    Provenance,
+    Role,
+    RunEndReason,
+    ToolCallView,
+)
 
 
 class StubGate:
@@ -54,7 +63,7 @@ def turn(text: str, *, guest: bool = False) -> UserTurn:
 
 
 def make_loop(
-    tmp_path: Path, provider: FakeProvider, gate: StubGate, limits: LoopLimits | None = None
+    tmp_path: Path, provider: LLMProvider, gate: StubGate, limits: LoopLimits | None = None
 ) -> AgentLoop:
     (tmp_path / "a.txt").write_text("alpha\n")
     return AgentLoop(
@@ -235,3 +244,90 @@ async def test_native_content_is_replayed_and_history_is_append_only(tmp_path: P
     assert replayed.native == native
     for earlier, later in itertools.pairwise(provider.requests):
         assert later.messages[: len(earlier.messages)] == earlier.messages
+
+
+async def test_silent_model_times_out_before_first_output(tmp_path: Path) -> None:
+    class Mute:
+        async def stream(
+            self, request: LlmRequest, *, cancel: asyncio.Event
+        ) -> AsyncIterator[LlmEvent]:
+            await asyncio.sleep(3600)
+            yield Stop()
+
+    loop = make_loop(
+        tmp_path, Mute(), StubGate(), LoopLimits(first_token_timeout_s=0.05, idle_timeout_s=5)
+    )
+    events = await collect(loop, turn("hi"))
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.ERROR
+    assert last.error == "model produced no output for 0.05s"
+
+
+async def test_stalled_stream_times_out_between_events(tmp_path: Path) -> None:
+    limits = LoopLimits(first_token_timeout_s=5, idle_timeout_s=0.05)
+    loop = make_loop(tmp_path, StallingProvider(text="par"), StubGate(), limits)
+    events = await collect(loop, turn("hi"))
+    ended = next(e for e in events if isinstance(e, MessageEnd))
+    last = events[-1]
+    assert ended.text == "par"
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.ERROR
+    assert last.error == "model produced no output for 0.05s"
+    assert last.usage.output_tokens == 3
+
+
+async def abort_after(loop: AgentLoop, delay: float) -> tuple[list[AgentEvent], float]:
+    cancel = asyncio.Event()
+    started = asyncio.get_running_loop().time()
+
+    async def drain() -> list[AgentEvent]:
+        return [event async for event in loop.run(turn("go"), cancel=cancel)]
+
+    task = asyncio.create_task(drain())
+    await asyncio.sleep(delay)
+    cancel.set()
+    events = await asyncio.wait_for(task, 2)
+    return events, asyncio.get_running_loop().time() - started
+
+
+async def test_abort_before_any_output_leaves_no_empty_assistant_turn(tmp_path: Path) -> None:
+    loop = make_loop(tmp_path, StallingProvider(), StubGate(), LoopLimits())
+    events, elapsed = await abort_after(loop, 0.05)
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.ABORTED
+    assert last.usage.input_tokens == 7
+    assert elapsed < 1
+    assert not any(isinstance(m, AssistantTurn) for m in loop.conversation)
+
+
+async def test_abort_mid_stream_keeps_the_partial_answer(tmp_path: Path) -> None:
+    loop = make_loop(tmp_path, StallingProvider(text="half an ans"), StubGate(), LoopLimits())
+    events, _ = await abort_after(loop, 0.05)
+    ended = next(e for e in events if isinstance(e, MessageEnd))
+    assert ended.text == "half an ans"
+    assert [m.text for m in loop.conversation if isinstance(m, AssistantTurn)] == ["half an ans"]
+
+
+async def test_abort_while_waiting_for_approval(tmp_path: Path) -> None:
+    provider = FakeProvider([use_tool("bash", command="make")])
+    loop = make_loop(tmp_path, provider, StubGate(block=True))
+    events, _ = await abort_after(loop, 0.1)
+    result = next(e for e in events if isinstance(e, ToolEnd))
+    assert result.result.content == "Not executed: run aborted"
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.ABORTED
+    assert isinstance(loop.conversation[-1], ToolResultTurn)
+
+
+async def test_abort_kills_a_running_command(tmp_path: Path) -> None:
+    provider = FakeProvider([use_tool("bash", command="sleep 30")])
+    loop = make_loop(tmp_path, provider, StubGate())
+    events, elapsed = await abort_after(loop, 0.5)
+    assert any(isinstance(e, ToolStart) for e in events)
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.ABORTED
+    assert elapsed < 5

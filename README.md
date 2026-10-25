@@ -137,6 +137,8 @@ Every setting can be passed as an environment variable with the `PLURAL_` prefix
 | `PLURAL_PORT` | `7777` | Port for direct mode |
 | `PLURAL_RELAY_URL` | none | Relay URL |
 | `PLURAL_PUBLIC_URL` | none | Public URL used in invite links |
+| `PLURAL_FIRST_TOKEN_TIMEOUT_S` | `120` | Seconds to wait for the model's first output before the run fails |
+| `PLURAL_IDLE_TIMEOUT_S` | `60` | Seconds of silence mid-response before the run fails |
 | `PLURAL_APPROVAL_TIMEOUT_S` | `120` | Seconds before an approval expires |
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24h |
 | `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |

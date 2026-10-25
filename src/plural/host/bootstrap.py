@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from plural.agent.context import ContextBuilder
-from plural.agent.loop import AgentLoop
+from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.providers import anthropic_api
 from plural.agent.providers.anthropic_api import AnthropicProvider
 from plural.agent.providers.base import LLMProvider
@@ -126,6 +126,10 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         context=ContextBuilder(project_notes=await _project_notes(workspace)),
         tool_ctx=ToolCtx(workspace=workspace, backend=LocalBackend()),
         ids=ids,
+        limits=LoopLimits(
+            first_token_timeout_s=settings.first_token_timeout_s,
+            idle_timeout_s=settings.idle_timeout_s,
+        ),
     )
     room_url = settings.room_url(room)
     invites = InviteBook(clock=clock, link_base=room_url)

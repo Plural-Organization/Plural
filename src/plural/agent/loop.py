@@ -1,7 +1,7 @@
 import asyncio
 import json
 from collections import deque
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 from dataclasses import dataclass, field
 
 from pydantic import ValidationError
@@ -17,8 +17,10 @@ from plural.agent.events import (
     ToolStart,
 )
 from plural.agent.gate import PolicyGate
+from plural.agent.interrupt import Interrupted, TimedOut, interruptible
 from plural.agent.messages import AssistantTurn, Message, ToolResultTurn, UserTurn, to_llm
 from plural.agent.providers.base import (
+    LlmEvent,
     LLMProvider,
     LlmRequest,
     NativeContent,
@@ -45,6 +47,8 @@ class LoopLimits:
     max_turns: int = 50
     repeat_limit: int = 3
     tool_timeout_s: float = 600.0
+    first_token_timeout_s: float = 120.0
+    idle_timeout_s: float = 60.0
 
 
 @dataclass(slots=True)
@@ -84,6 +88,11 @@ class AgentLoop:
         self._conversation: list[Message] = []
         self._steer: deque[UserTurn] = deque()
         self._follow_up: deque[UserTurn] = deque()
+        self._usage = Usage()
+
+    @property
+    def usage(self) -> Usage:
+        return self._usage
 
     @property
     def conversation(self) -> Sequence[Message]:
@@ -104,14 +113,14 @@ class AgentLoop:
     async def run(self, prompt: UserTurn, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         provenance = prompt.provenance
         self._conversation.append(prompt)
-        usage = Usage()
+        self._usage = Usage()
         recent: deque[str] = deque(maxlen=self._limits.repeat_limit)
         try:
             for _ in range(self._limits.max_turns):
                 turn = _Turn(self._ids.new("m_"))
                 yield MessageStart(turn.message_id)
                 try:
-                    async for event in self._provider.stream(self._request(), cancel=cancel):
+                    async for event in self._events(cancel):
                         match event:
                             case TextDelta(text=text):
                                 turn.text.append(text)
@@ -124,47 +133,69 @@ class AgentLoop:
                             case NativeReady(content=content):
                                 turn.native = content
                             case UsageReport(usage=delta):
-                                usage = usage + delta
+                                self._usage = self._usage + delta
                             case Stop(reason=reason):
                                 turn.stop = reason
                 except ProviderError as error:
                     yield MessageEnd(turn.message_id, "".join(turn.text), "".join(turn.thinking))
-                    yield RunEnd(RunEndReason.ERROR, usage, str(error))
+                    yield RunEnd(RunEndReason.ERROR, self._usage, str(error))
                     return
                 assistant = turn.assistant()
-                self._conversation.append(assistant)
+                if assistant.text or assistant.tool_calls or not cancel.is_set():
+                    self._conversation.append(assistant)
                 yield MessageEnd(turn.message_id, assistant.text, "".join(turn.thinking))
                 if cancel.is_set():
-                    yield RunEnd(RunEndReason.ABORTED, usage)
+                    yield RunEnd(RunEndReason.ABORTED, self._usage)
                     return
                 if turn.stop in _UNFINISHED:
                     for call in assistant.tool_calls:
                         for event in self._skip(call, _UNFINISHED[turn.stop]):
                             yield event
                     if turn.stop == "refusal":
-                        yield RunEnd(RunEndReason.ERROR, usage, "model declined the request")
+                        yield RunEnd(RunEndReason.ERROR, self._usage, "model declined the request")
                         return
                     continue
                 for call in assistant.tool_calls:
                     recent.append(_signature(call))
                     if len(recent) == recent.maxlen and len(set(recent)) == 1:
-                        yield RunEnd(RunEndReason.LIMIT, usage, "repeated identical tool call")
+                        yield RunEnd(
+                            RunEndReason.LIMIT, self._usage, "repeated identical tool call"
+                        )
                         return
-                    async for event in self._execute(call, provenance):
+                    async for event in self._execute(call, provenance, cancel):
                         yield event
                     if cancel.is_set():
-                        yield RunEnd(RunEndReason.ABORTED, usage)
+                        yield RunEnd(RunEndReason.ABORTED, self._usage)
                         return
                 queued = self._next_input(has_tool_calls=bool(assistant.tool_calls))
                 if not assistant.tool_calls and not queued:
-                    yield RunEnd(RunEndReason.STOP, usage)
+                    yield RunEnd(RunEndReason.STOP, self._usage)
                     return
                 for message in queued:
                     provenance = merge(provenance, message.provenance)
                     self._conversation.append(message)
-            yield RunEnd(RunEndReason.LIMIT, usage, "max turns reached")
+            yield RunEnd(RunEndReason.LIMIT, self._usage, "max turns reached")
         finally:
             self._settle()
+
+    async def _events(self, cancel: asyncio.Event) -> AsyncIterator[LlmEvent]:
+        stream = self._provider.stream(self._request(), cancel=cancel).__aiter__()
+        limit = self._limits.first_token_timeout_s
+        try:
+            while True:
+                try:
+                    event = await interruptible(anext(stream), cancel, limit)
+                except StopAsyncIteration:
+                    return
+                except Interrupted:
+                    return
+                except TimedOut:
+                    raise ProviderError(f"model produced no output for {limit:g}s") from None
+                limit = self._limits.idle_timeout_s
+                yield event
+        finally:
+            if isinstance(stream, AsyncGenerator):
+                await stream.aclose()
 
     def _next_input(self, *, has_tool_calls: bool) -> list[UserTurn]:
         if self._steer:
@@ -183,7 +214,7 @@ class AgentLoop:
         )
 
     async def _execute(
-        self, call: ToolCallRequest, provenance: Provenance
+        self, call: ToolCallRequest, provenance: Provenance, cancel: asyncio.Event
     ) -> AsyncIterator[AgentEvent]:
         if call.parse_error is not None:
             for event in self._skip(call, f"Invalid tool call: {call.parse_error}"):
@@ -203,19 +234,24 @@ class AgentLoop:
             args=call.args,
         )
         yield ToolStart(view)
-        verdict = await self._gate.check(view, subject=prepared.subject, provenance=provenance)
-        if verdict.allowed:
-            result = await self._invoke(prepared)
-        else:
-            result = ToolResult(f"Denied: {verdict.reason}", is_error=True)
+        try:
+            verdict = await interruptible(
+                self._gate.check(view, subject=prepared.subject, provenance=provenance), cancel
+            )
+            if verdict.allowed:
+                result = await self._invoke(prepared, cancel)
+            else:
+                result = ToolResult(f"Denied: {verdict.reason}", is_error=True)
+        except Interrupted:
+            result = ToolResult(_ABORTED, is_error=True)
         yield self._finish(call, result)
 
-    async def _invoke(self, prepared: PreparedCall) -> ToolResult:
+    async def _invoke(self, prepared: PreparedCall, cancel: asyncio.Event) -> ToolResult:
         try:
-            return await asyncio.wait_for(
-                prepared.execute(self._tool_ctx), self._limits.tool_timeout_s
+            return await interruptible(
+                prepared.execute(self._tool_ctx), cancel, self._limits.tool_timeout_s
             )
-        except TimeoutError:
+        except TimedOut:
             return ToolResult("Tool timed out", is_error=True)
         except (ToolError, SandboxError, OSError, UnicodeDecodeError) as error:
             return ToolResult(f"{type(error).__name__}: {error}", is_error=True)
@@ -253,6 +289,8 @@ class AgentLoop:
                         )
                 return
 
+
+_ABORTED = "Not executed: run aborted"
 
 _UNFINISHED: dict[StopReason, str] = {
     "max_tokens": "Not executed: the response hit the output limit before the call was complete",

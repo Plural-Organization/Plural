@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
+from tests.doubles import StallingProvider
 from tests.e2e.support import Session, running_session
 
 
@@ -12,5 +13,13 @@ async def session(request: pytest.FixtureRequest, tmp_path: Path) -> AsyncGenera
     provider = FakeProvider([use_tool("bash", command="cat notes.txt"), reply("All good.")])
     async with running_session(
         tmp_path, relayed=request.param == "relay", provider=provider
+    ) as running:
+        yield running
+
+
+@pytest.fixture
+async def stalled_session(tmp_path: Path) -> AsyncGenerator[Session]:
+    async with running_session(
+        tmp_path, relayed=False, provider=StallingProvider(text="working on it")
     ) as running:
         yield running

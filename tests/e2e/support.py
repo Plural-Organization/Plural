@@ -7,7 +7,7 @@ from pathlib import Path
 
 import uvicorn
 
-from plural.agent.providers.fake import FakeProvider
+from plural.agent.providers.base import LLMProvider
 from plural.client.connection import CommandRejected
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.host.bootstrap import Host, build_host
@@ -84,7 +84,7 @@ class Session:
 
 @asynccontextmanager
 async def running_session(
-    tmp_path: Path, *, relayed: bool, provider: FakeProvider
+    tmp_path: Path, *, relayed: bool, provider: LLMProvider
 ) -> AsyncGenerator[Session]:
     workspace = tmp_path / "ws"
     workspace.mkdir(exist_ok=True)
