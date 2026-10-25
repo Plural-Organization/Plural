@@ -44,6 +44,12 @@ class ApprovalDecision(StrEnum):
     BLOCK = "block"
 
 
+class PolicyAction(StrEnum):
+    ALLOW = "allow"
+    ASK = "ask"
+    DENY = "deny"
+
+
 class ToolRisk(StrEnum):
     READ = "read"
     WRITE = "write"
@@ -131,6 +137,13 @@ class ApprovalView(Model):
     suggested_patterns: tuple[str, ...] = ()
 
 
+class PolicyRuleView(Model):
+    id: str
+    tool: str
+    pattern: str
+    action: PolicyAction
+
+
 class RunView(Model):
     id: str
     prompt_id: str
@@ -153,5 +166,6 @@ class SessionState(Model):
     proposals: dict[str, ProposalView] = Field(default_factory=dict[str, ProposalView])
     approvals: dict[str, ApprovalView] = Field(default_factory=dict[str, ApprovalView])
     attachments: dict[str, AttachmentMeta] = Field(default_factory=dict[str, AttachmentMeta])
+    policy: tuple[PolicyRuleView, ...] = ()
     run: RunView | None = None
     transcript: tuple[TranscriptEntry, ...] = ()

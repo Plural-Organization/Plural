@@ -11,6 +11,8 @@ from plural.protocol.commands import (
     InviteCreate,
     ParticipantRevoke,
     ParticipantSetRole,
+    PolicyAdd,
+    PolicyRemove,
     PromptSubmit,
     ProposalDecide,
     RunAbort,
@@ -34,6 +36,8 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         InviteCreate: HOST_ONLY,
         ParticipantSetRole: HOST_ONLY,
         ParticipantRevoke: HOST_ONLY,
+        PolicyAdd: HOST_ONLY,
+        PolicyRemove: HOST_ONLY,
     }
 )
 

@@ -1,21 +1,14 @@
 from collections.abc import Mapping
-from enum import StrEnum
 from fnmatch import fnmatchcase
 from typing import Final, Self
 
-from plural.protocol.models import Model
-
-
-class Action(StrEnum):
-    ALLOW = "allow"
-    ASK = "ask"
-    DENY = "deny"
+from plural.protocol.models import Model, PolicyAction
 
 
 class Rule(Model):
     tool: str
     pattern: str
-    action: Action
+    action: PolicyAction
 
     def matches(self, tool: str, subject: str) -> bool:
         return fnmatchcase(tool, self.tool) and fnmatchcase(subject, self.pattern)
@@ -24,7 +17,7 @@ class Rule(Model):
 class RuleSet(Model):
     rules: tuple[Rule, ...] = ()
 
-    def resolve(self, tool: str, subject: str) -> Action | None:
+    def resolve(self, tool: str, subject: str) -> PolicyAction | None:
         for rule in reversed(self.rules):
             if rule.matches(tool, subject):
                 return rule.action
@@ -36,7 +29,7 @@ class RuleSet(Model):
     @classmethod
     def from_mapping(cls, spec: Mapping[str, Mapping[str, str]]) -> Self:
         rules = tuple(
-            Rule(tool=tool, pattern=pattern, action=Action(action))
+            Rule(tool=tool, pattern=pattern, action=PolicyAction(action))
             for tool, patterns in spec.items()
             for pattern, action in patterns.items()
         )

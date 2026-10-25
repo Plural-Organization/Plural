@@ -7,7 +7,7 @@ from plural.protocol.events import (
     MessageStarted,
     RunEnded,
 )
-from plural.protocol.models import Participant, SessionState
+from plural.protocol.models import Participant, PolicyRuleView, SessionState
 
 
 class Projection:
@@ -15,6 +15,7 @@ class Projection:
         self.state = SessionState()
         self.streaming: dict[str, str] = {}
         self.reasoning = 0
+        self.base_policy: tuple[PolicyRuleView, ...] = ()
         self.me_id: str | None = None
         self.ready = False
 

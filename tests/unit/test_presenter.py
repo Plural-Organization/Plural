@@ -1,13 +1,22 @@
 from datetime import UTC, datetime
 
-from plural.client.presenter import Line, history, label, live
+from plural.client.presenter import Line, describe, history, label, live
 from plural.client.projection import Projection
 from plural.core.provenance import direct
-from plural.protocol.events import EventRecord, MessageDelta, MessageEnded, RunEnded
+from plural.protocol.events import (
+    EventRecord,
+    MessageDelta,
+    MessageEnded,
+    PolicyRuleAdded,
+    PolicyRuleRemoved,
+    RunEnded,
+)
 from plural.protocol.models import (
     ApprovalView,
     EntryKind,
     Participant,
+    PolicyAction,
+    PolicyRuleView,
     Role,
     RunView,
     SessionState,
@@ -94,3 +103,12 @@ def test_live_status_follows_the_run() -> None:
     )
     projection.state = projection.state.model_copy(update={"approvals": {"a1": approval}})
     assert live(projection) == "… waiting for host approval"
+
+
+def test_policy_changes_are_described() -> None:
+    rule = PolicyRuleView(id="pl_1", tool="bash", pattern="make *", action=PolicyAction.ALLOW)
+    state = SessionState()
+    assert describe(PolicyRuleAdded(rule=rule), state) == Line(
+        "magenta", "policy + allow bash make *  [pl_1]"
+    )
+    assert describe(PolicyRuleRemoved(rule_id="pl_1"), state) == Line("magenta", "policy - pl_1")

@@ -10,6 +10,8 @@ from plural.protocol.events import (
     ParticipantLeft,
     ParticipantRevoked,
     ParticipantRoleChanged,
+    PolicyRuleAdded,
+    PolicyRuleRemoved,
     PromptAccepted,
     ProposalApproved,
     ProposalCreated,
@@ -82,6 +84,11 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             )
         case ApprovalResolved(approval_id=approval_id):
             return state.model_copy(update={"approvals": _without(state.approvals, approval_id)})
+        case PolicyRuleAdded(rule=rule):
+            return state.model_copy(update={"policy": (*state.policy, rule)})
+        case PolicyRuleRemoved(rule_id=rule_id):
+            kept = tuple(rule for rule in state.policy if rule.id != rule_id)
+            return state.model_copy(update={"policy": kept})
         case AttachmentAdded(attachment=attachment):
             return state.model_copy(
                 update={"attachments": {**state.attachments, attachment.id: attachment}}

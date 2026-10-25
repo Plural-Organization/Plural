@@ -3,12 +3,18 @@ from typing import Final
 
 from plural.agent.gate import GateResult
 from plural.core.policy.engine import Policy, ToolInvocation, evaluate
-from plural.core.policy.rejections import RejectionLedger, class_patterns
-from plural.core.policy.rules import Action
+from plural.core.policy.rejections import RejectionLedger
+from plural.core.policy.rules import RuleSet
 from plural.core.ports import Clock, IdGenerator
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.inbox import ApprovalNeeded, Inbox
-from plural.protocol.models import ApprovalDecision, ApprovalView, Provenance, ToolCallView
+from plural.protocol.models import (
+    ApprovalDecision,
+    ApprovalView,
+    PolicyAction,
+    Provenance,
+    ToolCallView,
+)
 
 FINAL: Final = "Do not retry this or an equivalent action; ask the user how to proceed instead"
 
@@ -37,6 +43,9 @@ class HostPolicyGate:
     def policy(self) -> Policy:
         return self._policy
 
+    def use_session_rules(self, rules: RuleSet) -> None:
+        self._policy = self._policy.with_session(rules)
+
     def begin_run(self) -> None:
         self._rejections.reset()
 
@@ -45,9 +54,9 @@ class HostPolicyGate:
     ) -> GateResult:
         invocation = ToolInvocation(name=call.name, risk=call.risk, subject=subject)
         decision = evaluate(self._policy, invocation, provenance)
-        if decision.action is Action.ALLOW:
+        if decision.action is PolicyAction.ALLOW:
             return GateResult(allowed=True, reason=decision.reason)
-        if decision.action is Action.DENY:
+        if decision.action is PolicyAction.DENY:
             return GateResult(allowed=False, reason=f"{decision.reason}. {FINAL}")
         if self._rejections.exhausted(invocation):
             return GateResult(allowed=False, reason=f"rejected by the host repeatedly. {FINAL}")
@@ -68,8 +77,5 @@ class HostPolicyGate:
             self._rejections.record(invocation)
             return GateResult(allowed=False, reason=f"rejected by the host. {FINAL}")
         if answer is ApprovalDecision.BLOCK:
-            self._policy = self._policy.deny_always(call.name, class_patterns(invocation))
             return GateResult(allowed=False, reason=f"blocked by the host. {FINAL}")
-        if answer is ApprovalDecision.ALWAYS:
-            self._policy = self._policy.allow_always(call.name, decision.suggested_patterns)
         return GateResult(allowed=True, reason=f"approved by host ({answer})")

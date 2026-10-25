@@ -11,6 +11,7 @@ from plural.protocol.models import (
     Delivery,
     Model,
     Participant,
+    PolicyRuleView,
     ProposalView,
     Provenance,
     Role,
@@ -147,6 +148,16 @@ class ApprovalResolved(EventBase):
     resolved_by: str | None = None
 
 
+class PolicyRuleAdded(EventBase):
+    type: Literal["policy.rule_added"] = "policy.rule_added"
+    rule: PolicyRuleView
+
+
+class PolicyRuleRemoved(EventBase):
+    type: Literal["policy.rule_removed"] = "policy.rule_removed"
+    rule_id: str
+
+
 class AttachmentAdded(EventBase):
     type: Literal["attachment.added"] = "attachment.added"
     attachment: AttachmentMeta
@@ -157,6 +168,7 @@ class SessionWelcome(TransientEvent):
     room: str
     token: str
     participant: Participant
+    base_policy: tuple[PolicyRuleView, ...] = ()
 
 
 class SessionSnapshot(TransientEvent):
@@ -198,6 +210,8 @@ Event = Annotated[
     | ToolEnded
     | ApprovalRequested
     | ApprovalResolved
+    | PolicyRuleAdded
+    | PolicyRuleRemoved
     | AttachmentAdded
     | SessionWelcome
     | SessionSnapshot

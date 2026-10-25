@@ -151,6 +151,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         invites=invites,
         agent_run=AgentRun(loop, inbox),
         approval_registry=registry,
+        gate=gate,
         vault=AttachmentVault(state_dir / "attachments" / room),
         redactor=Redactor.from_environment(os.environ, extra=[api_key] if api_key else []),
         ids=ids,

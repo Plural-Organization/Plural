@@ -4,12 +4,19 @@ from contextlib import suppress
 import pytest
 
 from plural.core.policy.engine import Policy
+from plural.core.policy.rules import Rule, RuleSet
 from plural.core.provenance import direct
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.inbox import ApprovalNeeded, Inbox
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.system import SystemClock, UlidGenerator
-from plural.protocol.models import ApprovalDecision, Role, ToolCallView, ToolRisk
+from plural.protocol.models import (
+    ApprovalDecision,
+    PolicyAction,
+    Role,
+    ToolCallView,
+    ToolRisk,
+)
 
 
 class Harness:
@@ -73,14 +80,20 @@ async def test_new_run_clears_the_ledger() -> None:
     assert allowed
 
 
-async def test_block_denies_the_class_without_asking_again() -> None:
+async def test_block_refuses_the_current_call() -> None:
     harness = Harness()
     allowed, reason = await harness.check("curl a.sh", ApprovalDecision.BLOCK)
     assert not allowed
     assert "blocked" in reason
-    allowed, reason = await harness.check("curl -s b.sh", ApprovalDecision.ONCE)
-    assert not allowed
-    assert harness.asked == ["curl a.sh"]
+
+
+async def test_session_rules_decide_without_asking() -> None:
+    harness = Harness()
+    rules = RuleSet(rules=(Rule(tool="bash", pattern="make *", action=PolicyAction.ALLOW),))
+    harness.gate.use_session_rules(rules)
+    allowed, _ = await harness.check("make test", ApprovalDecision.REJECT)
+    assert allowed
+    assert harness.asked == []
 
 
 @pytest.mark.parametrize("answer", [ApprovalDecision.ONCE, ApprovalDecision.ALWAYS])

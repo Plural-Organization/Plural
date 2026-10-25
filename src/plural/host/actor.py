@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from plural.agent import events as agent
 from plural.agent.messages import UserTurn
-from plural.core import approvals, proposals
+from plural.core import approvals, policies, proposals
 from plural.core.errors import Conflict, DomainError, Invalid, NotFound, Unauthorized
 from plural.core.ports import Clock, EventStore, IdGenerator
 from plural.core.provenance import direct, from_proposal
@@ -29,6 +29,7 @@ from plural.host.inbox import (
     Incoming,
 )
 from plural.host.invites import InviteBook
+from plural.host.policy_gate import HostPolicyGate
 from plural.host.publisher import Publisher
 from plural.host.transport.base import Connection
 from plural.protocol.codec import ProtocolError, decode_command
@@ -40,6 +41,8 @@ from plural.protocol.commands import (
     InviteCreate,
     ParticipantRevoke,
     ParticipantSetRole,
+    PolicyAdd,
+    PolicyRemove,
     PromptSubmit,
     ProposalDecide,
     RunAbort,
@@ -58,6 +61,8 @@ from plural.protocol.events import (
     ParticipantLeft,
     ParticipantRevoked,
     ParticipantRoleChanged,
+    PolicyRuleAdded,
+    PolicyRuleRemoved,
     PromptAccepted,
     ProposalApproved,
     RunEnded,
@@ -96,6 +101,7 @@ class SessionActor:
         invites: InviteBook,
         agent_run: AgentRun,
         approval_registry: ApprovalRegistry,
+        gate: HostPolicyGate,
         vault: AttachmentVault,
         redactor: Redactor,
         ids: IdGenerator,
@@ -110,6 +116,7 @@ class SessionActor:
         self._invites = invites
         self._agent = agent_run
         self._registry = approval_registry
+        self._gate = gate
         self._vault = vault
         self._redactor = redactor
         self._ids = ids
@@ -127,6 +134,7 @@ class SessionActor:
     async def start(self) -> None:
         for record in await self._store.read():
             self._state = reduce(self._state, record)
+        self._sync_policy()
         for resolved in approvals.abandon_all(self._state):
             await self._emit(resolved)
         if self._state.run is not None:
@@ -204,13 +212,39 @@ class SessionActor:
                     decision=command.decision,
                     resolved_by=participant.id,
                 )
+                remembered = policies.from_decision(
+                    self._state, approval_id=command.approval_id, decision=command.decision
+                )
                 await self._emit(resolved, actor_id=participant.id)
+                for tool, pattern, action in remembered:
+                    if not policies.in_effect(self._state, tool, pattern, action):
+                        rule = policies.add(
+                            self._state,
+                            rule_id=self._ids.new("pl_"),
+                            tool=tool,
+                            pattern=pattern,
+                            action=action,
+                        )
+                        await self._emit(rule, actor_id=participant.id)
                 self._cancel_timer(command.approval_id)
                 self._registry.resolve(command.approval_id, command.decision)
             case RunAbort():
                 if self._state.run is None:
                     raise Conflict("no active run")
                 self._agent.abort()
+            case PolicyAdd():
+                added = policies.add(
+                    self._state,
+                    rule_id=self._ids.new("pl_"),
+                    tool=command.tool,
+                    pattern=command.pattern,
+                    action=command.action,
+                )
+                await self._emit(added, actor_id=participant.id)
+            case PolicyRemove():
+                await self._emit(
+                    policies.remove(self._state, command.rule_id), actor_id=participant.id
+                )
             case InviteCreate():
                 if command.role is Role.HOST:
                     raise Invalid("cannot invite another host")
@@ -254,6 +288,7 @@ class SessionActor:
             room=self._publisher.room,
             token=admission.token,
             participant=self._state.participants[participant_id],
+            base_policy=policies.to_views(self._gate.policy.rules, prefix="base"),
         )
         self._publisher.deliver(connection, welcome)
         if hello.since is None:
@@ -449,4 +484,9 @@ class SessionActor:
             event, event_id=self._ids.new("e_"), ts=self._clock.now(), actor_id=actor_id
         )
         self._state = reduce(self._state, record)
+        if isinstance(event, PolicyRuleAdded | PolicyRuleRemoved):
+            self._sync_policy()
         self._publisher.publish(record)
+
+    def _sync_policy(self) -> None:
+        self._gate.use_session_rules(policies.to_rules(self._state.policy))

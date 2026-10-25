@@ -2,6 +2,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from textual.pilot import Pilot
+from textual.widgets import Input, OptionList
 
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.presenter import live
@@ -9,6 +10,7 @@ from plural.client.reconnect import JoinLink, SessionClient
 from plural.protocol.commands import PromptSubmit
 from plural.tui.app import PluralApp
 from plural.tui.widgets.dialogs import ApprovalDialog, ProposalDialog
+from plural.tui.widgets.policy import PoliciesDialog
 from plural.tui.widgets.transcript import Transcript
 from tests.e2e.support import CLIENT, Session, running_session
 
@@ -64,3 +66,30 @@ async def test_host_blocks_a_command_class_from_the_dialog(tmp_path: Path) -> No
             await until(pilot, lambda: isinstance(app.screen, ApprovalDialog))
             await pilot.click("#block")
             await until(pilot, lambda: "blocked by the host" in shown_when_idle(app))
+
+
+async def test_host_edits_policy_in_the_dialog_and_with_slash_commands(session: Session) -> None:
+    client = SessionClient(JoinLink.parse(session.host.host_link), name="Host", client=CLIENT)
+    app = PluralApp(client)
+    async with app.run_test(size=(140, 40)) as pilot:
+        await until(pilot, lambda: client.projection.me is not None)
+
+        prompt = app.query_one("#prompt", Input)
+        prompt.value = "/policy allow bash ls *"
+        await pilot.press("enter")
+        await until(pilot, lambda: len(client.projection.state.policy) == 1)
+
+        await pilot.press("ctrl+p")
+        await until(pilot, lambda: isinstance(app.screen, PoliciesDialog))
+        dialog = app.screen
+        assert isinstance(dialog, PoliciesDialog)
+        dialog.query_one("#pattern", Input).value = "make *"
+        await pilot.click("#add")
+        await until(pilot, lambda: len(client.projection.state.policy) == 2)
+        await until(pilot, lambda: dialog.query_one(OptionList).option_count == 2)
+
+        await pilot.click("#remove")
+        await until(pilot, lambda: len(client.projection.state.policy) == 1)
+        await pilot.click("#close")
+        await until(pilot, lambda: not isinstance(app.screen, PoliciesDialog))
+        assert [r.pattern for r in client.projection.state.policy] == ["make *"]

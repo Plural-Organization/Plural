@@ -2,7 +2,14 @@ from typing import Annotated, Literal
 
 from pydantic import Field
 
-from plural.protocol.models import ApprovalDecision, Delivery, Model, ProposalDecision, Role
+from plural.protocol.models import (
+    ApprovalDecision,
+    Delivery,
+    Model,
+    PolicyAction,
+    ProposalDecision,
+    Role,
+)
 
 MAX_PROMPT_CHARS = 32_000
 
@@ -68,6 +75,18 @@ class ParticipantRevoke(Model):
     participant_id: str
 
 
+class PolicyAdd(Model):
+    type: Literal["policy.add"] = "policy.add"
+    tool: str = Field(min_length=1, max_length=40)
+    pattern: str = Field(min_length=1, max_length=200)
+    action: PolicyAction
+
+
+class PolicyRemove(Model):
+    type: Literal["policy.remove"] = "policy.remove"
+    rule_id: str
+
+
 class FileAttach(Model):
     type: Literal["file.attach"] = "file.attach"
     name: str = Field(min_length=1, max_length=255)
@@ -85,6 +104,8 @@ Command = Annotated[
     | InviteCreate
     | ParticipantSetRole
     | ParticipantRevoke
+    | PolicyAdd
+    | PolicyRemove
     | FileAttach,
     Field(discriminator="type"),
 ]

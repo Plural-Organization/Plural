@@ -5,9 +5,10 @@ from rich.console import Console
 from rich.text import Text
 
 from plural.client.connection import CommandRejected
-from plural.client.presenter import Line, describe, history
+from plural.client.presenter import Line, describe, history, rule_line
 from plural.client.reconnect import SessionClient
-from plural.protocol.commands import PromptSubmit, RunAbort
+from plural.client.slash import ShowPolicy, SlashError, parse
+from plural.protocol.commands import PromptSubmit
 from plural.protocol.events import SessionSnapshot
 
 
@@ -36,8 +37,21 @@ async def _read_prompts(client: SessionClient, console: Console) -> None:
         text = raw.strip()
         if not text:
             continue
-        command = RunAbort() if text == "/abort" else PromptSubmit(text=text)
         try:
-            await client.send(command)
+            parsed = parse(text)
+            if isinstance(parsed, ShowPolicy):
+                _print_policy(client, console)
+                continue
+            await client.send(parsed or PromptSubmit(text=text))
+        except SlashError as error:
+            console.print(Text(str(error), style="red"))
         except (CommandRejected, ConnectionError, TimeoutError) as error:
             console.print(Text(str(error), style="red"))
+
+
+def _print_policy(client: SessionClient, console: Console) -> None:
+    projection = client.projection
+    for rule in projection.base_policy:
+        console.print(Text(f"  {rule_line(rule)}", style="dim"))
+    for rule in projection.state.policy:
+        console.print(Text(f"* {rule_line(rule)}  [{rule.id}]"))

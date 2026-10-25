@@ -97,9 +97,10 @@ class SessionClient:
         if record is not None:
             return event if self.projection.apply(record) else None
         match event:
-            case SessionWelcome(token=token, participant=participant):
+            case SessionWelcome(token=token, participant=participant, base_policy=base):
                 self._token = token
                 self.projection.me_id = participant.id
+                self.projection.base_policy = base
             case SessionSnapshot(state=state, streaming=streaming):
                 self.projection.load(state, streaming)
             case _:

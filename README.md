@@ -116,8 +116,11 @@ Run `plural <command> --help` for all options.
 |---|---|
 | `ctrl+r` | Review pending proposals and approvals |
 | `ctrl+o` | Create an invite link |
+| `ctrl+p` | View and edit session policy rules (host) |
 | `esc` | Abort the current run |
 | `ctrl+q` | Quit |
+
+Prompt-line commands work in the TUI and in `plural join --plain`: `/abort`, `/policy` (list rules), `/policy allow|ask|deny <tool> <pattern>`, `/policy rm <rule id>`.
 
 ### Configuration
 

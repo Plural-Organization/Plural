@@ -8,6 +8,7 @@ from textual.widgets import Footer, Header, Input
 from plural.client.connection import CommandRejected
 from plural.client.presenter import describe, history, label, live
 from plural.client.reconnect import SessionClient
+from plural.client.slash import ShowPolicy, SlashError, parse
 from plural.protocol.commands import (
     ApprovalRespond,
     Command,
@@ -25,12 +26,14 @@ from plural.protocol.events import (
 )
 from plural.protocol.models import ApprovalDecision, ApprovalView, ProposalDecision, Role
 from plural.tui.widgets.dialogs import ApprovalDialog, ProposalDialog
+from plural.tui.widgets.policy import PoliciesDialog
 from plural.tui.widgets.sidebar import ParticipantsPanel, ProposalsPanel
 from plural.tui.widgets.transcript import LiveReply, Transcript
 
 
 class PluralApp(App[None]):
     TITLE = "Plural"
+    ENABLE_COMMAND_PALETTE = False
     CSS = """
     #main { height: 1fr; }
     #left { width: 3fr; }
@@ -42,6 +45,7 @@ class PluralApp(App[None]):
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("ctrl+r", "review", "Review proposal"),
         Binding("ctrl+o", "invite", "Invite"),
+        Binding("ctrl+p", "policy", "Policy"),
         Binding("escape", "abort", "Abort run"),
         Binding("ctrl+q", "quit", "Quit"),
     ]
@@ -50,6 +54,7 @@ class PluralApp(App[None]):
         super().__init__()
         self._client = client
         self._dialogs: dict[str, ApprovalDialog] = {}
+        self._policies: PoliciesDialog | None = None
         self._transcript = Transcript()
         self._live = LiveReply()
         self._participants = ParticipantsPanel()
@@ -86,6 +91,8 @@ class PluralApp(App[None]):
         self._live.show(live(projection))
         self._participants.refresh_from(projection.state)
         self._proposals.refresh_from(projection.state)
+        if self._policies is not None and self._policies.is_current:
+            self._policies.show(projection.state.policy)
         match event:
             case SessionWelcome(participant=participant):
                 self.sub_title = f"{participant.name} · {participant.role}"
@@ -119,8 +126,20 @@ class PluralApp(App[None]):
     def on_input_submitted(self, message: Input.Submitted) -> None:
         text = message.value.strip()
         message.input.clear()
-        if text:
-            self._send(PromptSubmit(text=text))
+        if not text:
+            return
+        try:
+            parsed = parse(text)
+        except SlashError as error:
+            self.notify(str(error), severity="warning")
+            return
+        match parsed:
+            case None:
+                self._send(PromptSubmit(text=text))
+            case ShowPolicy():
+                self.action_policy()
+            case command:
+                self._send(command)
 
     def action_review(self) -> None:
         state = self._client.projection.state
@@ -137,6 +156,16 @@ class PluralApp(App[None]):
 
     def action_invite(self) -> None:
         self._send(InviteCreate())
+
+    def action_policy(self) -> None:
+        if not self._is_host():
+            self.notify("only the host manages policy", severity="warning")
+            return
+        projection = self._client.projection
+        dialog = self._policies = PoliciesDialog(
+            projection.base_policy, projection.state.policy, self._send
+        )
+        self.push_screen(dialog)
 
     def action_abort(self) -> None:
         self._send(RunAbort())

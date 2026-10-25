@@ -425,6 +425,8 @@
               "participant.left": "#/$defs/ParticipantLeft",
               "participant.revoked": "#/$defs/ParticipantRevoked",
               "participant.role_changed": "#/$defs/ParticipantRoleChanged",
+              "policy.rule_added": "#/$defs/PolicyRuleAdded",
+              "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
               "prompt.accepted": "#/$defs/PromptAccepted",
               "proposal.approved": "#/$defs/ProposalApproved",
               "proposal.created": "#/$defs/ProposalCreated",
@@ -493,6 +495,12 @@
             },
             {
               "$ref": "#/$defs/ApprovalResolved"
+            },
+            {
+              "$ref": "#/$defs/PolicyRuleAdded"
+            },
+            {
+              "$ref": "#/$defs/PolicyRuleRemoved"
             },
             {
               "$ref": "#/$defs/AttachmentAdded"
@@ -908,6 +916,130 @@
         "role"
       ],
       "title": "ParticipantSetRole",
+      "type": "object"
+    },
+    "PolicyAction": {
+      "enum": [
+        "allow",
+        "ask",
+        "deny"
+      ],
+      "title": "PolicyAction",
+      "type": "string"
+    },
+    "PolicyAdd": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/PolicyAction"
+        },
+        "pattern": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Pattern",
+          "type": "string"
+        },
+        "tool": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Tool",
+          "type": "string"
+        },
+        "type": {
+          "const": "policy.add",
+          "default": "policy.add",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "pattern",
+        "action"
+      ],
+      "title": "PolicyAdd",
+      "type": "object"
+    },
+    "PolicyRemove": {
+      "properties": {
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "policy.remove",
+          "default": "policy.remove",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id"
+      ],
+      "title": "PolicyRemove",
+      "type": "object"
+    },
+    "PolicyRuleAdded": {
+      "properties": {
+        "rule": {
+          "$ref": "#/$defs/PolicyRuleView"
+        },
+        "type": {
+          "const": "policy.rule_added",
+          "default": "policy.rule_added",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule"
+      ],
+      "title": "PolicyRuleAdded",
+      "type": "object"
+    },
+    "PolicyRuleRemoved": {
+      "properties": {
+        "rule_id": {
+          "title": "Rule Id",
+          "type": "string"
+        },
+        "type": {
+          "const": "policy.rule_removed",
+          "default": "policy.rule_removed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id"
+      ],
+      "title": "PolicyRuleRemoved",
+      "type": "object"
+    },
+    "PolicyRuleView": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/PolicyAction"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "pattern": {
+          "title": "Pattern",
+          "type": "string"
+        },
+        "tool": {
+          "title": "Tool",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "tool",
+        "pattern",
+        "action"
+      ],
+      "title": "PolicyRuleView",
       "type": "object"
     },
     "PromptAccepted": {
@@ -1407,6 +1539,14 @@
           "title": "Participants",
           "type": "object"
         },
+        "policy": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PolicyRuleView"
+          },
+          "title": "Policy",
+          "type": "array"
+        },
         "proposals": {
           "additionalProperties": {
             "$ref": "#/$defs/ProposalView"
@@ -1439,6 +1579,14 @@
     },
     "SessionWelcome": {
       "properties": {
+        "base_policy": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PolicyRuleView"
+          },
+          "title": "Base Policy",
+          "type": "array"
+        },
         "participant": {
           "$ref": "#/$defs/Participant"
         },
@@ -1700,6 +1848,8 @@
           "invite.create": "#/$defs/InviteCreate",
           "participant.revoke": "#/$defs/ParticipantRevoke",
           "participant.set_role": "#/$defs/ParticipantSetRole",
+          "policy.add": "#/$defs/PolicyAdd",
+          "policy.remove": "#/$defs/PolicyRemove",
           "prompt.submit": "#/$defs/PromptSubmit",
           "proposal.decide": "#/$defs/ProposalDecide",
           "run.abort": "#/$defs/RunAbort",
@@ -1736,6 +1886,12 @@
           "$ref": "#/$defs/ParticipantRevoke"
         },
         {
+          "$ref": "#/$defs/PolicyAdd"
+        },
+        {
+          "$ref": "#/$defs/PolicyRemove"
+        },
+        {
           "$ref": "#/$defs/FileAttach"
         }
       ],
@@ -1759,6 +1915,8 @@
           "participant.left": "#/$defs/ParticipantLeft",
           "participant.revoked": "#/$defs/ParticipantRevoked",
           "participant.role_changed": "#/$defs/ParticipantRoleChanged",
+          "policy.rule_added": "#/$defs/PolicyRuleAdded",
+          "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
           "prompt.accepted": "#/$defs/PromptAccepted",
           "proposal.approved": "#/$defs/ProposalApproved",
           "proposal.created": "#/$defs/ProposalCreated",
@@ -1827,6 +1985,12 @@
         },
         {
           "$ref": "#/$defs/ApprovalResolved"
+        },
+        {
+          "$ref": "#/$defs/PolicyRuleAdded"
+        },
+        {
+          "$ref": "#/$defs/PolicyRuleRemoved"
         },
         {
           "$ref": "#/$defs/AttachmentAdded"

@@ -13,6 +13,8 @@ from plural.protocol.events import (
     ParticipantLeft,
     ParticipantRevoked,
     ParticipantRoleChanged,
+    PolicyRuleAdded,
+    PolicyRuleRemoved,
     PromptAccepted,
     ProposalApproved,
     ProposalCreated,
@@ -22,7 +24,14 @@ from plural.protocol.events import (
     ToolEnded,
     ToolStarted,
 )
-from plural.protocol.models import EntryKind, Origin, Participant, SessionState, TranscriptEntry
+from plural.protocol.models import (
+    EntryKind,
+    Origin,
+    Participant,
+    PolicyRuleView,
+    SessionState,
+    TranscriptEntry,
+)
 
 PREVIEW_LINES = 12
 
@@ -66,6 +75,10 @@ def label(state: SessionState, participant: Participant) -> str:
 def _name(state: SessionState, participant_id: str | None) -> str:
     participant = state.participants.get(participant_id or "")
     return label(state, participant) if participant else participant_id or "system"
+
+
+def rule_line(rule: PolicyRuleView) -> str:
+    return f"{rule.action:<5} {rule.tool} {rule.pattern}"
 
 
 def live(projection: Projection) -> str:
@@ -123,6 +136,10 @@ def describe(event: Event, state: SessionState) -> Line | None:
         case ApprovalResolved(decision=decision, resolved_by=resolved_by):
             suffix = "timeout" if resolved_by is None else name(resolved_by)
             return Line("magenta", f"! approval {decision} ({suffix})")
+        case PolicyRuleAdded(rule=rule):
+            return Line("magenta", f"policy + {rule_line(rule)}  [{rule.id}]")
+        case PolicyRuleRemoved(rule_id=rule_id):
+            return Line("magenta", f"policy - {rule_id}")
         case AttachmentAdded(attachment=attachment):
             return Line("dim", f"📎 {name(attachment.owner_id)} attached {attachment.name}")
         case InviteCreated(link=link, role=role):

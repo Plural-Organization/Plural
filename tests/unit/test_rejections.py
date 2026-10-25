@@ -7,9 +7,9 @@ from plural.core.policy.rejections import (
     command_class,
     invocation_class,
 )
-from plural.core.policy.rules import Action
+from plural.core.policy.rules import Rule, RuleSet
 from plural.core.provenance import direct
-from plural.protocol.models import Role, ToolRisk
+from plural.protocol.models import PolicyAction, Role, ToolRisk
 
 
 def bash(command: str) -> ToolInvocation:
@@ -64,19 +64,26 @@ def test_ledger_exhausts_per_class_and_resets() -> None:
     assert not ledger.exhausted(bash("rm c"))
 
 
+def session(tool: str, patterns: tuple[str, ...], action: PolicyAction) -> Policy:
+    rules = tuple(Rule(tool=tool, pattern=p, action=action) for p in patterns)
+    return Policy().with_session(RuleSet(rules=rules))
+
+
 def test_blocked_class_is_denied_for_the_session() -> None:
     host = direct("p_host", Role.HOST)
     invocation = bash("curl example.com")
-    assert evaluate(Policy(), invocation, host).action is Action.ASK
-    blocked = Policy().deny_always("bash", class_patterns(invocation))
-    assert evaluate(blocked, bash("curl -s other.org"), host).action is Action.DENY
-    assert evaluate(blocked, bash("ls"), host).action is Action.ALLOW
+    assert evaluate(Policy(), invocation, host).action is PolicyAction.ASK
+    blocked = session("bash", class_patterns(invocation), PolicyAction.DENY)
+    assert evaluate(blocked, bash("curl -s other.org"), host).action is PolicyAction.DENY
+    assert evaluate(blocked, bash("ls"), host).action is PolicyAction.ALLOW
 
 
 def test_block_overrides_an_earlier_always() -> None:
     host = direct("p_host", Role.HOST)
-    invocation = bash("make deploy")
-    policy = Policy().allow_always("bash", class_patterns(invocation))
-    assert evaluate(policy, bash("make deploy staging"), host).action is Action.ALLOW
-    policy = policy.deny_always("bash", class_patterns(invocation))
-    assert evaluate(policy, bash("make deploy staging"), host).action is Action.DENY
+    patterns = class_patterns(bash("make deploy staging"))
+    allowed = tuple(Rule(tool="bash", pattern=p, action=PolicyAction.ALLOW) for p in patterns)
+    denied = tuple(Rule(tool="bash", pattern=p, action=PolicyAction.DENY) for p in patterns)
+    policy = Policy().with_session(RuleSet(rules=allowed))
+    assert evaluate(policy, bash("make deploy x"), host).action is PolicyAction.ALLOW
+    policy = policy.with_session(RuleSet(rules=(*allowed, *denied)))
+    assert evaluate(policy, bash("make deploy x"), host).action is PolicyAction.DENY
