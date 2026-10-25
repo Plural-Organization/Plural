@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from plural.client.projection import Projection
 from plural.protocol.events import (
     ApprovalRequested,
     ApprovalResolved,
@@ -21,7 +22,7 @@ from plural.protocol.events import (
     ToolEnded,
     ToolStarted,
 )
-from plural.protocol.models import Origin, SessionState
+from plural.protocol.models import EntryKind, Origin, Participant, SessionState, TranscriptEntry
 
 PREVIEW_LINES = 12
 
@@ -32,14 +33,65 @@ class Line:
     text: str
 
 
+def history(state: SessionState) -> list[Line]:
+    return [line for entry in state.transcript for line in _entry(entry, state)]
+
+
+def _entry(entry: TranscriptEntry, state: SessionState) -> list[Line]:
+    match entry.kind:
+        case EntryKind.PROMPT:
+            return [Line("bold", f"{_name(state, entry.author_id)} › {entry.text}")]
+        case EntryKind.ASSISTANT:
+            return [Line("", entry.text)] if entry.text else []
+        case EntryKind.TOOL:
+            if entry.tool is None:
+                return []
+            mark = {True: "✓", False: "✗", None: "…"}[entry.ok]
+            style = {True: "cyan", False: "red", None: "cyan"}[entry.ok]
+            lines = [Line(style, f"⚙ {entry.tool.name} {entry.tool.subject} {mark}")]
+            if entry.output:
+                lines.append(Line("green" if entry.ok else "red", _preview(entry.output)))
+            return lines
+
+
+def _preview(output: str) -> str:
+    return "\n".join(output.splitlines()[:PREVIEW_LINES])
+
+
+def label(state: SessionState, participant: Participant) -> str:
+    twins = sum(1 for other in state.participants.values() if other.name == participant.name)
+    return participant.name if twins < 2 else f"{participant.name} #{participant.id[-4:]}"
+
+
+def _name(state: SessionState, participant_id: str | None) -> str:
+    participant = state.participants.get(participant_id or "")
+    return label(state, participant) if participant else participant_id or "system"
+
+
+def live(projection: Projection) -> str:
+    streamed = "".join(projection.streaming.values())
+    state = projection.state
+    if streamed:
+        return streamed
+    if state.run is None:
+        return ""
+    if state.approvals:
+        return "… waiting for host approval"
+    last = state.transcript[-1] if state.transcript else None
+    if last is not None and last.tool is not None and last.ok is None:
+        return f"… running {last.tool.name}"
+    if projection.reasoning:
+        return f"… thinking ({projection.reasoning} chars)"
+    return "… waiting for the model"
+
+
 def describe(event: Event, state: SessionState) -> Line | None:
     def name(participant_id: str | None) -> str:
-        participant = state.participants.get(participant_id or "")
-        return participant.name if participant else participant_id or "system"
+        return _name(state, participant_id)
 
     match event:
         case ParticipantJoined(participant=participant):
-            return Line("dim", f"→ {participant.name} joined as {participant.role}")
+            return Line("dim", f"→ {label(state, participant)} joined as {participant.role}")
         case ParticipantLeft(participant_id=participant_id):
             return Line("dim", f"← {name(participant_id)} left")
         case ParticipantRoleChanged(participant_id=participant_id, role=role):
@@ -64,8 +116,7 @@ def describe(event: Event, state: SessionState) -> Line | None:
         case ToolStarted(call=call):
             return Line("cyan", f"⚙ {call.name} {call.subject}".rstrip())
         case ToolEnded(ok=ok, output=output):
-            preview = "\n".join(output.splitlines()[:PREVIEW_LINES])
-            return Line("green" if ok else "red", preview)
+            return Line("green" if ok else "red", _preview(output))
         case ApprovalRequested(approval=approval):
             call = approval.call
             return Line("magenta", f"! approval needed: {call.name} {call.subject} [{call.risk}]")

@@ -5,9 +5,10 @@ from rich.console import Console
 from rich.text import Text
 
 from plural.client.connection import CommandRejected
-from plural.client.presenter import Line, describe
+from plural.client.presenter import Line, describe, history
 from plural.client.reconnect import SessionClient
 from plural.protocol.commands import PromptSubmit, RunAbort
+from plural.protocol.events import SessionSnapshot
 
 
 def to_text(line: Line) -> Text:
@@ -22,6 +23,9 @@ async def stream(client: SessionClient, console: Console) -> None:
 
 async def _print_events(client: SessionClient, console: Console) -> None:
     async for event in client.events():
+        if isinstance(event, SessionSnapshot):
+            for line in history(client.projection.state):
+                console.print(to_text(line))
         line = describe(event, client.projection.state)
         if line is not None:
             console.print(to_text(line))

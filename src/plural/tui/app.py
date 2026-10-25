@@ -6,7 +6,7 @@ from textual.containers import Horizontal, Vertical
 from textual.widgets import Footer, Header, Input
 
 from plural.client.connection import CommandRejected
-from plural.client.presenter import describe
+from plural.client.presenter import describe, history, label, live
 from plural.client.reconnect import SessionClient
 from plural.protocol.commands import (
     ApprovalRespond,
@@ -16,7 +16,13 @@ from plural.protocol.commands import (
     ProposalDecide,
     RunAbort,
 )
-from plural.protocol.events import ApprovalRequested, ApprovalResolved, Event, SessionWelcome
+from plural.protocol.events import (
+    ApprovalRequested,
+    ApprovalResolved,
+    Event,
+    SessionSnapshot,
+    SessionWelcome,
+)
 from plural.protocol.models import ApprovalDecision, ApprovalView, ProposalDecision, Role
 from plural.tui.widgets.dialogs import ApprovalDialog, ProposalDialog
 from plural.tui.widgets.sidebar import ParticipantsPanel, ProposalsPanel
@@ -35,8 +41,8 @@ class PluralApp(App[None]):
     """
     BINDINGS: ClassVar[list[BindingType]] = [
         Binding("ctrl+r", "review", "Review proposal"),
-        Binding("ctrl+i", "invite", "Invite"),
-        Binding("ctrl+x", "abort", "Abort run"),
+        Binding("ctrl+o", "invite", "Invite"),
+        Binding("escape", "abort", "Abort run"),
         Binding("ctrl+q", "quit", "Quit"),
     ]
 
@@ -44,16 +50,20 @@ class PluralApp(App[None]):
         super().__init__()
         self._client = client
         self._dialogs: dict[str, ApprovalDialog] = {}
+        self._transcript = Transcript()
+        self._live = LiveReply()
+        self._participants = ParticipantsPanel()
+        self._proposals = ProposalsPanel()
 
     def compose(self) -> ComposeResult:
         yield Header()
         with Horizontal(id="main"):
             with Vertical(id="left"):
-                yield Transcript()
-                yield LiveReply()
+                yield self._transcript
+                yield self._live
             with Vertical(id="side"):
-                yield ParticipantsPanel()
-                yield ProposalsPanel()
+                yield self._participants
+                yield self._proposals
         yield Input(placeholder="Message the agent (participants send proposals)", id="prompt")
         yield Footer()
 
@@ -66,15 +76,23 @@ class PluralApp(App[None]):
 
     def _show(self, event: Event) -> None:
         projection = self._client.projection
+        if isinstance(event, SessionSnapshot):
+            self._transcript.clear()
+            for line in history(projection.state):
+                self._transcript.add(line)
         line = describe(event, projection.state)
         if line is not None:
-            self.query_one(Transcript).add(line)
-        self.query_one(LiveReply).show("".join(projection.streaming.values()))
-        self.query_one(ParticipantsPanel).refresh_from(projection.state)
-        self.query_one(ProposalsPanel).refresh_from(projection.state)
+            self._transcript.add(line)
+        self._live.show(live(projection))
+        self._participants.refresh_from(projection.state)
+        self._proposals.refresh_from(projection.state)
         match event:
             case SessionWelcome(participant=participant):
                 self.sub_title = f"{participant.name} · {participant.role}"
+            case SessionSnapshot(state=state) if self._is_host():
+                for approval in state.approvals.values():
+                    if approval.id not in self._dialogs:
+                        self._ask_approval(approval)
             case ApprovalRequested(approval=approval) if self._is_host():
                 self._ask_approval(approval)
             case ApprovalResolved(approval_id=approval_id):
@@ -115,7 +133,7 @@ class PluralApp(App[None]):
             if decision is not None:
                 self._send(ProposalDecide(proposal_id=proposal.id, decision=decision))
 
-        self.push_screen(ProposalDialog(proposal, author.name if author else "?"), decide)
+        self.push_screen(ProposalDialog(proposal, label(state, author) if author else "?"), decide)
 
     def action_invite(self) -> None:
         self._send(InviteCreate())

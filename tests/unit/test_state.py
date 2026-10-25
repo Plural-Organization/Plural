@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 
 from plural.core.provenance import direct
-from plural.core.state import reduce
+from plural.core.state import OUTPUT_PREVIEW_CHARS, reduce
 from plural.protocol.events import (
     Event,
     EventRecord,
@@ -68,3 +68,12 @@ def test_run_and_tool_entries() -> None:
     assert state.run is not None
     assert state.transcript[-1].ok is True
     assert fold(RunEnded(run_id="run_1", reason=RunEndReason.STOP)).run is None
+
+
+def test_tool_output_is_kept_as_a_bounded_preview() -> None:
+    call = ToolCallView(id="c1", name="bash", risk=ToolRisk.EXEC, subject="yes")
+    state = fold(
+        ToolStarted(run_id="run_1", call=call),
+        ToolEnded(run_id="run_1", call_id="c1", ok=True, output="x" * (OUTPUT_PREVIEW_CHARS * 3)),
+    )
+    assert state.transcript[-1].output == "x" * OUTPUT_PREVIEW_CHARS

@@ -22,6 +22,7 @@ from plural.protocol.events import (
 from plural.protocol.models import EntryKind, RunView, SessionState, TranscriptEntry
 
 TRANSCRIPT_LIMIT: Final = 200
+OUTPUT_PREVIEW_CHARS: Final = 2000
 
 
 def reduce(state: SessionState, record: EventRecord) -> SessionState:
@@ -68,9 +69,10 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             )
         case ToolStarted(call=call):
             return _append(state, TranscriptEntry(id=call.id, kind=EntryKind.TOOL, tool=call))
-        case ToolEnded(call_id=call_id, ok=ok):
+        case ToolEnded(call_id=call_id, ok=ok, output=output):
+            finished = {"ok": ok, "output": output[:OUTPUT_PREVIEW_CHARS]}
             transcript = tuple(
-                entry.model_copy(update={"ok": ok}) if entry.id == call_id else entry
+                entry.model_copy(update=finished) if entry.id == call_id else entry
                 for entry in state.transcript
             )
             return state.model_copy(update={"transcript": transcript})
