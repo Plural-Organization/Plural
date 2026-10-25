@@ -31,6 +31,10 @@ class Policy(Model):
         rules = tuple(Rule(tool=tool, pattern=p, action=Action.ALLOW) for p in patterns)
         return self.model_copy(update={"session": self.session.extended(*rules)})
 
+    def deny_always(self, tool: str, patterns: Iterable[str]) -> Self:
+        rules = tuple(Rule(tool=tool, pattern=p, action=Action.DENY) for p in patterns)
+        return self.model_copy(update={"session": self.session.extended(*rules)})
+
 
 def evaluate(policy: Policy, invocation: ToolInvocation, provenance: Provenance) -> Decision:
     base = policy.rules.resolve(invocation.name, invocation.subject)

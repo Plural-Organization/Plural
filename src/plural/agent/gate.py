@@ -11,6 +11,8 @@ class GateResult:
 
 
 class PolicyGate(Protocol):
+    def begin_run(self) -> None: ...
+
     async def check(
         self, call: ToolCallView, *, subject: str, provenance: Provenance
     ) -> GateResult: ...

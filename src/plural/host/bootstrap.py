@@ -118,6 +118,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         ids=ids,
         clock=clock,
         timeout_s=settings.approval_timeout_s,
+        rejection_limit=settings.rejection_limit,
     )
     loop = AgentLoop(
         provider=provider or build_provider(settings, api_key),

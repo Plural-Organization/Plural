@@ -35,7 +35,7 @@ Plural turns a solo AI agent session into a shared one. The agent runs on the **
 
 - **Shared live session.** Everyone sees the same transcript, tool calls and diffs as they stream.
 - **Proposals, not prompts.** Guests suggest prompts. The host approves, edits or rejects them.
-- **Host-only approvals.** Write and exec actions need host consent. Guest-originated turns are tainted and always ask.
+- **Host-only approvals.** Write and exec actions need host consent. Guest-originated turns are tainted and always ask. Rejected actions are not re-asked: after repeated rejections of the same kind the agent is told to ask the user instead, and "Block (session)" denies a whole command class.
 - **Attribution.** Every turn records who wrote it and who approved it.
 - **Policy engine.** Allow, ask and deny rules with last-match-wins. Base deny rules cannot be overridden.
 - **Event-sourced.** An append-only SQLite log is the source of truth. Reconnect, replay and audit come for free.
@@ -140,6 +140,7 @@ Every setting can be passed as an environment variable with the `PLURAL_` prefix
 | `PLURAL_FIRST_TOKEN_TIMEOUT_S` | `120` | Seconds to wait for the model's first output before the run fails |
 | `PLURAL_IDLE_TIMEOUT_S` | `60` | Seconds of silence mid-response before the run fails |
 | `PLURAL_APPROVAL_TIMEOUT_S` | `120` | Seconds before an approval expires |
+| `PLURAL_REJECTION_LIMIT` | `2` | Rejections of one kind of action per run before the agent stops asking the host |
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24h |
 | `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |
 

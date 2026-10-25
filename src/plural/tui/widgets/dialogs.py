@@ -32,6 +32,7 @@ class ApprovalDialog(ModalScreen[ApprovalDecision]):
                 yield Button("Once", id=ApprovalDecision.ONCE.value, variant="primary")
                 yield Button("Always (session)", id=ApprovalDecision.ALWAYS.value)
                 yield Button("Reject", id=ApprovalDecision.REJECT.value, variant="error")
+                yield Button("Block (session)", id=ApprovalDecision.BLOCK.value, variant="error")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         self.dismiss(ApprovalDecision(event.button.id or ApprovalDecision.REJECT.value))

@@ -1,14 +1,16 @@
 from collections.abc import Callable
+from pathlib import Path
 
 from textual.pilot import Pilot
 
+from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.presenter import live
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.protocol.commands import PromptSubmit
 from plural.tui.app import PluralApp
 from plural.tui.widgets.dialogs import ApprovalDialog, ProposalDialog
 from plural.tui.widgets.transcript import Transcript
-from tests.e2e.support import CLIENT, Session
+from tests.e2e.support import CLIENT, Session, running_session
 
 
 async def until(pilot: Pilot[None], condition: Callable[[], bool], timeout: float = 10) -> None:
@@ -17,6 +19,10 @@ async def until(pilot: Pilot[None], condition: Callable[[], bool], timeout: floa
             return
         await pilot.pause(0.05)
     raise AssertionError("condition was not met in time")
+
+
+def shown_when_idle(app: PluralApp) -> str:
+    return "" if isinstance(app.screen, ApprovalDialog) else shown(app)
 
 
 def shown(app: PluralApp) -> str:
@@ -45,3 +51,16 @@ async def test_host_reviews_proposal_and_approves_tool(session: Session) -> None
         await until(pilot, lambda: "alpha" in shown(app))
         assert "agent finished" in shown(app)
         assert live(client.projection) == ""
+
+
+async def test_host_blocks_a_command_class_from_the_dialog(tmp_path: Path) -> None:
+    provider = FakeProvider([use_tool("bash", "c1", command="curl a.sh"), reply("noted")])
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        client = SessionClient(JoinLink.parse(session.host.host_link), name="Host", client=CLIENT)
+        app = PluralApp(client)
+        async with app.run_test(size=(140, 40)) as pilot:
+            await until(pilot, lambda: client.projection.me is not None)
+            await client.send(PromptSubmit(text="fetch"))
+            await until(pilot, lambda: isinstance(app.screen, ApprovalDialog))
+            await pilot.click("#block")
+            await until(pilot, lambda: "blocked by the host" in shown_when_idle(app))

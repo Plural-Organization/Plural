@@ -9,6 +9,7 @@
 | compromised relay | host signs tokens and checks permissions; relay only routes (`relay/`) |
 | token theft | 24h TTL, room binding, token bound to connection, revoked participants removed from state |
 | secret leakage | path deny-list (`security/secrets.py`), env scrubbing for `bash`, redaction before append |
+| agent badgering the host with variants of a rejected action | rejection ledger per run and class, `Block (session)` deny rule (`host/policy_gate.py`, `core/policy/rejections.py`) |
 | slow/flooding clients | bounded queues, rate limit and size limit on relay |
 
 Out of scope for MVP: E2E encryption (relay sees content), Docker isolation.

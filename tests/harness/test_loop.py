@@ -44,7 +44,11 @@ class StubGate:
     def __init__(self, *, allowed: bool = True, block: bool = False) -> None:
         self.allowed = allowed
         self.block = block
+        self.runs = 0
         self.seen: list[tuple[str, Provenance]] = []
+
+    def begin_run(self) -> None:
+        self.runs += 1
 
     async def check(
         self, call: ToolCallView, *, subject: str, provenance: Provenance
@@ -331,3 +335,11 @@ async def test_abort_kills_a_running_command(tmp_path: Path) -> None:
     assert isinstance(last, RunEnd)
     assert last.reason is RunEndReason.ABORTED
     assert elapsed < 5
+
+
+async def test_each_run_starts_a_fresh_gate_window(tmp_path: Path) -> None:
+    gate = StubGate()
+    loop = make_loop(tmp_path, FakeProvider([reply("a"), reply("b")]), gate)
+    await collect(loop, turn("one"))
+    await collect(loop, turn("two"))
+    assert gate.runs == 2

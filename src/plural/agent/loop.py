@@ -114,6 +114,7 @@ class AgentLoop:
         provenance = prompt.provenance
         self._conversation.append(prompt)
         self._usage = Usage()
+        self._gate.begin_run()
         recent: deque[str] = deque(maxlen=self._limits.repeat_limit)
         try:
             for _ in range(self._limits.max_turns):

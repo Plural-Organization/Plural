@@ -26,6 +26,7 @@ class HostSettings(BaseSettings):
     max_output_tokens: int | None = Field(default=None, gt=0)
     first_token_timeout_s: float = Field(default=120, gt=0)
     idle_timeout_s: float = Field(default=60, gt=0)
+    rejection_limit: int = Field(default=2, gt=0)
     approval_timeout_s: float = Field(default=120, gt=0)
     token_ttl_s: int = Field(default=86_400, gt=0, le=86_400)
     invite_ttl_s: int = Field(default=3600, gt=0, le=86_400)

@@ -41,6 +41,7 @@ class ApprovalDecision(StrEnum):
     ONCE = "once"
     ALWAYS = "always"
     REJECT = "reject"
+    BLOCK = "block"
 
 
 class ToolRisk(StrEnum):

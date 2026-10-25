@@ -4,7 +4,8 @@
       "enum": [
         "once",
         "always",
-        "reject"
+        "reject",
+        "block"
       ],
       "title": "ApprovalDecision",
       "type": "string"
