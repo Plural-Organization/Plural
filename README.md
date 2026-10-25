@@ -115,8 +115,8 @@ Run `plural <command> --help` for all options.
 | Key | Action |
 |---|---|
 | `ctrl+r` | Review pending proposals and approvals |
-| `ctrl+i` | Create an invite link |
-| `ctrl+x` | Abort the current run |
+| `ctrl+o` | Create an invite link |
+| `esc` | Abort the current run |
 | `ctrl+q` | Quit |
 
 ### Configuration
@@ -126,8 +126,11 @@ Every setting can be passed as an environment variable with the `PLURAL_` prefix
 | Variable | Default | Description |
 |---|---|---|
 | `PLURAL_PROVIDER` | `fake` | `fake`, `anthropic` or `openai` |
-| `PLURAL_MODEL` | provider default | Model id |
-| `PLURAL_API_KEY` | none | Provider API key |
+| `PLURAL_MODEL` | `claude-opus-5-5` for `anthropic` | Model id, required for `openai` |
+| `PLURAL_API_KEY` | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Provider API key |
+| `PLURAL_BASE_URL` | provider default | Custom endpoint, e.g. a local OpenAI-compatible server |
+| `PLURAL_EFFORT` | provider default | `low`, `medium`, `high`, `xhigh` or `max` |
+| `PLURAL_MAX_OUTPUT_TOKENS` | provider default | Output token cap per model response |
 | `PLURAL_WORKSPACE` | current directory | Directory the agent works in |
 | `PLURAL_DATA_DIR` | `~/.plural` | Event logs, host key, attachments |
 | `PLURAL_BIND_HOST` | `127.0.0.1` | Bind address for direct mode |
@@ -138,8 +141,20 @@ Every setting can be passed as an environment variable with the `PLURAL_` prefix
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24h |
 | `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |
 
-> [!NOTE]
-> Real providers are being chosen in a spike. Until it lands, only `fake` is wired up.
+### Providers
+
+Two adapters cover most models: `anthropic` uses the official Anthropic SDK, and `openai` speaks the OpenAI Chat Completions format, which also covers OpenRouter, Groq, Gemini, DeepSeek and local servers such as Ollama.
+
+```sh
+PLURAL_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-... plural host
+
+PLURAL_PROVIDER=openai PLURAL_MODEL=gpt-5 OPENAI_API_KEY=sk-... plural host
+
+PLURAL_PROVIDER=openai PLURAL_MODEL=qwen2.5-coder PLURAL_BASE_URL=http://localhost:11434/v1 plural host
+```
+
+> [!IMPORTANT]
+> Plural uses API keys only. It never reads subscription logins or other credentials stored by vendor tools.
 
 ## How it works
 
@@ -220,7 +235,7 @@ npm run dev
 - [x] Workspace tools and local sandbox
 - [x] Direct and relay transports
 - [x] TUI and plain clients
-- [ ] Real LLM providers
+- [x] Anthropic and OpenAI-compatible providers
 - [ ] Web client
 - [ ] Context compaction
 - [ ] Container sandbox
