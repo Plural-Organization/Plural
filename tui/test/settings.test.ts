@@ -20,7 +20,17 @@ describe("settings", () => {
   test("valid values are kept and saving round-trips", () => {
     const directory = mkdtempSync(join(tmpdir(), "plural-settings-"));
     const path = join(directory, "nested", "tui.json");
-    const chosen = { theme: "gruvbox", panel: false, copyOnSelect: false, bell: true, announceTyping: false } as const;
+    const chosen = {
+      ...DEFAULT_SETTINGS,
+      theme: "gruvbox" as const,
+      panel: false,
+      copyOnSelect: false,
+      bell: true,
+      announceTyping: false,
+      rememberKey: false,
+      setupSeen: true,
+      agent: { preset: "gemini" as const, model: "gemini-2.5-flash", baseUrl: "", contextWindow: "" },
+    };
     saveSettings(chosen, path);
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(chosen);
     expect(loadSettings(path)).toEqual(chosen);

@@ -1,6 +1,6 @@
 # Configuration
 
-Every host setting can be passed as an environment variable with the `PLURAL_` prefix. Preferences of the client (theme, panel, copy on select) are in `tui.json` in the data directory and are changed from the settings screen.
+Every host setting can be passed as an environment variable with the `PLURAL_` prefix. The model and the API key are normally set from the settings screen of the client (`F2`): the choice is kept in `tui.json` and the key in `credentials.json`, readable only by you, both in the data directory. Environment variables still work and are used when nothing is chosen there.
 
 ## Settings
 

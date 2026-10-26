@@ -15,11 +15,15 @@ import { COMMANDS, helpText } from "./commands";
 import { FeedItemView } from "./components/Cards";
 import { Composer } from "./components/Composer";
 import { Inbox, inboxItems } from "./components/Inbox";
-import { cycleTheme, settingsRows, SettingsDialog, type RowId } from "./components/SettingsDialog";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
+import type { AgentControl } from "./control";
+import type { Keys } from "./credentials";
+import type { PresetId } from "./presets";
+import type { Tab } from "./settingsModel";
 import { copyToClipboard } from "./lib/clipboard";
 import { createSyntaxStyle } from "./syntax";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
@@ -32,6 +36,10 @@ export interface AppProps {
   guestLink: string | null;
   settings?: Settings;
   onSettings?: (settings: Settings) => void;
+  control?: AgentControl | null;
+  keys?: Keys;
+  onKeys?: (preset: PresetId, key: string, remember: boolean) => void;
+  startupNote?: string | null;
   onQuit: () => void;
 }
 
@@ -42,12 +50,25 @@ const MIN_WIDTH_FOR_PANEL = 90;
 const TYPING_REFRESH_MS = 3000;
 const TYPING_IDLE_MS = 2500;
 
-export function App({ client, room, version, guestLink, settings: initialSettings, onSettings, onQuit }: AppProps) {
+export function App({
+  client,
+  room,
+  version,
+  guestLink,
+  settings: initialSettings,
+  onSettings,
+  control = null,
+  keys = {},
+  onKeys,
+  startupNote = null,
+  onQuit,
+}: AppProps) {
   const renderer = useRenderer();
   const [settings, setSettings] = useState<Settings>(initialSettings ?? DEFAULT_SETTINGS);
   setTheme(settings.theme);
   const syntax = useMemo(() => createSyntaxStyle(renderer), [renderer, settings.theme]);
   const [dialog, setDialog] = useState(false);
+  const [welcome, setWelcome] = useState(false);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [allOpen, setAllOpen] = useState(false);
   const toggle = (id: string): void =>
@@ -60,12 +81,6 @@ export function App({ client, room, version, guestLink, settings: initialSetting
       }
       return next;
     });
-  const [row, setRow] = useState(0);
-  const rowRef = useRef(0);
-  const selectRow = (index: number): void => {
-    rowRef.current = index;
-    setRow(index);
-  };
   const { width, height } = useTerminalDimensions();
   const initial = useMemo(() => withBanner(emptyFeed(), { kind: "banner", id: "banner", room, version, guestLink }), []);
   const [feed, setFeed] = useState<Feed>(initial);
@@ -160,6 +175,27 @@ export function App({ client, room, version, guestLink, settings: initialSetting
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [approvals]);
+
+  const closeSettings = (): void => {
+    if (welcome) {
+      change({ ...settings, setupSeen: true });
+      setWelcome(false);
+    }
+    setDialog(false);
+  };
+
+  useEffect(() => {
+    if (control && isHost && !settings.setupSeen && settings.agent.preset === "demo" && state.agent.startsWith("demo")) {
+      setWelcome(true);
+      setDialog(true);
+    }
+  }, [isHost, state.agent]);
+
+  useEffect(() => {
+    if (startupNote) {
+      notify("warn", startupNote);
+    }
+  }, []);
 
   const send = (command: Command): void => {
     client.send(command).catch((error: unknown) => notify("danger", error instanceof Error ? error.message : String(error)));
@@ -312,64 +348,13 @@ export function App({ client, room, version, guestLink, settings: initialSetting
     send({ type: "prompt.submit", text, delivery: "now" });
   };
 
-  const rows = settingsRows(settings, state.prompt_mode, me?.role);
-
-  const apply = (index: number, direction: 1 | -1): void => {
-    const target = rows[index];
-    if (!target || !target.enabled) {
-      return;
-    }
-    const id: RowId = target.id;
-    switch (id) {
-      case "theme":
-        change({ ...settings, theme: cycleTheme(settings.theme, direction) });
-        break;
-      case "prompts":
-        send({ type: "session.set_prompt_mode", mode: state.prompt_mode === "open" ? "review" : "open" });
-        break;
-      case "panel":
-        change({ ...settings, panel: !settings.panel });
-        break;
-      case "copy":
-        change({ ...settings, copyOnSelect: !settings.copyOnSelect });
-        break;
-      case "bell":
-        change({ ...settings, bell: !settings.bell });
-        break;
-      case "typing":
-        if (settings.announceTyping) {
-          stopTyping();
-        }
-        change({ ...settings, announceTyping: !settings.announceTyping });
-        break;
-      case "invite":
-        send({ type: "invite.create", role: "participant", ttl_s: 3600 });
-        break;
-      case "reply":
-        copyReply();
-        break;
-    }
-  };
-
   useKeyboard((key) => {
-    if (key.name === "f2" || (dialog && key.name === "q")) {
-      key.preventDefault();
-      setDialog((open) => !open);
+    if (dialog) {
       return;
     }
-    if (dialog) {
+    if (key.name === "f2") {
       key.preventDefault();
-      if (key.name === "escape") {
-        setDialog(false);
-      } else if (key.name === "up") {
-        selectRow((rowRef.current + rows.length - 1) % rows.length);
-      } else if (key.name === "down") {
-        selectRow((rowRef.current + 1) % rows.length);
-      } else if (key.name === "left") {
-        apply(rowRef.current, -1);
-      } else if (key.name === "right" || key.name === "return" || key.name === "space") {
-        apply(rowRef.current, 1);
-      }
+      setDialog(true);
       return;
     }
     if (key.ctrl && key.name === "o") {
@@ -495,15 +480,23 @@ export function App({ client, room, version, guestLink, settings: initialSetting
       </box>
       {dialog ? (
         <SettingsDialog
-          rows={rows}
-          selected={row}
           width={width}
           height={height}
-          agent={projection.agent}
+          settings={settings}
+          mode={state.prompt_mode}
+          role={me?.role}
+          agent={state.agent || projection.agent}
           room={room}
-          onSelect={selectRow}
-          onChange={apply}
-          onClose={() => setDialog(false)}
+          control={isHost ? control : null}
+          keys={keys}
+          initialTab="model"
+          welcome={welcome}
+          onSettings={change}
+          onKeys={(preset, key, remember) => onKeys?.(preset, key, remember)}
+          onMode={(mode) => send({ type: "session.set_prompt_mode", mode })}
+          onInvite={() => send({ type: "invite.create", role: "participant", ttl_s: 3600 })}
+          onCopyReply={copyReply}
+          onClose={closeSettings}
         />
       ) : null}
       {showPanel ? <Sidebar projection={projection} room={room} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} /> : null}

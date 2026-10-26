@@ -1,64 +1,274 @@
-import { useState } from "react";
+import { decodePasteBytes } from "@opentui/core";
+import { useKeyboard, usePaste } from "@opentui/react";
+import { useReducer, useRef } from "react";
 import type { Role } from "@plural/client";
-import { THEMES, THEME_NAMES, theme, type ThemeName } from "../theme";
+import type { AgentControl } from "../control";
+import type { Keys } from "../credentials";
+import { presetOf, problemWith, toConfig, type AgentChoice, type PresetId } from "../presets";
 import type { Settings } from "../settings";
+import {
+  friendlyError,
+  maskKey,
+  nextModel,
+  nextPreset,
+  rowsFor,
+  TABS,
+  type ModelState,
+  type Row,
+  type Tab,
+} from "../settingsModel";
+import { THEME_NAMES, theme, type ThemeName } from "../theme";
 
-export type RowId = "theme" | "prompts" | "panel" | "copy" | "bell" | "typing" | "invite" | "reply";
+export const DIALOG_WIDTH = 72;
 
-export interface Row {
-  id: RowId;
-  label: string;
-  value: string;
-  hint: string;
-  enabled: boolean;
-  kind: "choice" | "toggle" | "action";
+type Tone = "ok" | "error" | "info";
+
+interface Editing {
+  id: string;
+  buffer: string;
 }
 
-export function settingsRows(settings: Settings, mode: "open" | "review", role: Role | undefined): Row[] {
-  const host = role === "host";
-  const on = (value: boolean) => (value ? "on" : "off");
-  return [
-    { id: "theme", label: "Theme", value: THEMES[settings.theme].label, hint: "colours of the whole interface", enabled: true, kind: "choice" },
-    {
-      id: "prompts",
-      label: "Prompts",
-      value: mode === "open" ? "open" : "host approves",
-      hint: host ? "open: everyone prompts directly · review: you approve each prompt" : "only the host can change this",
-      enabled: host,
-      kind: "choice",
-    },
-    { id: "panel", label: "Side panel", value: on(settings.panel), hint: "participants, queue and approvals (ctrl+b)", enabled: true, kind: "toggle" },
-    { id: "copy", label: "Copy on select", value: on(settings.copyOnSelect), hint: "selecting text puts it on the clipboard", enabled: true, kind: "toggle" },
-    { id: "bell", label: "Bell on requests", value: on(settings.bell), hint: "ring the terminal when something needs the host", enabled: host, kind: "toggle" },
-    { id: "typing", label: "Show my typing", value: on(settings.announceTyping), hint: "let others see when you are writing", enabled: role !== "viewer", kind: "toggle" },
-    { id: "invite", label: "Invite link", value: "create and copy", hint: "a one-time link for a participant", enabled: host, kind: "action" },
-    { id: "reply", label: "Last reply", value: "copy", hint: "put the agent's last answer on the clipboard", enabled: true, kind: "action" },
-  ];
+interface Local {
+  tab: Tab;
+  index: number;
+  editing: Editing | null;
+  choice: AgentChoice;
+  keys: Keys;
+  status: { tone: Tone; text: string } | null;
+  busy: boolean;
 }
 
-export function cycleTheme(current: ThemeName, direction: 1 | -1): ThemeName {
-  const index = THEME_NAMES.indexOf(current);
-  return THEME_NAMES[(index + direction + THEME_NAMES.length) % THEME_NAMES.length] as ThemeName;
-}
-
-export const DIALOG_WIDTH = 58;
-
-interface DialogProps {
-  rows: Row[];
-  selected: number;
+export interface DialogProps {
   width: number;
   height: number;
+  settings: Settings;
+  mode: "open" | "review";
+  role: Role | undefined;
   agent: string;
   room: string;
-  onSelect: (index: number) => void;
-  onChange: (index: number, direction: 1 | -1) => void;
+  control: AgentControl | null;
+  keys: Keys;
+  initialTab: Tab;
+  welcome: boolean;
+  onSettings: (next: Settings) => void;
+  onKeys: (preset: PresetId, key: string, remember: boolean) => void;
+  onMode: (mode: "open" | "review") => void;
+  onInvite: () => void;
+  onCopyReply: () => void;
   onClose: () => void;
 }
 
-export function SettingsDialog({ rows, selected, width, height, agent, room, onSelect, onChange, onClose }: DialogProps) {
-  const [closeHover, setCloseHover] = useState(false);
-  const boxWidth = Math.min(DIALOG_WIDTH, Math.max(30, width - 4));
-  const boxHeight = rows.length + 10;
+const TONE = { ok: theme.ok, error: theme.danger, info: theme.dim } as const;
+
+export function SettingsDialog(props: DialogProps) {
+  const [, redraw] = useReducer((value: number) => value + 1, 0);
+  const local = useRef<Local>({
+    tab: props.initialTab,
+    index: 0,
+    editing: null,
+    choice: props.settings.agent,
+    keys: { ...props.keys },
+    status: null,
+    busy: false,
+  });
+  const live = useRef(props);
+  live.current = props;
+
+  const state = (): ModelState => ({
+    settings: live.current.settings,
+    choice: local.current.choice,
+    keys: local.current.keys,
+    mode: live.current.mode,
+    role: live.current.role,
+    canConfigure: live.current.control !== null && live.current.role === "host",
+  });
+  const rows = (): Row[] => rowsFor(local.current.tab, state());
+  const set = (patch: Partial<Local>): void => {
+    local.current = { ...local.current, ...patch };
+    redraw();
+  };
+  const say = (tone: Tone, text: string): void => set({ status: { tone, text } });
+
+  const currentKey = (): string => local.current.keys[local.current.choice.preset] ?? "";
+
+  const run = async (kind: "test" | "save"): Promise<void> => {
+    const { choice } = local.current;
+    const key = currentKey();
+    const problem = problemWith(choice, key);
+    const control = live.current.control;
+    if (problem !== null) {
+      say("error", problem);
+      return;
+    }
+    if (control === null || local.current.busy) {
+      return;
+    }
+    set({ busy: true, status: { tone: "info", text: kind === "test" ? "testing the connection…" : "switching the agent…" } });
+    const result = kind === "test" ? await control.test(toConfig(choice, key)) : await control.configure(toConfig(choice, key));
+    set({ busy: false });
+    if (!result.ok) {
+      say("error", friendlyError(result.error ?? "it did not work"));
+      return;
+    }
+    if (kind === "test") {
+      say("ok", `✓ connected, ${result.message ?? "the model answered"}`);
+      return;
+    }
+    const current = live.current;
+    current.onSettings({ ...current.settings, agent: choice, setupSeen: true });
+    current.onKeys(choice.preset, key, current.settings.rememberKey);
+    say("ok", `✓ now using ${result.agent ?? presetOf(choice.preset).label}`);
+  };
+
+  const commit = (editing: Editing): void => {
+    const { choice, keys } = local.current;
+    const value = editing.buffer.trim();
+    if (editing.id === "key") {
+      set({ editing: null, keys: { ...keys, [choice.preset]: value }, status: null });
+    } else if (editing.id === "model") {
+      set({ editing: null, choice: { ...choice, model: value }, status: null });
+    } else if (editing.id === "url") {
+      set({ editing: null, choice: { ...choice, baseUrl: value }, status: null });
+    } else {
+      set({ editing: null, choice: { ...choice, contextWindow: value }, status: null });
+    }
+  };
+
+  const toggleSetting = (id: string): void => {
+    const { settings, onSettings } = live.current;
+    switch (id) {
+      case "panel":
+        onSettings({ ...settings, panel: !settings.panel });
+        break;
+      case "copy":
+        onSettings({ ...settings, copyOnSelect: !settings.copyOnSelect });
+        break;
+      case "bell":
+        onSettings({ ...settings, bell: !settings.bell });
+        break;
+      case "typing":
+        onSettings({ ...settings, announceTyping: !settings.announceTyping });
+        break;
+      case "remember":
+        onSettings({ ...settings, rememberKey: !settings.rememberKey });
+        break;
+    }
+  };
+
+  const startEditing = (row: Row): void => {
+    const { choice } = local.current;
+    const raw: Record<string, string> = {
+      key: currentKey(),
+      model: choice.model,
+      url: choice.baseUrl,
+      window: choice.contextWindow,
+    };
+    set({ editing: { id: row.id, buffer: raw[row.id] ?? "" } });
+  };
+
+  const change = (row: Row, direction: 1 | -1): void => {
+    if (!row.enabled) {
+      return;
+    }
+    const { choice } = local.current;
+    if (row.id === "preset") {
+      set({ choice: { preset: nextPreset(choice.preset, direction), model: "", baseUrl: "", contextWindow: "" }, status: null });
+    } else if (row.id === "model") {
+      set({ choice: { ...choice, model: nextModel(choice, direction) }, status: null });
+    } else if (row.kind === "toggle") {
+      toggleSetting(row.id);
+    }
+  };
+
+  const activate = (row: Row): void => {
+    if (!row.enabled) {
+      return;
+    }
+    switch (row.kind) {
+      case "text":
+      case "secret":
+        startEditing(row);
+        break;
+      case "toggle":
+        toggleSetting(row.id);
+        break;
+      case "choice":
+        change(row, 1);
+        break;
+      case "radio":
+        live.current.onMode(row.id === "mode-open" ? "open" : "review");
+        break;
+      case "swatch":
+        live.current.onSettings({ ...live.current.settings, theme: row.id.slice("theme:".length) as ThemeName });
+        break;
+      case "action":
+        if (row.id === "test" || row.id === "save") {
+          void run(row.id);
+        } else if (row.id === "reply") {
+          live.current.onCopyReply();
+        } else if (row.id === "invite") {
+          live.current.onInvite();
+        }
+        break;
+      case "note":
+        break;
+    }
+  };
+
+  const switchTab = (tab: Tab): void => set({ tab, index: 0, editing: null, status: null });
+
+  useKeyboard((key) => {
+    key.preventDefault();
+    const { editing, tab, index } = local.current;
+    if (editing) {
+      if (key.name === "escape") {
+        set({ editing: null });
+      } else if (key.name === "return") {
+        commit(editing);
+      } else if (key.name === "backspace") {
+        set({ editing: { ...editing, buffer: editing.buffer.slice(0, -1) } });
+      } else if (key.ctrl && key.name === "u") {
+        set({ editing: { ...editing, buffer: "" } });
+      } else if (!key.ctrl && !key.meta && key.sequence.length === 1 && key.sequence >= " ") {
+        set({ editing: { ...editing, buffer: editing.buffer + key.sequence } });
+      }
+      return;
+    }
+    const list = rows();
+    const row = list[index];
+    if (key.name === "escape" || key.name === "f2") {
+      live.current.onClose();
+    } else if (key.name === "tab") {
+      const at = TABS.findIndex((entry) => entry.id === tab);
+      switchTab((TABS[(at + (key.shift ? TABS.length - 1 : 1)) % TABS.length] as { id: Tab }).id);
+    } else if (key.name === "up") {
+      set({ index: (index + list.length - 1) % list.length });
+    } else if (key.name === "down") {
+      set({ index: (index + 1) % list.length });
+    } else if (key.name === "left" && row) {
+      change(row, -1);
+    } else if (key.name === "right" && row) {
+      change(row, 1);
+    } else if ((key.name === "return" || key.name === "space") && row) {
+      activate(row);
+    }
+  });
+
+  usePaste((event) => {
+    const editing = local.current.editing;
+    if (editing) {
+      const text = decodePasteBytes(event.bytes).replace(/[\r\n]+/g, "").trim();
+      set({ editing: { ...editing, buffer: editing.buffer + text } });
+    }
+  });
+
+  const { width, height } = props;
+  const boxWidth = Math.min(DIALOG_WIDTH, Math.max(34, width - 4));
+  const list = rows();
+  const { tab, index, editing, status } = local.current;
+  const selected = list[index];
+  void height;
+
   return (
     <box
       position="absolute"
@@ -67,13 +277,12 @@ export function SettingsDialog({ rows, selected, width, height, agent, room, onS
       width={width}
       height={height}
       zIndex={20}
-      onMouseDown={onClose}
+      onMouseDown={props.onClose}
       alignItems="center"
       justifyContent="center"
     >
       <box
         width={boxWidth}
-        height={boxHeight}
         flexDirection="column"
         border
         borderStyle="rounded"
@@ -88,45 +297,127 @@ export function SettingsDialog({ rows, selected, width, height, agent, room, onS
               <b>⚙ settings</b>
             </span>
           </text>
-          <box onMouseDown={onClose} onMouseOver={() => setCloseHover(true)} onMouseOut={() => setCloseHover(false)}>
-            <text fg={closeHover ? theme.danger : theme.dim}>✕ esc</text>
+          <box onMouseDown={props.onClose}>
+            <text fg={theme.dim}>✕ esc</text>
           </box>
         </box>
-        <text fg={theme.dim}>{" "}</text>
-        {rows.map((row, index) => {
-          const active = index === selected;
-          const color = !row.enabled ? theme.dim : active ? theme.accent : theme.text;
-          return (
-            <box
-              key={row.id}
-              flexDirection="row"
-              justifyContent="space-between"
-              onMouseDown={(event) => {
-                event.stopPropagation();
-                onSelect(index);
-                if (row.enabled) {
-                  onChange(index, 1);
-                }
-              }}
-            >
-              <text fg={color}>
-                {active ? "› " : "  "}
-                {row.label}
-              </text>
-              <text fg={row.enabled ? (active ? theme.accent : theme.text) : theme.dim}>
-                {row.kind === "choice" && row.enabled ? "‹ " : ""}
-                {row.value}
-                {row.kind === "choice" && row.enabled ? " ›" : ""}
+        {props.welcome ? (
+          <text fg={theme.warn}>Welcome. Pick a model to start, or keep the demo agent for now.</text>
+        ) : null}
+        <text>{" "}</text>
+        <box flexDirection="row">
+          {TABS.map((entry) => (
+            <box key={entry.id} marginRight={3} onMouseDown={() => switchTab(entry.id)}>
+              <text fg={entry.id === tab ? theme.accent : theme.dim}>
+                {entry.id === tab ? "● " : "○ "}
+                {entry.id === tab ? <b>{entry.label}</b> : entry.label}
               </text>
             </box>
-          );
-        })}
-        <text fg={theme.dim}>{" "}</text>
-        <text fg={theme.dim}>{rows[selected]?.hint ?? ""}</text>
-        <text fg={theme.dim}>agent {agent || "unknown"}</text>
-        <text fg={theme.dim}>room {room.slice(0, 26)}…</text>
-        <text fg={theme.dim}>↑↓ select · ←→ change · enter apply · esc close</text>
+          ))}
+        </box>
+        <text fg={theme.line}>{"─".repeat(Math.max(10, boxWidth - 6))}</text>
+        {list.map((row, position) => (
+          <RowView
+            key={row.id}
+            row={row}
+            active={position === index}
+            editing={editing?.id === row.id ? editing.buffer : null}
+            onClick={() => {
+              set({ index: position });
+              activate(row);
+            }}
+          />
+        ))}
+        <text>{" "}</text>
+        {status ? <text fg={TONE[status.tone]}>{status.text}</text> : <text fg={theme.dim}>{selected?.hint ?? ""}</text>}
+        <text fg={theme.dim}>
+          {editing ? "type or paste · enter to keep · esc to cancel" : "tab next tab · ↑↓ select · ←→ change · enter apply · esc close"}
+        </text>
+        <text fg={theme.dim}>agent: {props.agent || "unknown"}</text>
       </box>
     </box>
   );
 }
+
+function Value({ row, editing }: { row: Row; editing: string | null }) {
+  if (editing !== null) {
+    const shown = row.kind === "secret" ? maskKey(editing === "" ? "" : editing).replace("not set", "") : editing;
+    return (
+      <text fg={theme.accent}>
+        {shown}▏
+      </text>
+    );
+  }
+  const chevrons = row.kind === "choice" && row.enabled;
+  return (
+    <text fg={row.enabled ? theme.text : theme.dim}>
+      {chevrons ? "‹ " : ""}
+      {row.value}
+      {chevrons ? " ›" : ""}
+    </text>
+  );
+}
+
+function RowView({ row, active, editing, onClick }: { row: Row; active: boolean; editing: string | null; onClick: () => void }) {
+  const color = !row.enabled ? theme.dim : active ? theme.accent : theme.text;
+  const marker = active ? "› " : "  ";
+  if (row.kind === "note") {
+    return <text fg={theme.dim}>{row.label}</text>;
+  }
+  if (row.kind === "radio") {
+    return (
+      <box flexDirection="column" onMouseDown={onClick}>
+        <text fg={color}>
+          {marker}
+          {row.selected ? "(●) " : "( ) "}
+          {row.label}
+        </text>
+        <text fg={theme.dim}>
+          {"      "}
+          {row.description}
+        </text>
+      </box>
+    );
+  }
+  if (row.kind === "swatch") {
+    return (
+      <box flexDirection="row" justifyContent="space-between" onMouseDown={onClick}>
+        <text fg={color}>
+          {marker}
+          {row.selected ? "(●) " : "( ) "}
+          {row.label}
+        </text>
+        <text>
+          {(row.colors ?? []).map((value, position) => (
+            <span key={position} fg={value}>
+              ██
+            </span>
+          ))}
+        </text>
+      </box>
+    );
+  }
+  if (row.kind === "action") {
+    return (
+      <box onMouseDown={onClick}>
+        <text fg={color}>
+          {marker}
+          {row.enabled ? "[ " : "  "}
+          {row.label}
+          {row.enabled ? " ]" : ""}
+        </text>
+      </box>
+    );
+  }
+  return (
+    <box flexDirection="row" justifyContent="space-between" onMouseDown={onClick}>
+      <text fg={color}>
+        {marker}
+        {row.label}
+      </text>
+      <Value row={row} editing={editing} />
+    </box>
+  );
+}
+
+export { THEME_NAMES };

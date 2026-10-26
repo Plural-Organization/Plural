@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
 import type { ToolCallView } from "@plural/client";
 import { App } from "../src/App";
+import { DEFAULT_SETTINGS, type Settings } from "../src/settings";
 import { ALIA, CALL, FakeSession, GUEST, HOST } from "./support/fake-session";
 
 type Setup = Awaited<ReturnType<typeof testRender>>;
@@ -274,17 +275,16 @@ describe("App", () => {
     expect(fake.sent).toEqual([]);
   });
 
-  test("F2 opens the settings and escape closes them", async () => {
+  test("F2 opens the settings with three tabs and escape closes them", async () => {
     const setup = await mount(session());
     await setup.mockInput.pressKey("F2");
-    const text = await frame(setup, "settings");
-    expect(text).toContain("Theme");
-    expect(text).toContain("Tokyo Night");
-    expect(text).toContain("Prompts");
+    const text = await frame(setup, "● Model");
+    expect(text).toContain("○ Session");
+    expect(text).toContain("○ Appearance");
     await setup.mockInput.pressEscape();
     await tick(100);
     await setup.renderOnce();
-    expect(setup.captureCharFrame()).not.toContain("Copy on select");
+    expect(setup.captureCharFrame()).not.toContain("○ Appearance");
   });
 
   test("the buttons in the panel and the top bar open the settings with the mouse", async () => {
@@ -294,46 +294,73 @@ describe("App", () => {
     const row = lines.findIndex((line) => line.includes("⚙  settings"));
     const column = (lines[row] ?? "").indexOf("⚙");
     await setup.mockMouse.click(column + 2, row);
-    await frame(setup, "Copy on select");
+    await frame(setup, "○ Appearance");
     await setup.mockInput.pressEscape();
     await tick(100);
     await setup.renderOnce();
-    expect(setup.captureCharFrame()).not.toContain("Copy on select");
+    expect(setup.captureCharFrame()).not.toContain("○ Appearance");
 
     const top = setup.captureCharFrame().split("\n")[0] ?? "";
     await setup.mockMouse.click(top.lastIndexOf("⚙"), 0);
-    await frame(setup, "Copy on select");
+    await frame(setup, "○ Appearance");
   });
 
-  test("changing the theme and the toggles is reported so it can be saved", async () => {
-    const saved: unknown[] = [];
+  test("tabs switch with tab and with the mouse", async () => {
+    const setup = await mount(session());
+    await setup.mockInput.pressKey("F2");
+    await frame(setup, "● Model");
+    await setup.mockInput.pressTab();
+    const session_ = await frame(setup, "Host approves");
+    expect(session_).toContain("everyone in the room prompts the agent directly");
+    await setup.mockInput.pressTab();
+    const look = await frame(setup, "Tokyo Night");
+    expect(look).toContain("Daylight");
+    expect(look).toContain("High contrast");
+    const lines = look.split("\n");
+    const row = lines.findIndex((line) => line.includes("● Appearance"));
+    const column = (lines[row] ?? "").indexOf("○ Model");
+    await setup.mockMouse.click(column + 3, row);
+    await frame(setup, "● Model");
+  });
+
+  test("choosing a theme and toggling the panel is reported so it can be saved", async () => {
+    const saved: Settings[] = [];
     const setup = await testRender(
       <App client={session()} room="r_1" version="0.2.0" guestLink={null} onSettings={(value) => saved.push(value)} onQuit={() => undefined} />,
-      { width: 120, height: 36 },
+      { width: 120, height: 40 },
     );
     open.push(setup);
     await setup.renderOnce();
     await setup.mockInput.pressKey("F2");
+    await frame(setup, "● Model");
+    await setup.mockInput.pressTab();
+    await setup.mockInput.pressTab();
     await frame(setup, "Tokyo Night");
-    await setup.mockInput.pressArrow("right");
-    await frame(setup, "Daylight");
-    await setup.mockInput.pressArrow("down");
     await setup.mockInput.pressArrow("down");
     await setup.mockInput.pressEnter();
     await tick(100);
-    expect(saved).toEqual([
-      expect.objectContaining({ theme: "light", panel: true }),
-      expect.objectContaining({ theme: "light", panel: false }),
+    for (let step = 0; step < 3; step += 1) {
+      await setup.mockInput.pressArrow("down");
+    }
+    await setup.mockInput.pressEnter();
+    await tick(100);
+    expect(saved.map((value) => [value.theme, value.panel])).toEqual([
+      ["light", true],
+      ["light", false],
     ]);
+    await setup.mockInput.pressEscape();
+    await tick(100);
     await setup.renderOnce();
     expect(setup.captureCharFrame()).not.toContain("PARTICIPANTS");
   });
 
-  test("the host switches the prompt mode from the settings, a participant cannot", async () => {
+  test("the host switches the prompt mode from the Session tab, a participant cannot", async () => {
     const fake = session();
     const setup = await mount(fake);
     await setup.mockInput.pressKey("F2");
-    await frame(setup, "Prompts");
+    await frame(setup, "● Model");
+    await setup.mockInput.pressTab();
+    await frame(setup, "Host approves");
     await setup.mockInput.pressArrow("down");
     await setup.mockInput.pressEnter();
     await tick(100);
@@ -342,7 +369,9 @@ describe("App", () => {
     const guest = session("participant");
     const asGuest = await mount(guest);
     await asGuest.mockInput.pressKey("F2");
-    await frame(asGuest, "Prompts");
+    await frame(asGuest, "● Model");
+    await asGuest.mockInput.pressTab();
+    await frame(asGuest, "Host approves");
     await asGuest.mockInput.pressArrow("down");
     await frame(asGuest, "only the host can change this");
     await asGuest.mockInput.pressEnter();
@@ -354,7 +383,7 @@ describe("App", () => {
     const fake = session();
     const setup = await mount(fake);
     await setup.mockInput.pressKey("F2");
-    await frame(setup, "Theme");
+    await frame(setup, "● Model");
     await setup.mockInput.typeText("hello");
     await setup.mockInput.pressEscape();
     await tick(100);
@@ -371,7 +400,7 @@ describe("App", () => {
         room="r_1"
         version="0.2.0"
         guestLink={null}
-        settings={{ theme: "tokyo", panel: true, copyOnSelect: true, bell: false, announceTyping: false }}
+        settings={{ ...DEFAULT_SETTINGS, announceTyping: false }}
         onQuit={() => undefined}
       />,
       { width: 120, height: 36 },

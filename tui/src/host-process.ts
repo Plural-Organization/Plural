@@ -1,11 +1,13 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createServer } from "node:net";
+import { ControlLink, type AgentControl } from "./control";
 
 export interface HostHandle {
   room: string;
   guestLink: string;
   hostLink: string;
   version: string;
+  control: AgentControl;
   stop: () => Promise<void>;
 }
 
@@ -42,16 +44,27 @@ export async function startLocalHost(args: string[]): Promise<HostHandle> {
   child.stderr?.on("data", (chunk: Buffer) => {
     errors += chunk.toString();
   });
+  const link = new ControlLink((line) => child.stdin?.write(line) ?? false);
+  child.on("exit", () => link.close());
   const ready = await new Promise<{ room: string; guest_link: string; host_link: string; version: string }>(
     (resolve, reject) => {
       const timer = setTimeout(() => reject(new HostUnavailable(`the host did not start in time\n${errors}`)), 60_000);
       let buffered = "";
+      let announced = false;
       child.stdout?.on("data", (chunk: Buffer) => {
-        buffered += chunk.toString();
-        const line = buffered.split("\n").find((candidate) => candidate.startsWith("{"));
-        if (line) {
+        const text = chunk.toString();
+        if (announced) {
+          link.receive(text);
+          return;
+        }
+        buffered += text;
+        const end = buffered.indexOf("\n");
+        const line = end === -1 ? "" : buffered.slice(0, end);
+        if (line.startsWith("{")) {
+          announced = true;
           clearTimeout(timer);
           resolve(JSON.parse(line));
+          link.receive(buffered.slice(end + 1));
         }
       });
       child.on("error", (error: NodeJS.ErrnoException) => {
@@ -74,6 +87,7 @@ export async function startLocalHost(args: string[]): Promise<HostHandle> {
     guestLink: ready.guest_link,
     hostLink: ready.host_link,
     version: ready.version,
+    control: link,
     stop: () =>
       new Promise<void>((resolve) => {
         if (child.exitCode !== null) {

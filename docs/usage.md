@@ -92,13 +92,17 @@ Selecting text with the mouse copies it. Hold the terminal's bypass key (`shift`
 
 ## Settings
 
-Open them with `F2`, the `⚙ settings` button or `/settings`. They work with the keyboard and the mouse and are kept in `tui.json` in the data directory.
+Open them with `F2`, the `⚙ settings` button or `/settings`. On the first launch, when no model is set up, they open by themselves. They work with the keyboard and the mouse: `tab` switches the tab, `↑ ↓` select, `← →` change, `enter` applies, `esc` closes.
 
-- **Theme**: Tokyo Night, Daylight, Gruvbox or High contrast
-- **Prompts**: open or host approves (host)
-- **Side panel**, **Copy on select**, **Show my typing**
-- **Bell on requests**: ring the terminal when something needs the host (host)
-- **Invite link** and **Last reply** shortcuts
+**Model** (host only). Choose a provider (Anthropic, OpenAI, Google Gemini, OpenRouter, Groq, DeepSeek, Ollama, a custom OpenAI-compatible endpoint, or the demo agent), type or paste the API key, pick or type the model, and press *Test connection* to see whether it answers. *Save and use* switches the agent at once, the conversation is kept. A local model also asks for the context window the server really uses.
+
+The key is kept in `~/.plural/credentials.json`, readable only by you, when *Remember the key* is on, and it is sent only to your own host through a local pipe, never over the network. Keys in the environment (`ANTHROPIC_API_KEY` and so on) keep working. Participants do not see this tab: the agent and its key belong to the host.
+
+**Session**. *Open*: everyone prompts the agent directly. *Host approves*: participants propose and you approve, edit or reject every prompt. Also the typing indicator and the bell for requests that need the host.
+
+**Appearance**. Four themes (Tokyo Night, Daylight, Gruvbox, High contrast), the side panel and copy on select, plus shortcuts to copy the last reply and to create an invite link.
+
+Preferences are kept in `tui.json` in the data directory.
 
 ## Other commands
 

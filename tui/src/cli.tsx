@@ -5,6 +5,8 @@ import { createRoot } from "@opentui/react";
 import { parseLink, SessionClient } from "@plural/client";
 import pkg from "../package.json" with { type: "json" };
 import { App } from "./App";
+import { loadKeys, saveKeys } from "./credentials";
+import { toConfig } from "./presets";
 import { loadSettings, saveSettings } from "./settings";
 import { HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
 
@@ -88,6 +90,16 @@ async function main(): Promise<void> {
     fail(error instanceof Error ? error.message : String(error));
   }
 
+  const settings = loadSettings();
+  const keys = loadKeys();
+  const control = host?.control ?? null;
+  let startupNote: string | null = null;
+  if (control && settings.agent.preset !== "demo") {
+    const applied = await control.configure(toConfig(settings.agent, keys[settings.agent.preset] ?? ""));
+    if (!applied.ok) {
+      startupNote = `could not use the saved model: ${applied.error ?? "unknown error"}. Open the settings (F2) to fix it.`;
+    }
+  }
   const client = new SessionClient(parsed, { name, client: { kind: "tui", version: pkg.version } });
   const renderer = await createCliRenderer({ exitOnCtrlC: false, useMouse: true });
   const quit = new Promise<void>((resolve) => {
@@ -97,8 +109,20 @@ async function main(): Promise<void> {
         room={room}
         version={pkg.version}
         guestLink={guestLink}
-        settings={loadSettings()}
+        settings={settings}
         onSettings={saveSettings}
+        control={control}
+        keys={keys}
+        onKeys={(preset, key, remember) => {
+          const stored = loadKeys();
+          if (remember && key !== "") {
+            stored[preset] = key;
+          } else {
+            delete stored[preset];
+          }
+          saveKeys(stored);
+        }}
+        startupNote={startupNote}
         onQuit={() => {
           resolve();
         }}
