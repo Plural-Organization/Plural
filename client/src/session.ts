@@ -136,6 +136,7 @@ export class SessionClient implements Session {
         this.token = event.token;
         this.projection.meId = event.participant.id;
         this.projection.basePolicy = event.base_policy;
+        this.projection.agent = event.agent;
         break;
       case "session.snapshot":
         this.projection.load(event.state, event.streaming, event.typing);

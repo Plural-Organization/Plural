@@ -37,3 +37,22 @@ def test_openai_requires_model_and_key_unless_local() -> None:
         build_provider(HostSettings(provider="openai", model="gpt"), None)
     local = HostSettings(provider="openai", model="qwen", base_url="http://localhost:11434/v1")
     assert isinstance(build_provider(local, None), OpenAIProvider)
+
+
+def test_the_provider_follows_the_keys_in_the_environment() -> None:
+    assert HostSettings().resolved_provider({}) == "fake"
+    assert HostSettings().resolved_provider({"ANTHROPIC_API_KEY": "a"}) == "anthropic"
+    assert HostSettings().resolved_provider({"OPENAI_API_KEY": "o"}) == "openai"
+    both = {"ANTHROPIC_API_KEY": "a", "OPENAI_API_KEY": "o"}
+    assert HostSettings().resolved_provider(both) == "anthropic"
+    local = HostSettings(base_url="http://localhost:11434/v1", model="qwen3:4b")
+    assert local.resolved_provider({}) == "openai"
+    assert HostSettings(provider="fake").resolved_provider(both) == "fake"
+
+
+def test_the_agent_label_says_what_answers() -> None:
+    assert HostSettings(provider="fake").agent_label({}) == "demo agent (scripted)"
+    assert HostSettings(provider="anthropic").agent_label({}) == "anthropic · claude-opus-5-5"
+    assert HostSettings(provider="openai", model="gpt-5").agent_label({}) == "openai · gpt-5"
+    local = HostSettings(provider="openai", model="qwen3:4b", base_url="http://localhost:11434/v1")
+    assert local.agent_label({}) == "openai · qwen3:4b · local"

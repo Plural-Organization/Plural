@@ -461,6 +461,7 @@ export interface AttachmentMeta {
  * via the `definition` "SessionWelcome".
  */
 export interface SessionWelcome {
+  agent: string;
   base_policy: PolicyRuleView[];
   participant: Participant;
   room: string;

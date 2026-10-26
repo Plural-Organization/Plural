@@ -67,12 +67,12 @@ class Host:
 def resolve_api_key(settings: HostSettings, environ: Mapping[str, str]) -> str | None:
     if settings.api_key is not None:
         return settings.api_key.get_secret_value()
-    variable = KEY_VARIABLES.get(settings.provider)
+    variable = KEY_VARIABLES.get(settings.resolved_provider(environ))
     return environ.get(variable) if variable else None
 
 
 def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
-    match settings.provider:
+    match settings.resolved_provider():
         case "fake":
             return DemoProvider()
         case "anthropic":
@@ -162,6 +162,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         max_attachment_bytes=settings.max_attachment_bytes,
         prompt_mode=settings.prompt_mode,
         typing_ttl_s=settings.typing_ttl_s,
+        agent_label=settings.agent_label(),
     )
     await actor.start()
     transport: HostTransport = (

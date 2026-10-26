@@ -28,7 +28,7 @@ def clean_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 def test_doctor_passes_with_the_demo_provider(tmp_path: Path) -> None:
     result = runner.invoke(app, ["doctor", "--workspace", str(tmp_path)])
     assert result.exit_code == 0
-    assert "fake" in result.output
+    assert "demo agent" in result.output
 
 
 def test_doctor_fails_without_a_key(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

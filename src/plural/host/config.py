@@ -1,3 +1,5 @@
+import os
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Literal
 
@@ -20,7 +22,7 @@ class HostSettings(BaseSettings):
     port: int = 7777
     public_url: str | None = None
     relay_url: str | None = None
-    provider: Literal["fake", "anthropic", "openai"] = "fake"
+    provider: Literal["fake", "anthropic", "openai"] | None = None
     model: str | None = None
     api_key: SecretStr | None = None
     base_url: str | None = None
@@ -36,6 +38,26 @@ class HostSettings(BaseSettings):
     invite_ttl_s: int = Field(default=3600, gt=0, le=86_400)
     max_attachment_bytes: int = Field(default=1_048_576, gt=0)
     typing_ttl_s: float = Field(default=6, gt=0)
+
+    def resolved_provider(
+        self, environ: Mapping[str, str] | None = None
+    ) -> Literal["fake", "anthropic", "openai"]:
+        if self.provider is not None:
+            return self.provider
+        variables = os.environ if environ is None else environ
+        if variables.get("ANTHROPIC_API_KEY"):
+            return "anthropic"
+        if variables.get("OPENAI_API_KEY") or (self.base_url and self.model):
+            return "openai"
+        return "fake"
+
+    def agent_label(self, environ: Mapping[str, str] | None = None) -> str:
+        provider = self.resolved_provider(environ)
+        if provider == "fake":
+            return "demo agent (scripted)"
+        model = self.model or ("claude-opus-5-5" if provider == "anthropic" else "")
+        where = " · local" if provider == "openai" and self.base_url else ""
+        return f"{provider} · {model}{where}" if model else provider
 
     @property
     def state_dir(self) -> Path:

@@ -7,6 +7,7 @@ export class Projection {
   reasoning = 0;
   typing = new Set<string>();
   basePolicy: PolicyRuleView[] = [];
+  agent = "";
   meId: string | null = null;
   ready = false;
 

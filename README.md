@@ -98,7 +98,7 @@ uv run plural join "ws://127.0.0.1:7777/r_…?invite=…" --name alia
 
 By default participants prompt the agent directly (`open` mode). To approve every participant prompt yourself, start with `--prompts review`, or switch at any time with `/mode review` and `/mode open`.
 
-The default provider is `fake`, a scripted demo that needs no API key. Plain text lists the workspace. `$ cmd` asks to run `cmd` through `bash` and waits for host approval.
+Without a key the host runs `fake`, a scripted demo agent: any text lists the workspace and `$ cmd` asks to run `cmd` through `bash` and waits for host approval. Set `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`, or `PLURAL_BASE_URL` with `PLURAL_MODEL` for a local server) and the matching provider is picked automatically.
 
 ### Through a relay
 
@@ -141,7 +141,7 @@ Every setting can be passed as an environment variable with the `PLURAL_` prefix
 
 | Variable | Default | Description |
 |---|---|---|
-| `PLURAL_PROVIDER` | `fake` | `fake`, `anthropic` or `openai` |
+| `PLURAL_PROVIDER` | by key | `fake`, `anthropic` or `openai`; when unset it follows `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY` or `PLURAL_BASE_URL` plus `PLURAL_MODEL`, and falls back to `fake` |
 | `PLURAL_PROMPT_MODE` | `open` | `open` or `review`; a resumed room keeps its last mode when unset |
 | `PLURAL_MODEL` | `claude-opus-5-5` for `anthropic` | Model id, required for `openai` |
 | `PLURAL_API_KEY` | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Provider API key |

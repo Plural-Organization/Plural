@@ -170,7 +170,7 @@ def _provider_check(settings: HostSettings) -> tuple[bool, str]:
         build_provider(settings, resolve_api_key(settings, os.environ))
     except ConfigError as error:
         return False, str(error)
-    return True, settings.provider + (f" · {settings.model}" if settings.model else "")
+    return True, settings.agent_label()
 
 
 def _writable(path: Path) -> bool:

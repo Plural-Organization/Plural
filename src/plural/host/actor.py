@@ -128,6 +128,7 @@ class SessionActor:
         max_attachment_bytes: int,
         prompt_mode: PromptMode | None = None,
         typing_ttl_s: float = 6.0,
+        agent_label: str = "",
     ) -> None:
         self._inbox = inbox
         self._store = store
@@ -145,6 +146,7 @@ class SessionActor:
         self._max_attachment_bytes = max_attachment_bytes
         self._initial_mode = prompt_mode
         self._typing_ttl_s = typing_ttl_s
+        self._agent_label = agent_label
         self._typing: dict[str, asyncio.TimerHandle] = {}
         self._state = SessionState()
         self._streaming: dict[str, str] = {}
@@ -331,6 +333,7 @@ class SessionActor:
             token=admission.token,
             participant=self._state.participants[participant_id],
             base_policy=policies.to_views(self._gate.policy.rules, prefix="base"),
+            agent=self._agent_label,
         )
         self._publisher.deliver(connection, welcome)
         if hello.since is None:

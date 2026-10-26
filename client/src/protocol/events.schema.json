@@ -1281,6 +1281,10 @@
     },
     "SessionWelcome": {
       "properties": {
+        "agent": {
+          "default": "",
+          "type": "string"
+        },
         "base_policy": {
           "default": [],
           "items": {
@@ -1308,7 +1312,8 @@
         "room",
         "token",
         "participant",
-        "base_policy"
+        "base_policy",
+        "agent"
       ],
       "type": "object"
     },

@@ -107,6 +107,7 @@ async def running_session(
             while not relay.started:
                 await asyncio.sleep(0.01)
         relay_url = f"ws://127.0.0.1:{relay_port}"
+    options: dict[str, Any] = {"provider": "fake", **(overrides or {})}
     settings = HostSettings(
         workspace=workspace,
         data_dir=tmp_path / "data",
@@ -114,7 +115,7 @@ async def running_session(
         port=free_port(),
         relay_url=relay_url,
         approval_timeout_s=30,
-        **(overrides or {}),
+        **options,
     )
     host = await build_host(settings, provider=provider)
     serving = asyncio.create_task(host.serve())

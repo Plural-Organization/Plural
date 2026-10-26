@@ -74,6 +74,12 @@ async def test_guest_proposal_needs_host_decisions(review_session: Session) -> N
     assert (await guest.next(RunEnded)).error is None
 
 
+async def test_the_welcome_says_which_agent_answers(review_session: Session) -> None:
+    guest = await review_session.guest("Alia")
+    welcome = next(e for e in guest.events if isinstance(e, SessionWelcome))
+    assert welcome.agent == "demo agent (scripted)"
+
+
 async def test_every_client_converges_on_the_same_state(review_session: Session) -> None:
     owner, guest = await run_to_completion(review_session)
     assert owner.client.projection.state.transcript == guest.client.projection.state.transcript

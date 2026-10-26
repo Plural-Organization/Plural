@@ -195,6 +195,7 @@ class SessionWelcome(TransientEvent):
     token: str
     participant: Participant
     base_policy: tuple[PolicyRuleView, ...] = ()
+    agent: str = ""
 
 
 class SessionSnapshot(TransientEvent):
