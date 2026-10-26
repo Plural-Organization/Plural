@@ -130,6 +130,19 @@ class AgentLoop:
     def follow_up(self, turn: UserTurn) -> None:
         self._follow_up.append(turn)
 
+    def swap_provider(self, provider: LLMProvider, *, context_window: int | None = None) -> None:
+        self._provider = provider
+        if context_window is not None:
+            self._limits = replace(self._limits, context_window=context_window)
+        self._conversation = [
+            message.model_copy(update={"native": None})
+            if isinstance(message, AssistantTurn) and message.native is not None
+            else message
+            for message in self._conversation
+        ]
+        self._context_tokens = 0
+        self._compaction_failed = False
+
     def request_compaction(self) -> None:
         self._compact_requested = True
 

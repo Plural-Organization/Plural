@@ -8,31 +8,20 @@
         "ts": "2026-10-26T12:00:01Z",
         "actor_id": null,
         "event": {
-          "type": "participant.joined",
-          "participant": {
-            "id": "p_host",
-            "name": "vlad",
-            "role": "host",
-            "connected": true
-          }
+          "type": "agent.changed",
+          "agent": "demo agent (scripted)"
         }
       },
       "state": {
         "last_seq": 1,
         "prompt_mode": "open",
-        "participants": {
-          "p_host": {
-            "id": "p_host",
-            "name": "vlad",
-            "role": "host",
-            "connected": true
-          }
-        },
+        "participants": {},
         "proposals": {},
         "approvals": {},
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
         "transcript": []
@@ -50,9 +39,9 @@
         "event": {
           "type": "participant.joined",
           "participant": {
-            "id": "p_alia",
-            "name": "Alia",
-            "role": "participant",
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
             "connected": true
           }
         }
@@ -66,12 +55,6 @@
             "name": "vlad",
             "role": "host",
             "connected": true
-          },
-          "p_alia": {
-            "id": "p_alia",
-            "name": "Alia",
-            "role": "participant",
-            "connected": true
           }
         },
         "proposals": {},
@@ -79,6 +62,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
         "transcript": []
@@ -96,8 +80,8 @@
         "event": {
           "type": "participant.joined",
           "participant": {
-            "id": "p_bek1111",
-            "name": "Bek",
+            "id": "p_alia",
+            "name": "Alia",
             "role": "participant",
             "connected": true
           }
@@ -118,12 +102,6 @@
             "name": "Alia",
             "role": "participant",
             "connected": true
-          },
-          "p_bek1111": {
-            "id": "p_bek1111",
-            "name": "Bek",
-            "role": "participant",
-            "connected": true
           }
         },
         "proposals": {},
@@ -131,6 +109,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
         "transcript": []
@@ -148,9 +127,9 @@
         "event": {
           "type": "participant.joined",
           "participant": {
-            "id": "p_bek2222",
+            "id": "p_bek1111",
             "name": "Bek",
-            "role": "viewer",
+            "role": "participant",
             "connected": true
           }
         }
@@ -176,12 +155,6 @@
             "name": "Bek",
             "role": "participant",
             "connected": true
-          },
-          "p_bek2222": {
-            "id": "p_bek2222",
-            "name": "Bek",
-            "role": "viewer",
-            "connected": true
           }
         },
         "proposals": {},
@@ -189,6 +162,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
         "transcript": []
@@ -204,9 +178,13 @@
         "ts": "2026-10-26T12:00:05Z",
         "actor_id": null,
         "event": {
-          "type": "participant.role_changed",
-          "participant_id": "p_bek2222",
-          "role": "participant"
+          "type": "participant.joined",
+          "participant": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "viewer",
+            "connected": true
+          }
         }
       },
       "state": {
@@ -234,7 +212,7 @@
           "p_bek2222": {
             "id": "p_bek2222",
             "name": "Bek",
-            "role": "participant",
+            "role": "viewer",
             "connected": true
           }
         },
@@ -243,6 +221,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
         "transcript": []
@@ -258,12 +237,67 @@
         "ts": "2026-10-26T12:00:06Z",
         "actor_id": null,
         "event": {
+          "type": "participant.role_changed",
+          "participant_id": "p_bek2222",
+          "role": "participant"
+        }
+      },
+      "state": {
+        "last_seq": 6,
+        "prompt_mode": "open",
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "summary": null,
+        "run": null,
+        "transcript": []
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 7,
+        "id": "e_7",
+        "ts": "2026-10-26T12:00:07Z",
+        "actor_id": null,
+        "event": {
           "type": "participant.left",
           "participant_id": "p_bek1111"
         }
       },
       "state": {
-        "last_seq": 6,
+        "last_seq": 7,
         "prompt_mode": "open",
         "participants": {
           "p_host": {
@@ -296,6 +330,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
         "transcript": []
@@ -306,9 +341,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 7,
-        "id": "e_7",
-        "ts": "2026-10-26T12:00:07Z",
+        "seq": 8,
+        "id": "e_8",
+        "ts": "2026-10-26T12:00:08Z",
         "actor_id": null,
         "event": {
           "type": "session.prompt_mode_changed",
@@ -316,7 +351,7 @@
         }
       },
       "state": {
-        "last_seq": 7,
+        "last_seq": 8,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -349,6 +384,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
         "transcript": []
@@ -359,9 +395,63 @@
     {
       "kind": "record",
       "record": {
-        "seq": 8,
-        "id": "e_8",
-        "ts": "2026-10-26T12:00:08Z",
+        "seq": 9,
+        "id": "e_9",
+        "ts": "2026-10-26T12:00:09Z",
+        "actor_id": null,
+        "event": {
+          "type": "agent.changed",
+          "agent": "anthropic · claude-opus-5-5"
+        }
+      },
+      "state": {
+        "last_seq": 9,
+        "prompt_mode": "review",
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
+        "summary": null,
+        "run": null,
+        "transcript": []
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 10,
+        "id": "e_10",
+        "ts": "2026-10-26T12:00:10Z",
         "actor_id": null,
         "event": {
           "type": "proposal.created",
@@ -375,7 +465,7 @@
         }
       },
       "state": {
-        "last_seq": 8,
+        "last_seq": 10,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -416,6 +506,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": null,
         "transcript": []
@@ -426,9 +517,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 9,
-        "id": "e_9",
-        "ts": "2026-10-26T12:00:09Z",
+        "seq": 11,
+        "id": "e_11",
+        "ts": "2026-10-26T12:00:11Z",
         "actor_id": null,
         "event": {
           "type": "proposal.approved",
@@ -438,7 +529,7 @@
         }
       },
       "state": {
-        "last_seq": 9,
+        "last_seq": 11,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -471,6 +562,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": null,
         "transcript": []
@@ -481,9 +573,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 10,
-        "id": "e_10",
-        "ts": "2026-10-26T12:00:10Z",
+        "seq": 12,
+        "id": "e_12",
+        "ts": "2026-10-26T12:00:12Z",
         "actor_id": null,
         "event": {
           "type": "proposal.created",
@@ -497,7 +589,7 @@
         }
       },
       "state": {
-        "last_seq": 10,
+        "last_seq": 12,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -538,135 +630,10 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": null,
         "transcript": []
-      },
-      "streaming": {},
-      "reasoning": 0
-    },
-    {
-      "kind": "record",
-      "record": {
-        "seq": 11,
-        "id": "e_11",
-        "ts": "2026-10-26T12:00:11Z",
-        "actor_id": null,
-        "event": {
-          "type": "proposal.rejected",
-          "proposal_id": "pr_2",
-          "decided_by": "p_host"
-        }
-      },
-      "state": {
-        "last_seq": 11,
-        "prompt_mode": "review",
-        "participants": {
-          "p_host": {
-            "id": "p_host",
-            "name": "vlad",
-            "role": "host",
-            "connected": true
-          },
-          "p_alia": {
-            "id": "p_alia",
-            "name": "Alia",
-            "role": "participant",
-            "connected": true
-          },
-          "p_bek1111": {
-            "id": "p_bek1111",
-            "name": "Bek",
-            "role": "participant",
-            "connected": false
-          },
-          "p_bek2222": {
-            "id": "p_bek2222",
-            "name": "Bek",
-            "role": "participant",
-            "connected": true
-          }
-        },
-        "proposals": {},
-        "approvals": {},
-        "attachments": {},
-        "policy": [],
-        "queue": [],
-        "summary": null,
-        "run": null,
-        "transcript": []
-      },
-      "streaming": {},
-      "reasoning": 0
-    },
-    {
-      "kind": "record",
-      "record": {
-        "seq": 12,
-        "id": "e_12",
-        "ts": "2026-10-26T12:00:12Z",
-        "actor_id": null,
-        "event": {
-          "type": "prompt.accepted",
-          "prompt_id": "pm_1",
-          "author_id": "p_alia",
-          "text": "check the notes",
-          "delivery": "now",
-          "provenance": {
-            "initiator_id": "p_alia",
-            "initiator_role": "participant",
-            "origin": "proposal"
-          },
-          "attachments": []
-        }
-      },
-      "state": {
-        "last_seq": 12,
-        "prompt_mode": "review",
-        "participants": {
-          "p_host": {
-            "id": "p_host",
-            "name": "vlad",
-            "role": "host",
-            "connected": true
-          },
-          "p_alia": {
-            "id": "p_alia",
-            "name": "Alia",
-            "role": "participant",
-            "connected": true
-          },
-          "p_bek1111": {
-            "id": "p_bek1111",
-            "name": "Bek",
-            "role": "participant",
-            "connected": false
-          },
-          "p_bek2222": {
-            "id": "p_bek2222",
-            "name": "Bek",
-            "role": "participant",
-            "connected": true
-          }
-        },
-        "proposals": {},
-        "approvals": {},
-        "attachments": {},
-        "policy": [],
-        "queue": [],
-        "summary": null,
-        "run": null,
-        "transcript": [
-          {
-            "id": "pm_1",
-            "kind": "prompt",
-            "author_id": "p_alia",
-            "text": "check the notes",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          }
-        ]
       },
       "streaming": {},
       "reasoning": 0
@@ -679,14 +646,9 @@
         "ts": "2026-10-26T12:00:13Z",
         "actor_id": null,
         "event": {
-          "type": "run.started",
-          "run_id": "run_1",
-          "prompt_id": "pm_1",
-          "provenance": {
-            "initiator_id": "p_alia",
-            "initiator_role": "participant",
-            "origin": "proposal"
-          }
+          "type": "proposal.rejected",
+          "proposal_id": "pr_2",
+          "decided_by": "p_host"
         }
       },
       "state": {
@@ -723,27 +685,10 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
-        "run": {
-          "id": "run_1",
-          "prompt_id": "pm_1",
-          "provenance": {
-            "initiator_id": "p_alia",
-            "initiator_role": "participant",
-            "origin": "proposal"
-          }
-        },
-        "transcript": [
-          {
-            "id": "pm_1",
-            "kind": "prompt",
-            "author_id": "p_alia",
-            "text": "check the notes",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          }
-        ]
+        "run": null,
+        "transcript": []
       },
       "streaming": {},
       "reasoning": 0
@@ -757,14 +702,14 @@
         "actor_id": null,
         "event": {
           "type": "prompt.accepted",
-          "prompt_id": "pm_q1",
-          "author_id": "p_bek1111",
-          "text": "then this",
+          "prompt_id": "pm_1",
+          "author_id": "p_alia",
+          "text": "check the notes",
           "delivery": "now",
           "provenance": {
             "initiator_id": "p_alia",
             "initiator_role": "participant",
-            "origin": "direct"
+            "origin": "proposal"
           },
           "attachments": []
         }
@@ -802,39 +747,16 @@
         "approvals": {},
         "attachments": {},
         "policy": [],
-        "queue": [
-          {
-            "prompt_id": "pm_q1",
-            "author_id": "p_bek1111",
-            "text": "then this",
-            "delivery": "now"
-          }
-        ],
+        "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
-        "run": {
-          "id": "run_1",
-          "prompt_id": "pm_1",
-          "provenance": {
-            "initiator_id": "p_alia",
-            "initiator_role": "participant",
-            "origin": "proposal"
-          }
-        },
+        "run": null,
         "transcript": [
           {
             "id": "pm_1",
             "kind": "prompt",
             "author_id": "p_alia",
             "text": "check the notes",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_q1",
-            "kind": "prompt",
-            "author_id": "p_bek1111",
-            "text": "then this",
             "tool": null,
             "ok": null,
             "output": ""
@@ -852,17 +774,14 @@
         "ts": "2026-10-26T12:00:15Z",
         "actor_id": null,
         "event": {
-          "type": "prompt.accepted",
-          "prompt_id": "pm_q2",
-          "author_id": "p_bek1111",
-          "text": "and later this",
-          "delivery": "follow_up",
+          "type": "run.started",
+          "run_id": "run_1",
+          "prompt_id": "pm_1",
           "provenance": {
             "initiator_id": "p_alia",
             "initiator_role": "participant",
-            "origin": "direct"
-          },
-          "attachments": []
+            "origin": "proposal"
+          }
         }
       },
       "state": {
@@ -898,20 +817,8 @@
         "approvals": {},
         "attachments": {},
         "policy": [],
-        "queue": [
-          {
-            "prompt_id": "pm_q1",
-            "author_id": "p_bek1111",
-            "text": "then this",
-            "delivery": "now"
-          },
-          {
-            "prompt_id": "pm_q2",
-            "author_id": "p_bek1111",
-            "text": "and later this",
-            "delivery": "follow_up"
-          }
-        ],
+        "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -931,24 +838,6 @@
             "tool": null,
             "ok": null,
             "output": ""
-          },
-          {
-            "id": "pm_q1",
-            "kind": "prompt",
-            "author_id": "p_bek1111",
-            "text": "then this",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_q2",
-            "kind": "prompt",
-            "author_id": "p_bek1111",
-            "text": "and later this",
-            "tool": null,
-            "ok": null,
-            "output": ""
           }
         ]
       },
@@ -963,9 +852,17 @@
         "ts": "2026-10-26T12:00:16Z",
         "actor_id": null,
         "event": {
-          "type": "prompt.dequeued",
+          "type": "prompt.accepted",
           "prompt_id": "pm_q1",
-          "reason": "delivered"
+          "author_id": "p_bek1111",
+          "text": "then this",
+          "delivery": "now",
+          "provenance": {
+            "initiator_id": "p_alia",
+            "initiator_role": "participant",
+            "origin": "direct"
+          },
+          "attachments": []
         }
       },
       "state": {
@@ -1003,12 +900,116 @@
         "policy": [],
         "queue": [
           {
+            "prompt_id": "pm_q1",
+            "author_id": "p_bek1111",
+            "text": "then this",
+            "delivery": "now"
+          }
+        ],
+        "agent": "anthropic · claude-opus-5-5",
+        "summary": null,
+        "run": {
+          "id": "run_1",
+          "prompt_id": "pm_1",
+          "provenance": {
+            "initiator_id": "p_alia",
+            "initiator_role": "participant",
+            "origin": "proposal"
+          }
+        },
+        "transcript": [
+          {
+            "id": "pm_1",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "check the notes",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q1",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "then this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          }
+        ]
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 17,
+        "id": "e_17",
+        "ts": "2026-10-26T12:00:17Z",
+        "actor_id": null,
+        "event": {
+          "type": "prompt.accepted",
+          "prompt_id": "pm_q2",
+          "author_id": "p_bek1111",
+          "text": "and later this",
+          "delivery": "follow_up",
+          "provenance": {
+            "initiator_id": "p_alia",
+            "initiator_role": "participant",
+            "origin": "direct"
+          },
+          "attachments": []
+        }
+      },
+      "state": {
+        "last_seq": 17,
+        "prompt_mode": "review",
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "queue": [
+          {
+            "prompt_id": "pm_q1",
+            "author_id": "p_bek1111",
+            "text": "then this",
+            "delivery": "now"
+          },
+          {
             "prompt_id": "pm_q2",
             "author_id": "p_bek1111",
             "text": "and later this",
             "delivery": "follow_up"
           }
         ],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1055,9 +1056,107 @@
     {
       "kind": "record",
       "record": {
-        "seq": 17,
-        "id": "e_17",
-        "ts": "2026-10-26T12:00:17Z",
+        "seq": 18,
+        "id": "e_18",
+        "ts": "2026-10-26T12:00:18Z",
+        "actor_id": null,
+        "event": {
+          "type": "prompt.dequeued",
+          "prompt_id": "pm_q1",
+          "reason": "delivered"
+        }
+      },
+      "state": {
+        "last_seq": 18,
+        "prompt_mode": "review",
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "queue": [
+          {
+            "prompt_id": "pm_q2",
+            "author_id": "p_bek1111",
+            "text": "and later this",
+            "delivery": "follow_up"
+          }
+        ],
+        "agent": "anthropic · claude-opus-5-5",
+        "summary": null,
+        "run": {
+          "id": "run_1",
+          "prompt_id": "pm_1",
+          "provenance": {
+            "initiator_id": "p_alia",
+            "initiator_role": "participant",
+            "origin": "proposal"
+          }
+        },
+        "transcript": [
+          {
+            "id": "pm_1",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "check the notes",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q1",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "then this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q2",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "and later this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          }
+        ]
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 19,
+        "id": "e_19",
+        "ts": "2026-10-26T12:00:19Z",
         "actor_id": null,
         "event": {
           "type": "prompt.dequeued",
@@ -1066,7 +1165,7 @@
         }
       },
       "state": {
-        "last_seq": 17,
+        "last_seq": 19,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -1099,6 +1198,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1151,7 +1251,7 @@
         "thinking": true
       },
       "state": {
-        "last_seq": 17,
+        "last_seq": 19,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -1184,6 +1284,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1230,9 +1331,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 19,
-        "id": "e_19",
-        "ts": "2026-10-26T12:00:19Z",
+        "seq": 21,
+        "id": "e_21",
+        "ts": "2026-10-26T12:00:21Z",
         "actor_id": null,
         "event": {
           "type": "message.started",
@@ -1241,7 +1342,7 @@
         }
       },
       "state": {
-        "last_seq": 19,
+        "last_seq": 21,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -1274,6 +1375,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1328,7 +1430,7 @@
         "thinking": false
       },
       "state": {
-        "last_seq": 19,
+        "last_seq": 21,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -1361,6 +1463,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1415,7 +1518,7 @@
         "thinking": false
       },
       "state": {
-        "last_seq": 19,
+        "last_seq": 21,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -1448,6 +1551,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1496,9 +1600,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 22,
-        "id": "e_22",
-        "ts": "2026-10-26T12:00:22Z",
+        "seq": 24,
+        "id": "e_24",
+        "ts": "2026-10-26T12:00:24Z",
         "actor_id": null,
         "event": {
           "type": "message.ended",
@@ -1506,242 +1610,6 @@
           "message_id": "m1",
           "text": "Looking around",
           "thinking": ""
-        }
-      },
-      "state": {
-        "last_seq": 22,
-        "prompt_mode": "review",
-        "participants": {
-          "p_host": {
-            "id": "p_host",
-            "name": "vlad",
-            "role": "host",
-            "connected": true
-          },
-          "p_alia": {
-            "id": "p_alia",
-            "name": "Alia",
-            "role": "participant",
-            "connected": true
-          },
-          "p_bek1111": {
-            "id": "p_bek1111",
-            "name": "Bek",
-            "role": "participant",
-            "connected": false
-          },
-          "p_bek2222": {
-            "id": "p_bek2222",
-            "name": "Bek",
-            "role": "participant",
-            "connected": true
-          }
-        },
-        "proposals": {},
-        "approvals": {},
-        "attachments": {},
-        "policy": [],
-        "queue": [],
-        "summary": null,
-        "run": {
-          "id": "run_1",
-          "prompt_id": "pm_1",
-          "provenance": {
-            "initiator_id": "p_alia",
-            "initiator_role": "participant",
-            "origin": "proposal"
-          }
-        },
-        "transcript": [
-          {
-            "id": "pm_1",
-            "kind": "prompt",
-            "author_id": "p_alia",
-            "text": "check the notes",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_q1",
-            "kind": "prompt",
-            "author_id": "p_bek1111",
-            "text": "then this",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_q2",
-            "kind": "prompt",
-            "author_id": "p_bek1111",
-            "text": "and later this",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "m1",
-            "kind": "assistant",
-            "author_id": null,
-            "text": "Looking around",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          }
-        ]
-      },
-      "streaming": {},
-      "reasoning": 0
-    },
-    {
-      "kind": "record",
-      "record": {
-        "seq": 23,
-        "id": "e_23",
-        "ts": "2026-10-26T12:00:23Z",
-        "actor_id": null,
-        "event": {
-          "type": "tool.started",
-          "run_id": "run_1",
-          "call": {
-            "id": "t1",
-            "name": "bash",
-            "risk": "exec",
-            "subject": "ls -la",
-            "args": {}
-          }
-        }
-      },
-      "state": {
-        "last_seq": 23,
-        "prompt_mode": "review",
-        "participants": {
-          "p_host": {
-            "id": "p_host",
-            "name": "vlad",
-            "role": "host",
-            "connected": true
-          },
-          "p_alia": {
-            "id": "p_alia",
-            "name": "Alia",
-            "role": "participant",
-            "connected": true
-          },
-          "p_bek1111": {
-            "id": "p_bek1111",
-            "name": "Bek",
-            "role": "participant",
-            "connected": false
-          },
-          "p_bek2222": {
-            "id": "p_bek2222",
-            "name": "Bek",
-            "role": "participant",
-            "connected": true
-          }
-        },
-        "proposals": {},
-        "approvals": {},
-        "attachments": {},
-        "policy": [],
-        "queue": [],
-        "summary": null,
-        "run": {
-          "id": "run_1",
-          "prompt_id": "pm_1",
-          "provenance": {
-            "initiator_id": "p_alia",
-            "initiator_role": "participant",
-            "origin": "proposal"
-          }
-        },
-        "transcript": [
-          {
-            "id": "pm_1",
-            "kind": "prompt",
-            "author_id": "p_alia",
-            "text": "check the notes",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_q1",
-            "kind": "prompt",
-            "author_id": "p_bek1111",
-            "text": "then this",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_q2",
-            "kind": "prompt",
-            "author_id": "p_bek1111",
-            "text": "and later this",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "m1",
-            "kind": "assistant",
-            "author_id": null,
-            "text": "Looking around",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "t1",
-            "kind": "tool",
-            "author_id": null,
-            "text": "",
-            "tool": {
-              "id": "t1",
-              "name": "bash",
-              "risk": "exec",
-              "subject": "ls -la",
-              "args": {}
-            },
-            "ok": null,
-            "output": ""
-          }
-        ]
-      },
-      "streaming": {},
-      "reasoning": 0
-    },
-    {
-      "kind": "record",
-      "record": {
-        "seq": 24,
-        "id": "e_24",
-        "ts": "2026-10-26T12:00:24Z",
-        "actor_id": null,
-        "event": {
-          "type": "approval.requested",
-          "approval": {
-            "id": "ap_1",
-            "call": {
-              "id": "t1",
-              "name": "bash",
-              "risk": "exec",
-              "subject": "ls -la",
-              "args": {}
-            },
-            "provenance": {
-              "initiator_id": "p_alia",
-              "initiator_role": "participant",
-              "origin": "proposal"
-            },
-            "timeout_at": "2026-10-26T12:02:00Z",
-            "suggested_patterns": [
-              "ls*"
-            ]
-          }
         }
       },
       "state": {
@@ -1774,30 +1642,11 @@
           }
         },
         "proposals": {},
-        "approvals": {
-          "ap_1": {
-            "id": "ap_1",
-            "call": {
-              "id": "t1",
-              "name": "bash",
-              "risk": "exec",
-              "subject": "ls -la",
-              "args": {}
-            },
-            "provenance": {
-              "initiator_id": "p_alia",
-              "initiator_role": "participant",
-              "origin": "proposal"
-            },
-            "timeout_at": "2026-10-26T12:02:00Z",
-            "suggested_patterns": [
-              "ls*"
-            ]
-          }
-        },
+        "approvals": {},
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1844,21 +1693,6 @@
             "tool": null,
             "ok": null,
             "output": ""
-          },
-          {
-            "id": "t1",
-            "kind": "tool",
-            "author_id": null,
-            "text": "",
-            "tool": {
-              "id": "t1",
-              "name": "bash",
-              "risk": "exec",
-              "subject": "ls -la",
-              "args": {}
-            },
-            "ok": null,
-            "output": ""
           }
         ]
       },
@@ -1873,10 +1707,15 @@
         "ts": "2026-10-26T12:00:25Z",
         "actor_id": null,
         "event": {
-          "type": "approval.resolved",
-          "approval_id": "ap_1",
-          "decision": "once",
-          "resolved_by": "p_host"
+          "type": "tool.started",
+          "run_id": "run_1",
+          "call": {
+            "id": "t1",
+            "name": "bash",
+            "risk": "exec",
+            "subject": "ls -la",
+            "args": {}
+          }
         }
       },
       "state": {
@@ -1913,6 +1752,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1988,12 +1828,26 @@
         "ts": "2026-10-26T12:00:26Z",
         "actor_id": null,
         "event": {
-          "type": "tool.ended",
-          "run_id": "run_1",
-          "call_id": "t1",
-          "ok": true,
-          "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29",
-          "diff": null
+          "type": "approval.requested",
+          "approval": {
+            "id": "ap_1",
+            "call": {
+              "id": "t1",
+              "name": "bash",
+              "risk": "exec",
+              "subject": "ls -la",
+              "args": {}
+            },
+            "provenance": {
+              "initiator_id": "p_alia",
+              "initiator_role": "participant",
+              "origin": "proposal"
+            },
+            "timeout_at": "2026-10-26T12:02:00Z",
+            "suggested_patterns": [
+              "ls*"
+            ]
+          }
         }
       },
       "state": {
@@ -2026,10 +1880,31 @@
           }
         },
         "proposals": {},
-        "approvals": {},
+        "approvals": {
+          "ap_1": {
+            "id": "ap_1",
+            "call": {
+              "id": "t1",
+              "name": "bash",
+              "risk": "exec",
+              "subject": "ls -la",
+              "args": {}
+            },
+            "provenance": {
+              "initiator_id": "p_alia",
+              "initiator_role": "participant",
+              "origin": "proposal"
+            },
+            "timeout_at": "2026-10-26T12:02:00Z",
+            "suggested_patterns": [
+              "ls*"
+            ]
+          }
+        },
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2089,8 +1964,8 @@
               "subject": "ls -la",
               "args": {}
             },
-            "ok": true,
-            "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
+            "ok": null,
+            "output": ""
           }
         ]
       },
@@ -2105,15 +1980,10 @@
         "ts": "2026-10-26T12:00:27Z",
         "actor_id": null,
         "event": {
-          "type": "tool.started",
-          "run_id": "run_1",
-          "call": {
-            "id": "t2",
-            "name": "edit",
-            "risk": "write",
-            "subject": "calc.py",
-            "args": {}
-          }
+          "type": "approval.resolved",
+          "approval_id": "ap_1",
+          "decision": "once",
+          "resolved_by": "p_host"
         }
       },
       "state": {
@@ -2150,6 +2020,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2209,21 +2080,6 @@
               "subject": "ls -la",
               "args": {}
             },
-            "ok": true,
-            "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
-          },
-          {
-            "id": "t2",
-            "kind": "tool",
-            "author_id": null,
-            "text": "",
-            "tool": {
-              "id": "t2",
-              "name": "edit",
-              "risk": "write",
-              "subject": "calc.py",
-              "args": {}
-            },
             "ok": null,
             "output": ""
           }
@@ -2242,9 +2098,9 @@
         "event": {
           "type": "tool.ended",
           "run_id": "run_1",
-          "call_id": "t2",
-          "ok": false,
-          "output": "denied by policy",
+          "call_id": "t1",
+          "ok": true,
+          "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29",
           "diff": null
         }
       },
@@ -2282,6 +2138,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2343,21 +2200,6 @@
             },
             "ok": true,
             "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
-          },
-          {
-            "id": "t2",
-            "kind": "tool",
-            "author_id": null,
-            "text": "",
-            "tool": {
-              "id": "t2",
-              "name": "edit",
-              "risk": "write",
-              "subject": "calc.py",
-              "args": {}
-            },
-            "ok": false,
-            "output": "denied by policy"
           }
         ]
       },
@@ -2372,12 +2214,14 @@
         "ts": "2026-10-26T12:00:29Z",
         "actor_id": null,
         "event": {
-          "type": "policy.rule_added",
-          "rule": {
-            "id": "pl_1",
-            "tool": "bash",
-            "pattern": "ls *",
-            "action": "allow"
+          "type": "tool.started",
+          "run_id": "run_1",
+          "call": {
+            "id": "t2",
+            "name": "edit",
+            "risk": "write",
+            "subject": "calc.py",
+            "args": {}
           }
         }
       },
@@ -2413,15 +2257,9 @@
         "proposals": {},
         "approvals": {},
         "attachments": {},
-        "policy": [
-          {
-            "id": "pl_1",
-            "tool": "bash",
-            "pattern": "ls *",
-            "action": "allow"
-          }
-        ],
+        "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2496,8 +2334,8 @@
               "subject": "calc.py",
               "args": {}
             },
-            "ok": false,
-            "output": "denied by policy"
+            "ok": null,
+            "output": ""
           }
         ]
       },
@@ -2512,8 +2350,12 @@
         "ts": "2026-10-26T12:00:30Z",
         "actor_id": null,
         "event": {
-          "type": "policy.rule_removed",
-          "rule_id": "pl_1"
+          "type": "tool.ended",
+          "run_id": "run_1",
+          "call_id": "t2",
+          "ok": false,
+          "output": "denied by policy",
+          "diff": null
         }
       },
       "state": {
@@ -2550,6 +2392,7 @@
         "attachments": {},
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2640,13 +2483,12 @@
         "ts": "2026-10-26T12:00:31Z",
         "actor_id": null,
         "event": {
-          "type": "attachment.added",
-          "attachment": {
-            "id": "at_1",
-            "name": "notes.md",
-            "size": 12,
-            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-            "owner_id": "p_alia"
+          "type": "policy.rule_added",
+          "rule": {
+            "id": "pl_1",
+            "tool": "bash",
+            "pattern": "ls *",
+            "action": "allow"
           }
         }
       },
@@ -2681,17 +2523,17 @@
         },
         "proposals": {},
         "approvals": {},
-        "attachments": {
-          "at_1": {
-            "id": "at_1",
-            "name": "notes.md",
-            "size": 12,
-            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-            "owner_id": "p_alia"
+        "attachments": {},
+        "policy": [
+          {
+            "id": "pl_1",
+            "tool": "bash",
+            "pattern": "ls *",
+            "action": "allow"
           }
-        },
-        "policy": [],
+        ],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2782,14 +2624,147 @@
         "ts": "2026-10-26T12:00:32Z",
         "actor_id": null,
         "event": {
-          "type": "context.compacted",
-          "run_id": "run_1",
-          "summary": "notes were read",
-          "tokens_before": 900
+          "type": "policy.rule_removed",
+          "rule_id": "pl_1"
         }
       },
       "state": {
         "last_seq": 32,
+        "prompt_mode": "review",
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
+        "summary": null,
+        "run": {
+          "id": "run_1",
+          "prompt_id": "pm_1",
+          "provenance": {
+            "initiator_id": "p_alia",
+            "initiator_role": "participant",
+            "origin": "proposal"
+          }
+        },
+        "transcript": [
+          {
+            "id": "pm_1",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "check the notes",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q1",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "then this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q2",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "and later this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "m1",
+            "kind": "assistant",
+            "author_id": null,
+            "text": "Looking around",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "t1",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t1",
+              "name": "bash",
+              "risk": "exec",
+              "subject": "ls -la",
+              "args": {}
+            },
+            "ok": true,
+            "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
+          },
+          {
+            "id": "t2",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t2",
+              "name": "edit",
+              "risk": "write",
+              "subject": "calc.py",
+              "args": {}
+            },
+            "ok": false,
+            "output": "denied by policy"
+          }
+        ]
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 33,
+        "id": "e_33",
+        "ts": "2026-10-26T12:00:33Z",
+        "actor_id": null,
+        "event": {
+          "type": "attachment.added",
+          "attachment": {
+            "id": "at_1",
+            "name": "notes.md",
+            "size": 12,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "owner_id": "p_alia"
+          }
+        }
+      },
+      "state": {
+        "last_seq": 33,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -2830,6 +2805,146 @@
         },
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
+        "summary": null,
+        "run": {
+          "id": "run_1",
+          "prompt_id": "pm_1",
+          "provenance": {
+            "initiator_id": "p_alia",
+            "initiator_role": "participant",
+            "origin": "proposal"
+          }
+        },
+        "transcript": [
+          {
+            "id": "pm_1",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "check the notes",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q1",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "then this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q2",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "and later this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "m1",
+            "kind": "assistant",
+            "author_id": null,
+            "text": "Looking around",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "t1",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t1",
+              "name": "bash",
+              "risk": "exec",
+              "subject": "ls -la",
+              "args": {}
+            },
+            "ok": true,
+            "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
+          },
+          {
+            "id": "t2",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t2",
+              "name": "edit",
+              "risk": "write",
+              "subject": "calc.py",
+              "args": {}
+            },
+            "ok": false,
+            "output": "denied by policy"
+          }
+        ]
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 34,
+        "id": "e_34",
+        "ts": "2026-10-26T12:00:34Z",
+        "actor_id": null,
+        "event": {
+          "type": "context.compacted",
+          "run_id": "run_1",
+          "summary": "notes were read",
+          "tokens_before": 900
+        }
+      },
+      "state": {
+        "last_seq": 34,
+        "prompt_mode": "review",
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {
+          "at_1": {
+            "id": "at_1",
+            "name": "notes.md",
+            "size": 12,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "owner_id": "p_alia"
+          }
+        },
+        "policy": [],
+        "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": "notes were read",
         "run": {
           "id": "run_1",
@@ -2908,7 +3023,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_32",
+            "id": "e_34",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -2924,9 +3039,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 33,
-        "id": "e_33",
-        "ts": "2026-10-26T12:00:33Z",
+        "seq": 35,
+        "id": "e_35",
+        "ts": "2026-10-26T12:00:35Z",
         "actor_id": null,
         "event": {
           "type": "approval.requested",
@@ -2952,7 +3067,7 @@
         }
       },
       "state": {
-        "last_seq": 33,
+        "last_seq": 35,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -3013,6 +3128,7 @@
         },
         "policy": [],
         "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": "notes were read",
         "run": {
           "id": "run_1",
@@ -3091,327 +3207,10 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_32",
+            "id": "e_34",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          }
-        ]
-      },
-      "streaming": {},
-      "reasoning": 0
-    },
-    {
-      "kind": "record",
-      "record": {
-        "seq": 34,
-        "id": "e_34",
-        "ts": "2026-10-26T12:00:34Z",
-        "actor_id": null,
-        "event": {
-          "type": "approval.resolved",
-          "approval_id": "ap_1",
-          "decision": "reject",
-          "resolved_by": null
-        }
-      },
-      "state": {
-        "last_seq": 34,
-        "prompt_mode": "review",
-        "participants": {
-          "p_host": {
-            "id": "p_host",
-            "name": "vlad",
-            "role": "host",
-            "connected": true
-          },
-          "p_alia": {
-            "id": "p_alia",
-            "name": "Alia",
-            "role": "participant",
-            "connected": true
-          },
-          "p_bek1111": {
-            "id": "p_bek1111",
-            "name": "Bek",
-            "role": "participant",
-            "connected": false
-          },
-          "p_bek2222": {
-            "id": "p_bek2222",
-            "name": "Bek",
-            "role": "participant",
-            "connected": true
-          }
-        },
-        "proposals": {},
-        "approvals": {},
-        "attachments": {
-          "at_1": {
-            "id": "at_1",
-            "name": "notes.md",
-            "size": 12,
-            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-            "owner_id": "p_alia"
-          }
-        },
-        "policy": [],
-        "queue": [],
-        "summary": "notes were read",
-        "run": {
-          "id": "run_1",
-          "prompt_id": "pm_1",
-          "provenance": {
-            "initiator_id": "p_alia",
-            "initiator_role": "participant",
-            "origin": "proposal"
-          }
-        },
-        "transcript": [
-          {
-            "id": "pm_1",
-            "kind": "prompt",
-            "author_id": "p_alia",
-            "text": "check the notes",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_q1",
-            "kind": "prompt",
-            "author_id": "p_bek1111",
-            "text": "then this",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_q2",
-            "kind": "prompt",
-            "author_id": "p_bek1111",
-            "text": "and later this",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "m1",
-            "kind": "assistant",
-            "author_id": null,
-            "text": "Looking around",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "t1",
-            "kind": "tool",
-            "author_id": null,
-            "text": "",
-            "tool": {
-              "id": "t1",
-              "name": "bash",
-              "risk": "exec",
-              "subject": "ls -la",
-              "args": {}
-            },
-            "ok": true,
-            "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
-          },
-          {
-            "id": "t2",
-            "kind": "tool",
-            "author_id": null,
-            "text": "",
-            "tool": {
-              "id": "t2",
-              "name": "edit",
-              "risk": "write",
-              "subject": "calc.py",
-              "args": {}
-            },
-            "ok": false,
-            "output": "denied by policy"
-          },
-          {
-            "id": "e_32",
-            "kind": "compaction",
-            "author_id": null,
-            "text": "context compacted (900 tokens summarized)",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          }
-        ]
-      },
-      "streaming": {},
-      "reasoning": 0
-    },
-    {
-      "kind": "record",
-      "record": {
-        "seq": 35,
-        "id": "e_35",
-        "ts": "2026-10-26T12:00:35Z",
-        "actor_id": null,
-        "event": {
-          "type": "prompt.accepted",
-          "prompt_id": "pm_2",
-          "author_id": "p_alia",
-          "text": "again",
-          "delivery": "now",
-          "provenance": {
-            "initiator_id": "p_alia",
-            "initiator_role": "participant",
-            "origin": "direct"
-          },
-          "attachments": []
-        }
-      },
-      "state": {
-        "last_seq": 35,
-        "prompt_mode": "review",
-        "participants": {
-          "p_host": {
-            "id": "p_host",
-            "name": "vlad",
-            "role": "host",
-            "connected": true
-          },
-          "p_alia": {
-            "id": "p_alia",
-            "name": "Alia",
-            "role": "participant",
-            "connected": true
-          },
-          "p_bek1111": {
-            "id": "p_bek1111",
-            "name": "Bek",
-            "role": "participant",
-            "connected": false
-          },
-          "p_bek2222": {
-            "id": "p_bek2222",
-            "name": "Bek",
-            "role": "participant",
-            "connected": true
-          }
-        },
-        "proposals": {},
-        "approvals": {},
-        "attachments": {
-          "at_1": {
-            "id": "at_1",
-            "name": "notes.md",
-            "size": 12,
-            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
-            "owner_id": "p_alia"
-          }
-        },
-        "policy": [],
-        "queue": [
-          {
-            "prompt_id": "pm_2",
-            "author_id": "p_alia",
-            "text": "again",
-            "delivery": "now"
-          }
-        ],
-        "summary": "notes were read",
-        "run": {
-          "id": "run_1",
-          "prompt_id": "pm_1",
-          "provenance": {
-            "initiator_id": "p_alia",
-            "initiator_role": "participant",
-            "origin": "proposal"
-          }
-        },
-        "transcript": [
-          {
-            "id": "pm_1",
-            "kind": "prompt",
-            "author_id": "p_alia",
-            "text": "check the notes",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_q1",
-            "kind": "prompt",
-            "author_id": "p_bek1111",
-            "text": "then this",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_q2",
-            "kind": "prompt",
-            "author_id": "p_bek1111",
-            "text": "and later this",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "m1",
-            "kind": "assistant",
-            "author_id": null,
-            "text": "Looking around",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "t1",
-            "kind": "tool",
-            "author_id": null,
-            "text": "",
-            "tool": {
-              "id": "t1",
-              "name": "bash",
-              "risk": "exec",
-              "subject": "ls -la",
-              "args": {}
-            },
-            "ok": true,
-            "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
-          },
-          {
-            "id": "t2",
-            "kind": "tool",
-            "author_id": null,
-            "text": "",
-            "tool": {
-              "id": "t2",
-              "name": "edit",
-              "risk": "write",
-              "subject": "calc.py",
-              "args": {}
-            },
-            "ok": false,
-            "output": "denied by policy"
-          },
-          {
-            "id": "e_32",
-            "kind": "compaction",
-            "author_id": null,
-            "text": "context compacted (900 tokens summarized)",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_2",
-            "kind": "prompt",
-            "author_id": "p_alia",
-            "text": "again",
             "tool": null,
             "ok": null,
             "output": ""
@@ -3429,16 +3228,10 @@
         "ts": "2026-10-26T12:00:36Z",
         "actor_id": null,
         "event": {
-          "type": "run.ended",
-          "run_id": "run_1",
-          "reason": "error",
-          "usage": {
-            "input_tokens": 10,
-            "output_tokens": 5,
-            "cache_read_tokens": 0,
-            "cache_write_tokens": 0
-          },
-          "error": "boom"
+          "type": "approval.resolved",
+          "approval_id": "ap_1",
+          "decision": "reject",
+          "resolved_by": null
         }
       },
       "state": {
@@ -3482,16 +3275,18 @@
           }
         },
         "policy": [],
-        "queue": [
-          {
-            "prompt_id": "pm_2",
-            "author_id": "p_alia",
-            "text": "again",
-            "delivery": "now"
-          }
-        ],
+        "queue": [],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": "notes were read",
-        "run": null,
+        "run": {
+          "id": "run_1",
+          "prompt_id": "pm_1",
+          "provenance": {
+            "initiator_id": "p_alia",
+            "initiator_role": "participant",
+            "origin": "proposal"
+          }
+        },
         "transcript": [
           {
             "id": "pm_1",
@@ -3560,19 +3355,10 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_32",
+            "id": "e_34",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
-            "tool": null,
-            "ok": null,
-            "output": ""
-          },
-          {
-            "id": "pm_2",
-            "kind": "prompt",
-            "author_id": "p_alia",
-            "text": "again",
             "tool": null,
             "ok": null,
             "output": ""
@@ -3590,16 +3376,17 @@
         "ts": "2026-10-26T12:00:37Z",
         "actor_id": null,
         "event": {
-          "type": "run.ended",
-          "run_id": "run_2",
-          "reason": "stop",
-          "usage": {
-            "input_tokens": 0,
-            "output_tokens": 0,
-            "cache_read_tokens": 0,
-            "cache_write_tokens": 0
+          "type": "prompt.accepted",
+          "prompt_id": "pm_2",
+          "author_id": "p_alia",
+          "text": "again",
+          "delivery": "now",
+          "provenance": {
+            "initiator_id": "p_alia",
+            "initiator_role": "participant",
+            "origin": "direct"
           },
-          "error": null
+          "attachments": []
         }
       },
       "state": {
@@ -3651,6 +3438,177 @@
             "delivery": "now"
           }
         ],
+        "agent": "anthropic · claude-opus-5-5",
+        "summary": "notes were read",
+        "run": {
+          "id": "run_1",
+          "prompt_id": "pm_1",
+          "provenance": {
+            "initiator_id": "p_alia",
+            "initiator_role": "participant",
+            "origin": "proposal"
+          }
+        },
+        "transcript": [
+          {
+            "id": "pm_1",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "check the notes",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q1",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "then this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q2",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "and later this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "m1",
+            "kind": "assistant",
+            "author_id": null,
+            "text": "Looking around",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "t1",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t1",
+              "name": "bash",
+              "risk": "exec",
+              "subject": "ls -la",
+              "args": {}
+            },
+            "ok": true,
+            "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
+          },
+          {
+            "id": "t2",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t2",
+              "name": "edit",
+              "risk": "write",
+              "subject": "calc.py",
+              "args": {}
+            },
+            "ok": false,
+            "output": "denied by policy"
+          },
+          {
+            "id": "e_34",
+            "kind": "compaction",
+            "author_id": null,
+            "text": "context compacted (900 tokens summarized)",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_2",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "again",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          }
+        ]
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 38,
+        "id": "e_38",
+        "ts": "2026-10-26T12:00:38Z",
+        "actor_id": null,
+        "event": {
+          "type": "run.ended",
+          "run_id": "run_1",
+          "reason": "error",
+          "usage": {
+            "input_tokens": 10,
+            "output_tokens": 5,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          },
+          "error": "boom"
+        }
+      },
+      "state": {
+        "last_seq": 38,
+        "prompt_mode": "review",
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {
+          "at_1": {
+            "id": "at_1",
+            "name": "notes.md",
+            "size": 12,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "owner_id": "p_alia"
+          }
+        },
+        "policy": [],
+        "queue": [
+          {
+            "prompt_id": "pm_2",
+            "author_id": "p_alia",
+            "text": "again",
+            "delivery": "now"
+          }
+        ],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -3721,7 +3679,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_32",
+            "id": "e_34",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -3746,9 +3704,171 @@
     {
       "kind": "record",
       "record": {
-        "seq": 38,
-        "id": "e_38",
-        "ts": "2026-10-26T12:00:38Z",
+        "seq": 39,
+        "id": "e_39",
+        "ts": "2026-10-26T12:00:39Z",
+        "actor_id": null,
+        "event": {
+          "type": "run.ended",
+          "run_id": "run_2",
+          "reason": "stop",
+          "usage": {
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0
+          },
+          "error": null
+        }
+      },
+      "state": {
+        "last_seq": 39,
+        "prompt_mode": "review",
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {
+          "at_1": {
+            "id": "at_1",
+            "name": "notes.md",
+            "size": 12,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "owner_id": "p_alia"
+          }
+        },
+        "policy": [],
+        "queue": [
+          {
+            "prompt_id": "pm_2",
+            "author_id": "p_alia",
+            "text": "again",
+            "delivery": "now"
+          }
+        ],
+        "agent": "anthropic · claude-opus-5-5",
+        "summary": "notes were read",
+        "run": null,
+        "transcript": [
+          {
+            "id": "pm_1",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "check the notes",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q1",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "then this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q2",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "and later this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "m1",
+            "kind": "assistant",
+            "author_id": null,
+            "text": "Looking around",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "t1",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t1",
+              "name": "bash",
+              "risk": "exec",
+              "subject": "ls -la",
+              "args": {}
+            },
+            "ok": true,
+            "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
+          },
+          {
+            "id": "t2",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t2",
+              "name": "edit",
+              "risk": "write",
+              "subject": "calc.py",
+              "args": {}
+            },
+            "ok": false,
+            "output": "denied by policy"
+          },
+          {
+            "id": "e_34",
+            "kind": "compaction",
+            "author_id": null,
+            "text": "context compacted (900 tokens summarized)",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_2",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "again",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          }
+        ]
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 40,
+        "id": "e_40",
+        "ts": "2026-10-26T12:00:40Z",
         "actor_id": null,
         "event": {
           "type": "participant.revoked",
@@ -3756,7 +3876,7 @@
         }
       },
       "state": {
-        "last_seq": 38,
+        "last_seq": 40,
         "prompt_mode": "review",
         "participants": {
           "p_host": {
@@ -3798,6 +3918,7 @@
             "delivery": "now"
           }
         ],
+        "agent": "anthropic · claude-opus-5-5",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -3868,7 +3989,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_32",
+            "id": "e_34",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",

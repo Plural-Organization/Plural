@@ -1,5 +1,22 @@
 {
   "$defs": {
+    "AgentChanged": {
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "type": {
+          "const": "agent.changed",
+          "default": "agent.changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "agent"
+      ],
+      "type": "object"
+    },
     "ApprovalDecision": {
       "enum": [
         "once",
@@ -381,6 +398,7 @@
         "event": {
           "discriminator": {
             "mapping": {
+              "agent.changed": "#/$defs/AgentChanged",
               "approval.requested": "#/$defs/ApprovalRequested",
               "approval.resolved": "#/$defs/ApprovalResolved",
               "attachment.added": "#/$defs/AttachmentAdded",
@@ -428,6 +446,9 @@
             },
             {
               "$ref": "#/$defs/PromptModeChanged"
+            },
+            {
+              "$ref": "#/$defs/AgentChanged"
             },
             {
               "$ref": "#/$defs/PromptDequeued"
@@ -1188,6 +1209,10 @@
     },
     "SessionState": {
       "properties": {
+        "agent": {
+          "default": "",
+          "type": "string"
+        },
         "approvals": {
           "additionalProperties": {
             "$ref": "#/$defs/ApprovalView"
@@ -1273,6 +1298,7 @@
         "attachments",
         "policy",
         "queue",
+        "agent",
         "summary",
         "run",
         "transcript"
@@ -1535,6 +1561,7 @@
     "event": {
       "discriminator": {
         "mapping": {
+          "agent.changed": "#/$defs/AgentChanged",
           "approval.requested": "#/$defs/ApprovalRequested",
           "approval.resolved": "#/$defs/ApprovalResolved",
           "attachment.added": "#/$defs/AttachmentAdded",
@@ -1582,6 +1609,9 @@
         },
         {
           "$ref": "#/$defs/PromptModeChanged"
+        },
+        {
+          "$ref": "#/$defs/AgentChanged"
         },
         {
           "$ref": "#/$defs/PromptDequeued"

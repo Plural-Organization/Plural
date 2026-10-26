@@ -58,6 +58,11 @@ class PromptModeChanged(EventBase):
     mode: PromptMode
 
 
+class AgentChanged(EventBase):
+    type: Literal["agent.changed"] = "agent.changed"
+    agent: str
+
+
 class PromptDequeued(EventBase):
     type: Literal["prompt.dequeued"] = "prompt.dequeued"
     prompt_id: str
@@ -225,6 +230,7 @@ Event = Annotated[
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | AgentChanged
     | PromptDequeued
     | ParticipantTyping
     | ProposalCreated

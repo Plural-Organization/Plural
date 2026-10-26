@@ -194,6 +194,7 @@ class SessionState(Model):
     attachments: dict[str, AttachmentMeta] = Field(default_factory=dict[str, AttachmentMeta])
     policy: tuple[PolicyRuleView, ...] = ()
     queue: tuple[QueuedPrompt, ...] = ()
+    agent: str = ""
     summary: str | None = None
     run: RunView | None = None
     transcript: tuple[TranscriptEntry, ...] = ()

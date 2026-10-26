@@ -29,6 +29,7 @@ SECRET_VALUE: Final = re.compile(
     r"|gh[pousr]_[A-Za-z0-9]{30,}"
     r"|AKIA[0-9A-Z]{16}"
     r"|xox[abprs]-[A-Za-z0-9\-]{10,}"
+    r"|AIza[0-9A-Za-z_\-]{35}"
 )
 MASK: Final = "[REDACTED]"
 MIN_SECRET_LENGTH: Final = 8
@@ -46,6 +47,10 @@ class Redactor:
         self._values = sorted(
             {v for v in values if len(v) >= MIN_SECRET_LENGTH}, key=len, reverse=True
         )
+
+    def add(self, value: str) -> None:
+        if len(value) >= MIN_SECRET_LENGTH and value not in self._values:
+            self._values = sorted([*self._values, value], key=len, reverse=True)
 
     @classmethod
     def from_environment(cls, environ: Mapping[str, str], extra: Iterable[str] = ()) -> "Redactor":

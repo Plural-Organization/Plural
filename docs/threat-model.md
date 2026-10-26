@@ -9,6 +9,7 @@
 | session `always` overriding deny | base deny rules are evaluated first and cannot be overridden |
 | compromised relay | host signs tokens and checks permissions; relay only routes (`relay/`) |
 | token theft | 24h TTL, room binding, token bound to connection, revoked participants removed from state |
+| api key typed in the client reaches the wrong party | keys go only through the local stdin pipe between a client and the host it started, never over the protocol or a relay; the host registers them with the redactor (`host/control.py`) |
 | secret leakage | path deny-list (`security/secrets.py`), env scrubbing for `bash`, redaction before append |
 | agent badgering the host with variants of a rejected action | rejection ledger per run and class, `Block (session)` deny rule (`host/policy_gate.py`, `core/policy/rejections.py`) |
 | agent or guest widening its own permissions | policy rules are events changed only by host commands (`core/roles.py`); an allow rule never overrides a built-in deny or the guest taint; rules are never read from the workspace the agent can write |

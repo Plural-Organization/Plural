@@ -6,6 +6,7 @@ from typing import Any
 
 from plural.client.projection import Projection
 from plural.protocol.events import (
+    AgentChanged,
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
@@ -85,6 +86,7 @@ def _approval() -> ApprovalView:
 
 def _steps() -> list[tuple[str, Event]]:
     return [
+        ("record", AgentChanged(agent="demo agent (scripted)")),
         ("record", ParticipantJoined(participant=HOST)),
         ("record", ParticipantJoined(participant=ALIA)),
         ("record", ParticipantJoined(participant=BEK_ONE)),
@@ -92,6 +94,7 @@ def _steps() -> list[tuple[str, Event]]:
         ("record", ParticipantRoleChanged(participant_id="p_bek2222", role=Role.PARTICIPANT)),
         ("record", ParticipantLeft(participant_id="p_bek1111")),
         ("record", PromptModeChanged(mode=PromptMode.REVIEW)),
+        ("record", AgentChanged(agent="anthropic · claude-opus-5-5")),
         (
             "record",
             ProposalCreated(

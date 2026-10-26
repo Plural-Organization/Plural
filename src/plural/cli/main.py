@@ -17,6 +17,7 @@ from rich.table import Table
 from plural import __version__
 from plural.host.bootstrap import ConfigError, Host, build_host, build_provider, resolve_api_key
 from plural.host.config import HostSettings
+from plural.host.control import MAX_LINE_BYTES, Control, read_lines
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import PromptMode, Role
 from plural.relay.app import create_app
@@ -95,16 +96,16 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
         )
     try:
         if machine:
-            await _serve_until_stdin_closes(plural_host)
+            await _serve_until_stdin_closes(plural_host, settings)
         else:
             await plural_host.serve()
     finally:
         await plural_host.close()
 
 
-async def _serve_until_stdin_closes(plural_host: Host) -> None:
+async def _serve_until_stdin_closes(plural_host: Host, settings: HostSettings) -> None:
     serving = asyncio.create_task(plural_host.serve())
-    watching = asyncio.create_task(_wait_for_stdin_eof())
+    watching = asyncio.create_task(_control_until_stdin_closes(plural_host, settings))
     done, pending = await asyncio.wait({serving, watching}, return_when=asyncio.FIRST_COMPLETED)
     for task in pending:
         task.cancel()
@@ -114,12 +115,16 @@ async def _serve_until_stdin_closes(plural_host: Host) -> None:
         serving.result()
 
 
-async def _wait_for_stdin_eof() -> None:
+def _write_reply(message: dict[str, object]) -> None:
+    print(json.dumps(message), flush=True)
+
+
+async def _control_until_stdin_closes(plural_host: Host, settings: HostSettings) -> None:
     loop = asyncio.get_running_loop()
-    reader = asyncio.StreamReader()
+    reader = asyncio.StreamReader(limit=2 * MAX_LINE_BYTES)
     await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), sys.stdin)
-    while await reader.read(1024):
-        pass
+    control = Control(plural_host, settings, _write_reply)
+    await read_lines(reader, control.handle)
 
 
 @app.command()

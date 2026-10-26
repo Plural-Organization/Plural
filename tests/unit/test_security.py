@@ -62,3 +62,8 @@ def test_redaction() -> None:
 )
 def test_denied_paths(path: str, denied: bool) -> None:
     assert is_denied_path(PurePath(path)) is denied
+
+
+def test_google_api_keys_are_masked_without_being_registered() -> None:
+    key = "AIzaSyD9tSrke72PouQMnMXa7eZSW0jkFMBWYxA"
+    assert Redactor().redact(f"key={key}") == "key=[REDACTED]"

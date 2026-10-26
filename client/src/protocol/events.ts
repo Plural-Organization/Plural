@@ -87,6 +87,7 @@ export interface EventsSchema {
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | AgentChanged
     | PromptDequeued
     | ParticipantTyping
     | ProposalCreated
@@ -193,6 +194,14 @@ export interface ParticipantRevoked {
 export interface PromptModeChanged {
   mode: PromptMode;
   type: "session.prompt_mode_changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AgentChanged".
+ */
+export interface AgentChanged {
+  agent: string;
+  type: "agent.changed";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -485,6 +494,7 @@ export interface SessionSnapshot {
  * via the `definition` "SessionState".
  */
 export interface SessionState {
+  agent: string;
   approvals: {
     [k: string]: ApprovalView;
   };
@@ -569,6 +579,7 @@ export interface EventRecord {
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | AgentChanged
     | PromptDequeued
     | ParticipantTyping
     | ProposalCreated

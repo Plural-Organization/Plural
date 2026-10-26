@@ -5,6 +5,7 @@ import structlog
 from plural.agent.events import RunEnd
 from plural.agent.loop import AgentLoop
 from plural.agent.messages import UserTurn
+from plural.agent.providers.base import LLMProvider
 from plural.host.inbox import AgentOutput, Inbox
 from plural.protocol.models import RunEndReason
 
@@ -36,6 +37,9 @@ class AgentRun:
 
     def follow_up(self, turn: UserTurn) -> None:
         self._loop.follow_up(turn)
+
+    def swap_provider(self, provider: LLMProvider, *, context_window: int | None) -> None:
+        self._loop.swap_provider(provider, context_window=context_window)
 
     def request_compaction(self) -> None:
         self._loop.request_compaction()

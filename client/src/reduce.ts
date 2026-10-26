@@ -13,6 +13,7 @@ export function emptyState(): SessionState {
     attachments: {},
     policy: [],
     queue: [],
+    agent: "",
     summary: null,
     run: null,
     transcript: [],
@@ -37,6 +38,8 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return patchParticipant(state, event.participant_id, { role: event.role });
     case "participant.revoked":
       return { ...state, participants: without(state.participants, event.participant_id) };
+    case "agent.changed":
+      return { ...state, agent: event.agent };
     case "session.prompt_mode_changed":
       return { ...state, prompt_mode: event.mode };
     case "proposal.created":

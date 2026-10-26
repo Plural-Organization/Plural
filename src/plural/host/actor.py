@@ -34,6 +34,7 @@ from plural.host.inbox import (
     Inbox,
     InboxMessage,
     Incoming,
+    Reconfigure,
     TypingExpired,
 )
 from plural.host.invites import InviteBook
@@ -62,6 +63,7 @@ from plural.protocol.commands import (
 )
 from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo
 from plural.protocol.events import (
+    AgentChanged,
     ApprovalRequested,
     AttachmentAdded,
     ContextCompacted,
@@ -180,6 +182,8 @@ class SessionActor:
                 await self._emit(ParticipantLeft(participant_id=participant.id))
         if self._host.id not in self._state.participants:
             await self._emit(ParticipantJoined(participant=self._host), actor_id=self._host.id)
+        if self._agent_label and self._state.agent != self._agent_label:
+            await self._emit(AgentChanged(agent=self._agent_label), actor_id=self._host.id)
         if self._initial_mode is not None:
             await self._set_prompt_mode(self._initial_mode, actor_id=self._host.id)
 
@@ -205,6 +209,8 @@ class SessionActor:
                 self._timers[approval.id] = asyncio.get_running_loop().call_later(
                     delay, self._inbox.put, ApprovalExpired(approval.id)
                 )
+            case Reconfigure() as change:
+                await self._reconfigure(change)
             case TypingExpired(participant_id=participant_id):
                 if self._typing.pop(participant_id, None) is not None:
                     await self._emit(ParticipantTyping(participant_id=participant_id, typing=False))
@@ -369,6 +375,20 @@ class SessionActor:
             self._state, proposal_id=self._ids.new("pr_"), author_id=participant.id, command=command
         )
         await self._emit(created, actor_id=participant.id)
+
+    async def _reconfigure(self, change: Reconfigure) -> None:
+        if self._state.run is not None:
+            change.reply.set_exception(
+                Conflict("the agent is busy, wait for the current run to end")
+            )
+            return
+        self._agent.swap_provider(change.provider, context_window=change.context_window)
+        for secret in change.secrets:
+            self._redactor.add(secret)
+        self._agent_label = change.label
+        if change.label != self._state.agent:
+            await self._emit(AgentChanged(agent=change.label), actor_id=self._host.id)
+        change.reply.set_result(None)
 
     async def _set_typing(self, participant_id: str, *, typing: bool) -> None:
         timer = self._typing.pop(participant_id, None)

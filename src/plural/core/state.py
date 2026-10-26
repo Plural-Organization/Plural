@@ -1,6 +1,7 @@
 from typing import Final
 
 from plural.protocol.events import (
+    AgentChanged,
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
@@ -55,6 +56,8 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             return state.model_copy(
                 update={"participants": _without(state.participants, participant_id)}
             )
+        case AgentChanged(agent=agent):
+            return state.model_copy(update={"agent": agent})
         case PromptModeChanged(mode=mode):
             return state.model_copy(update={"prompt_mode": mode})
         case ProposalCreated(proposal=proposal):

@@ -1,0 +1,160 @@
+import asyncio
+import json
+import time
+from collections.abc import Callable, Coroutine
+from typing import Any, Final, Literal
+
+import structlog
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
+
+from plural.agent.providers.base import (
+    LlmMessage,
+    LLMProvider,
+    LlmRequest,
+    ProviderError,
+    Stop,
+    TextDelta,
+)
+from plural.core.errors import DomainError
+from plural.host.bootstrap import ConfigError, Host, build_provider, resolve_api_key
+from plural.host.config import HostSettings
+from plural.host.inbox import Reconfigure
+
+log = structlog.get_logger(__name__)
+
+PROBE_TIMEOUT_S: Final = 30.0
+PROBE_PROMPT: Final = "Reply with the single word ok."
+MAX_LINE_BYTES: Final = 64 * 1024
+
+
+class AgentConfig(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    provider: Literal["fake", "anthropic", "openai"]
+    model: str | None = None
+    base_url: str | None = None
+    api_key: SecretStr | None = None
+    context_window: int | None = Field(default=None, gt=0)
+
+
+class Request(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="ignore")
+
+    id: str
+    type: Literal["configure", "test"]
+    config: AgentConfig
+
+
+Reply = Callable[[dict[str, object]], None]
+
+
+def settings_for(base: HostSettings, config: AgentConfig) -> HostSettings:
+    return base.model_copy(
+        update={
+            "provider": config.provider,
+            "model": config.model or None,
+            "base_url": config.base_url or None,
+            "api_key": config.api_key,
+            "context_window": config.context_window or base.context_window,
+        }
+    )
+
+
+def provider_for(
+    base: HostSettings, config: AgentConfig
+) -> tuple[LLMProvider, HostSettings, str | None]:
+    settings = settings_for(base, config)
+    key = resolve_api_key(settings, {})
+    return build_provider(settings, key), settings, key
+
+
+async def probe(provider: LLMProvider) -> str:
+    request = LlmRequest(
+        system="",
+        messages=(LlmMessage(role="user", content=PROBE_PROMPT),),
+    )
+    started = time.monotonic()
+    cancel = asyncio.Event()
+
+    async def consume() -> None:
+        async for event in provider.stream(request, cancel=cancel):
+            if isinstance(event, TextDelta | Stop):
+                return
+
+    try:
+        await asyncio.wait_for(consume(), PROBE_TIMEOUT_S)
+    except TimeoutError:
+        raise ProviderError(f"no answer within {PROBE_TIMEOUT_S:g}s") from None
+    return f"answered in {time.monotonic() - started:.1f}s"
+
+
+class Control:
+    def __init__(self, host: Host, base: HostSettings, reply: Reply) -> None:
+        self._host = host
+        self._base = base
+        self._reply = reply
+
+    async def handle(self, line: str) -> None:
+        request = self._parse(line)
+        if request is None:
+            return
+        try:
+            if request.type == "test":
+                provider, _, _ = provider_for(self._base, request.config)
+                message = await probe(provider)
+                self._reply({"type": "result", "id": request.id, "ok": True, "message": message})
+            else:
+                label = await self._configure(request.config)
+                self._reply({"type": "result", "id": request.id, "ok": True, "agent": label})
+        except (ConfigError, ProviderError, DomainError) as error:
+            self._reply({"type": "result", "id": request.id, "ok": False, "error": str(error)})
+        except Exception:
+            log.exception("control.failed", request=request.type)
+            self._reply(
+                {"type": "result", "id": request.id, "ok": False, "error": "internal error"}
+            )
+
+    async def _configure(self, config: AgentConfig) -> str:
+        provider, settings, key = provider_for(self._base, config)
+        done: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        label = settings.agent_label({})
+        self._host.inbox.put(
+            Reconfigure(
+                provider=provider,
+                label=label,
+                context_window=settings.context_window,
+                secrets=(key,) if key else (),
+                reply=done,
+            )
+        )
+        await done
+        return label
+
+    def _parse(self, line: str) -> Request | None:
+        if len(line) > MAX_LINE_BYTES:
+            log.warning("control.too_long")
+            return None
+        try:
+            return Request.model_validate(json.loads(line))
+        except (json.JSONDecodeError, ValidationError):
+            log.warning("control.invalid")
+            return None
+
+
+async def read_lines(
+    source: asyncio.StreamReader, handle: Callable[[str], Coroutine[Any, Any, None]]
+) -> None:
+    pending: set[asyncio.Task[None]] = set()
+    while True:
+        try:
+            raw = await source.readline()
+        except ValueError:
+            log.warning("control.too_long")
+            continue
+        if not raw:
+            break
+        task: asyncio.Task[None] = asyncio.create_task(handle(raw.decode(errors="replace").strip()))
+        pending.add(task)
+        task.add_done_callback(pending.discard)
+    for task in pending:
+        task.cancel()

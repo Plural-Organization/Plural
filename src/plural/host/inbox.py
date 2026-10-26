@@ -2,6 +2,7 @@ import asyncio
 from dataclasses import dataclass
 
 from plural.agent.events import AgentEvent
+from plural.agent.providers.base import LLMProvider
 from plural.host.transport.base import Connection
 from plural.protocol.envelope import Envelope
 from plural.protocol.models import ApprovalView
@@ -39,8 +40,23 @@ class TypingExpired:
     participant_id: str
 
 
+@dataclass(frozen=True, slots=True)
+class Reconfigure:
+    provider: LLMProvider
+    label: str
+    context_window: int | None
+    secrets: tuple[str, ...]
+    reply: "asyncio.Future[None]"
+
+
 InboxMessage = (
-    Incoming | Disconnected | AgentOutput | ApprovalNeeded | ApprovalExpired | TypingExpired
+    Incoming
+    | Disconnected
+    | AgentOutput
+    | ApprovalNeeded
+    | ApprovalExpired
+    | TypingExpired
+    | Reconfigure
 )
 
 
