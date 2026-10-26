@@ -17,6 +17,7 @@ import { Composer } from "./components/Composer";
 import { Inbox, inboxItems } from "./components/Inbox";
 import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
+import { TopBar } from "./components/TopBar";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import { copyToClipboard } from "./lib/clipboard";
 import { createSyntaxStyle } from "./syntax";
@@ -279,6 +280,7 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
   return (
     <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg}>
       <box flexDirection="column" flexGrow={1} minWidth={0}>
+        <TopBar room={room} state={state} />
         <scrollbox
           ref={scroll}
           stickyScroll

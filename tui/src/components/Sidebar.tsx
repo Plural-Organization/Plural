@@ -1,6 +1,7 @@
 import { label, type Participant, type Projection } from "@plural/client";
 import type { ReactNode } from "react";
 import { colorFor, theme } from "../theme";
+import { truncate } from "../lib/wrap";
 import type { InboxItem } from "./Inbox";
 import { Spinner, useElapsed } from "./Spinner";
 
@@ -43,9 +44,9 @@ interface SidebarProps {
 export function Sidebar({ projection, room, inbox, running, status }: SidebarProps) {
   const state = projection.state;
   const elapsed = useElapsed(running);
-  const people = Object.values(state.participants).sort(
-    (a, b) => Number(b.connected) - Number(a.connected) || a.name.localeCompare(b.name),
-  );
+  const rank = (participant: Participant): number =>
+    participant.id === projection.meId ? 0 : participant.role === "host" ? 1 : participant.connected ? 2 : 3;
+  const people = Object.values(state.participants).sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
   const online = people.filter((participant) => participant.connected).length;
   return (
     <box
@@ -73,15 +74,13 @@ export function Sidebar({ projection, room, inbox, running, status }: SidebarPro
           {inbox.slice(0, 4).map((item) =>
             item.kind === "approval" ? (
               <box key={item.id} flexDirection="column">
-                <text fg={theme.warn}>
-                  ! {item.approval.call.name} {item.approval.call.subject}
-                </text>
+                <text fg={theme.warn}>! {truncate(`${item.approval.call.name} ${item.approval.call.subject}`, SIDEBAR_WIDTH - 8)}</text>
                 <text fg={theme.dim}>  from {nameOf(projection, item.approval.provenance.initiator_id)}</text>
               </box>
             ) : (
               <box key={item.id} flexDirection="column">
                 <text fg={theme.warn}>? {nameOf(projection, item.proposal.author_id)} proposes</text>
-                <text fg={theme.dim}>  {item.proposal.text.slice(0, 22)}</text>
+                <text fg={theme.dim}>  {truncate(item.proposal.text, SIDEBAR_WIDTH - 8)}</text>
               </box>
             ),
           )}
@@ -94,14 +93,10 @@ export function Sidebar({ projection, room, inbox, running, status }: SidebarPro
         </text>
         <text fg={theme.dim}>
           agent{"  "}
-          {running ? (
-            <span fg={theme.info}>
-              <Spinner color={theme.info} /> {status.replace(/^…\s*/, "")} {elapsed}s
-            </span>
-          ) : (
-            <span fg={theme.dim}>idle</span>
-          )}
+          {running ? <Spinner color={theme.info} /> : null}
+          <span fg={running ? theme.info : theme.dim}>{running ? ` working ${elapsed}s` : "idle"}</span>
         </text>
+        {running ? <text fg={theme.dim}>  {truncate(brief(status), SIDEBAR_WIDTH - 8)}</text> : null}
       </Section>
       <box flexGrow={1} />
       <text fg={theme.dim}>ctrl+b hide panel</text>
@@ -112,4 +107,9 @@ export function Sidebar({ projection, room, inbox, running, status }: SidebarPro
 function nameOf(projection: Projection, participantId: string): string {
   const participant = projection.state.participants[participantId];
   return participant ? label(projection.state, participant) : participantId;
+}
+
+function brief(status: string): string {
+  const text = status.replace(/^…\s*/, "");
+  return text === "waiting for host approval" ? "needs approval" : text;
 }

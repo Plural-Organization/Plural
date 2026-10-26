@@ -181,4 +181,17 @@ describe("App", () => {
     expect(text).toContain("First bold paragraph.");
     expect(text.match(/● plural/g)?.length).toBe(1);
   });
+
+  test("a fenced code block is drawn in a box with its language", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    const reply = "Fixed:\n\n```python\ndef add(a, b):\n    return a + b\n```\n";
+    fake.emit({ type: "message.started", run_id: "r", message_id: "m1" });
+    fake.emit({ type: "message.delta", message_id: "m1", text: reply, thinking: false });
+    fake.emit({ type: "message.ended", run_id: "r", message_id: "m1", text: reply, thinking: "" });
+    const text = await frame(setup, "return a + b");
+    expect(text).toContain("python");
+    expect(text).toContain("def add(a, b):");
+    expect(text).toContain("╭");
+  });
 });

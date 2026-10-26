@@ -18,7 +18,7 @@ export function StatusBar({ me, state, connection, inbox, focused, hint }: Statu
   const who = connection === "online" ? (me ? `${me.name} (${me.role})` : "connected") : connection === "connecting" ? "connecting…" : "reconnecting…";
   const right = hint ?? (inbox > 0 ? (focused ? "answer above · tab: back to the prompt" : `tab: ${inbox} waiting for you`) : "/help");
   return (
-    <box flexDirection="row" justifyContent="space-between" paddingX={2} height={1} flexShrink={0}>
+    <box flexDirection="row" justifyContent="space-between" paddingX={2} height={1} flexShrink={0} backgroundColor={theme.panel}>
       <text fg={theme.dim}>
         <span fg={dot}>●</span> {who} · <span fg={state.prompt_mode === "review" ? theme.warn : theme.dim}>{state.prompt_mode}</span>
         {names.length > 0 ? ` · with ${names.join(", ")}${extra > 0 ? ` +${extra}` : ""}` : ""}

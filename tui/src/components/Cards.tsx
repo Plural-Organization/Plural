@@ -1,4 +1,7 @@
 import type { SyntaxStyle } from "@opentui/core";
+import { useRenderer } from "@opentui/react";
+import { useMemo } from "react";
+import { codeBlockRenderer } from "../code";
 import type { FeedItem, Tone } from "../feed";
 import { previewLines } from "../lib/wrap";
 import { colorFor, theme } from "../theme";
@@ -14,27 +17,23 @@ const TONES: Record<Tone, { color: string; mark: string }> = {
 
 const OUTPUT_LINES = 6;
 
+const TABLE = { widthMode: "content", cellPaddingY: 0, borderStyle: "rounded", borderColor: theme.line } as const;
+
 export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }) {
   return (
-    <box flexDirection="column" border borderStyle="rounded" borderColor={theme.accent} paddingX={2} marginBottom={1}>
+    <box flexDirection="column" marginBottom={1}>
       <text>
         <span fg={theme.accent}>
           <b>◆ plural</b>
         </span>
-        <span fg={theme.dim}>  v{item.version}</span>
+        <span fg={theme.dim}>  v{item.version} · room {item.room.slice(0, 14)}…</span>
       </text>
-      <text fg={theme.dim}>room {item.room}</text>
       {item.guestLink ? (
-        <box flexDirection="column" marginTop={1}>
-          <text fg={theme.dim}>invite a teammate with</text>
-          <text fg={theme.info} selectable>
-            plural join "{item.guestLink}"
-          </text>
-        </box>
+        <text fg={theme.dim}>
+          invite a teammate: <span fg={theme.info}>plural join "{item.guestLink}"</span>
+        </text>
       ) : null}
-      <box marginTop={1}>
-        <text fg={theme.dim}>/help for commands · esc interrupts · ctrl+c twice quits</text>
-      </box>
+      <text fg={theme.dim}>/help for commands · esc interrupts · ctrl+c twice quits</text>
     </box>
   );
 }
@@ -59,6 +58,8 @@ export function UserCard({ item }: { item: Extract<FeedItem, { kind: "user" }> }
 }
 
 export function AssistantCard({ item, syntax }: { item: Extract<FeedItem, { kind: "assistant" }>; syntax: SyntaxStyle }) {
+  const renderer = useRenderer();
+  const renderNode = useMemo(() => codeBlockRenderer(renderer), [renderer]);
   return (
     <box flexDirection="column" marginBottom={1}>
       <text>
@@ -67,7 +68,7 @@ export function AssistantCard({ item, syntax }: { item: Extract<FeedItem, { kind
         </span>
       </text>
       <box paddingLeft={2}>
-        <markdown content={item.text} syntaxStyle={syntax} streaming={item.streaming} />
+        <markdown content={item.text} syntaxStyle={syntax} streaming={item.streaming} renderNode={renderNode} tableOptions={TABLE} />
       </box>
     </box>
   );

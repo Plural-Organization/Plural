@@ -144,7 +144,7 @@ export function Composer(props: ComposerProps) {
 
   const color = disabled ? theme.dim : focused ? theme.accent : theme.dim;
   return (
-    <box flexDirection="column" flexShrink={0}>
+    <box flexDirection="column" flexShrink={0} backgroundColor={theme.panel}>
       <box flexDirection="column" border={["top"]} borderColor={color} paddingX={2}>
         {label ? <text fg={theme.warn}>{label}</text> : null}
         <box flexDirection="row">
@@ -158,6 +158,8 @@ export function Composer(props: ComposerProps) {
             placeholder={disabled ?? placeholder}
             placeholderColor={theme.dim}
             textColor={theme.text}
+            backgroundColor={theme.panel}
+            focusedBackgroundColor={theme.panel}
             keyBindings={BINDINGS}
             onContentChange={() => {
               const text = area.current?.plainText ?? "";

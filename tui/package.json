@@ -10,7 +10,8 @@
     "dev": "bun src/cli.tsx",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "build": "bun build src/cli.tsx --compile --outfile ../dist-bin/plural"
+    "build": "bun build src/cli.tsx --compile --outfile ../dist-bin/plural",
+    "demo": "bun dev/demo.tsx"
   },
   "dependencies": {
     "@opentui/core": "0.7.0",
