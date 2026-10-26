@@ -3,6 +3,7 @@ import getpass
 import json
 import os
 import sys
+from contextlib import suppress
 from pathlib import Path
 from typing import Annotated
 
@@ -14,7 +15,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from plural import __version__
-from plural.host.bootstrap import ConfigError, build_host, build_provider, resolve_api_key
+from plural.host.bootstrap import ConfigError, Host, build_host, build_provider, resolve_api_key
 from plural.host.config import HostSettings
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import PromptMode, Role
@@ -43,7 +44,9 @@ def host(
     ] = None,
     machine: Annotated[
         bool,
-        typer.Option("--json", help="Print one JSON line when ready and log to a file."),
+        typer.Option(
+            "--json", help="Print one JSON line when ready, log to a file, quit when stdin closes."
+        ),
     ] = False,
 ) -> None:
     settings = HostSettings(
@@ -91,9 +94,32 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
             )
         )
     try:
-        await plural_host.serve()
+        if machine:
+            await _serve_until_stdin_closes(plural_host)
+        else:
+            await plural_host.serve()
     finally:
         await plural_host.close()
+
+
+async def _serve_until_stdin_closes(plural_host: Host) -> None:
+    serving = asyncio.create_task(plural_host.serve())
+    watching = asyncio.create_task(_wait_for_stdin_eof())
+    done, pending = await asyncio.wait({serving, watching}, return_when=asyncio.FIRST_COMPLETED)
+    for task in pending:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+    if serving in done:
+        serving.result()
+
+
+async def _wait_for_stdin_eof() -> None:
+    loop = asyncio.get_running_loop()
+    reader = asyncio.StreamReader()
+    await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), sys.stdin)
+    while await reader.read(1024):
+        pass
 
 
 @app.command()

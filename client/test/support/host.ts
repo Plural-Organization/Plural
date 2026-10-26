@@ -34,7 +34,7 @@ export async function startHost(mode: "open" | "review" = "open"): Promise<Runni
     {
       cwd: ROOT,
       env: { ...process.env, PLURAL_DATA_DIR: join(directory, "data"), PLURAL_PROVIDER: "fake" },
-      stdio: ["ignore", "pipe", "pipe"],
+      stdio: ["pipe", "pipe", "pipe"],
     },
   );
   let output = "";
