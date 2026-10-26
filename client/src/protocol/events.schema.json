@@ -7,7 +7,6 @@
         "reject",
         "block"
       ],
-      "title": "ApprovalDecision",
       "type": "string"
     },
     "ApprovalRequested": {
@@ -18,20 +17,18 @@
         "type": {
           "const": "approval.requested",
           "default": "approval.requested",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "approval"
       ],
-      "title": "ApprovalRequested",
       "type": "object"
     },
     "ApprovalResolved": {
       "properties": {
         "approval_id": {
-          "title": "Approval Id",
           "type": "string"
         },
         "decision": {
@@ -46,44 +43,20 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Resolved By"
+          "default": null
         },
         "type": {
           "const": "approval.resolved",
           "default": "approval.resolved",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "approval_id",
-        "decision"
+        "decision",
+        "resolved_by"
       ],
-      "title": "ApprovalResolved",
-      "type": "object"
-    },
-    "ApprovalRespond": {
-      "properties": {
-        "approval_id": {
-          "title": "Approval Id",
-          "type": "string"
-        },
-        "decision": {
-          "$ref": "#/$defs/ApprovalDecision"
-        },
-        "type": {
-          "const": "approval.respond",
-          "default": "approval.respond",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "approval_id",
-        "decision"
-      ],
-      "title": "ApprovalRespond",
       "type": "object"
     },
     "ApprovalView": {
@@ -92,7 +65,6 @@
           "$ref": "#/$defs/ToolCallView"
         },
         "id": {
-          "title": "Id",
           "type": "string"
         },
         "provenance": {
@@ -103,12 +75,10 @@
           "items": {
             "type": "string"
           },
-          "title": "Suggested Patterns",
           "type": "array"
         },
         "timeout_at": {
           "format": "date-time",
-          "title": "Timeout At",
           "type": "string"
         }
       },
@@ -116,9 +86,9 @@
         "id",
         "call",
         "provenance",
-        "timeout_at"
+        "timeout_at",
+        "suggested_patterns"
       ],
-      "title": "ApprovalView",
       "type": "object"
     },
     "AttachmentAdded": {
@@ -129,36 +99,30 @@
         "type": {
           "const": "attachment.added",
           "default": "attachment.added",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "attachment"
       ],
-      "title": "AttachmentAdded",
       "type": "object"
     },
     "AttachmentMeta": {
       "properties": {
         "id": {
-          "title": "Id",
           "type": "string"
         },
         "name": {
-          "title": "Name",
           "type": "string"
         },
         "owner_id": {
-          "title": "Owner Id",
           "type": "string"
         },
         "sha256": {
-          "title": "Sha256",
           "type": "string"
         },
         "size": {
-          "title": "Size",
           "type": "integer"
         }
       },
@@ -169,66 +133,31 @@
         "sha256",
         "owner_id"
       ],
-      "title": "AttachmentMeta",
-      "type": "object"
-    },
-    "ClientInfo": {
-      "properties": {
-        "kind": {
-          "title": "Kind",
-          "type": "string"
-        },
-        "version": {
-          "title": "Version",
-          "type": "string"
-        }
-      },
-      "required": [
-        "kind",
-        "version"
-      ],
-      "title": "ClientInfo",
-      "type": "object"
-    },
-    "ContextCompact": {
-      "properties": {
-        "type": {
-          "const": "context.compact",
-          "default": "context.compact",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "title": "ContextCompact",
       "type": "object"
     },
     "ContextCompacted": {
       "properties": {
         "run_id": {
-          "title": "Run Id",
           "type": "string"
         },
         "summary": {
-          "title": "Summary",
           "type": "string"
         },
         "tokens_before": {
-          "title": "Tokens Before",
           "type": "integer"
         },
         "type": {
           "const": "context.compacted",
           "default": "context.compacted",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "run_id",
         "summary",
         "tokens_before"
       ],
-      "title": "ContextCompacted",
       "type": "object"
     },
     "Delivery": {
@@ -237,7 +166,6 @@
         "steer",
         "follow_up"
       ],
-      "title": "Delivery",
       "type": "string"
     },
     "EntryKind": {
@@ -247,7 +175,6 @@
         "tool",
         "compaction"
       ],
-      "title": "EntryKind",
       "type": "string"
     },
     "Envelope": {
@@ -261,8 +188,7 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Actor"
+          "default": null
         },
         "error": {
           "anyOf": [
@@ -276,7 +202,6 @@
           "default": null
         },
         "id": {
-          "title": "Id",
           "type": "string"
         },
         "kind": {
@@ -291,14 +216,12 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Ok"
+          "default": null
         },
         "payload": {
           "additionalProperties": {
             "$ref": "#/$defs/JsonValue"
           },
-          "title": "Payload",
           "type": "object"
         },
         "re": {
@@ -310,11 +233,9 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Re"
+          "default": null
         },
         "room": {
-          "title": "Room",
           "type": "string"
         },
         "seq": {
@@ -326,8 +247,7 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Seq"
+          "default": null
         },
         "to": {
           "anyOf": [
@@ -338,8 +258,7 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "To"
+          "default": null
         },
         "token": {
           "anyOf": [
@@ -350,12 +269,10 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Token"
+          "default": null
         },
         "ts": {
           "format": "date-time",
-          "title": "Ts",
           "type": "string"
         },
         "type": {
@@ -367,22 +284,29 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Type"
+          "default": null
         },
         "v": {
           "default": 1,
-          "title": "V",
           "type": "integer"
         }
       },
       "required": [
+        "v",
         "id",
         "kind",
+        "type",
         "room",
-        "ts"
+        "ts",
+        "actor",
+        "seq",
+        "to",
+        "token",
+        "re",
+        "ok",
+        "error",
+        "payload"
       ],
-      "title": "Envelope",
       "type": "object"
     },
     "ErrorCode": {
@@ -396,7 +320,6 @@
         "version_mismatch",
         "internal"
       ],
-      "title": "ErrorCode",
       "type": "string"
     },
     "ErrorInfo": {
@@ -405,7 +328,6 @@
           "$ref": "#/$defs/ErrorCode"
         },
         "message": {
-          "title": "Message",
           "type": "string"
         }
       },
@@ -413,7 +335,6 @@
         "code",
         "message"
       ],
-      "title": "ErrorInfo",
       "type": "object"
     },
     "ErrorRaised": {
@@ -422,21 +343,19 @@
           "$ref": "#/$defs/ErrorCode"
         },
         "message": {
-          "title": "Message",
           "type": "string"
         },
         "type": {
           "const": "error",
           "default": "error",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "code",
         "message"
       ],
-      "title": "ErrorRaised",
       "type": "object"
     },
     "EventRecord": {
@@ -449,8 +368,7 @@
             {
               "type": "null"
             }
-          ],
-          "title": "Actor Id"
+          ]
         },
         "event": {
           "discriminator": {
@@ -567,20 +485,16 @@
             {
               "$ref": "#/$defs/ErrorRaised"
             }
-          ],
-          "title": "Event"
+          ]
         },
         "id": {
-          "title": "Id",
           "type": "string"
         },
         "seq": {
-          "title": "Seq",
           "type": "integer"
         },
         "ts": {
           "format": "date-time",
-          "title": "Ts",
           "type": "string"
         }
       },
@@ -591,109 +505,18 @@
         "actor_id",
         "event"
       ],
-      "title": "EventRecord",
-      "type": "object"
-    },
-    "FileAttach": {
-      "properties": {
-        "content_b64": {
-          "title": "Content B64",
-          "type": "string"
-        },
-        "name": {
-          "maxLength": 255,
-          "minLength": 1,
-          "title": "Name",
-          "type": "string"
-        },
-        "sha256": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Sha256",
-          "type": "string"
-        },
-        "type": {
-          "const": "file.attach",
-          "default": "file.attach",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "name",
-        "content_b64",
-        "sha256"
-      ],
-      "title": "FileAttach",
-      "type": "object"
-    },
-    "HistoryGet": {
-      "properties": {
-        "before_seq": {
-          "anyOf": [
-            {
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Before Seq"
-        },
-        "limit": {
-          "default": 100,
-          "maximum": 500,
-          "minimum": 1,
-          "title": "Limit",
-          "type": "integer"
-        },
-        "type": {
-          "const": "history.get",
-          "default": "history.get",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "title": "HistoryGet",
-      "type": "object"
-    },
-    "InviteCreate": {
-      "properties": {
-        "role": {
-          "$ref": "#/$defs/Role",
-          "default": "participant"
-        },
-        "ttl_s": {
-          "default": 3600,
-          "maximum": 86400,
-          "minimum": 60,
-          "title": "Ttl S",
-          "type": "integer"
-        },
-        "type": {
-          "const": "invite.create",
-          "default": "invite.create",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "title": "InviteCreate",
       "type": "object"
     },
     "InviteCreated": {
       "properties": {
         "code": {
-          "title": "Code",
           "type": "string"
         },
         "expires_at": {
           "format": "date-time",
-          "title": "Expires At",
           "type": "string"
         },
         "link": {
-          "title": "Link",
           "type": "string"
         },
         "role": {
@@ -702,17 +525,16 @@
         "type": {
           "const": "invite.created",
           "default": "invite.created",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "code",
         "role",
         "expires_at",
         "link"
       ],
-      "title": "InviteCreated",
       "type": "object"
     },
     "JsonValue": {},
@@ -722,94 +544,83 @@
         "evt",
         "ack"
       ],
-      "title": "Kind",
       "type": "string"
     },
     "MessageDelta": {
       "properties": {
         "message_id": {
-          "title": "Message Id",
           "type": "string"
         },
         "text": {
-          "title": "Text",
           "type": "string"
         },
         "thinking": {
           "default": false,
-          "title": "Thinking",
           "type": "boolean"
         },
         "type": {
           "const": "message.delta",
           "default": "message.delta",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "message_id",
-        "text"
+        "text",
+        "thinking"
       ],
-      "title": "MessageDelta",
       "type": "object"
     },
     "MessageEnded": {
       "properties": {
         "message_id": {
-          "title": "Message Id",
           "type": "string"
         },
         "run_id": {
-          "title": "Run Id",
           "type": "string"
         },
         "text": {
-          "title": "Text",
           "type": "string"
         },
         "thinking": {
           "default": "",
-          "title": "Thinking",
           "type": "string"
         },
         "type": {
           "const": "message.ended",
           "default": "message.ended",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "run_id",
         "message_id",
-        "text"
+        "text",
+        "thinking"
       ],
-      "title": "MessageEnded",
       "type": "object"
     },
     "MessageStarted": {
       "properties": {
         "message_id": {
-          "title": "Message Id",
           "type": "string"
         },
         "run_id": {
-          "title": "Run Id",
           "type": "string"
         },
         "type": {
           "const": "message.started",
           "default": "message.started",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "run_id",
         "message_id"
       ],
-      "title": "MessageStarted",
       "type": "object"
     },
     "Origin": {
@@ -817,22 +628,18 @@
         "direct",
         "proposal"
       ],
-      "title": "Origin",
       "type": "string"
     },
     "Participant": {
       "properties": {
         "connected": {
           "default": false,
-          "title": "Connected",
           "type": "boolean"
         },
         "id": {
-          "title": "Id",
           "type": "string"
         },
         "name": {
-          "title": "Name",
           "type": "string"
         },
         "role": {
@@ -842,9 +649,9 @@
       "required": [
         "id",
         "name",
-        "role"
+        "role",
+        "connected"
       ],
-      "title": "Participant",
       "type": "object"
     },
     "ParticipantJoined": {
@@ -855,77 +662,52 @@
         "type": {
           "const": "participant.joined",
           "default": "participant.joined",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "participant"
       ],
-      "title": "ParticipantJoined",
       "type": "object"
     },
     "ParticipantLeft": {
       "properties": {
         "participant_id": {
-          "title": "Participant Id",
           "type": "string"
         },
         "type": {
           "const": "participant.left",
           "default": "participant.left",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "participant_id"
       ],
-      "title": "ParticipantLeft",
-      "type": "object"
-    },
-    "ParticipantRevoke": {
-      "properties": {
-        "participant_id": {
-          "title": "Participant Id",
-          "type": "string"
-        },
-        "type": {
-          "const": "participant.revoke",
-          "default": "participant.revoke",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "participant_id"
-      ],
-      "title": "ParticipantRevoke",
       "type": "object"
     },
     "ParticipantRevoked": {
       "properties": {
         "participant_id": {
-          "title": "Participant Id",
           "type": "string"
         },
         "type": {
           "const": "participant.revoked",
           "default": "participant.revoked",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "participant_id"
       ],
-      "title": "ParticipantRevoked",
       "type": "object"
     },
     "ParticipantRoleChanged": {
       "properties": {
         "participant_id": {
-          "title": "Participant Id",
           "type": "string"
         },
         "role": {
@@ -934,38 +716,14 @@
         "type": {
           "const": "participant.role_changed",
           "default": "participant.role_changed",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "participant_id",
         "role"
       ],
-      "title": "ParticipantRoleChanged",
-      "type": "object"
-    },
-    "ParticipantSetRole": {
-      "properties": {
-        "participant_id": {
-          "title": "Participant Id",
-          "type": "string"
-        },
-        "role": {
-          "$ref": "#/$defs/Role"
-        },
-        "type": {
-          "const": "participant.set_role",
-          "default": "participant.set_role",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "participant_id",
-        "role"
-      ],
-      "title": "ParticipantSetRole",
       "type": "object"
     },
     "PolicyAction": {
@@ -974,59 +732,7 @@
         "ask",
         "deny"
       ],
-      "title": "PolicyAction",
       "type": "string"
-    },
-    "PolicyAdd": {
-      "properties": {
-        "action": {
-          "$ref": "#/$defs/PolicyAction"
-        },
-        "pattern": {
-          "maxLength": 200,
-          "minLength": 1,
-          "title": "Pattern",
-          "type": "string"
-        },
-        "tool": {
-          "maxLength": 40,
-          "minLength": 1,
-          "title": "Tool",
-          "type": "string"
-        },
-        "type": {
-          "const": "policy.add",
-          "default": "policy.add",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "tool",
-        "pattern",
-        "action"
-      ],
-      "title": "PolicyAdd",
-      "type": "object"
-    },
-    "PolicyRemove": {
-      "properties": {
-        "rule_id": {
-          "title": "Rule Id",
-          "type": "string"
-        },
-        "type": {
-          "const": "policy.remove",
-          "default": "policy.remove",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "rule_id"
-      ],
-      "title": "PolicyRemove",
-      "type": "object"
     },
     "PolicyRuleAdded": {
       "properties": {
@@ -1036,33 +742,30 @@
         "type": {
           "const": "policy.rule_added",
           "default": "policy.rule_added",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "rule"
       ],
-      "title": "PolicyRuleAdded",
       "type": "object"
     },
     "PolicyRuleRemoved": {
       "properties": {
         "rule_id": {
-          "title": "Rule Id",
           "type": "string"
         },
         "type": {
           "const": "policy.rule_removed",
           "default": "policy.rule_removed",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "rule_id"
       ],
-      "title": "PolicyRuleRemoved",
       "type": "object"
     },
     "PolicyRuleView": {
@@ -1071,15 +774,12 @@
           "$ref": "#/$defs/PolicyAction"
         },
         "id": {
-          "title": "Id",
           "type": "string"
         },
         "pattern": {
-          "title": "Pattern",
           "type": "string"
         },
         "tool": {
-          "title": "Tool",
           "type": "string"
         }
       },
@@ -1089,7 +789,6 @@
         "pattern",
         "action"
       ],
-      "title": "PolicyRuleView",
       "type": "object"
     },
     "PromptAccepted": {
@@ -1099,42 +798,38 @@
           "items": {
             "type": "string"
           },
-          "title": "Attachments",
           "type": "array"
         },
         "author_id": {
-          "title": "Author Id",
           "type": "string"
         },
         "delivery": {
           "$ref": "#/$defs/Delivery"
         },
         "prompt_id": {
-          "title": "Prompt Id",
           "type": "string"
         },
         "provenance": {
           "$ref": "#/$defs/Provenance"
         },
         "text": {
-          "title": "Text",
           "type": "string"
         },
         "type": {
           "const": "prompt.accepted",
           "default": "prompt.accepted",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "prompt_id",
         "author_id",
         "text",
         "delivery",
-        "provenance"
+        "provenance",
+        "attachments"
       ],
-      "title": "PromptAccepted",
       "type": "object"
     },
     "PromptMode": {
@@ -1142,7 +837,6 @@
         "open",
         "review"
       ],
-      "title": "PromptMode",
       "type": "string"
     },
     "PromptModeChanged": {
@@ -1153,94 +847,38 @@
         "type": {
           "const": "session.prompt_mode_changed",
           "default": "session.prompt_mode_changed",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "mode"
       ],
-      "title": "PromptModeChanged",
-      "type": "object"
-    },
-    "PromptModeSet": {
-      "properties": {
-        "mode": {
-          "$ref": "#/$defs/PromptMode"
-        },
-        "type": {
-          "const": "session.set_prompt_mode",
-          "default": "session.set_prompt_mode",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "mode"
-      ],
-      "title": "PromptModeSet",
-      "type": "object"
-    },
-    "PromptSubmit": {
-      "properties": {
-        "attachments": {
-          "default": [],
-          "items": {
-            "type": "string"
-          },
-          "title": "Attachments",
-          "type": "array"
-        },
-        "delivery": {
-          "$ref": "#/$defs/Delivery",
-          "default": "now"
-        },
-        "text": {
-          "maxLength": 32000,
-          "minLength": 1,
-          "title": "Text",
-          "type": "string"
-        },
-        "type": {
-          "const": "prompt.submit",
-          "default": "prompt.submit",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "text"
-      ],
-      "title": "PromptSubmit",
       "type": "object"
     },
     "ProposalApproved": {
       "properties": {
         "decided_by": {
-          "title": "Decided By",
           "type": "string"
         },
         "proposal_id": {
-          "title": "Proposal Id",
           "type": "string"
         },
         "text": {
-          "title": "Text",
           "type": "string"
         },
         "type": {
           "const": "proposal.approved",
           "default": "proposal.approved",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "proposal_id",
         "decided_by",
         "text"
       ],
-      "title": "ProposalApproved",
       "type": "object"
     },
     "ProposalCreated": {
@@ -1251,83 +889,34 @@
         "type": {
           "const": "proposal.created",
           "default": "proposal.created",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "proposal"
       ],
-      "title": "ProposalCreated",
       "type": "object"
-    },
-    "ProposalDecide": {
-      "properties": {
-        "decision": {
-          "$ref": "#/$defs/ProposalDecision"
-        },
-        "edited_text": {
-          "anyOf": [
-            {
-              "maxLength": 32000,
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Edited Text"
-        },
-        "proposal_id": {
-          "title": "Proposal Id",
-          "type": "string"
-        },
-        "type": {
-          "const": "proposal.decide",
-          "default": "proposal.decide",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "proposal_id",
-        "decision"
-      ],
-      "title": "ProposalDecide",
-      "type": "object"
-    },
-    "ProposalDecision": {
-      "enum": [
-        "approve",
-        "reject"
-      ],
-      "title": "ProposalDecision",
-      "type": "string"
     },
     "ProposalRejected": {
       "properties": {
         "decided_by": {
-          "title": "Decided By",
           "type": "string"
         },
         "proposal_id": {
-          "title": "Proposal Id",
           "type": "string"
         },
         "type": {
           "const": "proposal.rejected",
           "default": "proposal.rejected",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "proposal_id",
         "decided_by"
       ],
-      "title": "ProposalRejected",
       "type": "object"
     },
     "ProposalView": {
@@ -1337,22 +926,18 @@
           "items": {
             "type": "string"
           },
-          "title": "Attachments",
           "type": "array"
         },
         "author_id": {
-          "title": "Author Id",
           "type": "string"
         },
         "delivery": {
           "$ref": "#/$defs/Delivery"
         },
         "id": {
-          "title": "Id",
           "type": "string"
         },
         "text": {
-          "title": "Text",
           "type": "string"
         }
       },
@@ -1360,15 +945,14 @@
         "id",
         "author_id",
         "text",
-        "delivery"
+        "delivery",
+        "attachments"
       ],
-      "title": "ProposalView",
       "type": "object"
     },
     "Provenance": {
       "properties": {
         "initiator_id": {
-          "title": "Initiator Id",
           "type": "string"
         },
         "initiator_role": {
@@ -1383,7 +967,6 @@
         "initiator_role",
         "origin"
       ],
-      "title": "Provenance",
       "type": "object"
     },
     "Role": {
@@ -1392,20 +975,7 @@
         "participant",
         "viewer"
       ],
-      "title": "Role",
       "type": "string"
-    },
-    "RunAbort": {
-      "properties": {
-        "type": {
-          "const": "run.abort",
-          "default": "run.abort",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "title": "RunAbort",
-      "type": "object"
     },
     "RunEndReason": {
       "enum": [
@@ -1414,7 +984,6 @@
         "error",
         "limit"
       ],
-      "title": "RunEndReason",
       "type": "string"
     },
     "RunEnded": {
@@ -1428,20 +997,17 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Error"
+          "default": null
         },
         "reason": {
           "$ref": "#/$defs/RunEndReason"
         },
         "run_id": {
-          "title": "Run Id",
           "type": "string"
         },
         "type": {
           "const": "run.ended",
           "default": "run.ended",
-          "title": "Type",
           "type": "string"
         },
         "usage": {
@@ -1455,48 +1021,45 @@
         }
       },
       "required": [
+        "type",
         "run_id",
-        "reason"
+        "reason",
+        "usage",
+        "error"
       ],
-      "title": "RunEnded",
       "type": "object"
     },
     "RunStarted": {
       "properties": {
         "prompt_id": {
-          "title": "Prompt Id",
           "type": "string"
         },
         "provenance": {
           "$ref": "#/$defs/Provenance"
         },
         "run_id": {
-          "title": "Run Id",
           "type": "string"
         },
         "type": {
           "const": "run.started",
           "default": "run.started",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "run_id",
         "prompt_id",
         "provenance"
       ],
-      "title": "RunStarted",
       "type": "object"
     },
     "RunView": {
       "properties": {
         "id": {
-          "title": "Id",
           "type": "string"
         },
         "prompt_id": {
-          "title": "Prompt Id",
           "type": "string"
         },
         "provenance": {
@@ -1508,76 +1071,6 @@
         "prompt_id",
         "provenance"
       ],
-      "title": "RunView",
-      "type": "object"
-    },
-    "SessionHello": {
-      "properties": {
-        "client": {
-          "$ref": "#/$defs/ClientInfo"
-        },
-        "invite": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Invite"
-        },
-        "name": {
-          "anyOf": [
-            {
-              "maxLength": 40,
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Name"
-        },
-        "since": {
-          "anyOf": [
-            {
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Since"
-        },
-        "token": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Token"
-        },
-        "type": {
-          "const": "session.hello",
-          "default": "session.hello",
-          "title": "Type",
-          "type": "string"
-        }
-      },
-      "required": [
-        "client"
-      ],
-      "title": "SessionHello",
       "type": "object"
     },
     "SessionSnapshot": {
@@ -1589,20 +1082,19 @@
           "additionalProperties": {
             "type": "string"
           },
-          "title": "Streaming",
           "type": "object"
         },
         "type": {
           "const": "session.snapshot",
           "default": "session.snapshot",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
-        "state"
+        "type",
+        "state",
+        "streaming"
       ],
-      "title": "SessionSnapshot",
       "type": "object"
     },
     "SessionState": {
@@ -1611,26 +1103,22 @@
           "additionalProperties": {
             "$ref": "#/$defs/ApprovalView"
           },
-          "title": "Approvals",
           "type": "object"
         },
         "attachments": {
           "additionalProperties": {
             "$ref": "#/$defs/AttachmentMeta"
           },
-          "title": "Attachments",
           "type": "object"
         },
         "last_seq": {
           "default": 0,
-          "title": "Last Seq",
           "type": "integer"
         },
         "participants": {
           "additionalProperties": {
             "$ref": "#/$defs/Participant"
           },
-          "title": "Participants",
           "type": "object"
         },
         "policy": {
@@ -1638,7 +1126,6 @@
           "items": {
             "$ref": "#/$defs/PolicyRuleView"
           },
-          "title": "Policy",
           "type": "array"
         },
         "prompt_mode": {
@@ -1649,7 +1136,6 @@
           "additionalProperties": {
             "$ref": "#/$defs/ProposalView"
           },
-          "title": "Proposals",
           "type": "object"
         },
         "run": {
@@ -1672,19 +1158,28 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Summary"
+          "default": null
         },
         "transcript": {
           "default": [],
           "items": {
             "$ref": "#/$defs/TranscriptEntry"
           },
-          "title": "Transcript",
           "type": "array"
         }
       },
-      "title": "SessionState",
+      "required": [
+        "last_seq",
+        "prompt_mode",
+        "participants",
+        "proposals",
+        "approvals",
+        "attachments",
+        "policy",
+        "summary",
+        "run",
+        "transcript"
+      ],
       "type": "object"
     },
     "SessionWelcome": {
@@ -1694,33 +1189,30 @@
           "items": {
             "$ref": "#/$defs/PolicyRuleView"
           },
-          "title": "Base Policy",
           "type": "array"
         },
         "participant": {
           "$ref": "#/$defs/Participant"
         },
         "room": {
-          "title": "Room",
           "type": "string"
         },
         "token": {
-          "title": "Token",
           "type": "string"
         },
         "type": {
           "const": "session.welcome",
           "default": "session.welcome",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "room",
         "token",
-        "participant"
+        "participant",
+        "base_policy"
       ],
-      "title": "SessionWelcome",
       "type": "object"
     },
     "ToolCallView": {
@@ -1729,15 +1221,12 @@
           "additionalProperties": {
             "$ref": "#/$defs/JsonValue"
           },
-          "title": "Args",
           "type": "object"
         },
         "id": {
-          "title": "Id",
           "type": "string"
         },
         "name": {
-          "title": "Name",
           "type": "string"
         },
         "risk": {
@@ -1745,22 +1234,21 @@
         },
         "subject": {
           "default": "",
-          "title": "Subject",
           "type": "string"
         }
       },
       "required": [
         "id",
         "name",
-        "risk"
+        "risk",
+        "subject",
+        "args"
       ],
-      "title": "ToolCallView",
       "type": "object"
     },
     "ToolEnded": {
       "properties": {
         "call_id": {
-          "title": "Call Id",
           "type": "string"
         },
         "diff": {
@@ -1772,59 +1260,52 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Diff"
+          "default": null
         },
         "ok": {
-          "title": "Ok",
           "type": "boolean"
         },
         "output": {
-          "title": "Output",
           "type": "string"
         },
         "run_id": {
-          "title": "Run Id",
           "type": "string"
         },
         "type": {
           "const": "tool.ended",
           "default": "tool.ended",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "run_id",
         "call_id",
         "ok",
-        "output"
+        "output",
+        "diff"
       ],
-      "title": "ToolEnded",
       "type": "object"
     },
     "ToolOutput": {
       "properties": {
         "call_id": {
-          "title": "Call Id",
           "type": "string"
         },
         "chunk": {
-          "title": "Chunk",
           "type": "string"
         },
         "type": {
           "const": "tool.output",
           "default": "tool.output",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "call_id",
         "chunk"
       ],
-      "title": "ToolOutput",
       "type": "object"
     },
     "ToolRisk": {
@@ -1833,7 +1314,6 @@
         "write",
         "exec"
       ],
-      "title": "ToolRisk",
       "type": "string"
     },
     "ToolStarted": {
@@ -1842,21 +1322,19 @@
           "$ref": "#/$defs/ToolCallView"
         },
         "run_id": {
-          "title": "Run Id",
           "type": "string"
         },
         "type": {
           "const": "tool.started",
           "default": "tool.started",
-          "title": "Type",
           "type": "string"
         }
       },
       "required": [
+        "type",
         "run_id",
         "call"
       ],
-      "title": "ToolStarted",
       "type": "object"
     },
     "TranscriptEntry": {
@@ -1870,11 +1348,9 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Author Id"
+          "default": null
         },
         "id": {
-          "title": "Id",
           "type": "string"
         },
         "kind": {
@@ -1889,17 +1365,14 @@
               "type": "null"
             }
           ],
-          "default": null,
-          "title": "Ok"
+          "default": null
         },
         "output": {
           "default": "",
-          "title": "Output",
           "type": "string"
         },
         "text": {
           "default": "",
-          "title": "Text",
           "type": "string"
         },
         "tool": {
@@ -1916,105 +1389,44 @@
       },
       "required": [
         "id",
-        "kind"
+        "kind",
+        "author_id",
+        "text",
+        "tool",
+        "ok",
+        "output"
       ],
-      "title": "TranscriptEntry",
       "type": "object"
     },
     "Usage": {
       "properties": {
         "cache_read_tokens": {
           "default": 0,
-          "title": "Cache Read Tokens",
           "type": "integer"
         },
         "cache_write_tokens": {
           "default": 0,
-          "title": "Cache Write Tokens",
           "type": "integer"
         },
         "input_tokens": {
           "default": 0,
-          "title": "Input Tokens",
           "type": "integer"
         },
         "output_tokens": {
           "default": 0,
-          "title": "Output Tokens",
           "type": "integer"
         }
       },
-      "title": "Usage",
+      "required": [
+        "input_tokens",
+        "output_tokens",
+        "cache_read_tokens",
+        "cache_write_tokens"
+      ],
       "type": "object"
     }
   },
   "properties": {
-    "command": {
-      "discriminator": {
-        "mapping": {
-          "approval.respond": "#/$defs/ApprovalRespond",
-          "context.compact": "#/$defs/ContextCompact",
-          "file.attach": "#/$defs/FileAttach",
-          "history.get": "#/$defs/HistoryGet",
-          "invite.create": "#/$defs/InviteCreate",
-          "participant.revoke": "#/$defs/ParticipantRevoke",
-          "participant.set_role": "#/$defs/ParticipantSetRole",
-          "policy.add": "#/$defs/PolicyAdd",
-          "policy.remove": "#/$defs/PolicyRemove",
-          "prompt.submit": "#/$defs/PromptSubmit",
-          "proposal.decide": "#/$defs/ProposalDecide",
-          "run.abort": "#/$defs/RunAbort",
-          "session.hello": "#/$defs/SessionHello",
-          "session.set_prompt_mode": "#/$defs/PromptModeSet"
-        },
-        "propertyName": "type"
-      },
-      "oneOf": [
-        {
-          "$ref": "#/$defs/SessionHello"
-        },
-        {
-          "$ref": "#/$defs/HistoryGet"
-        },
-        {
-          "$ref": "#/$defs/PromptSubmit"
-        },
-        {
-          "$ref": "#/$defs/ProposalDecide"
-        },
-        {
-          "$ref": "#/$defs/ApprovalRespond"
-        },
-        {
-          "$ref": "#/$defs/RunAbort"
-        },
-        {
-          "$ref": "#/$defs/InviteCreate"
-        },
-        {
-          "$ref": "#/$defs/ParticipantSetRole"
-        },
-        {
-          "$ref": "#/$defs/ParticipantRevoke"
-        },
-        {
-          "$ref": "#/$defs/ContextCompact"
-        },
-        {
-          "$ref": "#/$defs/PromptModeSet"
-        },
-        {
-          "$ref": "#/$defs/PolicyAdd"
-        },
-        {
-          "$ref": "#/$defs/PolicyRemove"
-        },
-        {
-          "$ref": "#/$defs/FileAttach"
-        }
-      ],
-      "title": "Command"
-    },
     "envelope": {
       "$ref": "#/$defs/Envelope"
     },
@@ -2133,8 +1545,7 @@
         {
           "$ref": "#/$defs/ErrorRaised"
         }
-      ],
-      "title": "Event"
+      ]
     },
     "record": {
       "$ref": "#/$defs/EventRecord"
@@ -2142,10 +1553,8 @@
   },
   "required": [
     "envelope",
-    "command",
     "event",
     "record"
   ],
-  "title": "PluralProtocol",
   "type": "object"
 }

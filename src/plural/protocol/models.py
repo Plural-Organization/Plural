@@ -6,7 +6,9 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 
 class Model(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="ignore")
+    model_config = ConfigDict(
+        frozen=True, extra="ignore", json_schema_serialization_defaults_required=True
+    )
 
 
 class Role(StrEnum):

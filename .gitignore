@@ -59,8 +59,9 @@ session*.jsonl
 *.log
 
 # Web
-web/node_modules/
+node_modules/
 web/dist/
+dist-bin/
 web/.vite/
 web/src/protocol/types.ts
 npm-debug.log*

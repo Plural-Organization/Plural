@@ -1,0 +1,6 @@
+{
+  "name": "plural-monorepo",
+  "private": true,
+  "workspaces": ["client", "tui", "web"],
+  "engines": { "node": ">=22" }
+}

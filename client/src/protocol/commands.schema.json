@@ -1,0 +1,473 @@
+{
+  "$defs": {
+    "ApprovalDecision": {
+      "enum": [
+        "once",
+        "always",
+        "reject",
+        "block"
+      ],
+      "type": "string"
+    },
+    "ApprovalRespond": {
+      "properties": {
+        "approval_id": {
+          "type": "string"
+        },
+        "decision": {
+          "$ref": "#/$defs/ApprovalDecision"
+        },
+        "type": {
+          "const": "approval.respond",
+          "default": "approval.respond",
+          "type": "string"
+        }
+      },
+      "required": [
+        "approval_id",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "ClientInfo": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "version"
+      ],
+      "type": "object"
+    },
+    "ContextCompact": {
+      "properties": {
+        "type": {
+          "const": "context.compact",
+          "default": "context.compact",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Delivery": {
+      "enum": [
+        "now",
+        "steer",
+        "follow_up"
+      ],
+      "type": "string"
+    },
+    "FileAttach": {
+      "properties": {
+        "content_b64": {
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 255,
+          "minLength": 1,
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        "type": {
+          "const": "file.attach",
+          "default": "file.attach",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "content_b64",
+        "sha256"
+      ],
+      "type": "object"
+    },
+    "HistoryGet": {
+      "properties": {
+        "before_seq": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "limit": {
+          "default": 100,
+          "maximum": 500,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "type": {
+          "const": "history.get",
+          "default": "history.get",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "InviteCreate": {
+      "properties": {
+        "role": {
+          "$ref": "#/$defs/Role",
+          "default": "participant"
+        },
+        "ttl_s": {
+          "default": 3600,
+          "maximum": 86400,
+          "minimum": 60,
+          "type": "integer"
+        },
+        "type": {
+          "const": "invite.create",
+          "default": "invite.create",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ParticipantRevoke": {
+      "properties": {
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "participant.revoke",
+          "default": "participant.revoke",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id"
+      ],
+      "type": "object"
+    },
+    "ParticipantSetRole": {
+      "properties": {
+        "participant_id": {
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/Role"
+        },
+        "type": {
+          "const": "participant.set_role",
+          "default": "participant.set_role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id",
+        "role"
+      ],
+      "type": "object"
+    },
+    "PolicyAction": {
+      "enum": [
+        "allow",
+        "ask",
+        "deny"
+      ],
+      "type": "string"
+    },
+    "PolicyAdd": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/PolicyAction"
+        },
+        "pattern": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "tool": {
+          "maxLength": 40,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "policy.add",
+          "default": "policy.add",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool",
+        "pattern",
+        "action"
+      ],
+      "type": "object"
+    },
+    "PolicyRemove": {
+      "properties": {
+        "rule_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "policy.remove",
+          "default": "policy.remove",
+          "type": "string"
+        }
+      },
+      "required": [
+        "rule_id"
+      ],
+      "type": "object"
+    },
+    "PromptMode": {
+      "enum": [
+        "open",
+        "review"
+      ],
+      "type": "string"
+    },
+    "PromptModeSet": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/PromptMode"
+        },
+        "type": {
+          "const": "session.set_prompt_mode",
+          "default": "session.set_prompt_mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "PromptSubmit": {
+      "properties": {
+        "attachments": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "delivery": {
+          "$ref": "#/$defs/Delivery",
+          "default": "now"
+        },
+        "text": {
+          "maxLength": 32000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "prompt.submit",
+          "default": "prompt.submit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
+    "ProposalDecide": {
+      "properties": {
+        "decision": {
+          "$ref": "#/$defs/ProposalDecision"
+        },
+        "edited_text": {
+          "anyOf": [
+            {
+              "maxLength": 32000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "proposal_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "proposal.decide",
+          "default": "proposal.decide",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proposal_id",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "ProposalDecision": {
+      "enum": [
+        "approve",
+        "reject"
+      ],
+      "type": "string"
+    },
+    "Role": {
+      "enum": [
+        "host",
+        "participant",
+        "viewer"
+      ],
+      "type": "string"
+    },
+    "RunAbort": {
+      "properties": {
+        "type": {
+          "const": "run.abort",
+          "default": "run.abort",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "SessionHello": {
+      "properties": {
+        "client": {
+          "$ref": "#/$defs/ClientInfo"
+        },
+        "invite": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "anyOf": [
+            {
+              "maxLength": 40,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "since": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "token": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "session.hello",
+          "default": "session.hello",
+          "type": "string"
+        }
+      },
+      "required": [
+        "client"
+      ],
+      "type": "object"
+    }
+  },
+  "properties": {
+    "command": {
+      "discriminator": {
+        "mapping": {
+          "approval.respond": "#/$defs/ApprovalRespond",
+          "context.compact": "#/$defs/ContextCompact",
+          "file.attach": "#/$defs/FileAttach",
+          "history.get": "#/$defs/HistoryGet",
+          "invite.create": "#/$defs/InviteCreate",
+          "participant.revoke": "#/$defs/ParticipantRevoke",
+          "participant.set_role": "#/$defs/ParticipantSetRole",
+          "policy.add": "#/$defs/PolicyAdd",
+          "policy.remove": "#/$defs/PolicyRemove",
+          "prompt.submit": "#/$defs/PromptSubmit",
+          "proposal.decide": "#/$defs/ProposalDecide",
+          "run.abort": "#/$defs/RunAbort",
+          "session.hello": "#/$defs/SessionHello",
+          "session.set_prompt_mode": "#/$defs/PromptModeSet"
+        },
+        "propertyName": "type"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/SessionHello"
+        },
+        {
+          "$ref": "#/$defs/HistoryGet"
+        },
+        {
+          "$ref": "#/$defs/PromptSubmit"
+        },
+        {
+          "$ref": "#/$defs/ProposalDecide"
+        },
+        {
+          "$ref": "#/$defs/ApprovalRespond"
+        },
+        {
+          "$ref": "#/$defs/RunAbort"
+        },
+        {
+          "$ref": "#/$defs/InviteCreate"
+        },
+        {
+          "$ref": "#/$defs/ParticipantSetRole"
+        },
+        {
+          "$ref": "#/$defs/ParticipantRevoke"
+        },
+        {
+          "$ref": "#/$defs/ContextCompact"
+        },
+        {
+          "$ref": "#/$defs/PromptModeSet"
+        },
+        {
+          "$ref": "#/$defs/PolicyAdd"
+        },
+        {
+          "$ref": "#/$defs/PolicyRemove"
+        },
+        {
+          "$ref": "#/$defs/FileAttach"
+        }
+      ]
+    }
+  },
+  "required": [
+    "command"
+  ],
+  "type": "object"
+}
