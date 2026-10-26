@@ -33,3 +33,19 @@ describe("highlighting", () => {
     expect(text).toBe("x = 1\ny = 2");
   });
 });
+
+describe("diff blocks in replies", () => {
+  test("added and removed lines get a tinted background, the rest does not", () => {
+    const parts = chunks("@@ -1 +1 @@\n-old line\n+new line\n context", "diff");
+    const tinted = (needle: string) => parts.find((chunk) => chunk.text.includes(needle))?.bg;
+    expect(tinted("old line")).toBeDefined();
+    expect(tinted("new line")).toBeDefined();
+    expect(tinted("old line")).not.toEqual(tinted("new line"));
+    expect(tinted("context")).toBeUndefined();
+    expect(tinted("@@")).toBeUndefined();
+  });
+
+  test("other languages are never tinted", () => {
+    expect(chunks("+x\n-y", "python").every((chunk) => chunk.bg === undefined)).toBe(true);
+  });
+});

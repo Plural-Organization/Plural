@@ -41,6 +41,7 @@ export function helpText(role: Role | undefined): string {
     "  tab             review approvals and proposals / complete a command",
     "  esc             interrupt the run",
     "  pgup / pgdn     scroll the conversation",
+    "  ctrl+o          expand or collapse tool details (or click a tool line)",
     "  ctrl+b          show or hide the side panel",
     "  select text     copies it to the clipboard",
     "  ctrl+y          copy the last reply",

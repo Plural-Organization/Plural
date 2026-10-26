@@ -27,6 +27,9 @@ fake.emit({ type: "tool.ended", run_id: "r1", call_id: "t1", ok: true, output: "
 const test = { id: "t2", name: "bash", risk: "exec", subject: "pytest -q", args: {} } as const;
 fake.emit({ type: "tool.started", run_id: "r1", call: test });
 fake.emit({ type: "tool.ended", run_id: "r1", call_id: "t2", ok: false, output: "FAILED test_calc.py::test_add - assert 1 == 3\n1 failed in 0.02s\n[exit 1]", diff: null });
+const build = { id: "t6", name: "bash", risk: "exec", subject: "npm run build --workspace tui", args: {} } as const;
+fake.emit({ type: "tool.started", run_id: "r1", call: build });
+fake.emit({ type: "tool.ended", run_id: "r1", call_id: "t6", ok: true, output: Array.from({ length: 58 }, (_, i) => `step ${i + 1}: compiled module ${i + 1}`).join("\n") + "\n[exit 0]", diff: null });
 const edit = { id: "t3", name: "edit", risk: "write", subject: "calc.py", args: {} } as const;
 fake.emit({ type: "tool.started", run_id: "r1", call: edit });
 fake.emit({
@@ -35,7 +38,7 @@ fake.emit({
   call_id: "t3",
   ok: true,
   output: "edited calc.py",
-  diff: "--- a/calc.py\n+++ b/calc.py\n@@ -1,2 +1,2 @@\n def add(a, b):\n-    return a - b\n+    return a + b\n",
+  diff: "--- a/calc.py\n+++ b/calc.py\n@@ -1,6 +1,7 @@\n import math\n \n \n def add(a, b):\n-    return a - b\n+    \"\"\"Return the sum.\"\"\"\n+    return a + b\n \n \n def mul(a, b):\n",
 });
 fake.emit({ type: "message.started", run_id: "r1", message_id: "m1" });
 const reply = `The bug was the operator in **\`add\`**. I changed it and the test passes now.
@@ -64,6 +67,9 @@ fake.emit({ type: "message.ended", run_id: "r1", message_id: "m1", text: reply, 
 fake.emit({ type: "run.ended", run_id: "r1", reason: "stop", usage, error: null });
 fake.emit({ type: "prompt.accepted", prompt_id: "pm2", author_id: "p_alia", text: "also remove the temp files please", delivery: "now", provenance: direct(alia), attachments: [] });
 fake.emit({ type: "run.started", run_id: "r2", prompt_id: "pm2", provenance: direct(alia) });
+const live = { id: "t5", name: "bash", risk: "exec", subject: "pytest -x tests/e2e", args: {} } as const;
+fake.emit({ type: "tool.started", run_id: "r2", call: live });
+fake.emit({ type: "tool.output", call_id: "t5", chunk: "collected 42 items\n\ntests/e2e/test_flow.py ........\ntests/e2e/test_queue.py ......F\n" });
 const rm = { id: "t4", name: "bash", risk: "exec", subject: "rm -f tmp/*.log", args: {} } as const;
 fake.emit({ type: "tool.started", run_id: "r2", call: rm });
 fake.emit({

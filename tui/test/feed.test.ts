@@ -136,4 +136,38 @@ describe("feed", () => {
     );
     expect(lastReply(feed)).toBe("one\n\ntwo");
   });
+
+  test("command output grows the running card and is dropped when it ends", () => {
+    const running = replay(
+      { type: "tool.started", run_id: "r", call: CALL },
+      { type: "tool.output", call_id: "t1", chunk: "one\ntwo\n" },
+      { type: "tool.output", call_id: "t1", chunk: "three\n" },
+    );
+    expect(running.feed.items).toMatchObject([{ kind: "tool", status: "running", live: "one\ntwo\nthree\n" }]);
+    const ended = replay(
+      { type: "tool.started", run_id: "r", call: CALL },
+      { type: "tool.output", call_id: "t1", chunk: "one\n" },
+      { type: "tool.ended", run_id: "r", call_id: "t1", ok: true, output: "one\n[exit 0]", diff: null },
+    );
+    expect(ended.feed.items).toMatchObject([{ kind: "tool", status: "ok", live: "", output: "one\n[exit 0]" }]);
+  });
+
+  test("only the tail of a very long stream is kept and late output is ignored", () => {
+    const flood = "x".repeat(5000);
+    const { feed } = replay(
+      { type: "tool.started", run_id: "r", call: CALL },
+      { type: "tool.output", call_id: "t1", chunk: flood },
+      { type: "tool.output", call_id: "t1", chunk: `${flood}end` },
+    );
+    const item = feed.items[0];
+    expect(item?.kind === "tool" && item.live.length).toBe(8000);
+    expect(item?.kind === "tool" && item.live.endsWith("end")).toBe(true);
+
+    const late = replay(
+      { type: "tool.started", run_id: "r", call: CALL },
+      { type: "tool.ended", run_id: "r", call_id: "t1", ok: true, output: "done", diff: null },
+      { type: "tool.output", call_id: "t1", chunk: "stray\n" },
+    );
+    expect(late.feed.items[0]).toMatchObject({ live: "" });
+  });
 });

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
+import type { ToolCallView } from "@plural/client";
 import { App } from "../src/App";
 import { ALIA, CALL, FakeSession, GUEST, HOST } from "./support/fake-session";
 
@@ -387,5 +388,85 @@ describe("App", () => {
     const text = await frame(setup, "demo agent");
     expect(text).toContain("fixed script");
     expect(text).toContain("demo agent (scripted)");
+  });
+
+  const DIFF = "--- a/calc.py\n+++ b/calc.py\n@@ -1,3 +1,3 @@\n def add(a, b):\n-    return a - b\n+    return a + b\n";
+
+  function runTool(fake: FakeSession, call: ToolCallView, output: string, ok = true, diff: string | null = null): void {
+    fake.emit({ type: "tool.started", run_id: "r", call });
+    fake.emit({ type: "tool.ended", run_id: "r", call_id: call.id, ok, output, diff });
+  }
+
+  test("a finished tool is one line and ctrl+o opens every tool", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    runTool(fake, { id: "t1", name: "bash", risk: "exec", subject: "pytest -q", args: {} }, "a\nb\nc\n[exit 0]");
+    const collapsed = await frame(setup, "pytest -q");
+    expect(collapsed).toContain("▸ ✓ Bash pytest -q · 3 lines");
+    expect(collapsed).not.toContain("$ pytest -q");
+
+    await setup.mockInput.pressKey("o", { ctrl: true });
+    const open = await frame(setup, "$ pytest -q");
+    expect(open).toContain("▾ ✓ Bash");
+    expect(open).toContain("c");
+    await setup.mockInput.pressKey("o", { ctrl: true });
+    await tick(100);
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).not.toContain("$ pytest -q");
+  });
+
+  test("clicking the line of one tool opens only that tool", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    runTool(fake, { id: "t1", name: "bash", risk: "exec", subject: "echo first", args: {} }, "first\n[exit 0]");
+    runTool(fake, { id: "t2", name: "bash", risk: "exec", subject: "echo second", args: {} }, "second\n[exit 0]");
+    const text = await frame(setup, "echo second");
+    const lines = text.split("\n");
+    const row = lines.findIndex((line) => line.includes("echo second"));
+    await setup.mockMouse.click((lines[row] ?? "").indexOf("Bash"), row);
+    const open = await frame(setup, "$ echo second");
+    expect(open).not.toContain("$ echo first");
+    expect(open).toContain("▾ ✓ Bash echo second");
+    expect(open).toContain("▸ ✓ Bash echo first");
+  });
+
+  test("a failing command shows how it failed on its one line", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    runTool(fake, { id: "t1", name: "bash", risk: "exec", subject: "pytest", args: {} }, "FAILED test_x\n[exit 1]", false);
+    expect(await frame(setup, "exit 1")).toContain("✗ Bash pytest · exit 1");
+  });
+
+  test("a running command shows its latest line next to the spinner and the whole tail when open", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "tool.started", run_id: "r", call: { id: "t1", name: "bash", risk: "exec", subject: "make all", args: {} } });
+    fake.emit({ type: "tool.output", call_id: "t1", chunk: "compiling a\ncompiling b\n" });
+    const text = await frame(setup, "compiling b");
+    expect(text).toContain("make all");
+    expect(text).not.toContain("compiling a");
+    await setup.mockInput.pressKey("o", { ctrl: true });
+    const open = await frame(setup, "compiling a");
+    expect(open).toContain("compiling b");
+  });
+
+  test("an edit says what it added and removed and opens into a numbered diff", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    runTool(fake, { id: "t1", name: "edit", risk: "write", subject: "calc.py", args: {} }, "edited", true, DIFF);
+    expect(await frame(setup, "+1 −1")).toContain("✓ Edit calc.py · +1 −1");
+    await setup.mockInput.pressKey("o", { ctrl: true });
+    const open = await frame(setup, "return a + b");
+    expect(open).toMatch(/1\s+def add\(a, b\):/);
+    expect(open).toMatch(/2 − {5}return a - b/);
+    expect(open).toMatch(/2 \+ {5}return a \+ b/);
+  });
+
+  test("a broken diff does not break the card", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    runTool(fake, { id: "t1", name: "edit", risk: "write", subject: "calc.py", args: {} }, "edited", true, "@@ -1,9 +1,9 @@\n-a\n+b");
+    await setup.mockInput.pressKey("o", { ctrl: true });
+    expect(await frame(setup, "Edit calc.py")).toContain("+1 −1");
   });
 });

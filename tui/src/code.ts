@@ -11,6 +11,19 @@ import {
 import { highlightLines } from "./lib/highlight";
 import { theme } from "./theme";
 
+function tintFor(line: string, language: string | undefined): RGBA | undefined {
+  if (language !== "diff" && language !== "patch") {
+    return undefined;
+  }
+  if (line.startsWith("+") && !line.startsWith("+++")) {
+    return RGBA.fromHex(theme.addBg);
+  }
+  if (line.startsWith("-") && !line.startsWith("---")) {
+    return RGBA.fromHex(theme.removeBg);
+  }
+  return undefined;
+}
+
 export function chunks(code: string, language: string | undefined): TextChunk[] {
   const fallback = RGBA.fromHex(theme.text);
   const lines = highlightLines(code.replace(/\n$/, ""), language);
@@ -19,6 +32,7 @@ export function chunks(code: string, language: string | undefined): TextChunk[] 
     if (index > 0) {
       result.push({ __isChunk: true, text: "\n", fg: fallback });
     }
+    const bg = tintFor(spans.map((span) => span.text).join(""), language);
     for (const span of spans) {
       let attributes = 0;
       if (span.bold) {
@@ -31,6 +45,7 @@ export function chunks(code: string, language: string | undefined): TextChunk[] 
         __isChunk: true,
         text: span.text,
         fg: span.color ? RGBA.fromHex(span.color) : fallback,
+        ...(bg ? { bg } : {}),
         attributes,
       });
     }

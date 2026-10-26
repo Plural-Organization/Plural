@@ -48,6 +48,18 @@ export function App({ client, room, version, guestLink, settings: initialSetting
   setTheme(settings.theme);
   const syntax = useMemo(() => createSyntaxStyle(renderer), [renderer, settings.theme]);
   const [dialog, setDialog] = useState(false);
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+  const [allOpen, setAllOpen] = useState(false);
+  const toggle = (id: string): void =>
+    setOpened((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
   const [row, setRow] = useState(0);
   const rowRef = useRef(0);
   const selectRow = (index: number): void => {
@@ -360,6 +372,12 @@ export function App({ client, room, version, guestLink, settings: initialSetting
       }
       return;
     }
+    if (key.ctrl && key.name === "o") {
+      key.preventDefault();
+      setAllOpen((value) => !value);
+      flash(allOpen ? "tool details collapsed" : "tool details expanded");
+      return;
+    }
     if (key.ctrl && key.name === "b") {
       key.preventDefault();
       change({ ...settings, panel: !settings.panel });
@@ -432,7 +450,14 @@ export function App({ client, room, version, guestLink, settings: initialSetting
           scrollbarOptions={{ showArrows: false, trackOptions: { foregroundColor: theme.line, backgroundColor: theme.bg } }}
         >
           {feed.items.map((item) => (
-            <FeedItemView key={`${item.id}:${settings.theme}`} item={item} syntax={syntax} />
+            <FeedItemView
+              key={`${item.id}:${settings.theme}`}
+              item={item}
+              syntax={syntax}
+              width={width - (showPanel ? SIDEBAR_WIDTH : 0) - 8}
+              expanded={allOpen || opened.has(item.id)}
+              onToggle={toggle}
+            />
           ))}
         </scrollbox>
         {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} /> : null}

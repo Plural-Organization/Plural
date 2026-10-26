@@ -3,9 +3,12 @@ import { useRenderer } from "@opentui/react";
 import { useMemo } from "react";
 import { codeBlockRenderer } from "../code";
 import type { FeedItem, Tone } from "../feed";
-import { previewLines } from "../lib/wrap";
+import { gutterWidth, languageFor, parseDiff } from "../lib/diff";
+import { highlightLines } from "../lib/highlight";
+import { bodyLines, displayName, kindOf, lastLine, metaOf, oneLine } from "../lib/tools";
+import { truncate } from "../lib/wrap";
 import { colorFor, theme } from "../theme";
-import { Spinner } from "./Spinner";
+import { Spinner, useElapsed } from "./Spinner";
 
 const TONES: Record<Tone, { color: string; mark: string }> = {
   dim: { color: theme.dim, mark: "·" },
@@ -14,8 +17,6 @@ const TONES: Record<Tone, { color: string; mark: string }> = {
   danger: { color: theme.danger, mark: "✗" },
   accent: { color: theme.accent, mark: "◆" },
 };
-
-const OUTPUT_LINES = 6;
 
 const table = () => ({ widthMode: "content", cellPaddingY: 0, borderStyle: "rounded", borderColor: theme.line }) as const;
 
@@ -33,7 +34,7 @@ export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }
           invite a teammate: <span fg={theme.info}>plural join "{item.guestLink}"</span>
         </text>
       ) : null}
-      <text fg={theme.dim}>/help for commands · esc interrupts · ctrl+c twice quits</text>
+      <text fg={theme.dim}>/help for commands · esc interrupts · ctrl+o tool details · ctrl+c twice quits</text>
     </box>
   );
 }
@@ -74,32 +75,107 @@ export function AssistantCard({ item, syntax }: { item: Extract<FeedItem, { kind
   );
 }
 
-export function ToolCard({ item }: { item: Extract<FeedItem, { kind: "tool" }> }) {
-  const failed = item.status === "failed";
-  const color = failed ? theme.danger : theme.ok;
-  const output = previewLines(item.status === "ok" ? item.output.replace(/\n?\[exit 0\]\s*$/, "") : item.output, OUTPUT_LINES);
-  const showOutput = item.status !== "running" && output.lines.some((line) => line.trim() !== "");
+const EXPANDED_LINES = 40;
+const LIVE_LINES = 15;
+const DIFF_LINES = 60;
+
+function trimLines(lines: string[], limit: number): { shown: string; more: number } {
+  return { shown: lines.slice(0, limit).join("\n"), more: Math.max(0, lines.length - limit) };
+}
+
+function DiffView({ diff, path }: { diff: string; path: string }) {
+  const rows = parseDiff(diff);
+  const language = languageFor(path);
+  const width = gutterWidth(rows);
+  const shown = rows.slice(0, DIFF_LINES);
+  const tint = { add: theme.addBg, del: theme.removeBg, ctx: undefined, gap: undefined } as const;
+  const sign = { add: "+", del: "−", ctx: " ", gap: " " } as const;
+  const signColor = { add: theme.ok, del: theme.danger, ctx: theme.dim, gap: theme.dim } as const;
   return (
-    <box flexDirection="column" marginBottom={1}>
-      <text>
-        {item.status === "running" ? <Spinner color={theme.info} /> : <span fg={color}>{failed ? "✗" : "✓"}</span>}
-        <span> </span>
-        <b>{item.call.name}</b>
-        {item.call.subject ? <span fg={theme.dim}> {item.call.subject}</span> : null}
-      </text>
-      {item.diff ? (
-        <box paddingLeft={2}>
-          <diff diff={item.diff} view="unified" showLineNumbers={false} addedBg={theme.addBg} removedBg={theme.removeBg} />
-        </box>
-      ) : showOutput ? (
-        <box flexDirection="column" paddingLeft={2}>
-          {output.lines.map((line, index) => (
-            <text key={index} fg={failed ? theme.danger : theme.dim}>
-              {index === 0 ? "⎿ " : "  "}
-              {line}
+    <box flexDirection="column">
+      {shown.map((row, index) =>
+        row.kind === "gap" ? (
+          <text key={index} fg={theme.dim}>
+            {" ".repeat(width)} ⋯
+          </text>
+        ) : (
+          <box key={index} flexDirection="row" backgroundColor={tint[row.kind]}>
+            <text wrapMode="char">
+              <span fg={theme.dim}>{String(row.newNo ?? row.oldNo ?? "").padStart(width)} </span>
+              <span fg={signColor[row.kind]}>{sign[row.kind]} </span>
+              {(highlightLines(row.text, language)[0] ?? []).map((part, position) => (
+                <span key={position} fg={part.color ?? (row.kind === "ctx" ? theme.dim : theme.text)}>
+                  {part.text}
+                </span>
+              ))}
             </text>
-          ))}
-          {output.more > 0 ? <text fg={theme.dim}>  … +{output.more} lines</text> : null}
+          </box>
+        ),
+      )}
+      {rows.length > DIFF_LINES ? <text fg={theme.dim}>… +{rows.length - DIFF_LINES} more lines</text> : null}
+    </box>
+  );
+}
+
+function Body({ item }: { item: Extract<FeedItem, { kind: "tool" }> }) {
+  const kind = kindOf(item.call.name);
+  const failed = item.status === "failed";
+  const running = item.status === "running";
+  if (item.diff !== null && !running && (kind === "edit" || kind === "write")) {
+    return <DiffView diff={item.diff} path={item.call.subject} />;
+  }
+  const lines = running ? bodyLines(item.live).slice(-LIVE_LINES) : bodyLines(item.output);
+  const trimmed = running ? { shown: lines.join("\n"), more: 0 } : trimLines(lines, EXPANDED_LINES);
+  return (
+    <box flexDirection="column">
+      {kind === "bash" ? <text fg={theme.info}>$ {item.call.subject}</text> : null}
+      {trimmed.shown !== "" ? (
+        <text fg={failed ? theme.danger : theme.dim} wrapMode="char">
+          {trimmed.shown}
+        </text>
+      ) : (
+        <text fg={theme.dim}>{running ? "waiting for output…" : "no output"}</text>
+      )}
+      {trimmed.more > 0 ? <text fg={theme.dim}>… +{trimmed.more} more lines</text> : null}
+    </box>
+  );
+}
+
+interface ToolCardProps {
+  item: Extract<FeedItem, { kind: "tool" }>;
+  expanded: boolean;
+  onToggle: () => void;
+  width: number;
+}
+
+export function ToolCard({ item, expanded, onToggle, width }: ToolCardProps) {
+  const running = item.status === "running";
+  const failed = item.status === "failed";
+  const elapsed = useElapsed(running);
+  const name = displayName(item.call.name);
+  const meta = running
+    ? `${elapsed}s`
+    : metaOf({ name, tool: item.call.name, status: item.status, subject: item.call.subject, output: item.output, diff: item.diff, live: item.live });
+  const peek = running && !expanded ? lastLine(item.live) : "";
+  const fixed = name.length + meta.length + 10;
+  const subject = truncate(oneLine(item.call.subject), Math.max(8, width - fixed - (peek ? 14 : 0)));
+  const room = Math.max(0, width - fixed - subject.length - 3);
+  return (
+    <box flexDirection="column" marginBottom={expanded ? 1 : 0}>
+      <box flexDirection="row" onMouseDown={() => onToggle()}>
+        <text wrapMode="none">
+          <span fg={theme.dim}>{expanded ? "▾ " : "▸ "}</span>
+          {running ? <Spinner color={theme.info} /> : <span fg={failed ? theme.danger : theme.ok}>{failed ? "✗" : "✓"}</span>}
+          <span> </span>
+          <b>{name}</b>
+          <span fg={theme.dim}> {subject}</span>
+          {meta ? <span fg={failed ? theme.danger : theme.dim}> · {meta}</span> : null}
+          {peek && room > 6 ? <span fg={theme.dim}> · {truncate(peek, room)}</span> : null}
+        </text>
+      </box>
+      {expanded ? (
+        <box flexDirection="column" marginLeft={2} paddingLeft={1} border={["left"]} borderColor={theme.line}>
+          <Body item={item} />
         </box>
       ) : null}
     </box>
@@ -116,7 +192,15 @@ export function NoticeCard({ item }: { item: Extract<FeedItem, { kind: "notice" 
   );
 }
 
-export function FeedItemView({ item, syntax }: { item: FeedItem; syntax: SyntaxStyle }) {
+interface ViewProps {
+  item: FeedItem;
+  syntax: SyntaxStyle;
+  width: number;
+  expanded: boolean;
+  onToggle: (id: string) => void;
+}
+
+export function FeedItemView({ item, syntax, width, expanded, onToggle }: ViewProps) {
   switch (item.kind) {
     case "banner":
       return <Banner item={item} />;
@@ -125,7 +209,7 @@ export function FeedItemView({ item, syntax }: { item: FeedItem; syntax: SyntaxS
     case "assistant":
       return <AssistantCard item={item} syntax={syntax} />;
     case "tool":
-      return <ToolCard item={item} />;
+      return <ToolCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} width={width} />;
     case "notice":
       return <NoticeCard item={item} />;
   }

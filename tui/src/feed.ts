@@ -9,7 +9,8 @@ import {
   type TranscriptEntry,
 } from "@plural/client";
 
-export const TOOL_OUTPUT_LIMIT = 4000;
+export const TOOL_OUTPUT_LIMIT = 20_000;
+export const LIVE_OUTPUT_LIMIT = 8000;
 
 export type Tone = "dim" | "ok" | "warn" | "danger" | "accent";
 export type ToolStatus = "running" | "ok" | "failed";
@@ -18,7 +19,7 @@ export type FeedItem =
   | { kind: "banner"; id: string; room: string; version: string; guestLink: string | null }
   | { kind: "user"; id: string; participantId: string; name: string; role: Role; viaProposal: boolean; text: string }
   | { kind: "assistant"; id: string; text: string; streaming: boolean }
-  | { kind: "tool"; id: string; call: ToolCallView; status: ToolStatus; output: string; diff: string | null }
+  | { kind: "tool"; id: string; call: ToolCallView; status: ToolStatus; output: string; diff: string | null; live: string }
   | { kind: "notice"; id: string; tone: Tone; text: string };
 
 export interface Feed {
@@ -187,8 +188,17 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
         ...feed,
         items: [
           ...feed.items,
-          { kind: "tool", id: event.call.id, call: event.call, status: "running", output: "", diff: null },
+          { kind: "tool", id: event.call.id, call: event.call, status: "running", output: "", diff: null, live: "" },
         ],
+      };
+    case "tool.output":
+      return {
+        ...feed,
+        items: replace(feed.items, event.call_id, (item) =>
+          item.kind === "tool" && item.status === "running"
+            ? { ...item, live: (item.live + event.chunk).slice(-LIVE_OUTPUT_LIMIT) }
+            : item,
+        ),
       };
     case "tool.ended":
       return {
@@ -200,6 +210,7 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
                 status: event.ok ? "ok" : "failed",
                 output: event.output.slice(0, TOOL_OUTPUT_LIMIT),
                 diff: event.diff,
+                live: "",
               }
             : item,
         ),
@@ -284,6 +295,7 @@ function fromEntry(entry: TranscriptEntry, state: SessionState, counter: number)
         status: entry.ok === null ? "running" : entry.ok ? "ok" : "failed",
         output: entry.output,
         diff: null,
+        live: "",
       };
     case "compaction":
       return { kind: "notice", id: `h${counter}`, tone: "dim", text: entry.text };
