@@ -40,3 +40,6 @@ jobs:
       - run: git diff --exit-code client/src/protocol
       - run: npm run typecheck --workspace client
       - run: npm test --workspace client
+      - run: npm run typecheck --workspace tui
+      - run: npm test --workspace tui
+      - run: npm run build --workspace tui

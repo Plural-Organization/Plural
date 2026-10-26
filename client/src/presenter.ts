@@ -60,10 +60,11 @@ export function ruleLine(rule: PolicyRuleView): string {
 
 export function live(projection: Projection): string {
   const streamed = Object.values(projection.streaming).join("");
+  return streamed || status(projection);
+}
+
+export function status(projection: Projection): string {
   const state = projection.state;
-  if (streamed) {
-    return streamed;
-  }
   if (state.run === null) {
     return "";
   }

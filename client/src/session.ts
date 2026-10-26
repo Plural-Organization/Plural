@@ -8,22 +8,51 @@ const INITIAL_DELAY_MS = 250;
 const MAX_DELAY_MS = 2000;
 const FATAL = new Set<ErrorCode>(["unauthorized", "forbidden", "version_mismatch"]);
 
+export type ConnectionStatus = "connecting" | "online" | "offline";
+
 export interface SessionOptions {
   name: string;
   client: ClientInfo;
 }
 
-export class SessionClient {
+export interface Session {
+  readonly projection: Projection;
+  readonly status: ConnectionStatus;
+  onStatus(listener: (status: ConnectionStatus) => void): () => void;
+  events(): AsyncIterable<Event>;
+  send(command: Command): Promise<void>;
+  close(): void;
+}
+
+export class SessionClient implements Session {
   readonly projection = new Projection();
   private token: string | null;
   private wire: Wire | null = null;
   private closed = false;
+  private current: ConnectionStatus = "connecting";
+  private readonly listeners = new Set<(status: ConnectionStatus) => void>();
 
   constructor(
     private readonly link: JoinLink,
     private readonly options: SessionOptions,
   ) {
     this.token = link.token;
+  }
+
+  get status(): ConnectionStatus {
+    return this.current;
+  }
+
+  onStatus(listener: (status: ConnectionStatus) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private setStatus(status: ConnectionStatus): void {
+    if (status !== this.current) {
+      this.current = status;
+      this.listeners.forEach((listener) => listener(status));
+    }
   }
 
   async send(command: Command): Promise<void> {
@@ -46,6 +75,7 @@ export class SessionClient {
         try {
           await wire.request(this.hello(), null);
           this.wire = wire;
+          this.setStatus("online");
           delay = INITIAL_DELAY_MS;
           for await (const envelope of wire.envelopes()) {
             const event = this.absorb(envelope);
@@ -55,9 +85,11 @@ export class SessionClient {
           }
         } finally {
           this.wire = null;
+          this.setStatus("offline");
           wire.close();
         }
       } catch (error) {
+        this.setStatus("offline");
         if (error instanceof CommandRejected && FATAL.has(error.error.code)) {
           throw error;
         }

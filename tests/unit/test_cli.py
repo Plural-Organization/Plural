@@ -1,13 +1,16 @@
 import asyncio
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
 
+from plural import __version__
 from plural.cli import main
 from plural.cli.main import app
 from plural.host.config import HostSettings
+from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.events import ParticipantLeft
 from plural.protocol.models import PromptMode
 from plural.storage.sqlite_store import SqliteEventStore
@@ -83,13 +86,26 @@ def test_host_passes_the_prompt_mode_flag(
 ) -> None:
     seen: list[HostSettings] = []
 
-    async def fake_host(settings: HostSettings, *, headless: bool) -> None:
+    async def fake_host(settings: HostSettings, *, headless: bool, machine: bool) -> None:
         seen.append(settings)
 
     monkeypatch.setattr(main, "_host", fake_host)
     result = runner.invoke(app, ["host", "--workspace", str(tmp_path), *arguments])
     assert result.exit_code == 0
     assert [settings.prompt_mode for settings in seen] == [expected]
+
+
+def test_ready_line_is_one_json_object() -> None:
+    line = main.ready_line("r_1", "ws://h/r_1?invite=a", "ws://h/r_1?token=t")
+    assert "\n" not in line
+    assert json.loads(line) == {
+        "type": "ready",
+        "room": "r_1",
+        "guest_link": "ws://h/r_1?invite=a",
+        "host_link": "ws://h/r_1?token=t",
+        "version": __version__,
+        "protocol": PROTOCOL_VERSION,
+    }
 
 
 def test_host_rejects_an_unknown_prompt_mode(tmp_path: Path) -> None:

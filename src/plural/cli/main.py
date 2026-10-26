@@ -1,5 +1,6 @@
 import asyncio
 import getpass
+import json
 import os
 import sys
 from contextlib import suppress
@@ -19,6 +20,7 @@ from plural.client.reconnect import JoinLink, SessionClient
 from plural.host.bootstrap import ConfigError, build_host, build_provider, resolve_api_key
 from plural.host.config import HostSettings
 from plural.protocol.commands import ClientInfo
+from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import PromptMode, Role
 from plural.relay.app import create_app
 from plural.storage.jsonl_export import export_jsonl
@@ -45,6 +47,10 @@ def host(
         typer.Option(help="open: participants prompt directly; review: the host approves them."),
     ] = None,
     headless: Annotated[bool, typer.Option(help="Run without the TUI.")] = False,
+    machine: Annotated[
+        bool,
+        typer.Option("--json", help="Run headless and print one JSON line when ready."),
+    ] = False,
 ) -> None:
     settings = HostSettings(
         workspace=workspace,
@@ -57,23 +63,41 @@ def host(
         prompt_mode=prompts,
     )
     try:
-        asyncio.run(_host(settings, headless=headless))
+        asyncio.run(_host(settings, headless=headless or machine, machine=machine))
     except ConfigError as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(1) from error
 
 
-async def _host(settings: HostSettings, *, headless: bool) -> None:
-    _configure_logging(None if headless else settings.state_dir / "logs" / "host.log")
+def ready_line(room: str, guest_link: str, host_link: str) -> str:
+    return json.dumps(
+        {
+            "type": "ready",
+            "room": room,
+            "guest_link": guest_link,
+            "host_link": host_link,
+            "version": __version__,
+            "protocol": PROTOCOL_VERSION,
+        }
+    )
+
+
+async def _host(settings: HostSettings, *, headless: bool, machine: bool = False) -> None:
+    _configure_logging(
+        None if headless and not machine else settings.state_dir / "logs" / "host.log"
+    )
     plural_host = await build_host(settings)
     invite = plural_host.invites.create(Role.PARTICIPANT, settings.invite_ttl_s)
-    console.print(
-        Panel(
-            f"[bold]Guest link[/bold] (one-time)\n{invite.link}\n\n"
-            f"[bold]Host link[/bold]\n{plural_host.host_link}",
-            title=f"room {plural_host.room}",
+    if machine:
+        print(ready_line(plural_host.room, invite.link, plural_host.host_link), flush=True)
+    else:
+        console.print(
+            Panel(
+                f"[bold]Guest link[/bold] (one-time)\n{invite.link}\n\n"
+                f"[bold]Host link[/bold]\n{plural_host.host_link}",
+                title=f"room {plural_host.room}",
+            )
         )
-    )
     try:
         if headless:
             await plural_host.serve()

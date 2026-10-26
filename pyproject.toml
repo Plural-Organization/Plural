@@ -40,6 +40,7 @@ Changelog = "https://github.com/Plural-Organization/Plural/releases"
 
 [project.scripts]
 plural = "plural.cli.main:app"
+plural-host = "plural.cli.main:app"
 
 [dependency-groups]
 dev = [

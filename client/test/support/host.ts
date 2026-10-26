@@ -30,32 +30,32 @@ export async function startHost(mode: "open" | "review" = "open"): Promise<Runni
   const port = await freePort();
   const child: ChildProcess = spawn(
     "uv",
-    ["run", "plural", "host", "--headless", "--workspace", workspace, "--port", String(port), "--prompts", mode],
+    ["run", "plural-host", "host", "--json", "--workspace", workspace, "--port", String(port), "--prompts", mode],
     {
       cwd: ROOT,
-      env: { ...process.env, PLURAL_DATA_DIR: join(directory, "data"), COLUMNS: "500", PLURAL_PROVIDER: "fake" },
+      env: { ...process.env, PLURAL_DATA_DIR: join(directory, "data"), PLURAL_PROVIDER: "fake" },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
   let output = "";
-  const links = await new Promise<string[]>((resolveLinks, reject) => {
+  const ready = await new Promise<{ guest_link: string; host_link: string }>((resolveReady, reject) => {
     const timer = setTimeout(() => reject(new Error(`host did not start: ${output}`)), 30_000);
-    const onData = (chunk: Buffer) => {
+    child.stdout?.on("data", (chunk: Buffer) => {
       output += chunk.toString();
-      const found = output.match(/ws:\/\/\S+/g);
-      if (found && found.length >= 2) {
+      const line = output.split("\n").find((candidate) => candidate.startsWith("{"));
+      if (line) {
         clearTimeout(timer);
-        resolveLinks(found);
+        resolveReady(JSON.parse(line));
       }
-    };
-    child.stdout?.on("data", onData);
-    child.stderr?.on("data", onData);
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      output += chunk.toString();
+    });
     child.on("exit", (code) => reject(new Error(`host exited with ${code}: ${output}`)));
   });
-  const [guestLink, hostLink] = links as [string, string];
   return {
-    guestLink,
-    hostLink,
+    guestLink: ready.guest_link,
+    hostLink: ready.host_link,
     stop: () =>
       new Promise<void>((done) => {
         child.removeAllListeners("exit");
