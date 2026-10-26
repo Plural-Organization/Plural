@@ -119,7 +119,7 @@ describe("feed", () => {
         { id: "t1", kind: "tool", author_id: null, text: "", tool: CALL, ok: true, output: "x" },
       ],
     };
-    const snapshot: Event = { type: "session.snapshot", state: state as never, streaming: { m1: "typing" } };
+    const snapshot: Event = { type: "session.snapshot", state: state as never, streaming: { m1: "typing" }, typing: [] };
     const first = replay(snapshot);
     expect(first.feed.items.map((item) => item.kind)).toEqual(["user", "assistant", "tool", "assistant"]);
     expect(first.feed.items.at(-1)).toMatchObject({ id: "m1", text: "typing", streaming: true });

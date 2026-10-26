@@ -19,7 +19,7 @@ function Section({ title, count, children }: { title: string; count?: number; ch
   );
 }
 
-function ParticipantRow({ participant, name, me }: { participant: Participant; name: string; me: boolean }) {
+function ParticipantRow({ participant, name, me, typing }: { participant: Participant; name: string; me: boolean; typing: boolean }) {
   const online = participant.connected;
   return (
     <box flexDirection="row">
@@ -29,6 +29,7 @@ function ParticipantRow({ participant, name, me }: { participant: Participant; n
         {me ? " (you)" : ""}
         {participant.role === "host" ? "  host" : participant.role === "viewer" ? "  view" : ""}
       </text>
+      {typing ? <text fg={theme.accent}>  typing…</text> : null}
     </box>
   );
 }
@@ -66,6 +67,7 @@ export function Sidebar({ projection, room, inbox, running, status }: SidebarPro
             participant={participant}
             name={label(state, participant)}
             me={participant.id === projection.meId}
+            typing={projection.typing.has(participant.id) && participant.id !== projection.meId}
           />
         ))}
       </Section>
@@ -84,6 +86,22 @@ export function Sidebar({ projection, room, inbox, running, status }: SidebarPro
               </box>
             ),
           )}
+        </Section>
+      ) : null}
+      {state.queue.length > 0 ? (
+        <Section title="queue" count={state.queue.length}>
+          {state.queue.slice(0, 4).map((entry, index) => (
+            <box key={entry.prompt_id} flexDirection="column">
+              <text>
+                <span fg={theme.dim}>{index + 1} </span>
+                <span fg={colorFor(entry.author_id)}>{truncate(nameOf(projection, entry.author_id), 14)}</span>
+                {entry.delivery === "follow_up" ? <span fg={theme.dim}>  after</span> : null}
+              </text>
+              <text fg={theme.text}>  {truncate(entry.text.replace(/\s+/g, " "), SIDEBAR_WIDTH - 8)}</text>
+            </box>
+          ))}
+          {state.queue.length > 4 ? <text fg={theme.dim}>  +{state.queue.length - 4} more</text> : null}
+          <text fg={theme.dim}>/cancel &lt;n&gt; removes one</text>
         </Section>
       ) : null}
       <Section title="session">

@@ -87,6 +87,8 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
           ? "prompts are open: participants prompt the agent directly"
           : "prompts are in review: the host approves each participant prompt",
       );
+    case "prompt.dequeued":
+      return event.reason === "cancelled" ? note("dim", "a queued prompt was cancelled") : feed;
     case "proposal.created":
       return note("warn", `${nameOf(event.proposal.author_id)} proposes: ${event.proposal.text}`);
     case "proposal.approved":

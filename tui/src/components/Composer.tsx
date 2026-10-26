@@ -18,6 +18,7 @@ interface ComposerProps {
   onInterrupt: () => void;
   onCopy: () => void;
   onDirty: (dirty: boolean) => void;
+  onActivity: (text: string) => void;
 }
 
 const MAX_HISTORY = 100;
@@ -164,6 +165,7 @@ export function Composer(props: ComposerProps) {
             onContentChange={() => {
               const text = area.current?.plainText ?? "";
               setValue(text);
+              props.onActivity(text);
               setChoice(0);
               setDismissed(false);
               position.current = -1;

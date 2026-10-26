@@ -70,6 +70,9 @@ fake.emit({
   type: "approval.requested",
   approval: { id: "ap1", call: rm, provenance: direct(alia), timeout_at: new Date(Date.now() + 110_000).toISOString(), suggested_patterns: ["rm *"] },
 });
+fake.emit({ type: "participant.typing", participant_id: "p_bek", typing: true });
+fake.emit({ type: "prompt.accepted", prompt_id: "pm3", author_id: "p_bek", text: "then write the changelog entry", delivery: "now", provenance: direct(bek), attachments: [] });
+fake.emit({ type: "prompt.accepted", prompt_id: "pm4", author_id: "p_alia", text: "and bump the version to 0.2.1", delivery: "follow_up", provenance: direct(alia), attachments: [] });
 fake.emit({ type: "proposal.created", proposal: { id: "pr1", author_id: "p_bek", text: "add a README for the project", delivery: "now", attachments: [] } });
 
 const renderer = await createCliRenderer({ exitOnCtrlC: false, useMouse: true });

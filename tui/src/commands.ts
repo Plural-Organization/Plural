@@ -15,6 +15,7 @@ export const COMMANDS: CommandHint[] = [
   { name: "policy", usage: "/policy [allow|ask|deny <tool> <pattern> | rm <id>]", description: "show or edit permission rules", hostOnly: true },
   { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
   { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
+  { name: "cancel", usage: "/cancel <n>", description: "remove a queued prompt (yours, or any as host)" },
   { name: "copy", usage: "/copy", description: "copy the last reply to the clipboard" },
   { name: "quit", usage: "/quit", description: "leave the session" },
 ];

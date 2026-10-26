@@ -3,6 +3,11 @@ import { Projection, type Command, type ConnectionStatus, type Event, type Event
 export class FakeSession implements Session {
   readonly projection = new Projection();
   readonly sent: Command[] = [];
+
+  get commands(): Command[] {
+    return this.sent.filter((command) => command.type !== "presence.typing");
+  }
+
   status: ConnectionStatus = "online";
   private seq = 0;
   private queue: Event[] = [];
@@ -23,10 +28,10 @@ export class FakeSession implements Session {
   }
 
   emit(event: Event): void {
-    if (event.type === "message.delta") {
+    if (event.type === "message.delta" || event.type === "participant.typing") {
       this.projection.observe(event);
     } else if (event.type === "session.snapshot") {
-      this.projection.load(event.state, event.streaming);
+      this.projection.load(event.state, event.streaming, event.typing);
     } else if (event.type === "session.welcome") {
       this.projection.meId = event.participant.id;
     } else if (!event.type.startsWith("invite.") && event.type !== "error") {

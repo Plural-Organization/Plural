@@ -1,6 +1,6 @@
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useSelectionHandler, useTerminalDimensions } from "@opentui/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   label,
   parseSlash,
@@ -35,6 +35,8 @@ type Focus = "composer" | "inbox";
 
 const GUARD_MS = 400;
 const MIN_WIDTH_FOR_PANEL = 90;
+const TYPING_REFRESH_MS = 3000;
+const TYPING_IDLE_MS = 2500;
 
 export function App({ client, room, version, guestLink, onQuit }: AppProps) {
   const renderer = useRenderer();
@@ -51,11 +53,15 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
   const [hint, setHint] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [panel, setPanel] = useState(true);
+  const [, bump] = useReducer((value: number) => value + 1, 0);
   const scroll = useRef<ScrollBoxRenderable>(null);
   const armed = useRef(false);
   const dirty = useRef(false);
   const guardUntil = useRef(0);
   const copying = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingOn = useRef(false);
+  const typingSent = useRef(0);
+  const typingIdle = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const commit = (next: Feed): void => {
     feedRef.current = next;
@@ -72,6 +78,7 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
       try {
         for await (const event of client.events()) {
           commit(absorb(feedRef.current, event, client.projection));
+          bump();
           if (event.type === "invite.created") {
             copy(event.link, "invite link copied to the clipboard");
           }
@@ -93,6 +100,11 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
   const items = useMemo(() => (isHost ? inboxItems(state) : []), [isHost, state.approvals, state.proposals]);
   const approvals = Object.keys(state.approvals).length;
   const running = state.run !== null;
+  const typers = [...projection.typing]
+    .filter((id) => id !== projection.meId)
+    .map((id) => state.participants[id])
+    .filter((participant): participant is NonNullable<typeof participant> => participant !== undefined)
+    .map((participant) => label(state, participant));
   const runStatus = feed.items.some((item) => item.kind === "assistant" && item.streaming) ? "… writing" : status(projection);
 
   useEffect(() => {
@@ -115,6 +127,39 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
 
   const send = (command: Command): void => {
     client.send(command).catch((error: unknown) => notify("danger", error instanceof Error ? error.message : String(error)));
+  };
+
+  const canType = me !== undefined && me.role !== "viewer";
+
+  const stopTyping = (): void => {
+    if (typingIdle.current) {
+      clearTimeout(typingIdle.current);
+      typingIdle.current = null;
+    }
+    if (typingOn.current) {
+      typingOn.current = false;
+      send({ type: "presence.typing", typing: false });
+    }
+  };
+
+  const announceTyping = (text: string): void => {
+    if (!canType) {
+      return;
+    }
+    if (text.trim() === "" || text.startsWith("/")) {
+      stopTyping();
+      return;
+    }
+    const now = Date.now();
+    if (!typingOn.current || now - typingSent.current > TYPING_REFRESH_MS) {
+      typingOn.current = true;
+      typingSent.current = now;
+      send({ type: "presence.typing", typing: true });
+    }
+    if (typingIdle.current) {
+      clearTimeout(typingIdle.current);
+    }
+    typingIdle.current = setTimeout(stopTyping, TYPING_IDLE_MS);
   };
 
   const flash = (text: string): void => {
@@ -171,6 +216,15 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
       case "copy":
         copyReply();
         return true;
+      case "cancel": {
+        const entry = state.queue[Number(rest[0]) - 1];
+        if (!entry) {
+          notify("warn", state.queue.length === 0 ? "the queue is empty" : "usage: /cancel <number from the queue>");
+        } else {
+          send({ type: "queue.cancel", prompt_id: entry.prompt_id });
+        }
+        return true;
+      }
       case "quit":
         onQuit();
         return true;
@@ -180,6 +234,7 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
   };
 
   const submit = (text: string): void => {
+    stopTyping();
     scroll.current?.scrollTo(Number.MAX_SAFE_INTEGER);
     if (editing) {
       send({ type: "proposal.decide", proposal_id: editing, decision: "approve", edited_text: text });
@@ -295,6 +350,14 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
           ))}
         </scrollbox>
         {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} /> : null}
+        {typers.length > 0 ? (
+          <box paddingX={2} height={1} flexShrink={0}>
+            <text fg={theme.dim}>
+              <span fg={theme.accent}>✎ </span>
+              {typers.length <= 2 ? `${typers.join(" and ")} ${typers.length === 1 ? "is" : "are"} typing…` : `${typers.length} people are typing…`}
+            </text>
+          </box>
+        ) : null}
         <Composer
           focused={focus === "composer"}
           disabled={disabled}
@@ -315,6 +378,7 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
           onDirty={(value) => {
             dirty.current = value;
           }}
+          onActivity={announceTyping}
         />
         <StatusBar me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
       </box>
