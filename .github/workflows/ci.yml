@@ -42,6 +42,7 @@ jobs:
       - run: npm test --workspace client
       - run: npm run typecheck --workspace tui
       - run: npm test --workspace tui
+      - run: sh scripts/install-native-renderer.sh
       - run: npm run build --workspace tui
       - name: Start the compiled client in a pseudo terminal
         run: script -qec "timeout 30 ./dist-bin/plural --selftest" /dev/null

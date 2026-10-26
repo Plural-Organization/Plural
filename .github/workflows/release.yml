@@ -42,12 +42,7 @@ jobs:
           cache: npm
       - run: npm ci
       - name: Install the native renderer for every platform
-        run: |
-          npm install --no-save --force --os=any --cpu=any \
-            @opentui/core-darwin-x64@0.7.0 @opentui/core-darwin-arm64@0.7.0 \
-            @opentui/core-linux-x64@0.7.0 @opentui/core-linux-arm64@0.7.0 \
-            @opentui/core-linux-x64-musl@0.7.0 @opentui/core-linux-arm64-musl@0.7.0 \
-            @opentui/core-win32-x64@0.7.0 @opentui/core-win32-arm64@0.7.0
+        run: sh scripts/install-native-renderer.sh
       - name: Compile the client
         run: |
           mkdir -p stage
