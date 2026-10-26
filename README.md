@@ -1,284 +1,73 @@
 <div align="center">
 
-# Plural
+# ◆ plural
 
-**Multiplayer sessions for one AI coding agent.**
+**the shared room for your coding agent.**
 
-One agent. One host. Everyone in the room.
+[install](#install) · [quick start](#quick-start) · [docs](#docs) · [security](SECURITY.md) · [contributing](CONTRIBUTING.md)
 
-[![Python](https://img.shields.io/badge/python-3.12%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
-[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
-[![Checked with pyright](https://microsoft.github.io/pyright/img/pyright_badge.svg)](https://microsoft.github.io/pyright/)
-[![Status](https://img.shields.io/badge/status-alpha-orange.svg)](#roadmap)
-
-[Quick start](#quick-start) · [How it works](#how-it-works) · [Security](#security-model) · [Architecture](#architecture) · [Contributing](#contributing)
+[![License](https://img.shields.io/badge/license-Apache--2.0-666666?labelColor=333333)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Plural-Organization/Plural?label=release&labelColor=333333&color=666666)](https://github.com/Plural-Organization/Plural/releases/latest)
+[![PyPI](https://img.shields.io/pypi/v/plural-agent?label=pypi&labelColor=333333&color=666666)](https://pypi.org/project/plural-agent/)
+[![Python](https://img.shields.io/badge/python-3.12%2B-666666?labelColor=333333)](https://www.python.org/downloads/)
 
 </div>
 
 ---
 
-Plural turns a solo AI agent session into a shared one. The agent runs on the **host's machine** with the **host's API key**. Teammates join from a terminal or a browser, watch the run live, and prompt the agent. The host stays in control: every risky tool call goes through the host's approval, and in review mode every prompt does too.
+**one agent. one host. everyone in the room.**
 
-```text
-┌────────────┐        ┌──────────────┐        ┌─────────────┐
-│  guest TUI │◀──ws──▶│              │◀──ws──▶│  host       │
-├────────────┤        │  relay       │        │  ├ agent    │──▶ LLM API
-│  guest web │◀──ws──▶│  (optional,  │        │  ├ policy   │
-└────────────┘        │   dumb pipe) │        │  ├ tools    │──▶ workspace
-                      └──────────────┘        │  └ event log│
-                                              └─────────────┘
-```
+- **a shared live session** — the host runs the agent on their machine with their own key. teammates join from a terminal and watch every reply, tool call and diff as it happens.
+- **two ways to prompt** — in `open` mode everyone talks to the agent directly. in `review` mode the host approves each prompt first. switch any time.
+- **you approve what matters** — write and exec actions always wait for the host, and a run started by a guest can never be waved through by a rule.
+- **see who is doing what** — participants, who is typing, a prompt queue, and an attribution on every turn.
+- **tools you can follow** — each call is one line. open it to see the live output of a command or a numbered diff.
+- **full screen, in your terminal** — a side panel, themes, mouse and keyboard, copy on select. one binary, no runtime to install.
+- **your model, your key** — anthropic, any openai-compatible endpoint, or a local model through ollama. api keys only, never subscription logins.
+- **event-sourced** — an append-only log is the source of truth. reconnect, replay and audit come for free.
+- **direct or relayed** — connect over your network, or through a relay that never decides permissions and never stores content.
 
-## Features
+---
 
-- **Shared live session.** Everyone sees the same transcript, tool calls and diffs as they stream.
-- **Two prompt modes.** In `open` mode (default) participants prompt the agent directly. In `review` mode their prompts are proposals that the host approves, edits or rejects. The host switches the mode at any time.
-- **Host-only approvals.** Write and exec actions need host consent. Guest-originated turns are tainted and always ask. Rejected actions are not re-asked: after repeated rejections of the same kind the agent is told to ask the user instead, and "Block (session)" denies a whole command class.
-- **Attribution.** Every turn records who wrote it and who approved it.
-- **Policy engine.** Allow, ask and deny rules with last-match-wins. Base deny rules cannot be overridden.
-- **Event-sourced.** An append-only SQLite log is the source of truth. Reconnect, replay and audit come for free.
-- **Isolation.** Tools are confined to the workspace. Secret paths are denied and output is redacted.
-- **Direct or relayed.** Connect over LAN directly, or through a relay that never sees permissions and never stores content.
-- **Terminal clients.** A Textual TUI and a plain line mode. A browser client is in progress.
-- **Bring your own key.** API keys only. Plural never touches subscription credentials.
+## install
 
-## Requirements
-
-- Python **3.12** or newer
-- [uv](https://docs.astral.sh/uv/) 0.5+
-- macOS or Linux (Windows through WSL)
-- Node.js 22+ (only to work on the in-progress web client)
-
-## Installation
-
-```sh
+```bash
 curl -fsSL https://raw.githubusercontent.com/Plural-Organization/Plural/main/install.sh | sh
 ```
 
-The script installs [uv](https://docs.astral.sh/uv/) if it is missing, then Plural. Or install it yourself:
+macos and linux, arm64 and x64. windows through wsl. the script installs [uv](https://docs.astral.sh/uv/), the host (`plural-host`) and the `plural` client, and checks the download.
 
-```sh
-uv tool install plural-agent
+## quick start
+
+start in the project you want the agent to work on:
+
+```bash
+cd your-project
+plural
 ```
 
-The package is `plural-agent`; it installs the `plural` command. Other ways:
+the first line in the conversation is an invite. send it to a teammate:
 
-```sh
-pipx install plural-agent
-uvx --from plural-agent plural host
+```bash
+plural join "ws://…"
 ```
 
-From source, clone the repository and run from its root:
+without a key the host runs a scripted demo agent. for a real model:
 
-```sh
-uv sync
+```bash
+ANTHROPIC_API_KEY=sk-ant-… plural
 ```
 
-Check your environment:
+`/help` lists the commands, `F2` opens the settings, `ctrl+o` opens the tool details.
 
-```sh
-plural doctor
-```
+## docs
 
-## Quick start
+[usage](docs/usage.md) · [configuration](docs/configuration.md) · [relay deployment](deploy/) · [wire protocol](docs/protocol.md) · [threat model](docs/threat-model.md) · [design decisions](docs/adr/) · [development](docs/development.md)
 
-Start a session in your project:
+## acknowledgements
 
-```sh
-uv run plural host --workspace .
-```
+plural learns from [pi](https://github.com/badlogic/pi-mono), [opencode](https://github.com/sst/opencode), [hermes](https://github.com/NousResearch/hermes-agent) and [herdr](https://github.com/herdrdev/herdr).
 
-The host prints a one-time invite link and opens the TUI. Send the link to a teammate:
+## license
 
-```sh
-uv run plural join "ws://127.0.0.1:7777/r_…?invite=…" --name alia
-```
-
-By default participants prompt the agent directly (`open` mode). To approve every participant prompt yourself, start with `--prompts review`, or switch at any time with `/mode review` and `/mode open`.
-
-Without a key the host runs `fake`, a scripted demo agent: any text lists the workspace and `$ cmd` asks to run `cmd` through `bash` and waits for host approval. Set `ANTHROPIC_API_KEY` (or `OPENAI_API_KEY`, or `PLURAL_BASE_URL` with `PLURAL_MODEL` for a local server) and the matching provider is picked automatically.
-
-### Through a relay
-
-```sh
-uv run plural relay --bind 0.0.0.0 --port 8787
-uv run plural host --relay wss://relay.example.com
-```
-
-A ready-made deployment with Caddy and TLS lives in [`deploy/`](deploy/).
-
-## Usage
-
-### Commands
-
-| Command | Purpose |
-|---|---|
-| `plural host` | Start a host session, direct mode or `--relay URL` |
-| `plural join <link>` | Join as a guest, `--plain` for a line-mode stream |
-| `plural relay` | Run the relay router |
-| `plural doctor` | Check the environment and workspace |
-| `plural export <room>` | Dump a session's event log to JSONL |
-
-Run `plural <command> --help` for all options.
-
-### TUI keys
-
-| Key | Action |
-|---|---|
-| `ctrl+r` | Review pending proposals and approvals |
-| `ctrl+o` | Create an invite link |
-| `ctrl+p` | View and edit session policy rules (host) |
-| `esc` | Abort the current run |
-| `ctrl+q` | Quit |
-
-Prompt-line commands work in the TUI and in `plural join --plain`: `/abort`, `/compact`, `/mode open|review`, `/policy` (list rules), `/policy allow|ask|deny <tool> <pattern>`, `/policy rm <rule id>`.
-
-### Configuration
-
-Every setting can be passed as an environment variable with the `PLURAL_` prefix.
-
-| Variable | Default | Description |
-|---|---|---|
-| `PLURAL_PROVIDER` | by key | `fake`, `anthropic` or `openai`; when unset it follows `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY` or `PLURAL_BASE_URL` plus `PLURAL_MODEL`, and falls back to `fake` |
-| `PLURAL_PROMPT_MODE` | `open` | `open` or `review`; a resumed room keeps its last mode when unset |
-| `PLURAL_MODEL` | `claude-opus-5-5` for `anthropic` | Model id, required for `openai` |
-| `PLURAL_API_KEY` | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Provider API key |
-| `PLURAL_BASE_URL` | provider default | Custom endpoint, e.g. a local OpenAI-compatible server |
-| `PLURAL_EFFORT` | provider default | `low`, `medium`, `high`, `xhigh` or `max` |
-| `PLURAL_MAX_OUTPUT_TOKENS` | provider default | Output token cap per model response |
-| `PLURAL_WORKSPACE` | current directory | Directory the agent works in |
-| `PLURAL_DATA_DIR` | `~/.plural` | Event logs, host key, attachments |
-| `PLURAL_BIND_HOST` | `127.0.0.1` | Bind address for direct mode |
-| `PLURAL_PORT` | `7777` | Port for direct mode |
-| `PLURAL_RELAY_URL` | none | Relay URL |
-| `PLURAL_PUBLIC_URL` | none | Public URL used in invite links |
-| `PLURAL_FIRST_TOKEN_TIMEOUT_S` | `120` | Seconds to wait for the model's first output before the run fails |
-| `PLURAL_IDLE_TIMEOUT_S` | `60` | Seconds of silence mid-response before the run fails |
-| `PLURAL_CONTEXT_WINDOW` | `128000` | Model context size in tokens; set it to the server's real window for local models |
-| `PLURAL_COMPACT_AT` | `0.75` | Fraction of the window at which the conversation is summarized |
-| `PLURAL_APPROVAL_TIMEOUT_S` | `120` | Seconds before an approval expires |
-| `PLURAL_REJECTION_LIMIT` | `2` | Rejections of one kind of action per run before the agent stops asking the host |
-| `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24h |
-| `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |
-
-### Providers
-
-Two adapters cover most models: `anthropic` uses the official Anthropic SDK, and `openai` speaks the OpenAI Chat Completions format, which also covers OpenRouter, Groq, Gemini, DeepSeek and local servers such as Ollama.
-
-```sh
-PLURAL_PROVIDER=anthropic ANTHROPIC_API_KEY=sk-ant-... plural host
-
-PLURAL_PROVIDER=openai PLURAL_MODEL=gpt-5 OPENAI_API_KEY=sk-... plural host
-
-PLURAL_PROVIDER=openai PLURAL_MODEL=qwen2.5-coder PLURAL_BASE_URL=http://localhost:11434/v1 plural host
-```
-
-> [!NOTE]
-> Local servers truncate silently when a prompt exceeds their window (Ollama defaults to 4096 tokens). Start the server with a larger window (`OLLAMA_CONTEXT_LENGTH`) and set `PLURAL_CONTEXT_WINDOW` to the same value so compaction triggers in time.
-
-> [!IMPORTANT]
-> Plural uses API keys only. It never reads subscription logins or other credentials stored by vendor tools.
-
-## How it works
-
-1. The **host** starts a session. A `SessionActor` owns the room and processes every command in order: append to the log, reduce state, publish.
-2. A **guest** joins with an invite and receives a signed Ed25519 capability token bound to the room and connection.
-3. The guest sends a prompt. In `open` mode it enters the agent's queue attributed to the guest. In `review` mode it becomes a proposal, and after the host approves it enters the queue attributed as `[alia, proposal approved by host]`.
-4. The **agent loop** streams the model's reply. Each tool call is prepared, evaluated by the `PolicyGate`, and either runs, waits for the host, or is denied.
-5. Every event goes to the **event log** first and is then fanned out to clients. A client that reconnects asks for events `since` its last `seq`.
-
-## Security model
-
-- The agent and the API key live only on the host. Guests never see the key.
-- Permission decisions are made only by the host. The relay is a dumb pipe.
-- No tool runs without passing the `PolicyGate`. There are no bypasses.
-- Tools are confined to the workspace with `realpath` checks and a deny-list for secret files such as `.env`, keys and credentials.
-- `bash` runs with a clean environment, in its own process group, with a timeout.
-- Secrets are redacted before anything is written to the log or sent to clients.
-
-See [`SECURITY.md`](SECURITY.md) to report a vulnerability and [`docs/threat-model.md`](docs/threat-model.md) for the full threat model.
-
-## Architecture
-
-Plural is a hexagonal, event-sourced Python app. Layers are enforced with `import-linter`.
-
-```text
-src/plural/
-├── protocol/   wire models, envelope, codec          (pure)
-├── core/       state reducer, roles, policy engine   (pure)
-├── security/   tokens, host keys, redaction
-├── agent/      harness: loop, tools, sandbox, providers
-├── storage/    SQLite event store, migrations, export
-├── host/       session actor, gateway, transports
-├── relay/      dumb relay router
-├── client/     connection, reconnect, projection
-├── cli/        Typer entry point
-└── tui/        Textual app
-web/            browser client (in progress)
-```
-
-- `core` and `protocol` do no I/O.
-- `agent` knows nothing about transports or storage.
-- `relay` knows nothing about sessions, policy or content.
-- `client` knows nothing about the host internals.
-
-Design notes: [`docs/adr/`](docs/adr/) · Wire protocol: [`docs/protocol.md`](docs/protocol.md)
-
-## Development
-
-```sh
-uv sync
-uv run pytest
-```
-
-Full check, the same one CI runs:
-
-```sh
-uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run lint-imports && uv run pytest
-```
-
-Regenerate the protocol JSON schema for the web client:
-
-```sh
-uv run python scripts/gen_schema.py
-```
-
-Web client (in progress):
-
-```sh
-cd web
-npm ci
-npm run dev
-```
-
-## Roadmap
-
-- [x] Protocol, event log and session actor
-- [x] Policy engine and host approvals
-- [x] Workspace tools and local sandbox
-- [x] Direct and relay transports
-- [x] TUI and plain clients
-- [x] Anthropic and OpenAI-compatible providers
-- [ ] Web client (in progress)
-- [x] Context compaction
-- [ ] Container sandbox
-- [ ] End-to-end and load tests
-
-## Contributing
-
-Contributions are welcome. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) first. In short:
-
-- Open an issue before large changes.
-- Use [Conventional Commits](https://www.conventionalcommits.org/).
-- New dependencies need discussion, and large ones need an ADR.
-- Make sure the full check passes.
-
-## Acknowledgements
-
-Plural learns from [Pi](https://github.com/badlogic/pi-mono), [OpenCode](https://github.com/sst/opencode) and [Hermes](https://github.com/NousResearch/hermes-agent).
-
-## License
-
-Plural is licensed under the [Apache License 2.0](LICENSE).
+plural is licensed under the [apache license 2.0](LICENSE).
