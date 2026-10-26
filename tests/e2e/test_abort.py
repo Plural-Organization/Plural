@@ -1,7 +1,6 @@
 import pytest
 
 from plural.client.connection import CommandRejected
-from plural.client.presenter import live
 from plural.protocol.commands import ApprovalRespond, PromptSubmit, RunAbort
 from plural.protocol.events import (
     ApprovalRequested,
@@ -24,7 +23,7 @@ async def test_abort_during_model_call_clears_the_live_view(stalled_session: Ses
     assert ended.reason is RunEndReason.ABORTED
     assert ended.usage.input_tokens == 7
     assert owner.client.projection.streaming == {}
-    assert live(owner.client.projection) == ""
+    assert owner.client.projection.streaming == {}
     assert owner.client.projection.state.run is None
 
 

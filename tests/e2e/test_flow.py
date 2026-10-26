@@ -1,7 +1,6 @@
 import pytest
 
 from plural.client.connection import CommandRejected
-from plural.client.presenter import Line, history
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.protocol.commands import (
     ApprovalRespond,
@@ -84,11 +83,16 @@ async def test_every_client_converges_on_the_same_state(review_session: Session)
 async def test_late_joiner_sees_tool_output_in_history(review_session: Session) -> None:
     await run_to_completion(review_session)
     late = await review_session.guest("Cleo")
-    lines = history(late.client.projection.state)
-    assert Line("bold", "Alia › check the notes") in lines
-    assert any(line.text.startswith("⚙ bash cat notes.txt ✓") for line in lines)
-    assert Line("green", "alpha\nbeta\n[exit 0]") in lines
-    assert Line("", "All good.") in lines
+    entries = late.client.projection.state.transcript
+    assert [
+        (entry.kind, entry.text) for entry in entries if entry.kind != "tool" and entry.text
+    ] == [
+        ("prompt", "check the notes"),
+        ("assistant", "All good."),
+    ]
+    tool = next(entry for entry in entries if entry.kind == "tool")
+    assert tool.ok is True
+    assert tool.output == "alpha\nbeta\n[exit 0]"
 
 
 async def test_viewer_cannot_submit_prompts(session: Session) -> None:

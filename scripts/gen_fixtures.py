@@ -4,18 +4,14 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from plural.client.presenter import describe, history, live
 from plural.client.projection import Projection
-from plural.protocol.envelope import ErrorCode
 from plural.protocol.events import (
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
     ContextCompacted,
-    ErrorRaised,
     Event,
     EventRecord,
-    InviteCreated,
     MessageDelta,
     MessageEnded,
     MessageStarted,
@@ -194,18 +190,6 @@ def _steps() -> list[tuple[str, Event]]:
     ]
 
 
-def _transient() -> list[Event]:
-    return [
-        InviteCreated(
-            code="c1",
-            role=Role.PARTICIPANT,
-            expires_at=START + timedelta(hours=1),
-            link="ws://127.0.0.1:7777/r_1?invite=c1",
-        ),
-        ErrorRaised(code=ErrorCode.FORBIDDEN, message="participant cannot run.abort"),
-    ]
-
-
 def _dump(model: Any) -> Any:
     return json.loads(model.model_dump_json())
 
@@ -232,23 +216,8 @@ def _scenario() -> dict[str, Any]:
         step["state"] = _dump(projection.state)
         step["streaming"] = dict(projection.streaming)
         step["reasoning"] = projection.reasoning
-        step["live"] = live(projection)
-        line = describe(event, projection.state)
-        step["line"] = None if line is None else {"style": line.style, "text": line.text}
-        step["history"] = [
-            {"style": item.style, "text": item.text} for item in history(projection.state)
-        ]
         steps.append(step)
-    transient: list[dict[str, Any]] = []
-    for event in _transient():
-        line = describe(event, projection.state)
-        transient.append(
-            {
-                "event": _dump(event),
-                "line": None if line is None else {"style": line.style, "text": line.text},
-            }
-        )
-    return {"steps": steps, "transient": transient}
+    return {"steps": steps}
 
 
 def render() -> str:

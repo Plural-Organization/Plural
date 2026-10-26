@@ -3,7 +3,6 @@ import getpass
 import json
 import os
 import sys
-from contextlib import suppress
 from pathlib import Path
 from typing import Annotated
 
@@ -15,19 +14,15 @@ from rich.panel import Panel
 from rich.table import Table
 
 from plural import __version__
-from plural.cli.output import stream
-from plural.client.reconnect import JoinLink, SessionClient
 from plural.host.bootstrap import ConfigError, build_host, build_provider, resolve_api_key
 from plural.host.config import HostSettings
-from plural.protocol.commands import ClientInfo
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import PromptMode, Role
 from plural.relay.app import create_app
 from plural.storage.jsonl_export import export_jsonl
 from plural.storage.sqlite_store import SqliteEventStore
-from plural.tui.app import PluralApp
 
-app = typer.Typer(name="plural", no_args_is_help=True, add_completion=False)
+app = typer.Typer(name="plural-host", no_args_is_help=True, add_completion=False)
 console = Console()
 
 
@@ -46,10 +41,9 @@ def host(
         PromptMode | None,
         typer.Option(help="open: participants prompt directly; review: the host approves them."),
     ] = None,
-    headless: Annotated[bool, typer.Option(help="Run without the TUI.")] = False,
     machine: Annotated[
         bool,
-        typer.Option("--json", help="Run headless and print one JSON line when ready."),
+        typer.Option("--json", help="Print one JSON line when ready and log to a file."),
     ] = False,
 ) -> None:
     settings = HostSettings(
@@ -63,7 +57,7 @@ def host(
         prompt_mode=prompts,
     )
     try:
-        asyncio.run(_host(settings, headless=headless or machine, machine=machine))
+        asyncio.run(_host(settings, machine=machine))
     except ConfigError as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(1) from error
@@ -82,10 +76,8 @@ def ready_line(room: str, guest_link: str, host_link: str) -> str:
     )
 
 
-async def _host(settings: HostSettings, *, headless: bool, machine: bool = False) -> None:
-    _configure_logging(
-        None if headless and not machine else settings.state_dir / "logs" / "host.log"
-    )
+async def _host(settings: HostSettings, *, machine: bool) -> None:
+    _configure_logging(settings.state_dir / "logs" / "host.log" if machine else None)
     plural_host = await build_host(settings)
     invite = plural_host.invites.create(Role.PARTICIPANT, settings.invite_ttl_s)
     if machine:
@@ -99,42 +91,9 @@ async def _host(settings: HostSettings, *, headless: bool, machine: bool = False
             )
         )
     try:
-        if headless:
-            await plural_host.serve()
-            return
-        server = asyncio.create_task(plural_host.serve())
-        client = SessionClient(
-            JoinLink.parse(plural_host.host_link),
-            name=settings.host_name,
-            client=ClientInfo(kind="tui", version=__version__),
-        )
-        await PluralApp(client).run_async()
-        server.cancel()
-        with suppress(asyncio.CancelledError):
-            await server
+        await plural_host.serve()
     finally:
         await plural_host.close()
-
-
-@app.command()
-def join(
-    link: Annotated[str, typer.Argument(help="Invite or host link (ws:// or wss://).")],
-    name: Annotated[str, typer.Option(help="Display name.")] = getpass.getuser(),
-    plain: Annotated[bool, typer.Option(help="Print the stream instead of the TUI.")] = False,
-) -> None:
-    try:
-        parsed = JoinLink.parse(link)
-    except ValueError as error:
-        raise typer.BadParameter(str(error)) from error
-    client = SessionClient(
-        parsed, name=name, client=ClientInfo(kind="cli" if plain else "tui", version=__version__)
-    )
-    if plain:
-        _configure_logging(None)
-        asyncio.run(stream(client, console))
-    else:
-        _configure_logging(HostSettings().state_dir / "logs" / "client.log")
-        PluralApp(client).run()
 
 
 @app.command()

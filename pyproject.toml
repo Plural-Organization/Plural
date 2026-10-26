@@ -27,7 +27,6 @@ dependencies = [
   "rich>=13.9",
   "starlette>=0.46",
   "structlog>=25.1",
-  "textual>=2.1",
   "typer>=0.15",
   "uvicorn>=0.34",
   "websockets>=15",
@@ -39,7 +38,6 @@ Issues = "https://github.com/Plural-Organization/Plural/issues"
 Changelog = "https://github.com/Plural-Organization/Plural/releases"
 
 [project.scripts]
-plural = "plural.cli.main:app"
 plural-host = "plural.cli.main:app"
 
 [dependency-groups]
@@ -108,8 +106,8 @@ type = "forbidden"
 source_modules = ["plural.core", "plural.protocol"]
 forbidden_modules = [
   "plural.agent", "plural.host", "plural.relay", "plural.storage",
-  "plural.client", "plural.cli", "plural.tui", "plural.security",
-  "websockets", "aiosqlite", "starlette", "textual",
+  "plural.client", "plural.cli", "plural.security",
+  "websockets", "aiosqlite", "starlette",
 ]
 
 [[tool.importlinter.contracts]]
@@ -118,7 +116,7 @@ type = "forbidden"
 source_modules = ["plural.security"]
 forbidden_modules = [
   "plural.core", "plural.agent", "plural.host", "plural.relay",
-  "plural.storage", "plural.client", "plural.cli", "plural.tui",
+  "plural.storage", "plural.client", "plural.cli",
 ]
 
 [[tool.importlinter.contracts]]
@@ -126,7 +124,7 @@ name = "harness is transport-agnostic"
 type = "forbidden"
 source_modules = ["plural.agent"]
 forbidden_modules = [
-  "plural.host", "plural.relay", "plural.client", "plural.cli", "plural.tui", "plural.storage",
+  "plural.host", "plural.relay", "plural.client", "plural.cli", "plural.storage",
   "websockets", "aiosqlite", "starlette",
 ]
 
@@ -140,14 +138,14 @@ forbidden_modules = ["plural.core", "plural.agent", "plural.host", "plural.stora
 name = "client knows nothing about the host"
 type = "forbidden"
 source_modules = ["plural.client"]
-forbidden_modules = ["plural.agent", "plural.host", "plural.relay", "plural.storage", "plural.tui", "plural.cli"]
+forbidden_modules = ["plural.agent", "plural.host", "plural.relay", "plural.storage", "plural.cli"]
 
 [[tool.importlinter.contracts]]
 name = "vendor SDKs live only in provider adapters"
 type = "forbidden"
 source_modules = [
   "plural.core", "plural.protocol", "plural.security", "plural.storage", "plural.host",
-  "plural.relay", "plural.client", "plural.cli", "plural.tui",
+  "plural.relay", "plural.client", "plural.cli",
   "plural.agent.loop", "plural.agent.context", "plural.agent.messages", "plural.agent.gate",
   "plural.agent.events", "plural.agent.tools", "plural.agent.sandbox",
   "plural.agent.providers.base", "plural.agent.providers.fake",

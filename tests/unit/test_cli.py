@@ -46,11 +46,6 @@ def test_doctor_accepts_the_vendor_variable(
     assert runner.invoke(app, ["doctor", "--workspace", str(tmp_path)]).exit_code == 0
 
 
-def test_join_rejects_a_link_without_a_websocket_scheme() -> None:
-    result = runner.invoke(app, ["join", "http://example.com/r_1"])
-    assert result.exit_code == 2
-
-
 def test_export_writes_one_line_per_event(tmp_path: Path) -> None:
     async def populate() -> None:
         store = await SqliteEventStore.open(tmp_path / "data" / "sessions" / "r_demo.db")
@@ -86,7 +81,7 @@ def test_host_passes_the_prompt_mode_flag(
 ) -> None:
     seen: list[HostSettings] = []
 
-    async def fake_host(settings: HostSettings, *, headless: bool, machine: bool) -> None:
+    async def fake_host(settings: HostSettings, *, machine: bool) -> None:
         seen.append(settings)
 
     monkeypatch.setattr(main, "_host", fake_host)

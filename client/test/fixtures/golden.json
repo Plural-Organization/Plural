@@ -37,13 +37,7 @@
         "transcript": []
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "dim",
-        "text": "→ vlad joined as host"
-      },
-      "history": []
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -88,13 +82,7 @@
         "transcript": []
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "dim",
-        "text": "→ Alia joined as participant"
-      },
-      "history": []
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -145,13 +133,7 @@
         "transcript": []
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "dim",
-        "text": "→ Bek joined as participant"
-      },
-      "history": []
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -208,13 +190,7 @@
         "transcript": []
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "dim",
-        "text": "→ Bek #2222 joined as viewer"
-      },
-      "history": []
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -267,13 +243,7 @@
         "transcript": []
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "dim",
-        "text": "Bek #2222 is now participant"
-      },
-      "history": []
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -325,13 +295,7 @@
         "transcript": []
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "dim",
-        "text": "← Bek #1111 left"
-      },
-      "history": []
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -383,13 +347,7 @@
         "transcript": []
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "magenta",
-        "text": "prompts are now review: the host approves participants' prompts"
-      },
-      "history": []
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -455,13 +413,7 @@
         "transcript": []
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "yellow",
-        "text": "? Alia proposes: check the notes"
-      },
-      "history": []
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -515,13 +467,7 @@
         "transcript": []
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "green",
-        "text": "✓ proposal approved: check the notes"
-      },
-      "history": []
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -587,13 +533,7 @@
         "transcript": []
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "yellow",
-        "text": "? Alia proposes: delete all"
-      },
-      "history": []
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -646,13 +586,7 @@
         "transcript": []
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "red",
-        "text": "✗ proposal rejected"
-      },
-      "history": []
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -723,18 +657,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "bold",
-        "text": "Alia (via proposal) › check the notes"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -810,18 +733,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for the model",
-      "line": {
-        "style": "dim",
-        "text": "agent started"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "observe",
@@ -887,15 +799,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 4,
-      "live": "… thinking (4 chars)",
-      "line": null,
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        }
-      ]
+      "reasoning": 4
     },
     {
       "kind": "record",
@@ -968,15 +872,7 @@
       "streaming": {
         "m1": ""
       },
-      "reasoning": 4,
-      "live": "… thinking (4 chars)",
-      "line": null,
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        }
-      ]
+      "reasoning": 4
     },
     {
       "kind": "observe",
@@ -1044,15 +940,7 @@
       "streaming": {
         "m1": "Looking "
       },
-      "reasoning": 4,
-      "live": "Looking ",
-      "line": null,
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        }
-      ]
+      "reasoning": 4
     },
     {
       "kind": "observe",
@@ -1120,15 +1008,7 @@
       "streaming": {
         "m1": "Looking around"
       },
-      "reasoning": 4,
-      "live": "Looking around",
-      "line": null,
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        }
-      ]
+      "reasoning": 4
     },
     {
       "kind": "record",
@@ -1210,22 +1090,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for the model",
-      "line": {
-        "style": "",
-        "text": "Looking around"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -1326,26 +1191,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… running bash",
-      "line": {
-        "style": "cyan",
-        "text": "⚙ bash ls -la"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la …"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -1477,26 +1323,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for host approval",
-      "line": {
-        "style": "magenta",
-        "text": "! approval needed: bash ls -la [exec]"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la …"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -1592,26 +1419,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… running bash",
-      "line": {
-        "style": "magenta",
-        "text": "! approval once (vlad)"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la …"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -1709,30 +1517,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for the model",
-      "line": {
-        "style": "green",
-        "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -1848,34 +1633,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… running edit",
-      "line": {
-        "style": "cyan",
-        "text": "⚙ edit calc.py"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ edit calc.py …"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -1988,38 +1746,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for the model",
-      "line": {
-        "style": "red",
-        "text": "denied by policy"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "red",
-          "text": "⚙ edit calc.py ✗"
-        },
-        {
-          "style": "red",
-          "text": "denied by policy"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -2140,38 +1867,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for the model",
-      "line": {
-        "style": "magenta",
-        "text": "policy + allow bash ls *  [pl_1]"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "red",
-          "text": "⚙ edit calc.py ✗"
-        },
-        {
-          "style": "red",
-          "text": "denied by policy"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -2280,38 +1976,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for the model",
-      "line": {
-        "style": "magenta",
-        "text": "policy - pl_1"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "red",
-          "text": "⚙ edit calc.py ✗"
-        },
-        {
-          "style": "red",
-          "text": "denied by policy"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -2434,38 +2099,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for the model",
-      "line": {
-        "style": "dim",
-        "text": "📎 Alia attached notes.md"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "red",
-          "text": "⚙ edit calc.py ✗"
-        },
-        {
-          "style": "red",
-          "text": "denied by policy"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -2593,42 +2227,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for the model",
-      "line": {
-        "style": "dim",
-        "text": "⟲ context compacted (900 tokens summarized)"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "red",
-          "text": "⚙ edit calc.py ✗"
-        },
-        {
-          "style": "red",
-          "text": "denied by policy"
-        },
-        {
-          "style": "dim",
-          "text": "⟲ context compacted (900 tokens summarized)"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -2792,42 +2391,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for host approval",
-      "line": {
-        "style": "magenta",
-        "text": "! approval needed: bash ls -la [exec]"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "red",
-          "text": "⚙ edit calc.py ✗"
-        },
-        {
-          "style": "red",
-          "text": "denied by policy"
-        },
-        {
-          "style": "dim",
-          "text": "⟲ context compacted (900 tokens summarized)"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -2955,42 +2519,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for the model",
-      "line": {
-        "style": "magenta",
-        "text": "! approval reject (timeout)"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "red",
-          "text": "⚙ edit calc.py ✗"
-        },
-        {
-          "style": "red",
-          "text": "denied by policy"
-        },
-        {
-          "style": "dim",
-          "text": "⟲ context compacted (900 tokens summarized)"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -3134,46 +2663,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "… waiting for the model",
-      "line": {
-        "style": "bold",
-        "text": "Alia › again"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "red",
-          "text": "⚙ edit calc.py ✗"
-        },
-        {
-          "style": "red",
-          "text": "denied by policy"
-        },
-        {
-          "style": "dim",
-          "text": "⟲ context compacted (900 tokens summarized)"
-        },
-        {
-          "style": "bold",
-          "text": "Alia › again"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -3308,46 +2798,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "dim",
-        "text": "agent finished: error (boom)"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "red",
-          "text": "⚙ edit calc.py ✗"
-        },
-        {
-          "style": "red",
-          "text": "denied by policy"
-        },
-        {
-          "style": "dim",
-          "text": "⟲ context compacted (900 tokens summarized)"
-        },
-        {
-          "style": "bold",
-          "text": "Alia › again"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -3482,46 +2933,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "dim",
-        "text": "agent finished: stop"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "Alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "red",
-          "text": "⚙ edit calc.py ✗"
-        },
-        {
-          "style": "red",
-          "text": "denied by policy"
-        },
-        {
-          "style": "dim",
-          "text": "⟲ context compacted (900 tokens summarized)"
-        },
-        {
-          "style": "bold",
-          "text": "Alia › again"
-        }
-      ]
+      "reasoning": 0
     },
     {
       "kind": "record",
@@ -3642,72 +3054,7 @@
         ]
       },
       "streaming": {},
-      "reasoning": 0,
-      "live": "",
-      "line": {
-        "style": "red",
-        "text": "✗ access revoked for p_alia"
-      },
-      "history": [
-        {
-          "style": "bold",
-          "text": "p_alia › check the notes"
-        },
-        {
-          "style": "",
-          "text": "Looking around"
-        },
-        {
-          "style": "cyan",
-          "text": "⚙ bash ls -la ✓"
-        },
-        {
-          "style": "green",
-          "text": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11"
-        },
-        {
-          "style": "red",
-          "text": "⚙ edit calc.py ✗"
-        },
-        {
-          "style": "red",
-          "text": "denied by policy"
-        },
-        {
-          "style": "dim",
-          "text": "⟲ context compacted (900 tokens summarized)"
-        },
-        {
-          "style": "bold",
-          "text": "p_alia › again"
-        }
-      ]
-    }
-  ],
-  "transient": [
-    {
-      "event": {
-        "type": "invite.created",
-        "code": "c1",
-        "role": "participant",
-        "expires_at": "2026-10-26T13:00:00Z",
-        "link": "ws://127.0.0.1:7777/r_1?invite=c1"
-      },
-      "line": {
-        "style": "green",
-        "text": "invite (participant): ws://127.0.0.1:7777/r_1?invite=c1"
-      }
-    },
-    {
-      "event": {
-        "type": "error",
-        "code": "forbidden",
-        "message": "participant cannot run.abort"
-      },
-      "line": {
-        "style": "red",
-        "text": "participant cannot run.abort"
-      }
+      "reasoning": 0
     }
   ]
 }

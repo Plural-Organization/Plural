@@ -2,13 +2,11 @@ from datetime import UTC, datetime
 
 import pytest
 
-from plural.client.slash import ShowPolicy, SlashError, parse
 from plural.core import policies
 from plural.core.errors import Invalid, NotFound
 from plural.core.policy.rules import DEFAULT_RULES
 from plural.core.provenance import direct
 from plural.core.state import reduce
-from plural.protocol.commands import PolicyAdd, PolicyRemove, PromptModeSet, RunAbort
 from plural.protocol.events import (
     EventRecord,
     PolicyRuleAdded,
@@ -19,7 +17,6 @@ from plural.protocol.models import (
     ApprovalView,
     PolicyAction,
     PolicyRuleView,
-    PromptMode,
     Role,
     SessionState,
     ToolCallView,
@@ -117,32 +114,3 @@ def test_base_rules_are_listed_with_stable_ids() -> None:
     views = policies.to_views(DEFAULT_RULES, prefix="base")
     assert views[0].id == "base1"
     assert any(v.action is PolicyAction.DENY and v.pattern == "rm -rf*" for v in views)
-
-
-def test_slash_commands() -> None:
-    assert parse("just a prompt") is None
-    assert isinstance(parse("/abort"), RunAbort)
-    assert isinstance(parse("/policy"), ShowPolicy)
-    assert parse("/policy allow bash make *") == PolicyAdd(
-        tool="bash", pattern="make *", action=PolicyAction.ALLOW
-    )
-    assert parse("/policy rm pl_1") == PolicyRemove(rule_id="pl_1")
-    assert parse("/mode review") == PromptModeSet(mode=PromptMode.REVIEW)
-    assert parse("/mode open") == PromptModeSet(mode=PromptMode.OPEN)
-
-
-@pytest.mark.parametrize(
-    "text",
-    [
-        "/nope",
-        "/policy allow",
-        "/policy allow bash",
-        "/policy permit bash x",
-        "/policy rm",
-        "/mode",
-        "/mode closed",
-    ],
-)
-def test_slash_errors(text: str) -> None:
-    with pytest.raises(SlashError):
-        parse(text)
