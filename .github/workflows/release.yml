@@ -11,10 +11,11 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
-      - name: Check tag matches package version
+      - name: Check the tag matches every package version
         run: |
           version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/plural/__init__.py)
           test "v${version}" = "${GITHUB_REF_NAME}"
+          test "$(node -p "require('./tui/package.json').version")" = "${version}"
       - run: uv sync --frozen
       - run: uv run pytest
       - run: uv build
@@ -22,6 +23,42 @@ jobs:
         with:
           name: dist
           path: dist/
+
+  binaries:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: darwin, arch: arm64, target: bun-darwin-arm64 }
+          - { os: darwin, arch: x64, target: bun-darwin-x64 }
+          - { os: linux, arch: x64, target: bun-linux-x64 }
+          - { os: linux, arch: arm64, target: bun-linux-arm64 }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Compile the client
+        run: |
+          mkdir -p stage
+          npx --workspace tui bun build src/cli.tsx --compile --target=${{ matrix.target }} --outfile ../stage/plural
+      - name: Smoke test
+        if: matrix.os == 'linux' && matrix.arch == 'x64'
+        run: ./stage/plural --version
+      - name: Package
+        run: |
+          name=plural-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
+          tar -czf "$name" -C stage plural
+          sha256sum "$name" > "$name.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            plural-*.tar.gz
+            plural-*.tar.gz.sha256
 
   publish:
     needs: build
@@ -37,16 +74,16 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
 
   github-release:
-    needs: publish
+    needs: [publish, binaries]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v4
         with:
-          name: dist
-          path: dist/
+          path: assets/
+          merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/*
+          files: assets/*
           generate_release_notes: true
