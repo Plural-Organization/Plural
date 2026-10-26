@@ -2,7 +2,7 @@ import asyncio
 import json
 from collections import deque
 from collections.abc import AsyncGenerator, AsyncIterator, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 
 import structlog
 from pydantic import ValidationError
@@ -18,6 +18,7 @@ from plural.agent.events import (
     MessageStart,
     RunEnd,
     ToolEnd,
+    ToolOutput,
     ToolStart,
 )
 from plural.agent.gate import PolicyGate
@@ -362,18 +363,33 @@ class AgentLoop:
                 self._gate.check(view, subject=prepared.subject, provenance=provenance), cancel
             )
             if verdict.allowed:
-                result = await self._invoke(prepared, cancel)
+                queue: asyncio.Queue[str] = asyncio.Queue()
+                runner = asyncio.create_task(
+                    self._invoke(prepared, cancel, replace(self._tool_ctx, emit=queue.put_nowait))
+                )
+                try:
+                    while not runner.done() or not queue.empty():
+                        getter = asyncio.create_task(queue.get())
+                        await asyncio.wait({runner, getter}, return_when=asyncio.FIRST_COMPLETED)
+                        if getter.done():
+                            yield ToolOutput(call.id, getter.result())
+                        else:
+                            getter.cancel()
+                    result = runner.result()
+                finally:
+                    if not runner.done():
+                        runner.cancel()
             else:
                 result = ToolResult(f"Denied: {verdict.reason}", is_error=True)
         except Interrupted:
             result = ToolResult(_ABORTED, is_error=True)
         yield self._finish(call, result)
 
-    async def _invoke(self, prepared: PreparedCall, cancel: asyncio.Event) -> ToolResult:
+    async def _invoke(
+        self, prepared: PreparedCall, cancel: asyncio.Event, ctx: ToolCtx
+    ) -> ToolResult:
         try:
-            return await interruptible(
-                prepared.execute(self._tool_ctx), cancel, self._limits.tool_timeout_s
-            )
+            return await interruptible(prepared.execute(ctx), cancel, self._limits.tool_timeout_s)
         except TimedOut:
             return ToolResult("Tool timed out", is_error=True)
         except (ToolError, SandboxError, OSError, UnicodeDecodeError) as error:

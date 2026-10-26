@@ -29,6 +29,12 @@ class ToolStart:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolOutput:
+    call_id: str
+    chunk: str
+
+
+@dataclass(frozen=True, slots=True)
 class ToolEnd:
     call_id: str
     result: ToolResult
@@ -53,5 +59,13 @@ class RunEnd:
 
 
 AgentEvent = (
-    MessageStart | MessageDelta | MessageEnd | ToolStart | ToolEnd | Compacted | Delivered | RunEnd
+    MessageStart
+    | MessageDelta
+    | MessageEnd
+    | ToolStart
+    | ToolOutput
+    | ToolEnd
+    | Compacted
+    | Delivered
+    | RunEnd
 )

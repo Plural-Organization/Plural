@@ -4,6 +4,7 @@ from typing import Final
 from pydantic import Field
 
 from plural.agent.tools.base import ToolArgs, ToolCtx, ToolResult, ToolSpec, TypedTool
+from plural.agent.tools.streaming import LineStream
 from plural.agent.tools.truncation import truncate_tail
 from plural.protocol.models import ToolRisk
 
@@ -31,9 +32,17 @@ class BashTool(TypedTool[BashArgs]):
         return args.command
 
     async def run(self, args: BashArgs, ctx: ToolCtx) -> ToolResult:
-        result = await ctx.backend.run(
-            args.command, cwd=ctx.workspace.root, env=sandbox_env(), timeout=args.timeout_s
-        )
+        stream = LineStream(ctx.emit)
+        try:
+            result = await ctx.backend.run(
+                args.command,
+                cwd=ctx.workspace.root,
+                env=sandbox_env(),
+                timeout=args.timeout_s,
+                on_output=stream.feed,
+            )
+        finally:
+            stream.flush()
         if result.timed_out:
             return ToolResult(f"[timed out after {args.timeout_s:g}s]", is_error=True)
         body = truncate_tail(result.output)

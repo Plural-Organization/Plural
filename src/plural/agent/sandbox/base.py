@@ -1,4 +1,4 @@
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final, Protocol, Self
@@ -35,9 +35,18 @@ class DirEntry:
     is_dir: bool
 
 
+OutputSink = Callable[[str], None]
+
+
 class ExecutionBackend(Protocol):
     async def run(
-        self, command: str, *, cwd: Path, env: Mapping[str, str], timeout: float
+        self,
+        command: str,
+        *,
+        cwd: Path,
+        env: Mapping[str, str],
+        timeout: float,
+        on_output: OutputSink | None = None,
     ) -> ProcResult: ...
 
     async def read_file(self, path: Path) -> bytes: ...

@@ -35,11 +35,16 @@ class FileLocks:
         return self._locks.setdefault(path, asyncio.Lock())
 
 
+def _discard(_text: str) -> None:
+    return None
+
+
 @dataclass(frozen=True, slots=True)
 class ToolCtx:
     workspace: Workspace
     backend: ExecutionBackend
     locks: FileLocks = field(default_factory=FileLocks)
+    emit: Callable[[str], None] = _discard
 
 
 @dataclass(frozen=True, slots=True)

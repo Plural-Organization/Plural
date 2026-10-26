@@ -86,6 +86,7 @@ from plural.protocol.events import (
     SessionSnapshot,
     SessionWelcome,
     ToolEnded,
+    ToolOutput,
     ToolStarted,
 )
 from plural.protocol.models import (
@@ -483,6 +484,8 @@ class SessionActor:
                 )
             case agent.ToolStart(call=call):
                 await self._emit(ToolStarted(run_id=run_id, call=call))
+            case agent.ToolOutput(call_id=call_id, chunk=chunk):
+                await self._emit(ToolOutput(call_id=call_id, chunk=chunk))
             case agent.ToolEnd(call_id=call_id, result=result):
                 await self._emit(
                     ToolEnded(

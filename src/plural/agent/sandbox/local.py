@@ -1,16 +1,23 @@
 import asyncio
+import codecs
 import os
 import signal
 from collections.abc import Mapping
 from contextlib import suppress
 from pathlib import Path
 
-from plural.agent.sandbox.base import IGNORED_DIRECTORIES, DirEntry, ProcResult
+from plural.agent.sandbox.base import IGNORED_DIRECTORIES, DirEntry, OutputSink, ProcResult
 
 
 class LocalBackend:
     async def run(
-        self, command: str, *, cwd: Path, env: Mapping[str, str], timeout: float
+        self,
+        command: str,
+        *,
+        cwd: Path,
+        env: Mapping[str, str],
+        timeout: float,
+        on_output: OutputSink | None = None,
     ) -> ProcResult:
         process = await asyncio.create_subprocess_exec(
             "bash",
@@ -23,8 +30,9 @@ class LocalBackend:
             stderr=asyncio.subprocess.STDOUT,
             start_new_session=True,
         )
+        collected: list[str] = []
         try:
-            output, _ = await asyncio.wait_for(process.communicate(), timeout)
+            await asyncio.wait_for(_collect(process, collected, on_output), timeout)
         except TimeoutError:
             _kill_group(process)
             await process.wait()
@@ -32,7 +40,7 @@ class LocalBackend:
         except asyncio.CancelledError:
             _kill_group(process)
             raise
-        return ProcResult(exit_code=process.returncode or 0, output=output.decode(errors="replace"))
+        return ProcResult(exit_code=process.returncode or 0, output="".join(collected))
 
     async def read_file(self, path: Path) -> bytes:
         return await asyncio.to_thread(path.read_bytes)
@@ -45,6 +53,23 @@ class LocalBackend:
 
     async def walk(self, root: Path, *, limit: int) -> list[Path]:
         return await asyncio.to_thread(_walk, root, limit)
+
+
+async def _collect(
+    process: asyncio.subprocess.Process, collected: list[str], on_output: OutputSink | None
+) -> None:
+    assert process.stdout is not None
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    while chunk := await process.stdout.read(4096):
+        text = decoder.decode(chunk)
+        if text:
+            collected.append(text)
+            if on_output is not None:
+                on_output(text)
+    tail = decoder.decode(b"", final=True)
+    if tail:
+        collected.append(tail)
+    await process.wait()
 
 
 def _kill_group(process: asyncio.subprocess.Process) -> None:

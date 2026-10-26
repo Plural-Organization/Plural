@@ -12,6 +12,8 @@ Relay framing (`src/plural/protocol/relay.py`): host opens `/host/{room}` with `
 
 Prompt mode: `session.set_prompt_mode` (host only) appends `session.prompt_mode_changed`; `SessionState.prompt_mode` is `open` (participant prompts go straight to the agent) or `review` (they become proposals). See ADR 0004.
 
+Live output: while `bash` runs, the host broadcasts the transient `tool.output` with whole lines (batched at most every 100 ms, at most 64 KB per call) after redaction; `tool.ended` still carries the complete output. Clients show the tail and must not rely on receiving every chunk.
+
 Queue: a prompt accepted while a run is active is appended to `SessionState.queue` (`prompt.accepted` with an active run) and leaves it with `prompt.dequeued` and a reason: `delivered` when the agent takes it, `cancelled` when the author or the host removes it with `queue.cancel`, `dropped` when the run is aborted or the host restarts.
 
 Presence: `presence.typing` (host and participants) announces that the sender is composing a prompt. The host broadcasts the transient `participant.typing`, never stores it, repeats nothing while the state is unchanged, ends it when the prompt is accepted, the sender leaves or six seconds pass without a refresh, and lists who is typing in `session.snapshot.typing`.
