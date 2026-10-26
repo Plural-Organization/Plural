@@ -16,6 +16,7 @@ export const COMMANDS: CommandHint[] = [
   { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
   { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
   { name: "cancel", usage: "/cancel <n>", description: "remove a queued prompt (yours, or any as host)" },
+  { name: "settings", usage: "/settings", description: "theme, prompt mode and other preferences" },
   { name: "copy", usage: "/copy", description: "copy the last reply to the clipboard" },
   { name: "quit", usage: "/quit", description: "leave the session" },
 ];

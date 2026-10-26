@@ -52,31 +52,35 @@ export interface Span {
   italic?: boolean;
 }
 
-const STYLES: Record<string, Omit<Span, "text">> = {
-  keyword: { color: theme.code },
-  built_in: { color: theme.info },
-  type: { color: theme.info },
-  literal: { color: theme.warn },
-  number: { color: theme.warn },
-  string: { color: theme.ok },
-  regexp: { color: theme.ok },
-  symbol: { color: theme.ok },
-  comment: { color: theme.dim, italic: true },
-  doctag: { color: theme.dim, italic: true },
-  title: { color: theme.accent },
-  function: { color: theme.accent },
-  class: { color: theme.info },
-  attr: { color: theme.info },
-  attribute: { color: theme.info },
-  property: { color: theme.info },
-  variable: { color: theme.text },
-  meta: { color: theme.dim },
-  addition: { color: theme.ok },
-  deletion: { color: theme.danger },
-  section: { color: theme.accent, bold: true },
-  tag: { color: theme.code },
-  name: { color: theme.code },
-};
+type Style = Omit<Span, "text">;
+
+function styles(): Record<string, Style> {
+  return {
+    keyword: { color: theme.code },
+    built_in: { color: theme.info },
+    type: { color: theme.info },
+    literal: { color: theme.warn },
+    number: { color: theme.warn },
+    string: { color: theme.ok },
+    regexp: { color: theme.ok },
+    symbol: { color: theme.ok },
+    comment: { color: theme.dim, italic: true },
+    doctag: { color: theme.dim, italic: true },
+    title: { color: theme.accent },
+    function: { color: theme.accent },
+    class: { color: theme.info },
+    attr: { color: theme.info },
+    attribute: { color: theme.info },
+    property: { color: theme.info },
+    variable: { color: theme.text },
+    meta: { color: theme.dim },
+    addition: { color: theme.ok },
+    deletion: { color: theme.danger },
+    section: { color: theme.accent, bold: true },
+    tag: { color: theme.code },
+    name: { color: theme.code },
+  };
+}
 
 const ENTITIES: Record<string, string> = { "&lt;": "<", "&gt;": ">", "&amp;": "&", "&quot;": '"', "&#x27;": "'", "&#39;": "'" };
 
@@ -84,10 +88,10 @@ function unescape(text: string): string {
   return text.replace(/&(lt|gt|amp|quot|#x27|#39);/g, (entity) => ENTITIES[entity] ?? entity);
 }
 
-function styleFor(stack: string[]): Omit<Span, "text"> {
+function styleFor(stack: string[], table: Record<string, Style>): Style {
   for (let index = stack.length - 1; index >= 0; index -= 1) {
     const name = (stack[index] ?? "").replace(/^hljs-/, "").split(/[\s_]/)[0] ?? "";
-    const style = STYLES[name] ?? STYLES[(stack[index] ?? "").replace(/^hljs-/, "")];
+    const style = table[name] ?? table[(stack[index] ?? "").replace(/^hljs-/, "")];
     if (style) {
       return style;
     }
@@ -98,12 +102,13 @@ function styleFor(stack: string[]): Omit<Span, "text"> {
 function spans(html: string): Span[] {
   const result: Span[] = [];
   const stack: string[] = [];
+  const table = styles();
   const pattern = /<span class="([^"]*)">|<\/span>|([^<]+)/g;
   for (const match of html.matchAll(pattern)) {
     if (match[1] !== undefined) {
       stack.push(match[1].split(" ")[0] ?? "");
     } else if (match[2] !== undefined) {
-      result.push({ text: unescape(match[2]), ...styleFor(stack) });
+      result.push({ text: unescape(match[2]), ...styleFor(stack, table) });
     } else {
       stack.pop();
     }

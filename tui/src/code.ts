@@ -11,14 +11,13 @@ import {
 import { highlightLines } from "./lib/highlight";
 import { theme } from "./theme";
 
-const FALLBACK = RGBA.fromHex(theme.text);
-
 export function chunks(code: string, language: string | undefined): TextChunk[] {
+  const fallback = RGBA.fromHex(theme.text);
   const lines = highlightLines(code.replace(/\n$/, ""), language);
   const result: TextChunk[] = [];
   lines.forEach((spans, index) => {
     if (index > 0) {
-      result.push({ __isChunk: true, text: "\n", fg: FALLBACK });
+      result.push({ __isChunk: true, text: "\n", fg: fallback });
     }
     for (const span of spans) {
       let attributes = 0;
@@ -31,7 +30,7 @@ export function chunks(code: string, language: string | undefined): TextChunk[] 
       result.push({
         __isChunk: true,
         text: span.text,
-        fg: span.color ? RGBA.fromHex(span.color) : FALLBACK,
+        fg: span.color ? RGBA.fromHex(span.color) : fallback,
         attributes,
       });
     }

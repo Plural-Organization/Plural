@@ -1,5 +1,5 @@
 import { label, type Participant, type Projection } from "@plural/client";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { colorFor, theme } from "../theme";
 import { truncate } from "../lib/wrap";
 import type { InboxItem } from "./Inbox";
@@ -35,6 +35,7 @@ function ParticipantRow({ participant, name, me, typing }: { participant: Partic
 }
 
 interface SidebarProps {
+  onSettings: () => void;
   projection: Projection;
   room: string;
   inbox: InboxItem[];
@@ -42,8 +43,9 @@ interface SidebarProps {
   status: string;
 }
 
-export function Sidebar({ projection, room, inbox, running, status }: SidebarProps) {
+export function Sidebar({ projection, room, inbox, running, status, onSettings }: SidebarProps) {
   const state = projection.state;
+  const [hover, setHover] = useState(false);
   const elapsed = useElapsed(running);
   const rank = (participant: Participant): number =>
     participant.id === projection.meId ? 0 : participant.role === "host" ? 1 : participant.connected ? 2 : 3;
@@ -109,15 +111,27 @@ export function Sidebar({ projection, room, inbox, running, status }: SidebarPro
         <text fg={theme.dim}>
           prompts <span fg={state.prompt_mode === "open" ? theme.ok : theme.warn}>{state.prompt_mode}</span>
         </text>
+        <text fg={theme.dim}>{truncate(projection.agent || "agent", SIDEBAR_WIDTH - 4)}</text>
         <text fg={theme.dim}>
-          agent{"  "}
+          {"  "}
           {running ? <Spinner color={theme.info} /> : null}
           <span fg={running ? theme.info : theme.dim}>{running ? ` working ${elapsed}s` : "idle"}</span>
         </text>
         {running ? <text fg={theme.dim}>  {truncate(brief(status), SIDEBAR_WIDTH - 8)}</text> : null}
       </Section>
       <box flexGrow={1} />
-      <text fg={theme.dim}>ctrl+b hide panel</text>
+      <box
+        border
+        borderStyle="rounded"
+        borderColor={hover ? theme.accent : theme.line}
+        paddingX={1}
+        onMouseDown={onSettings}
+        onMouseOver={() => setHover(true)}
+        onMouseOut={() => setHover(false)}
+      >
+        <text fg={hover ? theme.accent : theme.text}>⚙  settings</text>
+      </box>
+      <text fg={theme.dim}>f2 settings · ctrl+b</text>
     </box>
   );
 }

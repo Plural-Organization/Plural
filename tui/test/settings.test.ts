@@ -1,0 +1,59 @@
+import { afterEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DEFAULT_SETTINGS, loadSettings, parseSettings, saveSettings, settingsPath } from "../src/settings";
+import { THEME_NAMES, THEMES, colorFor, setTheme, theme } from "../src/theme";
+
+afterEach(() => setTheme("tokyo"));
+
+describe("settings", () => {
+  test("missing, broken or foreign files fall back to the defaults", () => {
+    const directory = mkdtempSync(join(tmpdir(), "plural-settings-"));
+    expect(loadSettings(join(directory, "absent.json"))).toEqual(DEFAULT_SETTINGS);
+    writeFileSync(join(directory, "broken.json"), "{not json");
+    expect(loadSettings(join(directory, "broken.json"))).toEqual(DEFAULT_SETTINGS);
+    expect(parseSettings(null)).toEqual(DEFAULT_SETTINGS);
+    expect(parseSettings({ theme: "neon", panel: "yes", bell: 1 })).toEqual(DEFAULT_SETTINGS);
+  });
+
+  test("valid values are kept and saving round-trips", () => {
+    const directory = mkdtempSync(join(tmpdir(), "plural-settings-"));
+    const path = join(directory, "nested", "tui.json");
+    const chosen = { theme: "gruvbox", panel: false, copyOnSelect: false, bell: true, announceTyping: false } as const;
+    saveSettings(chosen, path);
+    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(chosen);
+    expect(loadSettings(path)).toEqual(chosen);
+  });
+
+  test("the file lives in the data directory", () => {
+    expect(settingsPath({ PLURAL_DATA_DIR: "/data" })).toBe("/data/tui.json");
+    expect(settingsPath({})).toEndWith("/.plural/tui.json");
+  });
+});
+
+describe("themes", () => {
+  test("every theme defines every colour as a hex value", () => {
+    const keys = Object.keys(THEMES.tokyo.colors).sort();
+    for (const name of THEME_NAMES) {
+      const colors = THEMES[name].colors;
+      expect(Object.keys(colors).sort()).toEqual(keys);
+      for (const [key, value] of Object.entries(colors)) {
+        if (key === "people") {
+          expect((value as string[]).length).toBe(8);
+        } else {
+          expect(value).toMatch(/^#[0-9a-f]{6}$/);
+        }
+      }
+    }
+  });
+
+  test("switching changes the live palette and the colour of a person", () => {
+    const before = colorFor("p_alia");
+    setTheme("light");
+    expect(theme.bg).toBe(THEMES.light.colors.bg);
+    expect(colorFor("p_alia")).not.toBe(before);
+    setTheme("tokyo");
+    expect(colorFor("p_alia")).toBe(before);
+  });
+});

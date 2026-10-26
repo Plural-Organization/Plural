@@ -68,6 +68,13 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
   const note = (tone: Tone, text: string): Feed => withNotice(feed, tone, text);
 
   switch (event.type) {
+    case "session.welcome":
+      return event.agent.startsWith("demo")
+        ? note(
+            "warn",
+            "demo agent: it follows a fixed script, so any text just lists the folder and `$ cmd` runs a command.\nFor a real model set ANTHROPIC_API_KEY, or PLURAL_PROVIDER=openai with PLURAL_MODEL and PLURAL_BASE_URL.",
+          )
+        : feed;
     case "session.snapshot":
       return loadHistory(feed, event.state, event.streaming);
     case "participant.joined":

@@ -15,19 +15,23 @@ import { COMMANDS, helpText } from "./commands";
 import { FeedItemView } from "./components/Cards";
 import { Composer } from "./components/Composer";
 import { Inbox, inboxItems } from "./components/Inbox";
+import { cycleTheme, settingsRows, SettingsDialog, type RowId } from "./components/SettingsDialog";
 import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import { copyToClipboard } from "./lib/clipboard";
 import { createSyntaxStyle } from "./syntax";
-import { theme } from "./theme";
+import { DEFAULT_SETTINGS, type Settings } from "./settings";
+import { setTheme, theme } from "./theme";
 
 export interface AppProps {
   client: Session;
   room: string;
   version: string;
   guestLink: string | null;
+  settings?: Settings;
+  onSettings?: (settings: Settings) => void;
   onQuit: () => void;
 }
 
@@ -38,9 +42,18 @@ const MIN_WIDTH_FOR_PANEL = 90;
 const TYPING_REFRESH_MS = 3000;
 const TYPING_IDLE_MS = 2500;
 
-export function App({ client, room, version, guestLink, onQuit }: AppProps) {
+export function App({ client, room, version, guestLink, settings: initialSettings, onSettings, onQuit }: AppProps) {
   const renderer = useRenderer();
-  const syntax = useMemo(() => createSyntaxStyle(renderer), [renderer]);
+  const [settings, setSettings] = useState<Settings>(initialSettings ?? DEFAULT_SETTINGS);
+  setTheme(settings.theme);
+  const syntax = useMemo(() => createSyntaxStyle(renderer), [renderer, settings.theme]);
+  const [dialog, setDialog] = useState(false);
+  const [row, setRow] = useState(0);
+  const rowRef = useRef(0);
+  const selectRow = (index: number): void => {
+    rowRef.current = index;
+    setRow(index);
+  };
   const { width, height } = useTerminalDimensions();
   const initial = useMemo(() => withBanner(emptyFeed(), { kind: "banner", id: "banner", room, version, guestLink }), []);
   const [feed, setFeed] = useState<Feed>(initial);
@@ -52,7 +65,6 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
   const [editing, setEditing] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
-  const [panel, setPanel] = useState(true);
   const [, bump] = useReducer((value: number) => value + 1, 0);
   const scroll = useRef<ScrollBoxRenderable>(null);
   const armed = useRef(false);
@@ -63,6 +75,10 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
   const typingSent = useRef(0);
   const typingIdle = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const change = (next: Settings): void => {
+    setSettings(next);
+    onSettings?.(next);
+  };
   const commit = (next: Feed): void => {
     feedRef.current = next;
     setFeed(next);
@@ -117,6 +133,14 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
     }
   }, [items.length, approvals]);
 
+  const seenInbox = useRef(0);
+  useEffect(() => {
+    if (settings.bell && isHost && items.length > seenInbox.current) {
+      process.stdout.write("\u0007");
+    }
+    seenInbox.current = items.length;
+  }, [items.length]);
+
   useEffect(() => {
     if (approvals === 0) {
       return;
@@ -129,7 +153,7 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
     client.send(command).catch((error: unknown) => notify("danger", error instanceof Error ? error.message : String(error)));
   };
 
-  const canType = me !== undefined && me.role !== "viewer";
+  const canType = me !== undefined && me.role !== "viewer" && settings.announceTyping;
 
   const stopTyping = (): void => {
     if (typingIdle.current) {
@@ -213,6 +237,9 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
       case "invite":
         send({ type: "invite.create", role: rest[0] === "viewer" ? "viewer" : "participant", ttl_s: 3600 });
         return true;
+      case "settings":
+        setDialog(true);
+        return true;
       case "copy":
         copyReply();
         return true;
@@ -273,10 +300,69 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
     send({ type: "prompt.submit", text, delivery: "now" });
   };
 
+  const rows = settingsRows(settings, state.prompt_mode, me?.role);
+
+  const apply = (index: number, direction: 1 | -1): void => {
+    const target = rows[index];
+    if (!target || !target.enabled) {
+      return;
+    }
+    const id: RowId = target.id;
+    switch (id) {
+      case "theme":
+        change({ ...settings, theme: cycleTheme(settings.theme, direction) });
+        break;
+      case "prompts":
+        send({ type: "session.set_prompt_mode", mode: state.prompt_mode === "open" ? "review" : "open" });
+        break;
+      case "panel":
+        change({ ...settings, panel: !settings.panel });
+        break;
+      case "copy":
+        change({ ...settings, copyOnSelect: !settings.copyOnSelect });
+        break;
+      case "bell":
+        change({ ...settings, bell: !settings.bell });
+        break;
+      case "typing":
+        if (settings.announceTyping) {
+          stopTyping();
+        }
+        change({ ...settings, announceTyping: !settings.announceTyping });
+        break;
+      case "invite":
+        send({ type: "invite.create", role: "participant", ttl_s: 3600 });
+        break;
+      case "reply":
+        copyReply();
+        break;
+    }
+  };
+
   useKeyboard((key) => {
+    if (key.name === "f2" || (dialog && key.name === "q")) {
+      key.preventDefault();
+      setDialog((open) => !open);
+      return;
+    }
+    if (dialog) {
+      key.preventDefault();
+      if (key.name === "escape") {
+        setDialog(false);
+      } else if (key.name === "up") {
+        selectRow((rowRef.current + rows.length - 1) % rows.length);
+      } else if (key.name === "down") {
+        selectRow((rowRef.current + 1) % rows.length);
+      } else if (key.name === "left") {
+        apply(rowRef.current, -1);
+      } else if (key.name === "right" || key.name === "return" || key.name === "space") {
+        apply(rowRef.current, 1);
+      }
+      return;
+    }
     if (key.ctrl && key.name === "b") {
       key.preventDefault();
-      setPanel((value) => !value);
+      change({ ...settings, panel: !settings.panel });
       return;
     }
     if (key.name === "pageup" || key.name === "pagedown") {
@@ -316,7 +402,7 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
 
   useSelectionHandler((selection) => {
     const text = selection.getSelectedText();
-    if (!text) {
+    if (!text || !settings.copyOnSelect) {
       return;
     }
     if (copying.current) {
@@ -330,12 +416,12 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
       ? "Propose a prompt, the host approves it"
       : "Message the agent, / for commands";
   const disabled = me?.role === "viewer" ? "viewers can only watch the session" : null;
-  const showPanel = panel && width >= MIN_WIDTH_FOR_PANEL;
+  const showPanel = settings.panel && width >= MIN_WIDTH_FOR_PANEL;
 
   return (
     <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg}>
       <box flexDirection="column" flexGrow={1} minWidth={0}>
-        <TopBar room={room} state={state} />
+        <TopBar room={room} state={state} onSettings={() => setDialog(true)} />
         <scrollbox
           ref={scroll}
           stickyScroll
@@ -346,7 +432,7 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
           scrollbarOptions={{ showArrows: false, trackOptions: { foregroundColor: theme.line, backgroundColor: theme.bg } }}
         >
           {feed.items.map((item) => (
-            <FeedItemView key={item.id} item={item} syntax={syntax} />
+            <FeedItemView key={`${item.id}:${settings.theme}`} item={item} syntax={syntax} />
           ))}
         </scrollbox>
         {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} /> : null}
@@ -359,7 +445,7 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
           </box>
         ) : null}
         <Composer
-          focused={focus === "composer"}
+          focused={focus === "composer" && !dialog}
           disabled={disabled}
           placeholder={placeholder}
           role={me?.role}
@@ -382,7 +468,20 @@ export function App({ client, room, version, guestLink, onQuit }: AppProps) {
         />
         <StatusBar me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
       </box>
-      {showPanel ? <Sidebar projection={projection} room={room} inbox={items} running={running} status={runStatus} /> : null}
+      {dialog ? (
+        <SettingsDialog
+          rows={rows}
+          selected={row}
+          width={width}
+          height={height}
+          agent={projection.agent}
+          room={room}
+          onSelect={selectRow}
+          onChange={apply}
+          onClose={() => setDialog(false)}
+        />
+      ) : null}
+      {showPanel ? <Sidebar projection={projection} room={room} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} /> : null}
     </box>
   );
 }

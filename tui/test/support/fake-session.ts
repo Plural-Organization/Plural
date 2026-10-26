@@ -34,6 +34,7 @@ export class FakeSession implements Session {
       this.projection.load(event.state, event.streaming, event.typing);
     } else if (event.type === "session.welcome") {
       this.projection.meId = event.participant.id;
+      this.projection.agent = event.agent;
     } else if (!event.type.startsWith("invite.") && event.type !== "error") {
       this.seq += 1;
       const record: EventRecord = { seq: this.seq, id: `e${this.seq}`, ts: new Date().toISOString(), actor_id: null, event };

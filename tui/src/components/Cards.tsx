@@ -17,7 +17,7 @@ const TONES: Record<Tone, { color: string; mark: string }> = {
 
 const OUTPUT_LINES = 6;
 
-const TABLE = { widthMode: "content", cellPaddingY: 0, borderStyle: "rounded", borderColor: theme.line } as const;
+const table = () => ({ widthMode: "content", cellPaddingY: 0, borderStyle: "rounded", borderColor: theme.line }) as const;
 
 export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }) {
   return (
@@ -68,7 +68,7 @@ export function AssistantCard({ item, syntax }: { item: Extract<FeedItem, { kind
         </span>
       </text>
       <box paddingLeft={2}>
-        <markdown content={item.text} syntaxStyle={syntax} streaming={item.streaming} renderNode={renderNode} tableOptions={TABLE} />
+        <markdown content={item.text} syntaxStyle={syntax} streaming={item.streaming} renderNode={renderNode} tableOptions={table()} />
       </box>
     </box>
   );

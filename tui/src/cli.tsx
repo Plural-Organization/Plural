@@ -5,6 +5,7 @@ import { createRoot } from "@opentui/react";
 import { parseLink, SessionClient } from "@plural/client";
 import pkg from "../package.json" with { type: "json" };
 import { App } from "./App";
+import { loadSettings, saveSettings } from "./settings";
 import { HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
 
 const USAGE = `plural ${pkg.version}
@@ -96,6 +97,8 @@ async function main(): Promise<void> {
         room={room}
         version={pkg.version}
         guestLink={guestLink}
+        settings={loadSettings()}
+        onSettings={saveSettings}
         onQuit={() => {
           resolve();
         }}

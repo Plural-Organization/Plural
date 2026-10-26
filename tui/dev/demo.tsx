@@ -14,7 +14,7 @@ const dan = person("p_dan", "dan", "participant", false);
 const direct = (p: typeof vlad) => ({ initiator_id: p.id, initiator_role: p.role, origin: "direct" }) as const;
 const usage = { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 };
 
-fake.emit({ type: "session.welcome", room: "r_01M5W7ACDDJR7954MF354JW85W", token: "t", participant: vlad, base_policy: [] });
+fake.emit({ type: "session.welcome", room: "r_01M5W7ACDDJR7954MF354JW85W", token: "t", participant: vlad, base_policy: [], agent: "anthropic · claude-opus-5-5" });
 for (const p of [vlad, alia, bek, cleo, dan]) {
   fake.emit({ type: "participant.joined", participant: p });
 }

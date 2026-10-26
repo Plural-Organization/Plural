@@ -73,7 +73,7 @@ describe("feed", () => {
     });
     const { feed } = replay(
       joined(HOST),
-      { type: "session.welcome", room: "r", token: "t", participant: HOST, base_policy: [] },
+      { type: "session.welcome", room: "r", token: "t", participant: HOST, base_policy: [], agent: "" },
       request("ap1"),
       { type: "approval.resolved", approval_id: "ap1", decision: "once", resolved_by: "p_host" },
       request("ap2"),
