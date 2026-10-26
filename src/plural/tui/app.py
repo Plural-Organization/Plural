@@ -70,7 +70,7 @@ class PluralApp(App[None]):
             with Vertical(id="side"):
                 yield self._participants
                 yield self._proposals
-        yield Input(placeholder="Message the agent (participants send proposals)", id="prompt")
+        yield Input(placeholder="Message the agent", id="prompt")
         yield Footer()
 
     def on_mount(self) -> None:

@@ -19,7 +19,7 @@ from plural.client.reconnect import JoinLink, SessionClient
 from plural.host.bootstrap import ConfigError, build_host, build_provider, resolve_api_key
 from plural.host.config import HostSettings
 from plural.protocol.commands import ClientInfo
-from plural.protocol.models import Role
+from plural.protocol.models import PromptMode, Role
 from plural.relay.app import create_app
 from plural.storage.jsonl_export import export_jsonl
 from plural.storage.sqlite_store import SqliteEventStore
@@ -40,6 +40,10 @@ def host(
     public_url: Annotated[str | None, typer.Option(help="Public ws(s) URL for links.")] = None,
     room: Annotated[str | None, typer.Option(help="Resume an existing room.")] = None,
     name: Annotated[str, typer.Option(help="Host display name.")] = getpass.getuser(),
+    prompts: Annotated[
+        PromptMode | None,
+        typer.Option(help="open: participants prompt directly; review: the host approves them."),
+    ] = None,
     headless: Annotated[bool, typer.Option(help="Run without the TUI.")] = False,
 ) -> None:
     settings = HostSettings(
@@ -50,6 +54,7 @@ def host(
         public_url=public_url,
         room=room,
         host_name=name,
+        prompt_mode=prompts,
     )
     try:
         asyncio.run(_host(settings, headless=headless))

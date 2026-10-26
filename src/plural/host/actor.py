@@ -44,6 +44,7 @@ from plural.protocol.commands import (
     ParticipantSetRole,
     PolicyAdd,
     PolicyRemove,
+    PromptModeSet,
     PromptSubmit,
     ProposalDecide,
     RunAbort,
@@ -66,6 +67,7 @@ from plural.protocol.events import (
     PolicyRuleAdded,
     PolicyRuleRemoved,
     PromptAccepted,
+    PromptModeChanged,
     ProposalApproved,
     RunEnded,
     RunStarted,
@@ -81,6 +83,7 @@ from plural.protocol.models import (
     AttachmentMeta,
     Delivery,
     Participant,
+    PromptMode,
     Provenance,
     Role,
     RunEndReason,
@@ -110,6 +113,7 @@ class SessionActor:
         clock: Clock,
         host: Participant,
         max_attachment_bytes: int,
+        prompt_mode: PromptMode | None = None,
     ) -> None:
         self._inbox = inbox
         self._store = store
@@ -125,6 +129,7 @@ class SessionActor:
         self._clock = clock
         self._host = host
         self._max_attachment_bytes = max_attachment_bytes
+        self._initial_mode = prompt_mode
         self._state = SessionState()
         self._streaming: dict[str, str] = {}
         self._timers: dict[str, asyncio.TimerHandle] = {}
@@ -152,6 +157,8 @@ class SessionActor:
                 await self._emit(ParticipantLeft(participant_id=participant.id))
         if self._host.id not in self._state.participants:
             await self._emit(ParticipantJoined(participant=self._host), actor_id=self._host.id)
+        if self._initial_mode is not None:
+            await self._set_prompt_mode(self._initial_mode, actor_id=self._host.id)
 
     async def run(self) -> None:
         while True:
@@ -238,6 +245,8 @@ class SessionActor:
                 self._agent.abort()
             case ContextCompact():
                 self._agent.request_compaction()
+            case PromptModeSet():
+                await self._set_prompt_mode(command.mode, actor_id=participant.id)
             case PolicyAdd():
                 added = policies.add(
                     self._state,
@@ -313,7 +322,7 @@ class SessionActor:
         return participant
 
     async def _submit(self, participant: Participant, command: PromptSubmit) -> None:
-        if participant.role is Role.HOST:
+        if participant.role is Role.HOST or self._state.prompt_mode is PromptMode.OPEN:
             proposals.ensure_attachments(self._state, command.attachments)
             await self._accept(
                 participant,
@@ -327,6 +336,10 @@ class SessionActor:
             self._state, proposal_id=self._ids.new("pr_"), author_id=participant.id, command=command
         )
         await self._emit(created, actor_id=participant.id)
+
+    async def _set_prompt_mode(self, mode: PromptMode, *, actor_id: str) -> None:
+        if mode is not self._state.prompt_mode:
+            await self._emit(PromptModeChanged(mode=mode), actor_id=actor_id)
 
     async def _decide(self, participant: Participant, command: ProposalDecide) -> None:
         proposal = self._state.proposals.get(command.proposal_id)

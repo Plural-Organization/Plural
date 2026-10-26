@@ -30,7 +30,7 @@ from plural.protocol.events import (
     SessionWelcome,
     ToolEnded,
 )
-from plural.protocol.models import ApprovalDecision, Origin, ProposalDecision, Role
+from plural.protocol.models import ApprovalDecision, Origin, PromptMode, ProposalDecision, Role
 
 CLIENT = ClientInfo(kind="test", version="0")
 
@@ -85,7 +85,12 @@ async def host(tmp_path: Path) -> AsyncIterator[Host]:
     workspace.mkdir()
     (workspace / "notes.txt").write_text("hello from notes\n")
     provider = FakeProvider([use_tool("bash", command="cat notes.txt"), reply("All good.")])
-    settings = HostSettings(workspace=workspace, data_dir=tmp_path / "data", room="r_test")
+    settings = HostSettings(
+        workspace=workspace,
+        data_dir=tmp_path / "data",
+        room="r_test",
+        prompt_mode=PromptMode.REVIEW,
+    )
     plural_host = await build_host(settings, provider=provider)
     task = asyncio.create_task(plural_host.actor.run())
     yield plural_host

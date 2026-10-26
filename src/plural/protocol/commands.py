@@ -7,6 +7,7 @@ from plural.protocol.models import (
     Delivery,
     Model,
     PolicyAction,
+    PromptMode,
     ProposalDecision,
     Role,
 )
@@ -79,6 +80,11 @@ class ContextCompact(Model):
     type: Literal["context.compact"] = "context.compact"
 
 
+class PromptModeSet(Model):
+    type: Literal["session.set_prompt_mode"] = "session.set_prompt_mode"
+    mode: PromptMode
+
+
 class PolicyAdd(Model):
     type: Literal["policy.add"] = "policy.add"
     tool: str = Field(min_length=1, max_length=40)
@@ -109,6 +115,7 @@ Command = Annotated[
     | ParticipantSetRole
     | ParticipantRevoke
     | ContextCompact
+    | PromptModeSet
     | PolicyAdd
     | PolicyRemove
     | FileAttach,

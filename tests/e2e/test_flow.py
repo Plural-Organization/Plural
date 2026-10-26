@@ -39,9 +39,9 @@ async def run_to_completion(session: Session) -> tuple[Watcher, Watcher]:
     return owner, guest
 
 
-async def test_guest_proposal_needs_host_decisions(session: Session) -> None:
-    owner = await session.owner()
-    guest = await session.guest("Alia")
+async def test_guest_proposal_needs_host_decisions(review_session: Session) -> None:
+    owner = await review_session.owner()
+    guest = await review_session.guest("Alia")
 
     await guest.client.send(PromptSubmit(text="check the notes"))
     proposal = (await owner.next(ProposalCreated)).proposal
@@ -75,15 +75,15 @@ async def test_guest_proposal_needs_host_decisions(session: Session) -> None:
     assert (await guest.next(RunEnded)).error is None
 
 
-async def test_every_client_converges_on_the_same_state(session: Session) -> None:
-    owner, guest = await run_to_completion(session)
+async def test_every_client_converges_on_the_same_state(review_session: Session) -> None:
+    owner, guest = await run_to_completion(review_session)
     assert owner.client.projection.state.transcript == guest.client.projection.state.transcript
     assert owner.client.projection.state.run is None
 
 
-async def test_late_joiner_sees_tool_output_in_history(session: Session) -> None:
-    await run_to_completion(session)
-    late = await session.guest("Cleo")
+async def test_late_joiner_sees_tool_output_in_history(review_session: Session) -> None:
+    await run_to_completion(review_session)
+    late = await review_session.guest("Cleo")
     lines = history(late.client.projection.state)
     assert Line("bold", "Alia › check the notes") in lines
     assert any(line.text.startswith("⚙ bash cat notes.txt ✓") for line in lines)

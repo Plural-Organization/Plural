@@ -38,9 +38,11 @@ def shown(app: PluralApp) -> str:
     return "\n".join(strip.text for strip in transcript.lines)
 
 
-async def test_host_reviews_proposal_and_approves_tool(session: Session) -> None:
-    guest = await session.guest("Bek")
-    client = SessionClient(JoinLink.parse(session.host.host_link), name="Host", client=CLIENT)
+async def test_host_reviews_proposal_and_approves_tool(review_session: Session) -> None:
+    guest = await review_session.guest("Bek")
+    client = SessionClient(
+        JoinLink.parse(review_session.host.host_link), name="Host", client=CLIENT
+    )
     app = PluralApp(client)
     async with app.run_test(size=(140, 40)) as pilot:
         await until(pilot, lambda: client.projection.me is not None)

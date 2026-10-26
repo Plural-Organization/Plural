@@ -2,7 +2,8 @@
 
 | threat | mitigation in code |
 |---|---|
-| guest runs commands on host | guests only create proposals; host approves (`core/roles.py`, `host/actor.py`) |
+| guest runs commands on host | tool calls always need host approval; a run containing a guest prompt is tainted in both prompt modes (`core/roles.py`, `core/provenance.py`, `host/actor.py`) |
+| guest floods the agent with prompts or spends the host's budget | `review` mode makes the host approve every prompt; viewers cannot prompt; host aborts with `/abort` |
 | prompt injection via guest | provenance taint forces `ask` for write/exec (`core/policy/engine.py`) |
 | compound shell bypass (`ls; rm`) | allow rules ignored for compound commands → `ask` |
 | session `always` overriding deny | base deny rules are evaluated first and cannot be overridden |

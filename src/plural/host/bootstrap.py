@@ -160,6 +160,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         clock=clock,
         host=host,
         max_attachment_bytes=settings.max_attachment_bytes,
+        prompt_mode=settings.prompt_mode,
     )
     await actor.start()
     transport: HostTransport = (

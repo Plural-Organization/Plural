@@ -9,6 +9,7 @@ from plural.protocol.events import (
     ParticipantJoined,
     ParticipantLeft,
     ParticipantRevoked,
+    PromptModeChanged,
     ProposalApproved,
     ProposalCreated,
     RunEnded,
@@ -20,6 +21,7 @@ from plural.protocol.models import (
     Delivery,
     EntryKind,
     Participant,
+    PromptMode,
     ProposalView,
     Role,
     RunEndReason,
@@ -36,6 +38,18 @@ def fold(*events: Event) -> SessionState:
     for seq, event in enumerate(events, 1):
         state = reduce(state, EventRecord(seq=seq, id=f"e{seq}", ts=TS, actor_id=None, event=event))
     return state
+
+
+def test_prompt_mode_defaults_to_open_and_follows_events() -> None:
+    assert SessionState().prompt_mode is PromptMode.OPEN
+    review = fold(PromptModeChanged(mode=PromptMode.REVIEW))
+    assert review.prompt_mode is PromptMode.REVIEW
+    assert (
+        fold(
+            PromptModeChanged(mode=PromptMode.REVIEW), PromptModeChanged(mode=PromptMode.OPEN)
+        ).prompt_mode
+        is PromptMode.OPEN
+    )
 
 
 def test_participants_lifecycle() -> None:

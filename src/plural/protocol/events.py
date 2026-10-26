@@ -12,6 +12,7 @@ from plural.protocol.models import (
     Model,
     Participant,
     PolicyRuleView,
+    PromptMode,
     ProposalView,
     Provenance,
     Role,
@@ -49,6 +50,11 @@ class ParticipantRoleChanged(EventBase):
 class ParticipantRevoked(EventBase):
     type: Literal["participant.revoked"] = "participant.revoked"
     participant_id: str
+
+
+class PromptModeChanged(EventBase):
+    type: Literal["session.prompt_mode_changed"] = "session.prompt_mode_changed"
+    mode: PromptMode
 
 
 class ProposalCreated(EventBase):
@@ -203,6 +209,7 @@ Event = Annotated[
     | ParticipantLeft
     | ParticipantRoleChanged
     | ParticipantRevoked
+    | PromptModeChanged
     | ProposalCreated
     | ProposalApproved
     | ProposalRejected

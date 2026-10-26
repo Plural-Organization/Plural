@@ -476,6 +476,7 @@
               "proposal.rejected": "#/$defs/ProposalRejected",
               "run.ended": "#/$defs/RunEnded",
               "run.started": "#/$defs/RunStarted",
+              "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
               "session.snapshot": "#/$defs/SessionSnapshot",
               "session.welcome": "#/$defs/SessionWelcome",
               "tool.ended": "#/$defs/ToolEnded",
@@ -496,6 +497,9 @@
             },
             {
               "$ref": "#/$defs/ParticipantRevoked"
+            },
+            {
+              "$ref": "#/$defs/PromptModeChanged"
             },
             {
               "$ref": "#/$defs/ProposalCreated"
@@ -1133,6 +1137,50 @@
       "title": "PromptAccepted",
       "type": "object"
     },
+    "PromptMode": {
+      "enum": [
+        "open",
+        "review"
+      ],
+      "title": "PromptMode",
+      "type": "string"
+    },
+    "PromptModeChanged": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/PromptMode"
+        },
+        "type": {
+          "const": "session.prompt_mode_changed",
+          "default": "session.prompt_mode_changed",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "PromptModeChanged",
+      "type": "object"
+    },
+    "PromptModeSet": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/PromptMode"
+        },
+        "type": {
+          "const": "session.set_prompt_mode",
+          "default": "session.set_prompt_mode",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "title": "PromptModeSet",
+      "type": "object"
+    },
     "PromptSubmit": {
       "properties": {
         "attachments": {
@@ -1593,6 +1641,10 @@
           "title": "Policy",
           "type": "array"
         },
+        "prompt_mode": {
+          "$ref": "#/$defs/PromptMode",
+          "default": "open"
+        },
         "proposals": {
           "additionalProperties": {
             "$ref": "#/$defs/ProposalView"
@@ -1912,7 +1964,8 @@
           "prompt.submit": "#/$defs/PromptSubmit",
           "proposal.decide": "#/$defs/ProposalDecide",
           "run.abort": "#/$defs/RunAbort",
-          "session.hello": "#/$defs/SessionHello"
+          "session.hello": "#/$defs/SessionHello",
+          "session.set_prompt_mode": "#/$defs/PromptModeSet"
         },
         "propertyName": "type"
       },
@@ -1946,6 +1999,9 @@
         },
         {
           "$ref": "#/$defs/ContextCompact"
+        },
+        {
+          "$ref": "#/$defs/PromptModeSet"
         },
         {
           "$ref": "#/$defs/PolicyAdd"
@@ -1986,6 +2042,7 @@
           "proposal.rejected": "#/$defs/ProposalRejected",
           "run.ended": "#/$defs/RunEnded",
           "run.started": "#/$defs/RunStarted",
+          "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
           "session.snapshot": "#/$defs/SessionSnapshot",
           "session.welcome": "#/$defs/SessionWelcome",
           "tool.ended": "#/$defs/ToolEnded",
@@ -2006,6 +2063,9 @@
         },
         {
           "$ref": "#/$defs/ParticipantRevoked"
+        },
+        {
+          "$ref": "#/$defs/PromptModeChanged"
         },
         {
           "$ref": "#/$defs/ProposalCreated"

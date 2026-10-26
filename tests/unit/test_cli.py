@@ -5,8 +5,11 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
+from plural.cli import main
 from plural.cli.main import app
+from plural.host.config import HostSettings
 from plural.protocol.events import ParticipantLeft
+from plural.protocol.models import PromptMode
 from plural.storage.sqlite_store import SqliteEventStore
 
 runner = CliRunner()
@@ -62,3 +65,33 @@ def test_export_writes_one_line_per_event(tmp_path: Path) -> None:
     result = runner.invoke(app, ["export", "r_demo", "--out", str(out)])
     assert result.exit_code == 0
     assert len(out.read_text().splitlines()) == 3
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [
+        ([], None),
+        (["--prompts", "review"], PromptMode.REVIEW),
+        (["--prompts", "open"], PromptMode.OPEN),
+    ],
+)
+def test_host_passes_the_prompt_mode_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    arguments: list[str],
+    expected: PromptMode | None,
+) -> None:
+    seen: list[HostSettings] = []
+
+    async def fake_host(settings: HostSettings, *, headless: bool) -> None:
+        seen.append(settings)
+
+    monkeypatch.setattr(main, "_host", fake_host)
+    result = runner.invoke(app, ["host", "--workspace", str(tmp_path), *arguments])
+    assert result.exit_code == 0
+    assert [settings.prompt_mode for settings in seen] == [expected]
+
+
+def test_host_rejects_an_unknown_prompt_mode(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["host", "--workspace", str(tmp_path), "--prompts", "closed"])
+    assert result.exit_code == 2

@@ -19,7 +19,7 @@ One agent. One host. Everyone in the room.
 
 ---
 
-Plural turns a solo AI agent session into a shared one. The agent runs on the **host's machine** with the **host's API key**. Teammates join from a terminal or a browser, watch the run live, and propose prompts. The host stays in control: every proposal and every risky tool call goes through the host's approval.
+Plural turns a solo AI agent session into a shared one. The agent runs on the **host's machine** with the **host's API key**. Teammates join from a terminal or a browser, watch the run live, and prompt the agent. The host stays in control: every risky tool call goes through the host's approval, and in review mode every prompt does too.
 
 ```text
 ┌────────────┐        ┌──────────────┐        ┌─────────────┐
@@ -34,7 +34,7 @@ Plural turns a solo AI agent session into a shared one. The agent runs on the **
 ## Features
 
 - **Shared live session.** Everyone sees the same transcript, tool calls and diffs as they stream.
-- **Proposals, not prompts.** Guests suggest prompts. The host approves, edits or rejects them.
+- **Two prompt modes.** In `open` mode (default) participants prompt the agent directly. In `review` mode their prompts are proposals that the host approves, edits or rejects. The host switches the mode at any time.
 - **Host-only approvals.** Write and exec actions need host consent. Guest-originated turns are tainted and always ask. Rejected actions are not re-asked: after repeated rejections of the same kind the agent is told to ask the user instead, and "Block (session)" denies a whole command class.
 - **Attribution.** Every turn records who wrote it and who approved it.
 - **Policy engine.** Allow, ask and deny rules with last-match-wins. Base deny rules cannot be overridden.
@@ -96,6 +96,8 @@ The host prints a one-time invite link and opens the TUI. Send the link to a tea
 uv run plural join "ws://127.0.0.1:7777/r_…?invite=…" --name alia
 ```
 
+By default participants prompt the agent directly (`open` mode). To approve every participant prompt yourself, start with `--prompts review`, or switch at any time with `/mode review` and `/mode open`.
+
 The default provider is `fake`, a scripted demo that needs no API key. Plain text lists the workspace. `$ cmd` asks to run `cmd` through `bash` and waits for host approval.
 
 ### Through a relay
@@ -131,7 +133,7 @@ Run `plural <command> --help` for all options.
 | `esc` | Abort the current run |
 | `ctrl+q` | Quit |
 
-Prompt-line commands work in the TUI and in `plural join --plain`: `/abort`, `/compact`, `/policy` (list rules), `/policy allow|ask|deny <tool> <pattern>`, `/policy rm <rule id>`.
+Prompt-line commands work in the TUI and in `plural join --plain`: `/abort`, `/compact`, `/mode open|review`, `/policy` (list rules), `/policy allow|ask|deny <tool> <pattern>`, `/policy rm <rule id>`.
 
 ### Configuration
 
@@ -140,6 +142,7 @@ Every setting can be passed as an environment variable with the `PLURAL_` prefix
 | Variable | Default | Description |
 |---|---|---|
 | `PLURAL_PROVIDER` | `fake` | `fake`, `anthropic` or `openai` |
+| `PLURAL_PROMPT_MODE` | `open` | `open` or `review`; a resumed room keeps its last mode when unset |
 | `PLURAL_MODEL` | `claude-opus-5-5` for `anthropic` | Model id, required for `openai` |
 | `PLURAL_API_KEY` | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Provider API key |
 | `PLURAL_BASE_URL` | provider default | Custom endpoint, e.g. a local OpenAI-compatible server |
@@ -182,7 +185,7 @@ PLURAL_PROVIDER=openai PLURAL_MODEL=qwen2.5-coder PLURAL_BASE_URL=http://localho
 
 1. The **host** starts a session. A `SessionActor` owns the room and processes every command in order: append to the log, reduce state, publish.
 2. A **guest** joins with an invite and receives a signed Ed25519 capability token bound to the room and connection.
-3. The guest **proposes** a prompt. The host approves it, and it enters the agent's queue attributed as `[alia, proposal approved by host]`.
+3. The guest sends a prompt. In `open` mode it enters the agent's queue attributed to the guest. In `review` mode it becomes a proposal, and after the host approves it enters the queue attributed as `[alia, proposal approved by host]`.
 4. The **agent loop** streams the model's reply. Each tool call is prepared, evaluated by the `PolicyGate`, and either runs, waits for the host, or is denied.
 5. Every event goes to the **event log** first and is then fanned out to clients. A client that reconnects asks for events `since` its last `seq`.
 

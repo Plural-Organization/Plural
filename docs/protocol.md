@@ -10,4 +10,6 @@ JSON over WebSocket. Every frame is an `Envelope` (`src/plural/protocol/envelope
 
 Relay framing (`src/plural/protocol/relay.py`): host opens `/host/{room}` with `relay.open` (public key + signature over room id); guests connect to `/{room}`; relay wraps guest frames into `relay.frame{conn,data}` and reports `relay.closed`.
 
+Prompt mode: `session.set_prompt_mode` (host only) appends `session.prompt_mode_changed`; `SessionState.prompt_mode` is `open` (participant prompts go straight to the agent) or `review` (they become proposals). See ADR 0004.
+
 Policy: `policy.add` / `policy.remove` (host only) append `policy.rule_added` / `policy.rule_removed` events; the live session rules are `SessionState.policy`, the built-in rules arrive in `session.welcome.base_policy`. `Always` and `Block` approval decisions are recorded as rules by the host.

@@ -5,6 +5,7 @@ from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from plural.agent.providers.base import Effort
+from plural.protocol.models import PromptMode
 
 
 class HostSettings(BaseSettings):
@@ -14,6 +15,7 @@ class HostSettings(BaseSettings):
     data_dir: Path = Path("~/.plural")
     room: str | None = None
     host_name: str = "host"
+    prompt_mode: PromptMode | None = None
     bind_host: str = "127.0.0.1"
     port: int = 7777
     public_url: str | None = None

@@ -14,6 +14,7 @@ from plural.protocol.events import (
     PolicyRuleAdded,
     PolicyRuleRemoved,
     PromptAccepted,
+    PromptModeChanged,
     ProposalApproved,
     ProposalCreated,
     ProposalRejected,
@@ -47,6 +48,8 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             return state.model_copy(
                 update={"participants": _without(state.participants, participant_id)}
             )
+        case PromptModeChanged(mode=mode):
+            return state.model_copy(update={"prompt_mode": mode})
         case ProposalCreated(proposal=proposal):
             return state.model_copy(
                 update={"proposals": {**state.proposals, proposal.id: proposal}}

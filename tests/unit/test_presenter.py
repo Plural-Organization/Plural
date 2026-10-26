@@ -10,6 +10,7 @@ from plural.protocol.events import (
     MessageEnded,
     PolicyRuleAdded,
     PolicyRuleRemoved,
+    PromptModeChanged,
     RunEnded,
 )
 from plural.protocol.models import (
@@ -18,6 +19,7 @@ from plural.protocol.models import (
     Participant,
     PolicyAction,
     PolicyRuleView,
+    PromptMode,
     Role,
     RunView,
     SessionState,
@@ -113,6 +115,16 @@ def test_policy_changes_are_described() -> None:
         "magenta", "policy + allow bash make *  [pl_1]"
     )
     assert describe(PolicyRuleRemoved(rule_id="pl_1"), state) == Line("magenta", "policy - pl_1")
+
+
+def test_prompt_mode_changes_are_announced() -> None:
+    state = SessionState()
+    assert describe(PromptModeChanged(mode=PromptMode.REVIEW), state) == Line(
+        "magenta", "prompts are now review: the host approves participants' prompts"
+    )
+    assert describe(PromptModeChanged(mode=PromptMode.OPEN), state) == Line(
+        "magenta", "prompts are now open: participants prompt the agent directly"
+    )
 
 
 def test_compaction_is_shown_in_history_and_live() -> None:

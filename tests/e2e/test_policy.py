@@ -9,18 +9,16 @@ from plural.protocol.commands import (
     PolicyAdd,
     PolicyRemove,
     PromptSubmit,
-    ProposalDecide,
 )
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.events import (
     ApprovalRequested,
     PolicyRuleAdded,
     PolicyRuleRemoved,
-    ProposalCreated,
     RunEnded,
     ToolEnded,
 )
-from plural.protocol.models import ApprovalDecision, PolicyAction, ProposalDecision
+from plural.protocol.models import ApprovalDecision, PolicyAction
 from tests.e2e.support import Session, running_session
 
 
@@ -126,10 +124,6 @@ async def test_allow_rule_does_not_lift_the_guest_taint(tmp_path: Path) -> None:
         await owner.next(PolicyRuleAdded)
 
         await guest.client.send(PromptSubmit(text="say hello"))
-        proposal = (await owner.next(ProposalCreated)).proposal
-        await owner.client.send(
-            ProposalDecide(proposal_id=proposal.id, decision=ProposalDecision.APPROVE)
-        )
         approval = (await owner.next(ApprovalRequested)).approval
         assert approval.call.subject == "echo hello world"
         await owner.client.send(

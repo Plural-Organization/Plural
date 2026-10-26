@@ -17,6 +17,7 @@ from plural.protocol.events import (
     PolicyRuleAdded,
     PolicyRuleRemoved,
     PromptAccepted,
+    PromptModeChanged,
     ProposalApproved,
     ProposalCreated,
     ProposalRejected,
@@ -30,11 +31,16 @@ from plural.protocol.models import (
     Origin,
     Participant,
     PolicyRuleView,
+    PromptMode,
     SessionState,
     TranscriptEntry,
 )
 
 PREVIEW_LINES = 12
+PROMPT_MODE_HINT = {
+    PromptMode.OPEN: "open: participants prompt the agent directly",
+    PromptMode.REVIEW: "review: the host approves participants' prompts",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +120,8 @@ def describe(event: Event, state: SessionState) -> Line | None:
             return Line("dim", f"{name(participant_id)} is now {role}")
         case ParticipantRevoked(participant_id=participant_id):
             return Line("red", f"✗ access revoked for {participant_id}")
+        case PromptModeChanged(mode=mode):
+            return Line("magenta", f"prompts are now {PROMPT_MODE_HINT[mode]}")
         case ProposalCreated(proposal=proposal):
             return Line("yellow", f"? {name(proposal.author_id)} proposes: {proposal.text}")
         case ProposalApproved(text=text):

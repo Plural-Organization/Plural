@@ -1,8 +1,16 @@
 from dataclasses import dataclass
 
-from plural.protocol.commands import Command, ContextCompact, PolicyAdd, PolicyRemove, RunAbort
-from plural.protocol.models import PolicyAction
+from plural.protocol.commands import (
+    Command,
+    ContextCompact,
+    PolicyAdd,
+    PolicyRemove,
+    PromptModeSet,
+    RunAbort,
+)
+from plural.protocol.models import PolicyAction, PromptMode
 
+MODE_USAGE = "usage: /mode open|review"
 USAGE = "usage: /policy | /policy allow|ask|deny <tool> <pattern> | /policy rm <rule id>"
 
 
@@ -24,10 +32,19 @@ def parse(text: str) -> Command | ShowPolicy | None:
             return RunAbort()
         case "compact":
             return ContextCompact()
+        case "mode":
+            return _mode(rest.strip())
         case "policy":
             return _policy(rest.strip())
         case _:
             raise SlashError(f"unknown command /{name}")
+
+
+def _mode(argument: str) -> Command:
+    try:
+        return PromptModeSet(mode=PromptMode(argument))
+    except ValueError:
+        raise SlashError(MODE_USAGE) from None
 
 
 def _policy(arguments: str) -> Command | ShowPolicy:

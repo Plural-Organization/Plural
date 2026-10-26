@@ -2,8 +2,14 @@ import pytest
 
 from plural.core.errors import Forbidden
 from plural.core.roles import authorize, can
-from plural.protocol.commands import HistoryGet, PromptSubmit, ProposalDecide, RunAbort
-from plural.protocol.models import ProposalDecision, Role
+from plural.protocol.commands import (
+    HistoryGet,
+    PromptModeSet,
+    PromptSubmit,
+    ProposalDecide,
+    RunAbort,
+)
+from plural.protocol.models import PromptMode, ProposalDecision, Role
 
 
 def test_matrix() -> None:
@@ -15,3 +21,7 @@ def test_matrix() -> None:
     assert can(Role.HOST, decide)
     with pytest.raises(Forbidden):
         authorize(Role.PARTICIPANT, RunAbort())
+    switch = PromptModeSet(mode=PromptMode.REVIEW)
+    assert can(Role.HOST, switch)
+    assert not can(Role.PARTICIPANT, switch)
+    assert not can(Role.VIEWER, switch)

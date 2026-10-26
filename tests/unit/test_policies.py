@@ -8,7 +8,7 @@ from plural.core.errors import Invalid, NotFound
 from plural.core.policy.rules import DEFAULT_RULES
 from plural.core.provenance import direct
 from plural.core.state import reduce
-from plural.protocol.commands import PolicyAdd, PolicyRemove, RunAbort
+from plural.protocol.commands import PolicyAdd, PolicyRemove, PromptModeSet, RunAbort
 from plural.protocol.events import (
     EventRecord,
     PolicyRuleAdded,
@@ -19,6 +19,7 @@ from plural.protocol.models import (
     ApprovalView,
     PolicyAction,
     PolicyRuleView,
+    PromptMode,
     Role,
     SessionState,
     ToolCallView,
@@ -126,10 +127,21 @@ def test_slash_commands() -> None:
         tool="bash", pattern="make *", action=PolicyAction.ALLOW
     )
     assert parse("/policy rm pl_1") == PolicyRemove(rule_id="pl_1")
+    assert parse("/mode review") == PromptModeSet(mode=PromptMode.REVIEW)
+    assert parse("/mode open") == PromptModeSet(mode=PromptMode.OPEN)
 
 
 @pytest.mark.parametrize(
-    "text", ["/nope", "/policy allow", "/policy allow bash", "/policy permit bash x", "/policy rm"]
+    "text",
+    [
+        "/nope",
+        "/policy allow",
+        "/policy allow bash",
+        "/policy permit bash x",
+        "/policy rm",
+        "/mode",
+        "/mode closed",
+    ],
 )
 def test_slash_errors(text: str) -> None:
     with pytest.raises(SlashError):
