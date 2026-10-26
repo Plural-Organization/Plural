@@ -10,7 +10,14 @@ from pydantic import ValidationError
 from plural.agent import events as agent
 from plural.agent.messages import UserTurn
 from plural.core import approvals, policies, proposals
-from plural.core.errors import Conflict, DomainError, Invalid, NotFound, Unauthorized
+from plural.core.errors import (
+    Conflict,
+    DomainError,
+    Forbidden,
+    Invalid,
+    NotFound,
+    Unauthorized,
+)
 from plural.core.ports import Clock, EventStore, IdGenerator
 from plural.core.provenance import direct, from_proposal
 from plural.core.roles import authorize
@@ -27,6 +34,7 @@ from plural.host.inbox import (
     Inbox,
     InboxMessage,
     Incoming,
+    TypingExpired,
 )
 from plural.host.invites import InviteBook
 from plural.host.policy_gate import HostPolicyGate
@@ -47,8 +55,10 @@ from plural.protocol.commands import (
     PromptModeSet,
     PromptSubmit,
     ProposalDecide,
+    QueueCancel,
     RunAbort,
     SessionHello,
+    TypingSet,
 )
 from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo
 from plural.protocol.events import (
@@ -64,9 +74,11 @@ from plural.protocol.events import (
     ParticipantLeft,
     ParticipantRevoked,
     ParticipantRoleChanged,
+    ParticipantTyping,
     PolicyRuleAdded,
     PolicyRuleRemoved,
     PromptAccepted,
+    PromptDequeued,
     PromptModeChanged,
     ProposalApproved,
     RunEnded,
@@ -82,6 +94,7 @@ from plural.protocol.models import (
     ApprovalDecision,
     AttachmentMeta,
     Delivery,
+    DequeueReason,
     Participant,
     PromptMode,
     Provenance,
@@ -114,6 +127,7 @@ class SessionActor:
         host: Participant,
         max_attachment_bytes: int,
         prompt_mode: PromptMode | None = None,
+        typing_ttl_s: float = 6.0,
     ) -> None:
         self._inbox = inbox
         self._store = store
@@ -130,6 +144,8 @@ class SessionActor:
         self._host = host
         self._max_attachment_bytes = max_attachment_bytes
         self._initial_mode = prompt_mode
+        self._typing_ttl_s = typing_ttl_s
+        self._typing: dict[str, asyncio.TimerHandle] = {}
         self._state = SessionState()
         self._streaming: dict[str, str] = {}
         self._timers: dict[str, asyncio.TimerHandle] = {}
@@ -151,6 +167,10 @@ class SessionActor:
                 RunEnded(
                     run_id=self._state.run.id, reason=RunEndReason.ERROR, error="host restarted"
                 )
+            )
+        for entry in self._state.queue:
+            await self._emit(
+                PromptDequeued(prompt_id=entry.prompt_id, reason=DequeueReason.DROPPED)
             )
         for participant in self._state.participants.values():
             if participant.connected:
@@ -182,6 +202,9 @@ class SessionActor:
                 self._timers[approval.id] = asyncio.get_running_loop().call_later(
                     delay, self._inbox.put, ApprovalExpired(approval.id)
                 )
+            case TypingExpired(participant_id=participant_id):
+                if self._typing.pop(participant_id, None) is not None:
+                    await self._emit(ParticipantTyping(participant_id=participant_id, typing=False))
             case ApprovalExpired(approval_id=approval_id):
                 self._timers.pop(approval_id, None)
                 expired = approvals.expire(self._state, approval_id)
@@ -247,6 +270,10 @@ class SessionActor:
                 self._agent.request_compaction()
             case PromptModeSet():
                 await self._set_prompt_mode(command.mode, actor_id=participant.id)
+            case TypingSet():
+                await self._set_typing(participant.id, typing=command.typing)
+            case QueueCancel():
+                await self._cancel_queued(participant, command)
             case PolicyAdd():
                 added = policies.add(
                     self._state,
@@ -307,7 +334,9 @@ class SessionActor:
         )
         self._publisher.deliver(connection, welcome)
         if hello.since is None:
-            snapshot = SessionSnapshot(state=self._state, streaming=dict(self._streaming))
+            snapshot = SessionSnapshot(
+                state=self._state, streaming=dict(self._streaming), typing=tuple(self._typing)
+            )
             self._publisher.deliver(connection, snapshot)
             return
         for record in await self._store.read(after=hello.since):
@@ -336,6 +365,34 @@ class SessionActor:
             self._state, proposal_id=self._ids.new("pr_"), author_id=participant.id, command=command
         )
         await self._emit(created, actor_id=participant.id)
+
+    async def _set_typing(self, participant_id: str, *, typing: bool) -> None:
+        timer = self._typing.pop(participant_id, None)
+        if timer is not None:
+            timer.cancel()
+        if typing:
+            self._typing[participant_id] = asyncio.get_running_loop().call_later(
+                self._typing_ttl_s, self._inbox.put, TypingExpired(participant_id)
+            )
+            if timer is None:
+                await self._emit(ParticipantTyping(participant_id=participant_id, typing=True))
+        elif timer is not None:
+            await self._emit(ParticipantTyping(participant_id=participant_id, typing=False))
+
+    async def _cancel_queued(self, participant: Participant, command: QueueCancel) -> None:
+        entry = next(
+            (queued for queued in self._state.queue if queued.prompt_id == command.prompt_id), None
+        )
+        if entry is None:
+            raise NotFound(f"queued prompt {command.prompt_id}")
+        if participant.role is not Role.HOST and entry.author_id != participant.id:
+            raise Forbidden("only the author or the host can cancel a queued prompt")
+        if not self._agent.cancel_pending(command.prompt_id):
+            raise Conflict("the prompt has already reached the agent")
+        await self._emit(
+            PromptDequeued(prompt_id=command.prompt_id, reason=DequeueReason.CANCELLED),
+            actor_id=participant.id,
+        )
 
     async def _set_prompt_mode(self, mode: PromptMode, *, actor_id: str) -> None:
         if mode is not self._state.prompt_mode:
@@ -377,6 +434,7 @@ class SessionActor:
             attachments=attachments,
         )
         await self._emit(accepted, actor_id=author.id)
+        await self._set_typing(author.id, typing=False)
         turn = UserTurn(
             id=prompt_id,
             author=Actor(id=author.id, kind=ActorKind.HUMAN, name=author.name),
@@ -411,6 +469,11 @@ class SessionActor:
                 await self._emit(
                     MessageEnded(run_id=run_id, message_id=message_id, text=text, thinking=thinking)
                 )
+            case agent.Delivered(prompt_ids=prompt_ids):
+                for prompt_id in prompt_ids:
+                    await self._emit(
+                        PromptDequeued(prompt_id=prompt_id, reason=DequeueReason.DELIVERED)
+                    )
             case agent.Compacted(summary=summary, tokens_before=tokens_before):
                 await self._emit(
                     ContextCompacted(run_id=run_id, summary=summary, tokens_before=tokens_before)
@@ -440,9 +503,14 @@ class SessionActor:
         self._streaming.clear()
         await self._emit(RunEnded(run_id=run_id, reason=reason, usage=usage, error=error))
         pending = self._agent.drain_pending()
-        if reason is RunEndReason.ABORTED or not pending:
+        if reason is RunEndReason.ABORTED:
+            for turn in pending:
+                await self._emit(PromptDequeued(prompt_id=turn.id, reason=DequeueReason.DROPPED))
+            return
+        if not pending:
             return
         first, *rest = pending
+        await self._emit(PromptDequeued(prompt_id=first.id, reason=DequeueReason.DELIVERED))
         await self._start_run(first)
         for turn in rest:
             self._agent.follow_up(turn)
@@ -451,6 +519,7 @@ class SessionActor:
         participant_id = self._publisher.unbind(connection)
         if participant_id is None or self._publisher.is_online(participant_id):
             return
+        await self._set_typing(participant_id, typing=False)
         if participant_id in self._state.participants:
             await self._emit(
                 ParticipantLeft(participant_id=participant_id), actor_id=participant_id

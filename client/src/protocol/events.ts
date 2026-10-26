@@ -40,6 +40,11 @@ export type Role = "host" | "participant" | "viewer";
 export type PromptMode = "open" | "review";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "DequeueReason".
+ */
+export type DequeueReason = "delivered" | "cancelled" | "dropped";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "Delivery".
  */
 export type Delivery = "now" | "steer" | "follow_up";
@@ -82,6 +87,8 @@ export interface EventsSchema {
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | PromptDequeued
+    | ParticipantTyping
     | ProposalCreated
     | ProposalApproved
     | ProposalRejected
@@ -186,6 +193,24 @@ export interface ParticipantRevoked {
 export interface PromptModeChanged {
   mode: PromptMode;
   type: "session.prompt_mode_changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PromptDequeued".
+ */
+export interface PromptDequeued {
+  prompt_id: string;
+  reason: DequeueReason;
+  type: "prompt.dequeued";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ParticipantTyping".
+ */
+export interface ParticipantTyping {
+  participant_id: string;
+  type: "participant.typing";
+  typing: boolean;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -452,6 +477,7 @@ export interface SessionSnapshot {
     [k: string]: string;
   };
   type: "session.snapshot";
+  typing: string[];
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -473,9 +499,20 @@ export interface SessionState {
   proposals: {
     [k: string]: ProposalView;
   };
+  queue: QueuedPrompt[];
   run: RunView | null;
   summary: string | null;
   transcript: TranscriptEntry[];
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "QueuedPrompt".
+ */
+export interface QueuedPrompt {
+  author_id: string;
+  delivery: Delivery;
+  prompt_id: string;
+  text: string;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -531,6 +568,8 @@ export interface EventRecord {
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | PromptDequeued
+    | ParticipantTyping
     | ProposalCreated
     | ProposalApproved
     | ProposalRejected

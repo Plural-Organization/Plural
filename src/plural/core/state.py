@@ -14,6 +14,7 @@ from plural.protocol.events import (
     PolicyRuleAdded,
     PolicyRuleRemoved,
     PromptAccepted,
+    PromptDequeued,
     PromptModeChanged,
     ProposalApproved,
     ProposalCreated,
@@ -23,7 +24,13 @@ from plural.protocol.events import (
     ToolEnded,
     ToolStarted,
 )
-from plural.protocol.models import EntryKind, RunView, SessionState, TranscriptEntry
+from plural.protocol.models import (
+    EntryKind,
+    QueuedPrompt,
+    RunView,
+    SessionState,
+    TranscriptEntry,
+)
 
 TRANSCRIPT_LIMIT: Final = 200
 OUTPUT_PREVIEW_CHARS: Final = 2000
@@ -63,7 +70,25 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
                 author_id=event.author_id,
                 text=event.text,
             )
+            queued = state.run is not None
+            if queued:
+                state = state.model_copy(
+                    update={
+                        "queue": (
+                            *state.queue,
+                            QueuedPrompt(
+                                prompt_id=event.prompt_id,
+                                author_id=event.author_id,
+                                text=event.text,
+                                delivery=event.delivery,
+                            ),
+                        )
+                    }
+                )
             return _append(state, entry)
+        case PromptDequeued(prompt_id=prompt_id):
+            kept = tuple(entry for entry in state.queue if entry.prompt_id != prompt_id)
+            return state.model_copy(update={"queue": kept})
         case RunStarted():
             run = RunView(id=event.run_id, prompt_id=event.prompt_id, provenance=event.provenance)
             return state.model_copy(update={"run": run})

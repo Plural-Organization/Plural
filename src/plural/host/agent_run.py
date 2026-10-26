@@ -43,6 +43,9 @@ class AgentRun:
     def restore(self, summary: str) -> None:
         self._loop.restore(summary)
 
+    def cancel_pending(self, prompt_id: str) -> bool:
+        return self._loop.cancel_pending(prompt_id)
+
     def drain_pending(self) -> list[UserTurn]:
         return self._loop.drain_pending()
 

@@ -138,7 +138,7 @@ export class SessionClient implements Session {
         this.projection.basePolicy = event.base_policy;
         break;
       case "session.snapshot":
-        this.projection.load(event.state, event.streaming);
+        this.projection.load(event.state, event.streaming, event.typing);
         break;
       default:
         this.projection.observe(event);

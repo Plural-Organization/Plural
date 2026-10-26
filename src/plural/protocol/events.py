@@ -9,6 +9,7 @@ from plural.protocol.models import (
     ApprovalView,
     AttachmentMeta,
     Delivery,
+    DequeueReason,
     Model,
     Participant,
     PolicyRuleView,
@@ -55,6 +56,18 @@ class ParticipantRevoked(EventBase):
 class PromptModeChanged(EventBase):
     type: Literal["session.prompt_mode_changed"] = "session.prompt_mode_changed"
     mode: PromptMode
+
+
+class PromptDequeued(EventBase):
+    type: Literal["prompt.dequeued"] = "prompt.dequeued"
+    prompt_id: str
+    reason: DequeueReason
+
+
+class ParticipantTyping(TransientEvent):
+    type: Literal["participant.typing"] = "participant.typing"
+    participant_id: str
+    typing: bool
 
 
 class ProposalCreated(EventBase):
@@ -188,6 +201,7 @@ class SessionSnapshot(TransientEvent):
     type: Literal["session.snapshot"] = "session.snapshot"
     state: SessionState
     streaming: dict[str, str] = Field(default_factory=dict[str, str])
+    typing: tuple[str, ...] = ()
 
 
 class InviteCreated(TransientEvent):
@@ -210,6 +224,8 @@ Event = Annotated[
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | PromptDequeued
+    | ParticipantTyping
     | ProposalCreated
     | ProposalApproved
     | ProposalRejected

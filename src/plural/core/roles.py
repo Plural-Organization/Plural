@@ -17,8 +17,10 @@ from plural.protocol.commands import (
     PromptModeSet,
     PromptSubmit,
     ProposalDecide,
+    QueueCancel,
     RunAbort,
     SessionHello,
+    TypingSet,
 )
 from plural.protocol.models import Model, Role
 
@@ -42,6 +44,8 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         PolicyAdd: HOST_ONLY,
         PolicyRemove: HOST_ONLY,
         PromptModeSet: HOST_ONLY,
+        TypingSet: CONTRIBUTORS,
+        QueueCancel: CONTRIBUTORS,
     }
 )
 

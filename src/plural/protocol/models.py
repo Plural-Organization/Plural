@@ -33,6 +33,12 @@ class PromptMode(StrEnum):
     REVIEW = "review"
 
 
+class DequeueReason(StrEnum):
+    DELIVERED = "delivered"
+    CANCELLED = "cancelled"
+    DROPPED = "dropped"
+
+
 class Delivery(StrEnum):
     NOW = "now"
     STEER = "steer"
@@ -141,6 +147,13 @@ class ProposalView(Model):
     attachments: tuple[str, ...] = ()
 
 
+class QueuedPrompt(Model):
+    prompt_id: str
+    author_id: str
+    text: str
+    delivery: Delivery
+
+
 class ApprovalView(Model):
     id: str
     call: ToolCallView
@@ -180,6 +193,7 @@ class SessionState(Model):
     approvals: dict[str, ApprovalView] = Field(default_factory=dict[str, ApprovalView])
     attachments: dict[str, AttachmentMeta] = Field(default_factory=dict[str, AttachmentMeta])
     policy: tuple[PolicyRuleView, ...] = ()
+    queue: tuple[QueuedPrompt, ...] = ()
     summary: str | None = None
     run: RunView | None = None
     transcript: tuple[TranscriptEntry, ...] = ()

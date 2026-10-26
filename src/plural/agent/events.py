@@ -41,10 +41,17 @@ class Compacted:
 
 
 @dataclass(frozen=True, slots=True)
+class Delivered:
+    prompt_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class RunEnd:
     reason: RunEndReason
     usage: Usage
     error: str | None = None
 
 
-AgentEvent = MessageStart | MessageDelta | MessageEnd | ToolStart | ToolEnd | Compacted | RunEnd
+AgentEvent = (
+    MessageStart | MessageDelta | MessageEnd | ToolStart | ToolEnd | Compacted | Delivered | RunEnd
+)

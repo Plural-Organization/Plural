@@ -12,6 +12,7 @@ from plural.agent.context import ContextBuilder
 from plural.agent.events import (
     AgentEvent,
     Compacted,
+    Delivered,
     MessageDelta,
     MessageEnd,
     MessageStart,
@@ -135,6 +136,14 @@ class AgentLoop:
         self._conversation = [SummaryTurn(text=summary)]
         self._context_tokens = 0
 
+    def cancel_pending(self, prompt_id: str) -> bool:
+        for queue in (self._steer, self._follow_up):
+            for turn in queue:
+                if turn.id == prompt_id:
+                    queue.remove(turn)
+                    return True
+        return False
+
     def drain_pending(self) -> list[UserTurn]:
         pending = [*self._steer, *self._follow_up]
         self._steer.clear()
@@ -230,6 +239,8 @@ class AgentLoop:
                 if not assistant.tool_calls and not queued:
                     yield RunEnd(RunEndReason.STOP, self._usage)
                     return
+                if queued:
+                    yield Delivered(tuple(message.id for message in queued))
                 for message in queued:
                     provenance = merge(provenance, message.provenance)
                     self._conversation.append(message)

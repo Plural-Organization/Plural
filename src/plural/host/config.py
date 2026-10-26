@@ -35,6 +35,7 @@ class HostSettings(BaseSettings):
     token_ttl_s: int = Field(default=86_400, gt=0, le=86_400)
     invite_ttl_s: int = Field(default=3600, gt=0, le=86_400)
     max_attachment_bytes: int = Field(default=1_048_576, gt=0)
+    typing_ttl_s: float = Field(default=6, gt=0)
 
     @property
     def state_dir(self) -> Path:

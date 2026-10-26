@@ -85,6 +85,16 @@ class PromptModeSet(Model):
     mode: PromptMode
 
 
+class TypingSet(Model):
+    type: Literal["presence.typing"] = "presence.typing"
+    typing: bool
+
+
+class QueueCancel(Model):
+    type: Literal["queue.cancel"] = "queue.cancel"
+    prompt_id: str
+
+
 class PolicyAdd(Model):
     type: Literal["policy.add"] = "policy.add"
     tool: str = Field(min_length=1, max_length=40)
@@ -116,6 +126,8 @@ Command = Annotated[
     | ParticipantRevoke
     | ContextCompact
     | PromptModeSet
+    | TypingSet
+    | QueueCancel
     | PolicyAdd
     | PolicyRemove
     | FileAttach,

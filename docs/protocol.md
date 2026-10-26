@@ -12,4 +12,8 @@ Relay framing (`src/plural/protocol/relay.py`): host opens `/host/{room}` with `
 
 Prompt mode: `session.set_prompt_mode` (host only) appends `session.prompt_mode_changed`; `SessionState.prompt_mode` is `open` (participant prompts go straight to the agent) or `review` (they become proposals). See ADR 0004.
 
+Queue: a prompt accepted while a run is active is appended to `SessionState.queue` (`prompt.accepted` with an active run) and leaves it with `prompt.dequeued` and a reason: `delivered` when the agent takes it, `cancelled` when the author or the host removes it with `queue.cancel`, `dropped` when the run is aborted or the host restarts.
+
+Presence: `presence.typing` (host and participants) announces that the sender is composing a prompt. The host broadcasts the transient `participant.typing`, never stores it, repeats nothing while the state is unchanged, ends it when the prompt is accepted, the sender leaves or six seconds pass without a refresh, and lists who is typing in `session.snapshot.typing`.
+
 Policy: `policy.add` / `policy.remove` (host only) append `policy.rule_added` / `policy.rule_removed` events; the live session rules are `SessionState.policy`, the built-in rules arrive in `session.welcome.base_policy`. `Always` and `Block` approval decisions are recorded as rules by the host.

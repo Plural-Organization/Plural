@@ -12,6 +12,7 @@ export function emptyState(): SessionState {
     approvals: {},
     attachments: {},
     policy: [],
+    queue: [],
     summary: null,
     run: null,
     transcript: [],
@@ -44,15 +45,28 @@ function apply(state: SessionState, record: EventRecord): SessionState {
     case "proposal.rejected":
       return { ...state, proposals: without(state.proposals, event.proposal_id) };
     case "prompt.accepted":
-      return append(state, {
-        id: event.prompt_id,
-        kind: "prompt",
-        author_id: event.author_id,
-        text: event.text,
-        tool: null,
-        ok: null,
-        output: "",
-      });
+      return append(
+        state.run === null
+          ? state
+          : {
+              ...state,
+              queue: [
+                ...state.queue,
+                { prompt_id: event.prompt_id, author_id: event.author_id, text: event.text, delivery: event.delivery },
+              ],
+            },
+        {
+          id: event.prompt_id,
+          kind: "prompt",
+          author_id: event.author_id,
+          text: event.text,
+          tool: null,
+          ok: null,
+          output: "",
+        },
+      );
+    case "prompt.dequeued":
+      return { ...state, queue: state.queue.filter((entry) => entry.prompt_id !== event.prompt_id) };
     case "run.started":
       return {
         ...state,

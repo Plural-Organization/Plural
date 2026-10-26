@@ -5,6 +5,7 @@ export class Projection {
   state: SessionState = emptyState();
   streaming: Record<string, string> = {};
   reasoning = 0;
+  typing = new Set<string>();
   basePolicy: PolicyRuleView[] = [];
   meId: string | null = null;
   ready = false;
@@ -13,9 +14,10 @@ export class Projection {
     return this.meId === null ? undefined : this.state.participants[this.meId];
   }
 
-  load(state: SessionState, streaming: Record<string, string>): void {
+  load(state: SessionState, streaming: Record<string, string>, typing: string[] = []): void {
     this.state = state;
     this.streaming = { ...streaming };
+    this.typing = new Set(typing);
     this.reasoning = 0;
     this.ready = true;
   }
@@ -38,6 +40,9 @@ export class Projection {
         this.streaming = {};
         this.reasoning = 0;
         break;
+      case "participant.revoked":
+        this.typing.delete(event.participant_id);
+        break;
       default:
         break;
     }
@@ -45,6 +50,14 @@ export class Projection {
   }
 
   observe(event: Event): void {
+    if (event.type === "participant.typing") {
+      if (event.typing) {
+        this.typing.add(event.participant_id);
+      } else {
+        this.typing.delete(event.participant_id);
+      }
+      return;
+    }
     if (event.type !== "message.delta") {
       return;
     }

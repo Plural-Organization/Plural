@@ -34,7 +34,14 @@ class ApprovalExpired:
     approval_id: str
 
 
-InboxMessage = Incoming | Disconnected | AgentOutput | ApprovalNeeded | ApprovalExpired
+@dataclass(frozen=True, slots=True)
+class TypingExpired:
+    participant_id: str
+
+
+InboxMessage = (
+    Incoming | Disconnected | AgentOutput | ApprovalNeeded | ApprovalExpired | TypingExpired
+)
 
 
 class Inbox:

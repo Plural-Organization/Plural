@@ -49,6 +49,8 @@ export interface CommandsSchema {
     | ParticipantRevoke
     | ContextCompact
     | PromptModeSet
+    | TypingSet
+    | QueueCancel
     | PolicyAdd
     | PolicyRemove
     | FileAttach;
@@ -158,6 +160,22 @@ export interface ContextCompact {
 export interface PromptModeSet {
   mode: PromptMode;
   type?: "session.set_prompt_mode";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "TypingSet".
+ */
+export interface TypingSet {
+  type?: "presence.typing";
+  typing: boolean;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "QueueCancel".
+ */
+export interface QueueCancel {
+  prompt_id: string;
+  type?: "queue.cancel";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

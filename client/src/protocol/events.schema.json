@@ -168,6 +168,14 @@
       ],
       "type": "string"
     },
+    "DequeueReason": {
+      "enum": [
+        "delivered",
+        "cancelled",
+        "dropped"
+      ],
+      "type": "string"
+    },
     "EntryKind": {
       "enum": [
         "prompt",
@@ -386,9 +394,11 @@
               "participant.left": "#/$defs/ParticipantLeft",
               "participant.revoked": "#/$defs/ParticipantRevoked",
               "participant.role_changed": "#/$defs/ParticipantRoleChanged",
+              "participant.typing": "#/$defs/ParticipantTyping",
               "policy.rule_added": "#/$defs/PolicyRuleAdded",
               "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
               "prompt.accepted": "#/$defs/PromptAccepted",
+              "prompt.dequeued": "#/$defs/PromptDequeued",
               "proposal.approved": "#/$defs/ProposalApproved",
               "proposal.created": "#/$defs/ProposalCreated",
               "proposal.rejected": "#/$defs/ProposalRejected",
@@ -418,6 +428,12 @@
             },
             {
               "$ref": "#/$defs/PromptModeChanged"
+            },
+            {
+              "$ref": "#/$defs/PromptDequeued"
+            },
+            {
+              "$ref": "#/$defs/ParticipantTyping"
             },
             {
               "$ref": "#/$defs/ProposalCreated"
@@ -726,6 +742,27 @@
       ],
       "type": "object"
     },
+    "ParticipantTyping": {
+      "properties": {
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "participant.typing",
+          "default": "participant.typing",
+          "type": "string"
+        },
+        "typing": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "participant_id",
+        "typing"
+      ],
+      "type": "object"
+    },
     "PolicyAction": {
       "enum": [
         "allow",
@@ -829,6 +866,27 @@
         "delivery",
         "provenance",
         "attachments"
+      ],
+      "type": "object"
+    },
+    "PromptDequeued": {
+      "properties": {
+        "prompt_id": {
+          "type": "string"
+        },
+        "reason": {
+          "$ref": "#/$defs/DequeueReason"
+        },
+        "type": {
+          "const": "prompt.dequeued",
+          "default": "prompt.dequeued",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "prompt_id",
+        "reason"
       ],
       "type": "object"
     },
@@ -969,6 +1027,29 @@
       ],
       "type": "object"
     },
+    "QueuedPrompt": {
+      "properties": {
+        "author_id": {
+          "type": "string"
+        },
+        "delivery": {
+          "$ref": "#/$defs/Delivery"
+        },
+        "prompt_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "prompt_id",
+        "author_id",
+        "text",
+        "delivery"
+      ],
+      "type": "object"
+    },
     "Role": {
       "enum": [
         "host",
@@ -1088,12 +1169,20 @@
           "const": "session.snapshot",
           "default": "session.snapshot",
           "type": "string"
+        },
+        "typing": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "required": [
         "type",
         "state",
-        "streaming"
+        "streaming",
+        "typing"
       ],
       "type": "object"
     },
@@ -1138,6 +1227,13 @@
           },
           "type": "object"
         },
+        "queue": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/QueuedPrompt"
+          },
+          "type": "array"
+        },
         "run": {
           "anyOf": [
             {
@@ -1176,6 +1272,7 @@
         "approvals",
         "attachments",
         "policy",
+        "queue",
         "summary",
         "run",
         "transcript"
@@ -1446,9 +1543,11 @@
           "participant.left": "#/$defs/ParticipantLeft",
           "participant.revoked": "#/$defs/ParticipantRevoked",
           "participant.role_changed": "#/$defs/ParticipantRoleChanged",
+          "participant.typing": "#/$defs/ParticipantTyping",
           "policy.rule_added": "#/$defs/PolicyRuleAdded",
           "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
           "prompt.accepted": "#/$defs/PromptAccepted",
+          "prompt.dequeued": "#/$defs/PromptDequeued",
           "proposal.approved": "#/$defs/ProposalApproved",
           "proposal.created": "#/$defs/ProposalCreated",
           "proposal.rejected": "#/$defs/ProposalRejected",
@@ -1478,6 +1577,12 @@
         },
         {
           "$ref": "#/$defs/PromptModeChanged"
+        },
+        {
+          "$ref": "#/$defs/PromptDequeued"
+        },
+        {
+          "$ref": "#/$defs/ParticipantTyping"
         },
         {
           "$ref": "#/$defs/ProposalCreated"
