@@ -1,17 +1,19 @@
 {
   "compilerOptions": {
-    "target": "ES2023",
-    "lib": ["ES2023", "DOM"],
+    "target": "ESNext",
+    "lib": ["ESNext", "DOM"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",
+    "jsxImportSource": "@opentui/react",
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
     "skipLibCheck": true,
     "isolatedModules": true,
     "resolveJsonModule": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "types": ["bun", "node"]
   },
-  "include": ["src", "test", "dev", "vitest.config.ts"]
+  "include": ["src", "test"]
 }

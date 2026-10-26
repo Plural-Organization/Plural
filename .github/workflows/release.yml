@@ -41,13 +41,22 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Install the native renderer for every platform
+        run: |
+          npm install --no-save --force --os=any --cpu=any \
+            @opentui/core-darwin-x64@0.7.0 @opentui/core-darwin-arm64@0.7.0 \
+            @opentui/core-linux-x64@0.7.0 @opentui/core-linux-arm64@0.7.0 \
+            @opentui/core-linux-x64-musl@0.7.0 @opentui/core-linux-arm64-musl@0.7.0 \
+            @opentui/core-win32-x64@0.7.0 @opentui/core-win32-arm64@0.7.0
       - name: Compile the client
         run: |
           mkdir -p stage
           npx --workspace tui bun build src/cli.tsx --compile --target=${{ matrix.target }} --outfile ../stage/plural
       - name: Smoke test
         if: matrix.os == 'linux' && matrix.arch == 'x64'
-        run: ./stage/plural --version
+        run: |
+          ./stage/plural --version
+          script -qec "timeout 30 ./stage/plural --selftest" /dev/null
       - name: Package
         run: |
           name=plural-${{ matrix.os }}-${{ matrix.arch }}.tar.gz

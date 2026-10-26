@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { createServer } from "node:net";
 
 export interface HostHandle {
   room: string;
@@ -20,10 +21,22 @@ export function runHostCommand(args: string[]): ChildProcess {
   return spawn(command as string, [...prefix, ...args], { stdio: "inherit" });
 }
 
+function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const probe = createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const address = probe.address();
+      probe.close(() => (address && typeof address === "object" ? resolve(address.port) : reject(new Error("no free port"))));
+    });
+  });
+}
+
 export async function startLocalHost(args: string[]): Promise<HostHandle> {
   const [command, ...prefix] = hostCommand();
-  const child = spawn(command as string, [...prefix, "host", "--json", ...args], {
-    stdio: ["ignore", "pipe", "pipe"],
+  const withPort = args.includes("--port") ? args : [...args, "--port", String(await freePort())];
+  const child = spawn(command as string, [...prefix, "host", "--json", ...withPort], {
+    stdio: ["pipe", "pipe", "pipe"],
   });
   let errors = "";
   child.stderr?.on("data", (chunk: Buffer) => {
@@ -72,6 +85,7 @@ export async function startLocalHost(args: string[]): Promise<HostHandle> {
           clearTimeout(kill);
           resolve();
         });
+        child.stdin?.end();
         child.kill("SIGTERM");
       }),
   };

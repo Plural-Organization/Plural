@@ -5,10 +5,6 @@ const NATIVE: Record<string, string[]> = {
   linux: ["wl-copy"],
 };
 
-export function osc52(text: string): string {
-  return `\u001b]52;c;${Buffer.from(text, "utf8").toString("base64")}\u0007`;
-}
-
 function native(text: string): Promise<boolean> {
   const command = NATIVE[process.platform];
   if (!command) {
@@ -22,9 +18,9 @@ function native(text: string): Promise<boolean> {
   });
 }
 
-export async function copyToClipboard(text: string, write: (data: string) => void): Promise<void> {
+export async function copyToClipboard(text: string, osc52: (text: string) => void): Promise<void> {
   if (await native(text)) {
     return;
   }
-  write(osc52(text));
+  osc52(text);
 }

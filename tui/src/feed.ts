@@ -1,7 +1,6 @@
 import {
   label,
   type Event,
-  type EventOf,
   type Participant,
   type Projection,
   type Role,
@@ -9,42 +8,32 @@ import {
   type ToolCallView,
   type TranscriptEntry,
 } from "@plural/client";
-import { committableEnd } from "./lib/blocks";
 
-export const HISTORY_ITEMS = 60;
 export const TOOL_OUTPUT_LIMIT = 4000;
 
 export type Tone = "dim" | "ok" | "warn" | "danger" | "accent";
+export type ToolStatus = "running" | "ok" | "failed";
 
 export type FeedItem =
   | { kind: "banner"; id: string; room: string; version: string; guestLink: string | null }
   | { kind: "user"; id: string; participantId: string; name: string; role: Role; viaProposal: boolean; text: string }
-  | { kind: "assistant"; id: string; text: string; first: boolean }
-  | { kind: "tool"; id: string; call: ToolCallView; ok: boolean | null; output: string; diff: string | null }
+  | { kind: "assistant"; id: string; text: string; streaming: boolean }
+  | { kind: "tool"; id: string; call: ToolCallView; status: ToolStatus; output: string; diff: string | null }
   | { kind: "notice"; id: string; tone: Tone; text: string };
-
-export interface Pending {
-  messageId: string;
-  text: string;
-  committed: number;
-  first: boolean;
-}
-
-export interface RunningTool {
-  call: ToolCallView;
-}
 
 export interface Feed {
   items: FeedItem[];
-  pending: Pending | null;
-  tools: RunningTool[];
   approvals: Record<string, ToolCallView>;
   history: boolean;
   counter: number;
 }
 
 export function emptyFeed(): Feed {
-  return { items: [], pending: null, tools: [], approvals: {}, history: false, counter: 0 };
+  return { items: [], approvals: {}, history: false, counter: 0 };
+}
+
+export function withBanner(feed: Feed, banner: Extract<FeedItem, { kind: "banner" }>): Feed {
+  return { ...feed, items: [banner, ...feed.items] };
 }
 
 export function withNotice(feed: Feed, tone: Tone, text: string): Feed {
@@ -59,212 +48,204 @@ export function lastReply(feed: Feed): string {
     if (item?.kind === "user") {
       break;
     }
-    if (item?.kind === "assistant") {
-      parts.unshift(item.text);
+    if (item?.kind === "assistant" && item.text.trim() !== "") {
+      parts.unshift(item.text.trim());
     }
-  }
-  const tail = feed.pending ? feed.pending.text.slice(feed.pending.committed).trim() : "";
-  if (tail) {
-    parts.push(tail);
   }
   return parts.join("\n\n");
 }
 
-export function withBanner(feed: Feed, banner: Extract<FeedItem, { kind: "banner" }>): Feed {
-  return { ...feed, items: [banner, ...feed.items] };
+function replace(items: FeedItem[], id: string, change: (item: FeedItem) => FeedItem): FeedItem[] {
+  return items.map((item) => (item.id === id ? change(item) : item));
 }
 
 export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
   const state = projection.state;
-  const next = { ...feed, items: [...feed.items] };
-  const add = (item: FeedItem): void => {
-    next.items.push(item);
-  };
-  const notice = (tone: Tone, text: string): void => {
-    next.counter += 1;
-    add({ kind: "notice", id: `n${next.counter}`, tone, text });
-  };
   const nameOf = (participantId: string | null): string => {
     const participant = state.participants[participantId ?? ""];
     return participant ? label(state, participant) : (participantId ?? "system");
   };
+  const note = (tone: Tone, text: string): Feed => withNotice(feed, tone, text);
 
   switch (event.type) {
     case "session.snapshot":
-      return loadHistory(next, event.state, event.streaming);
+      return loadHistory(feed, event.state, event.streaming);
     case "participant.joined":
-      if (event.participant.id !== projection.meId) {
-        notice("dim", `${label(state, event.participant)} joined as ${event.participant.role}`);
-      }
-      return next;
+      return event.participant.id === projection.meId
+        ? feed
+        : note("dim", `${label(state, event.participant)} joined as ${event.participant.role}`);
     case "participant.left":
-      notice("dim", `${nameOf(event.participant_id)} left`);
-      return next;
+      return note("dim", `${nameOf(event.participant_id)} left`);
     case "participant.role_changed":
-      notice("dim", `${nameOf(event.participant_id)} is now ${event.role}`);
-      return next;
+      return note("dim", `${nameOf(event.participant_id)} is now ${event.role}`);
     case "participant.revoked":
-      notice("danger", `access revoked for ${event.participant_id}`);
-      return next;
+      return note("danger", `access revoked for ${event.participant_id}`);
     case "session.prompt_mode_changed":
-      notice(
+      return note(
         "accent",
         event.mode === "open"
           ? "prompts are open: participants prompt the agent directly"
           : "prompts are in review: the host approves each participant prompt",
       );
-      return next;
     case "proposal.created":
-      notice("warn", `${nameOf(event.proposal.author_id)} proposes: ${event.proposal.text}`);
-      return next;
+      return note("warn", `${nameOf(event.proposal.author_id)} proposes: ${event.proposal.text}`);
     case "proposal.approved":
-      notice("ok", `proposal approved by ${nameOf(event.decided_by)}`);
-      return next;
+      return note("ok", `proposal approved by ${nameOf(event.decided_by)}`);
     case "proposal.rejected":
-      notice("danger", `proposal rejected by ${nameOf(event.decided_by)}`);
-      return next;
+      return note("danger", `proposal rejected by ${nameOf(event.decided_by)}`);
     case "prompt.accepted": {
       const author = state.participants[event.author_id];
-      add({
-        kind: "user",
-        id: event.prompt_id,
-        participantId: event.author_id,
-        name: author ? label(state, author) : event.author_id,
-        role: author?.role ?? event.provenance.initiator_role,
-        viaProposal: event.provenance.origin === "proposal",
-        text: event.text,
-      });
-      return next;
+      return {
+        ...feed,
+        items: [
+          ...feed.items,
+          {
+            kind: "user",
+            id: event.prompt_id,
+            participantId: event.author_id,
+            name: author ? label(state, author) : event.author_id,
+            role: author?.role ?? event.provenance.initiator_role,
+            viaProposal: event.provenance.origin === "proposal",
+            text: event.text,
+          },
+        ],
+      };
     }
-    case "run.ended":
-      next.pending = null;
-      next.tools = [];
+    case "run.ended": {
+      const settled = {
+        ...feed,
+        items: feed.items.map((item): FeedItem => {
+          if (item.kind === "assistant" && item.streaming) {
+            return { ...item, streaming: false };
+          }
+          if (item.kind === "tool" && item.status === "running") {
+            return { ...item, status: "failed" };
+          }
+          return item;
+        }),
+      };
       if (event.reason === "aborted") {
-        notice("warn", "run aborted");
-      } else if (event.reason === "error" || event.reason === "limit") {
-        notice("danger", `run ${event.reason === "limit" ? "stopped" : "failed"}${event.error ? `: ${event.error}` : ""}`);
+        return withNotice(settled, "warn", "run aborted");
       }
-      return next;
-    case "message.started":
-      next.pending = { messageId: event.message_id, text: "", committed: 0, first: true };
-      return next;
-    case "message.delta":
-      if (event.thinking) {
-        return next;
+      if (event.reason === "error" || event.reason === "limit") {
+        return withNotice(
+          settled,
+          "danger",
+          `run ${event.reason === "limit" ? "stopped" : "failed"}${event.error ? `: ${event.error}` : ""}`,
+        );
       }
-      return streamed(next, event);
-    case "message.ended":
-      return endMessage(next, event);
-    case "tool.started":
-      next.tools = [...next.tools, { call: event.call }];
-      return next;
-    case "tool.ended": {
-      const running = next.tools.find((tool) => tool.call.id === event.call_id);
-      next.tools = next.tools.filter((tool) => tool.call.id !== event.call_id);
-      if (running) {
-        add({
-          kind: "tool",
-          id: event.call_id,
-          call: running.call,
-          ok: event.ok,
-          output: event.output.slice(0, TOOL_OUTPUT_LIMIT),
-          diff: event.diff,
-        });
-      }
-      return next;
+      return settled;
     }
+    case "message.started":
+      return {
+        ...feed,
+        items: [...feed.items, { kind: "assistant", id: event.message_id, text: "", streaming: true }],
+      };
+    case "message.delta": {
+      if (event.thinking) {
+        return feed;
+      }
+      const exists = feed.items.some((item) => item.id === event.message_id);
+      const items = exists
+        ? replace(feed.items, event.message_id, (item) =>
+            item.kind === "assistant" ? { ...item, text: item.text + event.text } : item,
+          )
+        : [...feed.items, { kind: "assistant" as const, id: event.message_id, text: event.text, streaming: true }];
+      return { ...feed, items };
+    }
+    case "message.ended": {
+      const exists = feed.items.some((item) => item.id === event.message_id);
+      if (!exists) {
+        return event.text
+          ? { ...feed, items: [...feed.items, { kind: "assistant", id: event.message_id, text: event.text, streaming: false }] }
+          : feed;
+      }
+      if (!event.text) {
+        return { ...feed, items: feed.items.filter((item) => item.id !== event.message_id) };
+      }
+      return {
+        ...feed,
+        items: replace(feed.items, event.message_id, () => ({
+          kind: "assistant",
+          id: event.message_id,
+          text: event.text,
+          streaming: false,
+        })),
+      };
+    }
+    case "tool.started":
+      return {
+        ...feed,
+        items: [
+          ...feed.items,
+          { kind: "tool", id: event.call.id, call: event.call, status: "running", output: "", diff: null },
+        ],
+      };
+    case "tool.ended":
+      return {
+        ...feed,
+        items: replace(feed.items, event.call_id, (item) =>
+          item.kind === "tool"
+            ? {
+                ...item,
+                status: event.ok ? "ok" : "failed",
+                output: event.output.slice(0, TOOL_OUTPUT_LIMIT),
+                diff: event.diff,
+              }
+            : item,
+        ),
+      };
     case "approval.requested":
-      next.approvals = { ...next.approvals, [event.approval.id]: event.approval.call };
-      return next;
+      return { ...feed, approvals: { ...feed.approvals, [event.approval.id]: event.approval.call } };
     case "approval.resolved": {
-      const call = next.approvals[event.approval_id];
-      const { [event.approval_id]: _gone, ...rest } = next.approvals;
-      next.approvals = rest;
+      const call = feed.approvals[event.approval_id];
+      const { [event.approval_id]: _gone, ...rest } = feed.approvals;
+      const next = { ...feed, approvals: rest };
       const subject = call ? `${call.name} ${call.subject}`.trim() : "tool call";
       const who = event.resolved_by === null ? "timeout" : nameOf(event.resolved_by);
       if (event.decision === "reject" || event.decision === "block") {
-        notice("danger", `${subject}: ${event.decision === "block" ? "blocked" : "rejected"} (${who})`);
-      } else if (event.resolved_by !== projection.meId) {
-        notice("ok", `${subject}: allowed${event.decision === "always" ? " for the session" : ""} (${who})`);
+        return withNotice(next, "danger", `${subject}: ${event.decision === "block" ? "blocked" : "rejected"} (${who})`);
+      }
+      if (event.resolved_by !== projection.meId) {
+        return withNotice(next, "ok", `${subject}: allowed${event.decision === "always" ? " for the session" : ""} (${who})`);
       }
       return next;
     }
     case "policy.rule_added":
-      notice("accent", `policy + ${event.rule.action} ${event.rule.tool} ${event.rule.pattern}  [${event.rule.id}]`);
-      return next;
+      return note("accent", `policy + ${event.rule.action} ${event.rule.tool} ${event.rule.pattern}  [${event.rule.id}]`);
     case "policy.rule_removed":
-      notice("accent", `policy - ${event.rule_id}`);
-      return next;
+      return note("accent", `policy - ${event.rule_id}`);
     case "context.compacted":
-      notice("dim", `context compacted (${event.tokens_before} tokens summarized)`);
-      return next;
+      return note("dim", `context compacted (${event.tokens_before} tokens summarized)`);
     case "attachment.added":
-      notice("dim", `${nameOf(event.attachment.owner_id)} attached ${event.attachment.name}`);
-      return next;
+      return note("dim", `${nameOf(event.attachment.owner_id)} attached ${event.attachment.name}`);
     case "invite.created":
-      notice("ok", `invite for a ${event.role}: ${event.link}`);
-      return next;
+      return note("ok", `invite for a ${event.role}: ${event.link}`);
     case "error":
-      notice("danger", event.message);
-      return next;
+      return note("danger", event.message);
     default:
-      return next;
+      return feed;
   }
-}
-
-function streamed(feed: Feed, event: EventOf<"message.delta">): Feed {
-  const pending = feed.pending ?? { messageId: event.message_id, text: "", committed: 0, first: true };
-  const text = pending.text + event.text;
-  const end = committableEnd(text, pending.committed);
-  if (end <= pending.committed) {
-    return { ...feed, pending: { ...pending, text } };
-  }
-  const chunk = text.slice(pending.committed, end).replace(/\n+$/, "");
-  const items = chunk ? [...feed.items, assistant(feed, chunk, pending.first)] : feed.items;
-  return {
-    ...feed,
-    items,
-    counter: feed.counter + 1,
-    pending: { ...pending, text, committed: end, first: pending.first && !chunk },
-  };
-}
-
-function endMessage(feed: Feed, event: EventOf<"message.ended">): Feed {
-  const pending = feed.pending;
-  const from = pending && pending.messageId === event.message_id ? pending.committed : 0;
-  const first = pending && pending.messageId === event.message_id ? pending.first : true;
-  const tail = event.text.slice(from).trim();
-  const items = tail ? [...feed.items, assistant(feed, tail, first)] : feed.items;
-  return { ...feed, items, counter: feed.counter + 1, pending: null };
-}
-
-function assistant(feed: Feed, text: string, first: boolean): FeedItem {
-  return { kind: "assistant", id: `a${feed.counter + 1}`, text, first };
 }
 
 function loadHistory(feed: Feed, state: SessionState, streaming: Record<string, string>): Feed {
-  const entries = feed.history ? [] : state.transcript.slice(-HISTORY_ITEMS);
-  const items = [...feed.items];
+  if (feed.history) {
+    return feed;
+  }
+  const items: FeedItem[] = [...feed.items];
   let counter = feed.counter;
-  for (const entry of entries) {
+  for (const entry of state.transcript) {
     counter += 1;
     const item = fromEntry(entry, state, counter);
     if (item) {
       items.push(item);
     }
   }
-  const messageId = Object.keys(streaming)[0];
-  const pending: Pending | null =
-    messageId === undefined
-      ? null
-      : { messageId, text: streaming[messageId] ?? "", committed: 0, first: true };
-  const tools = state.transcript
-    .filter((entry) => entry.kind === "tool" && entry.ok === null && entry.tool !== null)
-    .map((entry) => ({ call: entry.tool as ToolCallView }));
-  const approvals = Object.fromEntries(
-    Object.values(state.approvals).map((approval) => [approval.id, approval.call]),
-  );
-  return { ...feed, items, counter, pending, tools, approvals, history: true };
+  for (const [messageId, text] of Object.entries(streaming)) {
+    items.push({ kind: "assistant", id: messageId, text, streaming: true });
+  }
+  const approvals = Object.fromEntries(Object.values(state.approvals).map((approval) => [approval.id, approval.call]));
+  return { ...feed, items, counter, approvals, history: true };
 }
 
 function fromEntry(entry: TranscriptEntry, state: SessionState, counter: number): FeedItem | null {
@@ -282,12 +263,19 @@ function fromEntry(entry: TranscriptEntry, state: SessionState, counter: number)
       };
     }
     case "assistant":
-      return entry.text ? { kind: "assistant", id: `h${counter}`, text: entry.text, first: true } : null;
+      return entry.text ? { kind: "assistant", id: `h${counter}`, text: entry.text, streaming: false } : null;
     case "tool":
-      if (entry.tool === null || entry.ok === null) {
+      if (entry.tool === null) {
         return null;
       }
-      return { kind: "tool", id: entry.id, call: entry.tool, ok: entry.ok, output: entry.output, diff: null };
+      return {
+        kind: "tool",
+        id: entry.id,
+        call: entry.tool,
+        status: entry.ok === null ? "running" : entry.ok ? "ok" : "failed",
+        output: entry.output,
+        diff: null,
+      };
     case "compaction":
       return { kind: "notice", id: `h${counter}`, tone: "dim", text: entry.text };
   }

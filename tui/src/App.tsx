@@ -1,4 +1,5 @@
-import { Box, Static, Text, useApp, useInput, useWindowSize } from "ink";
+import type { ScrollBoxRenderable } from "@opentui/core";
+import { useKeyboard, useRenderer, useSelectionHandler, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   label,
@@ -14,10 +15,11 @@ import { COMMANDS, helpText } from "./commands";
 import { FeedItemView } from "./components/Cards";
 import { Composer } from "./components/Composer";
 import { Inbox, inboxItems } from "./components/Inbox";
-import { Live } from "./components/Live";
+import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import { copyToClipboard } from "./lib/clipboard";
+import { createSyntaxStyle } from "./syntax";
 import { theme } from "./theme";
 
 export interface AppProps {
@@ -25,15 +27,18 @@ export interface AppProps {
   room: string;
   version: string;
   guestLink: string | null;
+  onQuit: () => void;
 }
 
 type Focus = "composer" | "inbox";
 
 const GUARD_MS = 400;
+const MIN_WIDTH_FOR_PANEL = 90;
 
-export function App({ client, room, version, guestLink }: AppProps) {
-  const { exit } = useApp();
-  const { columns, rows } = useWindowSize();
+export function App({ client, room, version, guestLink, onQuit }: AppProps) {
+  const renderer = useRenderer();
+  const syntax = useMemo(() => createSyntaxStyle(renderer), [renderer]);
+  const { width, height } = useTerminalDimensions();
   const initial = useMemo(() => withBanner(emptyFeed(), { kind: "banner", id: "banner", room, version, guestLink }), []);
   const [feed, setFeed] = useState<Feed>(initial);
   const feedRef = useRef(initial);
@@ -44,17 +49,20 @@ export function App({ client, room, version, guestLink }: AppProps) {
   const [editing, setEditing] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [panel, setPanel] = useState(true);
+  const scroll = useRef<ScrollBoxRenderable>(null);
   const armed = useRef(false);
   const dirty = useRef(false);
   const guardUntil = useRef(0);
+  const copying = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const commit = (next: Feed): void => {
     feedRef.current = next;
     setFeed(next);
   };
   const notify = (tone: Tone, text: string): void => commit(withNotice(feedRef.current, tone, text));
-  const write = (data: string): void => {
-    process.stdout.write(data);
+  const copy = (text: string, done: string): void => {
+    void copyToClipboard(text, (value) => renderer.copyToClipboardOSC52(value)).then(() => flash(done));
   };
 
   useEffect(() => {
@@ -64,7 +72,7 @@ export function App({ client, room, version, guestLink }: AppProps) {
         for await (const event of client.events()) {
           commit(absorb(feedRef.current, event, client.projection));
           if (event.type === "invite.created") {
-            void copyToClipboard(event.link, write).then(() => notify("dim", "invite link copied to the clipboard"));
+            copy(event.link, "invite link copied to the clipboard");
           }
         }
       } catch (error) {
@@ -84,6 +92,7 @@ export function App({ client, room, version, guestLink }: AppProps) {
   const items = useMemo(() => (isHost ? inboxItems(state) : []), [isHost, state.approvals, state.proposals]);
   const approvals = Object.keys(state.approvals).length;
   const running = state.run !== null;
+  const runStatus = feed.items.some((item) => item.kind === "assistant" && item.streaming) ? "… writing" : status(projection);
 
   useEffect(() => {
     if (items.length === 0) {
@@ -114,7 +123,7 @@ export function App({ client, room, version, guestLink }: AppProps) {
 
   const interrupt = (): void => {
     if (armed.current) {
-      exit();
+      onQuit();
       return;
     }
     armed.current = true;
@@ -130,7 +139,7 @@ export function App({ client, room, version, guestLink }: AppProps) {
       flash("nothing to copy yet");
       return;
     }
-    void copyToClipboard(text, write).then(() => flash("copied the last reply"));
+    copy(text, "copied the last reply");
   };
 
   const escape = (): void => {
@@ -162,7 +171,7 @@ export function App({ client, room, version, guestLink }: AppProps) {
         copyReply();
         return true;
       case "quit":
-        exit();
+        onQuit();
         return true;
       default:
         return false;
@@ -170,6 +179,7 @@ export function App({ client, room, version, guestLink }: AppProps) {
   };
 
   const submit = (text: string): void => {
+    scroll.current?.scrollTo(Number.MAX_SAFE_INTEGER);
     if (editing) {
       send({ type: "proposal.decide", proposal_id: editing, decision: "approve", edited_text: text });
       setEditing(null);
@@ -207,81 +217,108 @@ export function App({ client, room, version, guestLink }: AppProps) {
     send({ type: "prompt.submit", text, delivery: "now" });
   };
 
-  useInput(
-    (input, key) => {
-      const item = items[Math.min(selected, items.length - 1)];
-      if (Date.now() < guardUntil.current) {
-        return;
+  useKeyboard((key) => {
+    if (key.ctrl && key.name === "b") {
+      key.preventDefault();
+      setPanel((value) => !value);
+      return;
+    }
+    if (key.name === "pageup" || key.name === "pagedown") {
+      key.preventDefault();
+      scroll.current?.scrollBy((key.name === "pageup" ? -1 : 1) * Math.max(3, height - 8));
+      return;
+    }
+    if (focus !== "inbox" || !isHost || Date.now() < guardUntil.current) {
+      return;
+    }
+    const item = items[Math.min(selected, items.length - 1)];
+    key.preventDefault();
+    if (key.name === "tab" || key.name === "escape") {
+      setFocus("composer");
+    } else if (key.name === "up" || key.name === "k") {
+      setSelected((value) => Math.max(0, value - 1));
+    } else if (key.name === "down" || key.name === "j") {
+      setSelected((value) => Math.min(items.length - 1, value + 1));
+    } else if (item?.kind === "approval") {
+      const decisions: Record<string, "once" | "always" | "reject" | "block"> = { y: "once", a: "always", n: "reject", b: "block" };
+      const decision = key.name === "return" ? "once" : decisions[key.name];
+      if (decision) {
+        send({ type: "approval.respond", approval_id: item.id, decision });
       }
-      if (key.tab || key.escape) {
+    } else if (item?.kind === "proposal") {
+      if (key.name === "return" || key.name === "y") {
+        send({ type: "proposal.decide", proposal_id: item.id, decision: "approve" });
+      } else if (key.name === "n" || key.name === "x") {
+        send({ type: "proposal.decide", proposal_id: item.id, decision: "reject" });
+      } else if (key.name === "e") {
+        setEditing(item.id);
+        setSeed({ text: item.proposal.text, key: Date.now() });
         setFocus("composer");
-      } else if (key.upArrow || input === "k") {
-        setSelected((value) => Math.max(0, value - 1));
-      } else if (key.downArrow || input === "j") {
-        setSelected((value) => Math.min(items.length - 1, value + 1));
-      } else if (item?.kind === "approval") {
-        const decisions: Record<string, "once" | "always" | "reject" | "block"> = { y: "once", a: "always", n: "reject", b: "block" };
-        const decision = key.return ? "once" : decisions[input];
-        if (decision) {
-          send({ type: "approval.respond", approval_id: item.id, decision });
-        }
-      } else if (item?.kind === "proposal") {
-        if (key.return || input === "y") {
-          send({ type: "proposal.decide", proposal_id: item.id, decision: "approve" });
-        } else if (input === "n" || input === "x") {
-          send({ type: "proposal.decide", proposal_id: item.id, decision: "reject" });
-        } else if (input === "e") {
-          setEditing(item.id);
-          setSeed({ text: item.proposal.text, key: Date.now() });
-          setFocus("composer");
-        }
       }
-    },
-    { isActive: focus === "inbox" && isHost },
-  );
+    }
+  });
+
+  useSelectionHandler((selection) => {
+    const text = selection.getSelectedText();
+    if (!text) {
+      return;
+    }
+    if (copying.current) {
+      clearTimeout(copying.current);
+    }
+    copying.current = setTimeout(() => copy(text, `copied ${text.length} characters`), 250);
+  });
 
   const placeholder =
     me?.role === "participant" && state.prompt_mode === "review"
       ? "Propose a prompt, the host approves it"
       : "Message the agent, / for commands";
   const disabled = me?.role === "viewer" ? "viewers can only watch the session" : null;
+  const showPanel = panel && width >= MIN_WIDTH_FOR_PANEL;
 
   return (
-    <>
-      <Static items={feed.items}>{(item) => <FeedItemView key={item.id} item={item} width={columns} />}</Static>
-      <Live
-        feed={feed}
-        status={feed.pending && feed.pending.text !== "" ? "… writing" : status(projection)}
-        running={running}
-        columns={columns}
-        maxLines={Math.max(4, rows - 16)}
-        interruptible={isHost}
-      />
-      {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} /> : null}
-      <Composer
-        active={focus === "composer"}
-        disabled={disabled}
-        placeholder={placeholder}
-        role={me?.role}
-        columns={columns}
-        seed={seed}
-        label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
-        onSubmit={submit}
-        onEscape={escape}
-        onTab={() => {
-          if (items.length > 0) {
-            guardUntil.current = 0;
-            setFocus("inbox");
-          }
-        }}
-        onDirty={(value) => {
-          dirty.current = value;
-        }}
-        onInterrupt={interrupt}
-        onCopy={copyReply}
-      />
-      <StatusBar me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
-      {columns < 40 ? <Text color={theme.warn}>terminal is very narrow</Text> : null}
-    </>
+    <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg}>
+      <box flexDirection="column" flexGrow={1} minWidth={0}>
+        <scrollbox
+          ref={scroll}
+          stickyScroll
+          stickyStart="bottom"
+          flexGrow={1}
+          paddingX={2}
+          paddingTop={1}
+          scrollbarOptions={{ showArrows: false, trackOptions: { foregroundColor: theme.line, backgroundColor: theme.bg } }}
+        >
+          {feed.items.map((item) => (
+            <FeedItemView key={item.id} item={item} syntax={syntax} />
+          ))}
+        </scrollbox>
+        {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} /> : null}
+        <Composer
+          focused={focus === "composer"}
+          disabled={disabled}
+          placeholder={placeholder}
+          role={me?.role}
+          seed={seed}
+          label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
+          onSubmit={submit}
+          onEscape={escape}
+          onTab={() => {
+            if (items.length > 0) {
+              guardUntil.current = 0;
+              setFocus("inbox");
+            }
+          }}
+          onInterrupt={interrupt}
+          onCopy={copyReply}
+          onDirty={(value) => {
+            dirty.current = value;
+          }}
+        />
+        <StatusBar me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
+      </box>
+      {showPanel ? <Sidebar projection={projection} room={room} inbox={items} running={running} status={runStatus} /> : null}
+    </box>
   );
 }
+
+export { SIDEBAR_WIDTH };

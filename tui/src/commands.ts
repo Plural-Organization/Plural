@@ -35,9 +35,12 @@ export function helpText(role: Role | undefined): string {
   const commands = visibleCommands(role).map((command) => `  ${command.usage.padEnd(30)} ${command.description}`);
   const keys = [
     "  enter           send",
-    "  \\ + enter       new line (shift+enter in kitty, ghostty, wezterm, iterm2)",
+    "  shift+enter     new line (ctrl+j in any terminal)",
     "  tab             review approvals and proposals / complete a command",
     "  esc             interrupt the run",
+    "  pgup / pgdn     scroll the conversation",
+    "  ctrl+b          show or hide the side panel",
+    "  select text     copies it to the clipboard",
     "  ctrl+y          copy the last reply",
     "  ctrl+c          clear the input, twice to quit",
   ];

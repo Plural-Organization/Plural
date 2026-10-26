@@ -1,7 +1,10 @@
 export const theme = {
+  bg: "#16161e",
+  panel: "#1a1b26",
+  line: "#2a2e42",
+  text: "#c0caf5",
+  dim: "#565f89",
   accent: "#7aa2f7",
-  text: undefined,
-  dim: "gray",
   ok: "#9ece6a",
   warn: "#e0af68",
   danger: "#f7768e",

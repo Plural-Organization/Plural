@@ -1,6 +1,6 @@
 # ADR 0005: TypeScript client, Python host
 
-Status: accepted
+Status: accepted. The rendering part (Ink, inline mode) is superseded by ADR 0006.
 
 ## Context
 

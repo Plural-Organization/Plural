@@ -1,6 +1,7 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 import { userInfo } from "node:os";
-import { render } from "ink";
+import { createCliRenderer } from "@opentui/core";
+import { createRoot } from "@opentui/react";
 import { parseLink, SessionClient } from "@plural/client";
 import pkg from "../package.json" with { type: "json" };
 import { App } from "./App";
@@ -36,6 +37,12 @@ async function main(): Promise<void> {
     process.stdout.write(`${pkg.version}\n`);
     return;
   }
+  if (first === "--selftest") {
+    const probe = await createCliRenderer({ exitOnCtrlC: false, useMouse: false });
+    probe.destroy();
+    process.stdout.write("selftest ok\n");
+    process.exit(0);
+  }
   if (first === "--help" || first === "-h") {
     process.stdout.write(USAGE);
     return;
@@ -51,7 +58,6 @@ async function main(): Promise<void> {
   let guestLink: string | null = null;
   let room: string;
   let name: string;
-  let version = pkg.version;
   if (first === "join") {
     const target = rest[0];
     if (!target) {
@@ -71,7 +77,6 @@ async function main(): Promise<void> {
     link = host.hostLink;
     guestLink = host.guestLink;
     room = host.room;
-    version = pkg.version;
   }
 
   let parsed;
@@ -81,18 +86,26 @@ async function main(): Promise<void> {
     await host?.stop();
     fail(error instanceof Error ? error.message : String(error));
   }
-  const client = new SessionClient(parsed, { name, client: { kind: "tui", version } });
-  const instance = render(<App client={client} room={room} version={version} guestLink={guestLink} />, {
-    exitOnCtrlC: false,
+
+  const client = new SessionClient(parsed, { name, client: { kind: "tui", version: pkg.version } });
+  const renderer = await createCliRenderer({ exitOnCtrlC: false, useMouse: true });
+  const quit = new Promise<void>((resolve) => {
+    createRoot(renderer).render(
+      <App
+        client={client}
+        room={room}
+        version={pkg.version}
+        guestLink={guestLink}
+        onQuit={() => {
+          resolve();
+        }}
+      />,
+    );
+    process.on("SIGTERM", () => resolve());
+    process.on("SIGINT", () => resolve());
   });
-  const stop = async (): Promise<void> => {
-    instance.unmount();
-    await host?.stop();
-    process.exit(0);
-  };
-  process.on("SIGTERM", () => void stop());
-  process.on("SIGINT", () => void stop());
-  await instance.waitUntilExit();
+  await quit;
+  renderer.destroy();
   await host?.stop();
   process.exit(0);
 }
