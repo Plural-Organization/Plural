@@ -35,6 +35,7 @@ class ToolRegistry:
     def prepare(self, call: ToolCallRequest) -> PreparedCall:
         return self.get(call.name).prepare(call.args)
 
+
 def builtin_tools() -> ToolRegistry:
     registry = ToolRegistry()
     for tool in (
