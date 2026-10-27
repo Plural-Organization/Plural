@@ -40,6 +40,11 @@ export type PolicyAction = "allow" | "ask" | "deny";
  * via the `definition` "Delivery".
  */
 export type Delivery = "now" | "steer" | "follow_up";
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "SkillScope".
+ */
+export type SkillScope = "project" | "global";
 
 export interface CommandsSchema {
   command:
@@ -55,6 +60,14 @@ export interface CommandsSchema {
     | ContextCompact
     | PromptModeSet
     | PermissionModeSet
+    | SkillsSearch
+    | SkillsInstall
+    | SkillsRemove
+    | McpAdd
+    | McpRemove
+    | McpToggle
+    | McpRestart
+    | McpImport
     | TypingSet
     | QueueCancel
     | PolicyAdd
@@ -174,6 +187,81 @@ export interface PromptModeSet {
 export interface PermissionModeSet {
   mode: PermissionMode;
   type?: "session.set_permission_mode";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "SkillsSearch".
+ */
+export interface SkillsSearch {
+  query: string;
+  type?: "skills.search";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "SkillsInstall".
+ */
+export interface SkillsInstall {
+  package: string;
+  scope?: "project" | "global";
+  type?: "skills.install";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "SkillsRemove".
+ */
+export interface SkillsRemove {
+  name: string;
+  type?: "skills.remove";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "McpAdd".
+ */
+export interface McpAdd {
+  args?: string[];
+  command?: string | null;
+  env?: {
+    [k: string]: string;
+  };
+  headers?: {
+    [k: string]: string;
+  };
+  name: string;
+  scope?: "project" | "global";
+  type?: "mcp.add";
+  url?: string | null;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "McpRemove".
+ */
+export interface McpRemove {
+  name: string;
+  type?: "mcp.remove";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "McpToggle".
+ */
+export interface McpToggle {
+  enabled: boolean;
+  name: string;
+  type?: "mcp.toggle";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "McpRestart".
+ */
+export interface McpRestart {
+  name: string;
+  type?: "mcp.restart";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "McpImport".
+ */
+export interface McpImport {
+  type?: "mcp.import";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

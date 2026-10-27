@@ -1,9 +1,9 @@
 import asyncio
-from collections.abc import Sequence
+from collections.abc import AsyncIterator, Callable, Sequence
 
 import structlog
 
-from plural.agent.events import RunEnd
+from plural.agent.events import AgentEvent, ContextFill, RunEnd
 from plural.agent.loop import AgentLoop
 from plural.agent.messages import Message, UserTurn
 from plural.agent.providers.base import LLMProvider
@@ -28,10 +28,25 @@ class AgentRun:
         return self._task is not None and not self._task.done()
 
     def start(self, run_id: str, turn: UserTurn) -> None:
+        self._launch(run_id, lambda cancel: self._loop.run(turn, cancel=cancel))
+
+    def compact(self, run_id: str) -> None:
+        self._launch(run_id, lambda cancel: self._loop.compact(cancel=cancel))
+
+    @property
+    def can_compact(self) -> bool:
+        return self._loop.can_compact
+
+    def fill(self) -> ContextFill:
+        return self._loop.fill()
+
+    def _launch(
+        self, run_id: str, events: Callable[[asyncio.Event], AsyncIterator[AgentEvent]]
+    ) -> None:
         if self.active:
             raise RuntimeError("a run is already active")
         self._cancel = asyncio.Event()
-        self._task = asyncio.create_task(self._drive(run_id, turn, self._cancel), name=run_id)
+        self._task = asyncio.create_task(self._drive(run_id, events(self._cancel)), name=run_id)
 
     def steer(self, turn: UserTurn) -> None:
         self._loop.steer(turn)
@@ -63,9 +78,9 @@ class AgentRun:
         if task is not None and self._deadline is None:
             self._deadline = asyncio.get_running_loop().call_later(ABORT_GRACE_S, task.cancel)
 
-    async def _drive(self, run_id: str, turn: UserTurn, cancel: asyncio.Event) -> None:
+    async def _drive(self, run_id: str, events: AsyncIterator[AgentEvent]) -> None:
         try:
-            async for event in self._loop.run(turn, cancel=cancel):
+            async for event in events:
                 self._inbox.put(AgentOutput(run_id, event))
         except asyncio.CancelledError:
             self._inbox.put(AgentOutput(run_id, RunEnd(RunEndReason.ABORTED, self._loop.usage)))

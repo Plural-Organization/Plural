@@ -6,7 +6,9 @@ from plural.protocol.events import (
     ApprovalResolved,
     AttachmentAdded,
     ContextCompacted,
+    ContextUsage,
     EventRecord,
+    McpChanged,
     MessageEnded,
     ParticipantJoined,
     ParticipantLeft,
@@ -23,6 +25,7 @@ from plural.protocol.events import (
     ProposalRejected,
     RunEnded,
     RunStarted,
+    SkillsChanged,
     ToolEnded,
     ToolStarted,
 )
@@ -63,6 +66,12 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             return state.model_copy(update={"prompt_mode": mode})
         case PermissionModeChanged(mode=mode):
             return state.model_copy(update={"permission_mode": mode})
+        case McpChanged(servers=servers):
+            return state.model_copy(update={"mcp": servers})
+        case ContextUsage(context=context):
+            return state.model_copy(update={"context": context})
+        case SkillsChanged(skills=skills):
+            return state.model_copy(update={"skills": skills})
         case ProposalCreated(proposal=proposal):
             return state.model_copy(
                 update={"proposals": {**state.proposals, proposal.id: proposal}}

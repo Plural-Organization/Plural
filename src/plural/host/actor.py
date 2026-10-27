@@ -2,14 +2,16 @@ import asyncio
 import base64
 import binascii
 import hashlib
-from collections.abc import Sequence
+from collections.abc import Coroutine, Sequence
 from pathlib import PurePath
 
 import structlog
 from pydantic import ValidationError
 
 from plural.agent import events as agent
+from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.messages import Message, UserTurn
+from plural.agent.skills import Package, SkillError, SkillLibrary, parse_package
 from plural.core import approvals, policies, proposals
 from plural.core.errors import (
     Conflict,
@@ -36,7 +38,10 @@ from plural.host.inbox import (
     Inbox,
     InboxMessage,
     Incoming,
+    McpUpdated,
     Reconfigure,
+    SkillsReply,
+    SkillsUpdated,
     TypingExpired,
 )
 from plural.host.invites import InviteBook
@@ -51,6 +56,11 @@ from plural.protocol.commands import (
     FileAttach,
     HistoryGet,
     InviteCreate,
+    McpAdd,
+    McpImport,
+    McpRemove,
+    McpRestart,
+    McpToggle,
     ParticipantRevoke,
     ParticipantSetRole,
     PermissionModeSet,
@@ -62,6 +72,9 @@ from plural.protocol.commands import (
     QueueCancel,
     RunAbort,
     SessionHello,
+    SkillsInstall,
+    SkillsRemove,
+    SkillsSearch,
     TypingSet,
 )
 from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo
@@ -70,9 +83,13 @@ from plural.protocol.events import (
     ApprovalRequested,
     AttachmentAdded,
     ContextCompacted,
+    ContextCompacting,
+    ContextUsage,
+    ErrorRaised,
     Event,
     EventRecord,
     InviteCreated,
+    McpChanged,
     MessageDelta,
     MessageEnded,
     MessageStarted,
@@ -92,6 +109,8 @@ from plural.protocol.events import (
     RunStarted,
     SessionSnapshot,
     SessionWelcome,
+    SkillsChanged,
+    SkillsFound,
     ToolEnded,
     ToolOutput,
     ToolStarted,
@@ -101,6 +120,7 @@ from plural.protocol.models import (
     ActorKind,
     ApprovalDecision,
     AttachmentMeta,
+    ContextView,
     Delivery,
     DequeueReason,
     Participant,
@@ -110,6 +130,7 @@ from plural.protocol.models import (
     Role,
     RunEndReason,
     SessionState,
+    SkillScope,
     Usage,
 )
 from plural.security.secrets import Redactor, is_denied_path
@@ -141,6 +162,8 @@ class SessionActor:
         host: Participant,
         max_attachment_bytes: int,
         prompt_mode: PromptMode | None = None,
+        skills: SkillLibrary | None = None,
+        mcp: McpHub | None = None,
         typing_ttl_s: float = 6.0,
         agent_label: str = "",
     ) -> None:
@@ -159,6 +182,9 @@ class SessionActor:
         self._host = host
         self._max_attachment_bytes = max_attachment_bytes
         self._initial_mode = prompt_mode
+        self._skills = skills
+        self._mcp = mcp
+        self._jobs: set[asyncio.Task[None]] = set()
         self._typing_ttl_s = typing_ttl_s
         self._agent_label = agent_label
         self._typing: dict[str, asyncio.TimerHandle] = {}
@@ -199,6 +225,11 @@ class SessionActor:
         if self._initial_mode is not None:
             await self._set_prompt_mode(self._initial_mode, actor_id=self._host.id)
         await self._set_permission_mode(PermissionMode.DEFAULT, actor_id=self._host.id)
+        if self._skills is not None:
+            await self._skills.refresh()
+            await self._sync_skills()
+        await self._sync_context(self._agent.fill())
+        await self._sync_mcp()
 
     async def run(self) -> None:
         while True:
@@ -224,6 +255,19 @@ class SessionActor:
                 )
             case Reconfigure() as change:
                 await self._reconfigure(change)
+            case McpUpdated():
+                await self._sync_mcp()
+            case SkillsUpdated(connection=connection, error=error):
+                await self._sync_skills()
+                if error is not None and connection is not None:
+                    self._publisher.deliver(
+                        connection, ErrorRaised(code=ErrorCode.INVALID, message=error)
+                    )
+            case SkillsReply(connection=connection, event=found, error=error):
+                self._publisher.deliver(
+                    connection,
+                    found or ErrorRaised(code=ErrorCode.INVALID, message=error or "search failed"),
+                )
             case TypingExpired(participant_id=participant_id):
                 if self._typing.pop(participant_id, None) is not None:
                     await self._emit(ParticipantTyping(participant_id=participant_id, typing=False))
@@ -289,11 +333,38 @@ class SessionActor:
                     raise Conflict("no active run")
                 self._agent.abort()
             case ContextCompact():
-                self._agent.request_compaction()
+                if self._state.run is not None:
+                    self._agent.request_compaction()
+                elif not self._agent.can_compact:
+                    raise Conflict("nothing to compact yet")
+                else:
+                    run_id = self._ids.new("run_")
+                    provenance = direct(participant.id, participant.role)
+                    await self._emit(
+                        RunStarted(run_id=run_id, prompt_id="", provenance=provenance),
+                        actor_id=participant.id,
+                    )
+                    self._agent.compact(run_id)
             case PromptModeSet():
                 await self._set_prompt_mode(command.mode, actor_id=participant.id)
             case PermissionModeSet():
                 await self._set_permission_mode(command.mode, actor_id=participant.id)
+            case McpAdd() | McpRemove() | McpToggle() | McpRestart() | McpImport():
+                await self._mcp_command(command, actor_id=participant.id)
+            case SkillsSearch():
+                self._background(self._search_skills(connection, command.query))
+            case SkillsInstall():
+                try:
+                    package = parse_package(command.package)
+                except SkillError as error:
+                    raise Invalid(str(error)) from None
+                self._background(self._install_skill(connection, package, command.scope))
+            case SkillsRemove():
+                try:
+                    await self._library().remove(command.name)
+                except SkillError as error:
+                    raise NotFound(str(error)) from None
+                await self._sync_skills(actor_id=participant.id)
             case TypingSet():
                 await self._set_typing(participant.id, typing=command.typing)
             case QueueCancel():
@@ -403,6 +474,7 @@ class SessionActor:
         self._agent_label = change.label
         if change.label != self._state.agent:
             await self._emit(AgentChanged(agent=change.label), actor_id=self._host.id)
+        await self._sync_context(self._agent.fill())
         change.reply.set_result(None)
 
     async def _set_typing(self, participant_id: str, *, typing: bool) -> None:
@@ -440,6 +512,95 @@ class SessionActor:
     async def _set_permission_mode(self, mode: PermissionMode, *, actor_id: str) -> None:
         if mode is not self._state.permission_mode:
             await self._emit(PermissionModeChanged(mode=mode), actor_id=actor_id)
+
+    def _library(self) -> SkillLibrary:
+        if self._skills is None:
+            raise Conflict("skills are not available on this host")
+        return self._skills
+
+    def _background(self, job: Coroutine[None, None, None]) -> None:
+        task = asyncio.create_task(job)
+        self._jobs.add(task)
+        task.add_done_callback(self._jobs.discard)
+
+    async def _search_skills(self, connection: Connection, query: str) -> None:
+        try:
+            hits = await self._library().search(query)
+        except (SkillError, DomainError) as error:
+            self._inbox.put(SkillsReply(connection, error=str(error)))
+        else:
+            self._inbox.put(SkillsReply(connection, SkillsFound(query=query, hits=hits)))
+
+    async def _install_skill(
+        self, connection: Connection, package: Package, scope: SkillScope
+    ) -> None:
+        try:
+            await self._library().install(package, scope)
+        except (SkillError, DomainError) as error:
+            self._inbox.put(SkillsUpdated(connection, error=str(error)))
+        except Exception:
+            log.exception("actor.skill_install_failed", package=str(package))
+            self._inbox.put(SkillsUpdated(connection, error=f"could not install {package}"))
+        else:
+            self._inbox.put(SkillsUpdated(connection))
+
+    async def _mcp_command(
+        self, command: McpAdd | McpRemove | McpToggle | McpRestart | McpImport, *, actor_id: str
+    ) -> None:
+        if self._mcp is None:
+            raise Conflict("MCP is not available on this host")
+        try:
+            match command:
+                case McpAdd():
+                    if bool(command.command) == bool(command.url):
+                        raise Invalid("give either a command to launch or a URL")
+                    spec = ServerSpec(
+                        command=command.command,
+                        args=list(command.args),
+                        url=command.url,
+                        env=dict(command.env),
+                        headers=dict(command.headers),
+                    )
+                    self._mcp.add(command.name, spec, command.scope)
+                case McpRemove():
+                    await self._mcp.remove(command.name)
+                case McpToggle():
+                    await self._mcp.toggle(command.name, enabled=command.enabled)
+                case McpRestart():
+                    await self._mcp.restart(command.name)
+                case McpImport():
+                    if not self._mcp.import_servers():
+                        raise NotFound("no new MCP servers in Claude Code or Cursor settings")
+        except McpError as error:
+            raise Invalid(str(error)) from None
+        for secret in self._mcp.secrets():
+            self._redactor.add(secret)
+        await self._sync_mcp(actor_id=actor_id)
+
+    async def _sync_mcp(self, *, actor_id: str | None = None) -> None:
+        if self._mcp is None:
+            return
+        servers = self._mcp.views()
+        if servers != self._state.mcp:
+            await self._emit(McpChanged(servers=servers), actor_id=actor_id or self._host.id)
+
+    async def _sync_context(self, fill: agent.ContextFill) -> None:
+        context = ContextView(tokens=fill.tokens, window=fill.window, compact_at=fill.compact_at)
+        if context != self._state.context:
+            await self._emit(ContextUsage(context=context))
+
+    async def _sync_skills(self, *, actor_id: str | None = None) -> None:
+        if self._skills is None:
+            return
+        views = self._skills.views()
+        if views == self._state.skills:
+            return
+        before = {skill.name for skill in self._state.skills}
+        after = {skill.name for skill in views}
+        changed = SkillsChanged(
+            skills=views, added=tuple(sorted(after - before)), removed=tuple(sorted(before - after))
+        )
+        await self._emit(changed, actor_id=actor_id or self._host.id)
 
     async def _decide(self, participant: Participant, command: ProposalDecide) -> None:
         proposal = self._state.proposals.get(command.proposal_id)
@@ -520,6 +681,10 @@ class SessionActor:
                     await self._emit(
                         PromptDequeued(prompt_id=prompt_id, reason=DequeueReason.DELIVERED)
                     )
+            case agent.Compacting(tokens_before=tokens_before):
+                await self._emit(ContextCompacting(run_id=run_id, tokens_before=tokens_before))
+            case agent.ContextFill() as fill:
+                await self._sync_context(fill)
             case agent.Compacted(summary=summary, tokens_before=tokens_before):
                 await self._emit(
                     ContextCompacted(run_id=run_id, summary=summary, tokens_before=tokens_before)

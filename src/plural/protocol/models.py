@@ -40,6 +40,18 @@ class PermissionMode(StrEnum):
     AUTO = "auto"
 
 
+class SkillScope(StrEnum):
+    PROJECT = "project"
+    GLOBAL = "global"
+
+
+class McpStatus(StrEnum):
+    CONNECTING = "connecting"
+    READY = "ready"
+    FAILED = "failed"
+    OFF = "off"
+
+
 class DequeueReason(StrEnum):
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
@@ -176,6 +188,33 @@ class PolicyRuleView(Model):
     action: PolicyAction
 
 
+class SkillView(Model):
+    name: str
+    description: str
+    scope: SkillScope
+
+
+class SkillHit(Model):
+    package: str
+    name: str
+    installs: int = 0
+
+
+class McpServerView(Model):
+    name: str
+    transport: str
+    scope: SkillScope
+    status: McpStatus
+    tools: int = 0
+    error: str | None = None
+
+
+class ContextView(Model):
+    tokens: int
+    window: int
+    compact_at: float
+
+
 class RunView(Model):
     id: str
     prompt_id: str
@@ -201,6 +240,9 @@ class SessionState(Model):
     approvals: dict[str, ApprovalView] = Field(default_factory=dict[str, ApprovalView])
     attachments: dict[str, AttachmentMeta] = Field(default_factory=dict[str, AttachmentMeta])
     policy: tuple[PolicyRuleView, ...] = ()
+    skills: tuple[SkillView, ...] = ()
+    context: ContextView | None = None
+    mcp: tuple[McpServerView, ...] = ()
     queue: tuple[QueuedPrompt, ...] = ()
     agent: str = ""
     summary: str | None = None

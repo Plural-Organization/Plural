@@ -137,6 +137,139 @@
       },
       "type": "object"
     },
+    "McpAdd": {
+      "properties": {
+        "args": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "command": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "env": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "name": {
+          "maxLength": 32,
+          "minLength": 1,
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/SkillScope",
+          "default": "project"
+        },
+        "type": {
+          "const": "mcp.add",
+          "default": "mcp.add",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "McpImport": {
+      "properties": {
+        "type": {
+          "const": "mcp.import",
+          "default": "mcp.import",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "McpRemove": {
+      "properties": {
+        "name": {
+          "maxLength": 32,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "mcp.remove",
+          "default": "mcp.remove",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "McpRestart": {
+      "properties": {
+        "name": {
+          "maxLength": 32,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "mcp.restart",
+          "default": "mcp.restart",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "McpToggle": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "maxLength": 32,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "mcp.toggle",
+          "default": "mcp.toggle",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "enabled"
+      ],
+      "type": "object"
+    },
     "ParticipantRevoke": {
       "properties": {
         "participant_id": {
@@ -439,6 +572,71 @@
       ],
       "type": "object"
     },
+    "SkillScope": {
+      "enum": [
+        "project",
+        "global"
+      ],
+      "type": "string"
+    },
+    "SkillsInstall": {
+      "properties": {
+        "package": {
+          "maxLength": 200,
+          "minLength": 3,
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/SkillScope",
+          "default": "project"
+        },
+        "type": {
+          "const": "skills.install",
+          "default": "skills.install",
+          "type": "string"
+        }
+      },
+      "required": [
+        "package"
+      ],
+      "type": "object"
+    },
+    "SkillsRemove": {
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "skills.remove",
+          "default": "skills.remove",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "SkillsSearch": {
+      "properties": {
+        "query": {
+          "maxLength": 100,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "skills.search",
+          "default": "skills.search",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
     "TypingSet": {
       "properties": {
         "type": {
@@ -465,6 +663,11 @@
           "file.attach": "#/$defs/FileAttach",
           "history.get": "#/$defs/HistoryGet",
           "invite.create": "#/$defs/InviteCreate",
+          "mcp.add": "#/$defs/McpAdd",
+          "mcp.import": "#/$defs/McpImport",
+          "mcp.remove": "#/$defs/McpRemove",
+          "mcp.restart": "#/$defs/McpRestart",
+          "mcp.toggle": "#/$defs/McpToggle",
           "participant.revoke": "#/$defs/ParticipantRevoke",
           "participant.set_role": "#/$defs/ParticipantSetRole",
           "policy.add": "#/$defs/PolicyAdd",
@@ -476,7 +679,10 @@
           "run.abort": "#/$defs/RunAbort",
           "session.hello": "#/$defs/SessionHello",
           "session.set_permission_mode": "#/$defs/PermissionModeSet",
-          "session.set_prompt_mode": "#/$defs/PromptModeSet"
+          "session.set_prompt_mode": "#/$defs/PromptModeSet",
+          "skills.install": "#/$defs/SkillsInstall",
+          "skills.remove": "#/$defs/SkillsRemove",
+          "skills.search": "#/$defs/SkillsSearch"
         },
         "propertyName": "type"
       },
@@ -516,6 +722,30 @@
         },
         {
           "$ref": "#/$defs/PermissionModeSet"
+        },
+        {
+          "$ref": "#/$defs/SkillsSearch"
+        },
+        {
+          "$ref": "#/$defs/SkillsInstall"
+        },
+        {
+          "$ref": "#/$defs/SkillsRemove"
+        },
+        {
+          "$ref": "#/$defs/McpAdd"
+        },
+        {
+          "$ref": "#/$defs/McpRemove"
+        },
+        {
+          "$ref": "#/$defs/McpToggle"
+        },
+        {
+          "$ref": "#/$defs/McpRestart"
+        },
+        {
+          "$ref": "#/$defs/McpImport"
         },
         {
           "$ref": "#/$defs/TypingSet"

@@ -8,8 +8,10 @@ from plural.protocol.models import (
     ApprovalDecision,
     ApprovalView,
     AttachmentMeta,
+    ContextView,
     Delivery,
     DequeueReason,
+    McpServerView,
     Model,
     Participant,
     PermissionMode,
@@ -20,6 +22,8 @@ from plural.protocol.models import (
     Role,
     RunEndReason,
     SessionState,
+    SkillHit,
+    SkillView,
     ToolCallView,
     Usage,
 )
@@ -62,6 +66,19 @@ class PromptModeChanged(EventBase):
 class PermissionModeChanged(EventBase):
     type: Literal["session.permission_mode_changed"] = "session.permission_mode_changed"
     mode: PermissionMode
+
+
+class SkillsChanged(EventBase):
+    type: Literal["skills.changed"] = "skills.changed"
+    skills: tuple[SkillView, ...]
+    added: tuple[str, ...] = ()
+    removed: tuple[str, ...] = ()
+
+
+class SkillsFound(TransientEvent):
+    type: Literal["skills.found"] = "skills.found"
+    query: str
+    hits: tuple[SkillHit, ...]
 
 
 class AgentChanged(EventBase):
@@ -143,6 +160,22 @@ class MessageEnded(EventBase):
     message_id: str
     text: str
     thinking: str = ""
+
+
+class ContextCompacting(TransientEvent):
+    type: Literal["context.compacting"] = "context.compacting"
+    run_id: str
+    tokens_before: int
+
+
+class McpChanged(EventBase):
+    type: Literal["mcp.changed"] = "mcp.changed"
+    servers: tuple[McpServerView, ...]
+
+
+class ContextUsage(EventBase):
+    type: Literal["context.usage"] = "context.usage"
+    context: ContextView
 
 
 class ContextCompacted(EventBase):
@@ -237,6 +270,8 @@ Event = Annotated[
     | ParticipantRevoked
     | PromptModeChanged
     | PermissionModeChanged
+    | SkillsChanged
+    | SkillsFound
     | AgentChanged
     | PromptDequeued
     | ParticipantTyping
@@ -249,7 +284,10 @@ Event = Annotated[
     | MessageStarted
     | MessageDelta
     | MessageEnded
+    | ContextCompacting
     | ContextCompacted
+    | ContextUsage
+    | McpChanged
     | ToolStarted
     | ToolOutput
     | ToolEnded

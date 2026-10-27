@@ -2,9 +2,11 @@ import asyncio
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 
 from plural.agent.context import ContextBuilder, Environment
 from plural.agent.loop import AgentLoop, LoopLimits
+from plural.agent.mcp import McpHub
 from plural.agent.providers import anthropic_api
 from plural.agent.providers.anthropic_api import AnthropicProvider
 from plural.agent.providers.anthropic_oauth import AnthropicOAuthProvider, load_credentials
@@ -15,8 +17,10 @@ from plural.agent.providers.fake import DemoProvider
 from plural.agent.providers.openai_compat import OpenAIProvider
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
+from plural.agent.skills import SkillLibrary
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.registry import builtin_tools
+from plural.agent.tools.skills import skill_tools
 from plural.core.policy.engine import Policy
 from plural.host.actor import SessionActor
 from plural.host.agent_run import AgentRun
@@ -24,7 +28,7 @@ from plural.host.approval_registry import ApprovalRegistry
 from plural.host.attachments import AttachmentVault
 from plural.host.config import HostSettings
 from plural.host.gateway import Gateway
-from plural.host.inbox import Inbox
+from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.publisher import Publisher
@@ -58,6 +62,7 @@ class Host:
     invites: InviteBook
     host_token: str
     host_link: str
+    mcp: McpHub | None = None
 
     async def serve(self) -> None:
         async with asyncio.TaskGroup() as group:
@@ -65,6 +70,8 @@ class Host:
             group.create_task(self.transport.serve(self.inbox), name="transport")
 
     async def close(self) -> None:
+        if self.mcp is not None:
+            await self.mcp.close()
         await self.agent_run.close()
         await self.store.close()
 
@@ -139,6 +146,18 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     store = await SqliteEventStore.open(state_dir / "sessions" / f"{room}.db")
     workspace = await asyncio.to_thread(Workspace.at, settings.workspace)
     inbox = Inbox()
+    skills = SkillLibrary(project=workspace.root, home=Path.home())
+    tools = builtin_tools()
+    for tool in skill_tools(skills, lambda: inbox.put(SkillsUpdated())):
+        tools.register(tool)
+    mcp = McpHub(
+        workspace=workspace.root,
+        home=Path.home(),
+        logs=state_dir / "logs",
+        on_change=lambda: inbox.put(McpUpdated()),
+    )
+    tools.add_source(mcp)
+    mcp.start()
     registry = ApprovalRegistry()
     gate = HostPolicyGate(
         policy=Policy(),
@@ -151,7 +170,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     )
     loop = AgentLoop(
         provider=provider or build_provider(settings, api_key),
-        tools=builtin_tools(),
+        tools=tools,
         gate=gate,
         context=ContextBuilder(
             environment=Environment(
@@ -160,6 +179,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
                 git_branch=await _git_branch(workspace),
             ),
             project_notes=await _project_notes(workspace),
+            skills=skills,
         ),
         tool_ctx=ToolCtx(workspace=workspace, backend=LocalBackend()),
         ids=ids,
@@ -192,12 +212,16 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         approval_registry=registry,
         gate=gate,
         vault=AttachmentVault(state_dir / "attachments" / room),
-        redactor=Redactor.from_environment(os.environ, extra=provider_secrets(settings, api_key)),
+        redactor=Redactor.from_environment(
+            os.environ, extra=(*provider_secrets(settings, api_key), *mcp.secrets())
+        ),
         ids=ids,
         clock=clock,
         host=host,
         max_attachment_bytes=settings.max_attachment_bytes,
         prompt_mode=settings.prompt_mode,
+        skills=skills,
+        mcp=mcp,
         typing_ttl_s=settings.typing_ttl_s,
         agent_label=settings.agent_label(),
     )
@@ -218,6 +242,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         invites=invites,
         host_token=host_token,
         host_link=f"{room_url}?token={host_token}",
+        mcp=mcp,
     )
 
 
