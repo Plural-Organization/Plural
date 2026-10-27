@@ -13,7 +13,7 @@ const tick = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 class FakeControl implements AgentControl {
   readonly configured: AgentConfig[] = [];
   readonly tested: AgentConfig[] = [];
-  nextConfigure: ControlResult = { ok: true, agent: "anthropic · claude-opus-5-5" };
+  nextConfigure: ControlResult = { ok: true, agent: "Anthropic · claude-opus-5-5" };
   nextTest: ControlResult = { ok: true, message: "answered in 0.8s" };
 
   async configure(config: AgentConfig): Promise<ControlResult> {
@@ -97,9 +97,11 @@ describe("Model tab", () => {
     const { setup, hooks } = await mount(session(), control);
     await setup.mockInput.pressKey("F2");
     const first = await frame(setup, "Demo agent");
-    expect(first).toContain("A scripted agent");
+    expect(first).toContain("Local / demo");
 
     await setup.mockInput.pressArrow("right");
+    await setup.mockInput.pressArrow("right");
+    await down(setup, 1);
     const anthropic = await frame(setup, "Anthropic");
     expect(anthropic).toContain("API key");
     expect(anthropic).toContain("not set");
@@ -117,10 +119,11 @@ describe("Model tab", () => {
 
     await down(setup, 4);
     await setup.mockInput.pressEnter();
-    await frame(setup, "now using anthropic · claude-opus-5-5");
+    await frame(setup, "now using Anthropic · claude-opus-5-5");
     expect(control.configured).toEqual([
       {
         provider: "anthropic",
+        provider_name: "Anthropic",
         model: "claude-opus-5-5",
         base_url: null,
         api_key: "sk-ant-abcdefghijklmnop1234",
@@ -141,7 +144,9 @@ describe("Model tab", () => {
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
     await setup.mockInput.pressArrow("right");
+    await setup.mockInput.pressArrow("right");
     await frame(setup, "Anthropic");
+    await down(setup, 1);
     await down(setup, 4);
     await setup.mockInput.pressEnter();
     await frame(setup, "Anthropic needs an API key");
@@ -154,9 +159,8 @@ describe("Model tab", () => {
     const { setup, hooks } = await mount(session(), control);
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
-    await setup.mockInput.pressArrow("left");
-    await frame(setup, "Custom endpoint");
-    await setup.mockInput.pressArrow("left");
+    await down(setup, 1);
+    await setup.mockInput.pressArrow("right");
     await frame(setup, "Ollama (local)");
     await down(setup, 4);
     await setup.mockInput.pressEnter();
@@ -164,6 +168,7 @@ describe("Model tab", () => {
     expect(control.tested).toEqual([
       {
         provider: "openai",
+        provider_name: "Ollama (local)",
         model: "qwen3:4b",
         base_url: "http://127.0.0.1:11434/v1",
         api_key: null,
@@ -183,12 +188,16 @@ describe("Model tab", () => {
     const { setup } = await mount(session(), control);
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
-    await setup.mockInput.pressArrow("left");
+    await setup.mockInput.pressArrow("right");
+    await setup.mockInput.pressArrow("right");
+    await down(setup, 1);
+    await frame(setup, "Anthropic");
+    for (let step = 0; step < 8; step += 1) await setup.mockInput.pressArrow("right");
     await frame(setup, "Custom endpoint");
     const custom = await frame(setup, "Endpoint");
     expect(custom).toContain("Context window");
     expect(custom).toContain("API key (optional)");
-    await down(setup, 3);
+    await down(setup, 4);
     await setup.mockInput.pressEnter();
     await setup.mockInput.typeText("4096");
     await setup.mockInput.pressEnter();
@@ -201,6 +210,8 @@ describe("Model tab", () => {
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
     await setup.mockInput.pressArrow("right");
+    await setup.mockInput.pressArrow("right");
+    await down(setup, 1);
     await frame(setup, "Anthropic");
     await down(setup, 1);
     await setup.mockInput.pressEnter();
@@ -215,9 +226,11 @@ describe("Model tab", () => {
     const { setup } = await mount(session(), control);
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
-    for (let step = 0; step < 6; step += 1) {
-      await setup.mockInput.pressArrow("right");
-    }
+    await setup.mockInput.pressArrow("right");
+    await setup.mockInput.pressArrow("right");
+    await down(setup, 1);
+    await setup.mockInput.pressArrow("right");
+    await setup.mockInput.pressArrow("right");
     const gemini = await frame(setup, "Google Gemini");
     expect(gemini).toContain("0000");
     expect(gemini).toContain("gemini-2.5-pro");
@@ -231,6 +244,8 @@ describe("Model tab", () => {
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
     await setup.mockInput.pressArrow("right");
+    await setup.mockInput.pressArrow("right");
+    await down(setup, 1);
     await frame(setup, "Anthropic");
     await down(setup, 1);
     await setup.mockInput.pressEnter();

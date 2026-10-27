@@ -77,7 +77,18 @@ class SessionStore {
           if (event.type === "invite.created") {
             this.update({ invite: { link: event.link, role: event.role, expiresAt: event.expires_at } });
           }
-          this.update({ feed: absorb(this.view.feed, event, client.projection) });
+          this.update({
+            feed:
+              event.type === "skills.found"
+                ? withNotice(
+                    this.view.feed,
+                    "accent",
+                    event.hits.length === 0
+                      ? `skills.sh has nothing for "${event.query}"`
+                      : [`skills.sh results for "${event.query}"`, ...event.hits.map((hit) => `  ${hit.package}  ${hit.installs} installs`), "add one with /skills add <package> [--global]"].join("\n"),
+                  )
+                : absorb(this.view.feed, event, client.projection),
+          });
         }
       } catch (error) {
         if (alive) {

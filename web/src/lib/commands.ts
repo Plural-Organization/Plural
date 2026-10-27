@@ -13,6 +13,8 @@ export const COMMANDS: CommandHint[] = [
   { name: "invite", usage: "/invite [participant|viewer]", description: "create an invite link", hostOnly: true },
   { name: "mode", usage: "/mode open|review", description: "who may prompt directly", hostOnly: true },
   { name: "policy", usage: "/policy [allow|ask|deny <tool> <pattern> | rm <id>]", description: "show or edit permission rules", hostOnly: true },
+  { name: "skills", usage: "/skills [search <q> | add <owner/repo@skill> [--global] | rm <name>]", description: "list, find and install skills" },
+  { name: "mcp", usage: "/mcp [add <name> <command|url> [--global] | on|off|restart|rm <name> | import]", description: "connect MCP servers and their tools" },
   { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
   { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
   { name: "cancel", usage: "/cancel <n>", description: "remove a queued prompt" },

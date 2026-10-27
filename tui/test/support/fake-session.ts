@@ -28,7 +28,7 @@ export class FakeSession implements Session {
   }
 
   emit(event: Event): void {
-    if (event.type === "message.delta" || event.type === "participant.typing" || event.type === "tool.output") {
+    if (event.type === "message.delta" || event.type === "participant.typing" || event.type === "tool.output" || event.type === "context.compacting") {
       this.projection.observe(event);
     } else if (event.type === "session.snapshot") {
       this.projection.load(event.state, event.streaming, event.typing);

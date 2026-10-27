@@ -50,6 +50,22 @@ The host decides how much the agent may do without asking. `shift+tab` cycles th
 
 Deny rules hold in every mode, and a run that contains a participant's prompt still asks before edits and commands, even in auto mode. When a plan is ready the host picks how to start it: `a` in auto mode, `e` accepting edits, `y` asking before changes, or `n` to keep planning. A restarted host always comes back in the default mode.
 
+## Skills
+
+A skill is a folder with a `SKILL.md`: a name and a description up top, instructions below, and any files it refers to next to it. It is the same format Claude Code, Codex and the [skills.sh](https://skills.sh) catalog use, so skills from Vercel, Anthropic or any public GitHub repository work as they are.
+
+The host reads skills from `.agents/skills`, `.claude/skills` and `.plural/skills` in the project and in the home folder; a project skill wins over a global one with the same name. The agent sees each skill's name and description and loads the full instructions with the `skill` tool when a task matches.
+
+| Command | What it does |
+|---|---|
+| `/skills` | List the installed skills |
+| `/skills search <query>` | Search skills.sh, most installed first |
+| `/skills add <owner/repo@skill>` | Install into the project's `.agents/skills` (host) |
+| `/skills add <owner/repo@skill> --global` | Install into `~/.agents/skills` for every session (host) |
+| `/skills rm <name>` | Remove a skill Plural installed (host) |
+
+The agent can search the catalog on its own and suggest a skill. It can install one too, but every install waits for the host's approval like an edit does, and plan mode refuses it. A skill is someone else's instructions that the agent will follow with the host's permissions, so install skills from sources you trust.
+
 ## The screen
 
 The conversation is on the left. The panel on the right shows who is in the room and who is typing, what needs the host, the prompt queue and the state of the agent. `ctrl+b` hides it, and it hides itself on narrow terminals.
@@ -71,7 +87,29 @@ When something waits for you, an approval card appears above the prompt.
 
 Keys are ignored for a moment after a card appears, and a card never takes the keys of a prompt you are typing.
 
+## MCP servers
+
+The host can connect MCP servers and the agent gets their tools, whatever model it runs on. Servers live in `.mcp.json` in the project or `~/.plural/mcp.json` for every session, in the same `mcpServers` format Claude Code and Cursor use, so a config can be copied over as is.
+
+| Command | What it does |
+|---|---|
+| `/mcp` | The servers, their status and tool count; `↑↓` chooses, `enter` turns one on or off, `ctrl+r` restarts it. `+ add a server…` opens a wizard with popular servers (Context7, Playwright, GitHub, Notion, Filesystem, Fetch, Git, Memory, Time) or your own command or URL, and asks only for what that server needs |
+| `/mcp import` | Takes the servers already set up for Claude Code (`~/.claude.json`) and Cursor (`~/.cursor/mcp.json`) |
+| `/mcp add <name> <command…>` | Launches a local server, for example `/mcp add plane npx -y @makeplane/plane-mcp-server` |
+| `/mcp add <name> <url>` | Connects a remote server over HTTP |
+| `/mcp on\|off\|restart\|rm <name>` | Turns a server on or off, restarts or removes it |
+
+`--global` on `add` saves the server for every project. Environment variables and HTTP headers such as tokens go in the JSON file; they never reach the room and are scrubbed from tool output. Remote servers that sign in with OAuth are not supported yet.
+
+Every MCP tool call waits for the host's approval like a command, and `always` allows that tool for the rest of the session. A run with a participant's prompt still asks in auto mode, and plan mode refuses MCP calls. A server writes its stderr to `~/.plural/state/logs/mcp-<name>.log`.
+
+## Context
+
+Everyone sees how full the agent's context is, in the status bar and the side panel: a bar, the percent and the tokens, green, then yellow, then red as it nears the point where the agent compacts on its own. While the agent summarizes the conversation, a squeezing bar shows it to the whole room, and the bar drops once the summary is in.
+
 ## Commands
+
+What a command shows, like `/help`, `/who`, `/skills` or skills.sh search results, opens in a panel under the composer instead of the conversation: it is yours alone and never reaches the agent. `esc` or `✕` closes it. Search results are a picker: `↑↓` chooses, `enter` installs into the project and `g` for every project.
 
 | Command | What it does |
 |---|---|
@@ -82,7 +120,8 @@ Keys are ignored for a moment after a card appears, and a card never takes the k
 | `/policy` | Show the permission rules (host) |
 | `/policy allow\|ask\|deny <tool> <pattern>` | Add a rule (host) |
 | `/policy rm <id>` | Remove a rule (host) |
-| `/compact` | Summarize the conversation before the next prompt (host) |
+| `/compact` | Summarize the conversation now, or before the agent's next step when it is busy (host) |
+| `/skills [search\|add\|rm …]` | List, find and install skills, see [Skills](#skills) |
 | `/abort` | Stop the current run (host) |
 | `/cancel <n>` | Remove a queued prompt, yours or any as the host |
 | `/copy` | Copy the last reply |

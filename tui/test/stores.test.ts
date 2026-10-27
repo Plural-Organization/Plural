@@ -6,7 +6,7 @@ import { ControlLink, type ControlResult } from "../src/control";
 import { credentialsPath, loadKeys, parseKeys, saveKeys } from "../src/credentials";
 import { DEFAULT_CHOICE, PRESETS, presetOf, problemWith, toConfig } from "../src/presets";
 import { DEFAULT_SETTINGS, loadSettings, parseSettings, saveSettings } from "../src/settings";
-import { friendlyError, maskKey, nextModel, nextPreset, switchPreset } from "../src/settingsModel";
+import { friendlyError, maskKey, nextConnection, nextModel, nextPreset, nextPresetInConnection, switchConnection, switchPreset } from "../src/settingsModel";
 
 describe("credentials", () => {
   test("keys are stored for the owner only and never next to the preferences", () => {
@@ -67,6 +67,7 @@ describe("presets", () => {
   test("a choice becomes the host's config", () => {
     expect(toConfig({ preset: "anthropic", model: "", baseUrl: "", contextWindow: "" }, " sk-ant-x ")).toEqual({
       provider: "anthropic",
+      provider_name: "Anthropic",
       model: "claude-opus-5-5",
       base_url: null,
       api_key: "sk-ant-x",
@@ -74,6 +75,7 @@ describe("presets", () => {
     });
     expect(toConfig({ preset: "gemini", model: "gemini-2.5-flash", baseUrl: "ignored", contextWindow: "9" }, "k")).toEqual({
       provider: "openai",
+      provider_name: "Google Gemini",
       model: "gemini-2.5-flash",
       base_url: "https://generativelanguage.googleapis.com/v1beta/openai/",
       api_key: "k",
@@ -81,12 +83,22 @@ describe("presets", () => {
     });
     expect(toConfig({ preset: "custom", model: "m", baseUrl: " http://h/v1 ", contextWindow: "2048" }, "")).toEqual({
       provider: "openai",
+      provider_name: "Custom endpoint",
       model: "m",
       base_url: "http://h/v1",
       api_key: null,
       context_window: 2048,
     });
     expect(toConfig(DEFAULT_CHOICE, "")).toMatchObject({ provider: "fake", api_key: null });
+    expect(toConfig({ preset: "nvidia", model: "", baseUrl: "", contextWindow: "" }, "nvapi-test")).toMatchObject({
+      provider: "openai", model: "meta/llama-3.3-70b-instruct", base_url: "https://integrate.api.nvidia.com/v1", api_key: "nvapi-test",
+    });
+    expect(toConfig({ preset: "azure", model: "my-deployment", baseUrl: "https://my-resource.openai.azure.com/openai/v1/", contextWindow: "" }, "azure-test")).toMatchObject({
+      provider: "openai", model: "my-deployment", base_url: "https://my-resource.openai.azure.com/openai/v1/", api_key: "azure-test",
+    });
+    expect(toConfig({ preset: "amazon_bedrock", model: "openai.gpt-oss-20b-1:0", baseUrl: "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1", contextWindow: "" }, "bedrock-test")).toMatchObject({
+      provider: "openai", model: "openai.gpt-oss-20b-1:0", base_url: "https://bedrock-runtime.us-west-2.amazonaws.com/openai/v1", api_key: "bedrock-test",
+    });
     expect(toConfig({ preset: "claude_code", model: "", baseUrl: "", contextWindow: "" }, "")).toMatchObject({
       provider: "claude_code", model: "claude-sonnet-5-5", api_key: null,
     });
@@ -96,6 +108,8 @@ describe("presets", () => {
     expect(problemWith({ preset: "anthropic", model: "", baseUrl: "", contextWindow: "" }, "")).toBe("Anthropic needs an API key");
     expect(problemWith({ preset: "custom", model: "", baseUrl: "http://h", contextWindow: "" }, "")).toBe("choose a model");
     expect(problemWith({ preset: "custom", model: "m", baseUrl: "", contextWindow: "" }, "")).toBe("enter the endpoint address");
+    expect(problemWith({ preset: "azure", model: "", baseUrl: "https://resource/openai/v1/", contextWindow: "" }, "key")).toBe("choose a model");
+    expect(problemWith({ preset: "azure", model: "deployment", baseUrl: "", contextWindow: "" }, "key")).toBe("enter the endpoint address");
     expect(problemWith({ preset: "ollama", model: "", baseUrl: "", contextWindow: "lots" }, "")).toBe("the context window must be a whole number of tokens");
     expect(problemWith({ preset: "ollama", model: "", baseUrl: "", contextWindow: "4096" }, "")).toBeNull();
     expect(problemWith(DEFAULT_CHOICE, "")).toBeNull();
@@ -118,6 +132,19 @@ describe("presets", () => {
     const back = switchPreset(next.choice, next.saved, -1);
     expect(back.choice).toEqual(oauth);
     expect(back.saved.anthropic_oauth).toEqual(oauth);
+  });
+
+  test("connections are grouped by authentication and providers cycle within a group", () => {
+    expect(presetOf(nextConnection("anthropic_oauth", 1)).connection).toBe("api_key");
+    expect(presetOf(nextConnection("openai", 1)).connection).toBe("local");
+    expect(nextPresetInConnection("anthropic_oauth", 1)).toBe("claude_code");
+    expect(presetOf(nextPresetInConnection("openrouter", 1)).connection).toBe("api_key");
+
+    const current = { preset: "anthropic_oauth" as const, model: "claude-sonnet-5-5", baseUrl: "", contextWindow: "" };
+    const moved = switchConnection(current, {}, 1);
+    expect(moved.choice.preset).toBe("anthropic");
+    expect(moved.saved.anthropic_oauth).toEqual(current);
+    expect(switchPreset(moved.choice, moved.saved, 1, true).choice.preset).toBe("openai");
   });
 
   test("a key is shown only by its tail", () => {

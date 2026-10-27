@@ -12,6 +12,7 @@ import {
   maskKey,
   nextModel,
   rowsFor,
+  switchConnection,
   switchPreset,
   TABS,
   type ModelState,
@@ -195,8 +196,11 @@ export function SettingsDialog(props: DialogProps) {
       return;
     }
     const { choice } = local.current;
-    if (row.id === "preset") {
-      const switched = switchPreset(choice, local.current.savedChoices, direction);
+    if (row.id === "connection") {
+      const switched = switchConnection(choice, local.current.savedChoices, direction);
+      set({ choice: switched.choice, savedChoices: switched.saved, status: null });
+    } else if (row.id === "preset") {
+      const switched = switchPreset(choice, local.current.savedChoices, direction, true);
       set({ choice: switched.choice, savedChoices: switched.saved, status: null });
     } else if (row.id === "model") {
       set({ choice: { ...choice, model: nextModel(choice, direction) }, status: null });

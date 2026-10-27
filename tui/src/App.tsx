@@ -5,7 +5,7 @@ import {
   label,
   nextPermissionMode,
   parseSlash,
-  ruleLine,
+
   SlashError,
   status,
   type Command,
@@ -13,8 +13,8 @@ import {
   type PermissionMode,
   type Session,
 } from "@plural/client";
-import { COMMANDS, helpText } from "./commands";
-import { FeedItemView } from "./components/Cards";
+import { COMMANDS } from "./commands";
+import { FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { Composer } from "./components/Composer";
 import { Inbox, inboxItems, type InboxItem } from "./components/Inbox";
 import { SettingsDialog } from "./components/SettingsDialog";
@@ -22,7 +22,10 @@ import { Splash } from "./components/Splash";
 import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
-import { ModeLine, Working } from "./components/Working";
+import { SCOPES, TrayView, type McpWizard, type Row, type Tray } from "./components/Tray";
+import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
+import { Compacting, ModeLine, Working } from "./components/Working";
+import { helpRows, policyRows, skillRows, whoRows } from "./trays";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
@@ -101,6 +104,13 @@ export function App({
   const [now, setNow] = useState(Date.now());
   const [planReady, setPlanReady] = useState(false);
   const [intro, setIntro] = useState(splash);
+  const [tray, setTrayState] = useState<Tray | null>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
+  const trayRef = useRef<Tray | null>(null);
+  const setTray = (next: Tray | null | ((current: Tray | null) => Tray | null)): void => {
+    trayRef.current = typeof next === "function" ? next(trayRef.current) : next;
+    setTrayState(trayRef.current);
+  };
   const [, bump] = useReducer((value: number) => value + 1, 0);
   const scroll = useRef<ScrollBoxRenderable>(null);
   const armed = useRef(false);
@@ -129,10 +139,29 @@ export function App({
     (async () => {
       try {
         for await (const event of client.events()) {
-          commit(absorb(feedRef.current, event, client.projection));
+          const pending = trayRef.current?.kind === "busy";
+          if (!(pending && event.type === "error")) {
+            commit(absorb(feedRef.current, event, client.projection));
+          }
           bump();
           if (event.type === "invite.created") {
             copy(event.link, "invite link copied to the clipboard");
+          }
+          if (event.type === "skills.found") {
+            const host = client.projection.me?.role === "host";
+            setTray({ kind: "pick", title: `skills.sh · ${event.query}`, hits: [...event.hits], selected: 0, canInstall: host });
+          } else if (pending && event.type === "skills.changed") {
+            setTray({
+              kind: "text",
+              title: "skills",
+              tone: "accent",
+              rows: [
+                ...event.added.map((name): Row => [{ text: "✓ ", fg: theme.ok }, { text: name, bold: true }, { text: " installed · the agent sees it from the next prompt", fg: theme.dim }]),
+                ...event.removed.map((name): Row => [{ text: "✕ ", fg: theme.warn }, { text: name, bold: true }, { text: " removed", fg: theme.dim }]),
+              ],
+            });
+          } else if (pending && event.type === "error") {
+            setTray({ kind: "text", title: "skills", tone: "danger", rows: [[{ text: event.message, fg: theme.danger }]] });
           }
           if (event.type === "run.started" || event.type === "session.permission_mode_changed") {
             setPlanReady(false);
@@ -184,6 +213,30 @@ export function App({
     }
   }, [items.length, approvals, planReady]);
 
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const box = scroll.current;
+      if (!box) {
+        return;
+      }
+      let above: string | null = null;
+      for (const item of feedRef.current.items) {
+        if (item.kind !== "user") {
+          continue;
+        }
+        const card = box.findDescendantById(pinId(item.id));
+        if (card && card.y + card.height <= box.y) {
+          above = item.id;
+        } else if (card && card.y >= box.y) {
+          break;
+        }
+      }
+      setPinned((current) => (current === above ? current : above));
+    }, 100);
+    return () => clearInterval(timer);
+  }, []);
+  const pinnedItem = pinned ? feed.items.find((item): item is Extract<typeof item, { kind: "user" }> => item.kind === "user" && item.id === pinned) : undefined;
+
   const seenInbox = useRef(0);
   useEffect(() => {
     if (settings.bell && isHost && items.length > seenInbox.current) {
@@ -222,7 +275,132 @@ export function App({
   }, []);
 
   const send = (command: Command): void => {
-    client.send(command).catch((error: unknown) => notify("danger", error instanceof Error ? error.message : String(error)));
+    client.send(command).catch((error: unknown) => {
+      const text = error instanceof Error ? error.message : String(error);
+      if (command.type.startsWith("skills.") || command.type.startsWith("mcp.") || command.type === "context.compact") {
+        show(command.type.split(".")[0] === "context" ? "compact" : command.type.split(".")[0]!, [[{ text, fg: theme.warn }]], "warn");
+      } else {
+        notify("danger", text);
+      }
+    });
+  };
+
+  const show = (title: string, rows: Row[], tone: "accent" | "warn" | "danger" = "accent"): void => setTray({ kind: "text", title, tone, rows });
+  const warn = (title: string, text: string): void => show(title, [[{ text, fg: theme.warn }]], "warn");
+
+  const install = (global: boolean): void => {
+    const current = trayRef.current;
+    if (current?.kind !== "pick" || !current.canInstall) {
+      return;
+    }
+    const hit = current.hits[current.selected];
+    if (!hit) {
+      return;
+    }
+    setTray({ kind: "busy", title: "skills", text: `installing ${hit.package}${global ? " for every project" : ""}`, key: Date.now() });
+    send({ type: "skills.install", package: hit.package, scope: global ? "global" : "project" });
+  };
+
+  const advance = (wizard: McpWizard, typed: string): void => {
+    const field = wizard.fields[wizard.index];
+    if (!field) {
+      return;
+    }
+    const value = typed.trim() || field.fallback || "";
+    const taken = client.projection.state.mcp.map((server) => server.name);
+    const warning =
+      !value && !field.optional
+        ? `${field.label.toLowerCase()} is needed`
+        : field.key === "name" && !/^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$/.test(value)
+          ? "use letters, digits, - and _ (up to 32)"
+          : field.key === "name" && taken.includes(value)
+            ? `${value} is taken, pick another name`
+            : null;
+    if (warning) {
+      setTray({ ...wizard, warning });
+      return;
+    }
+    const values = { ...wizard.values, [field.key]: value };
+    const last = wizard.index + 1 >= wizard.fields.length;
+    setTray({ ...wizard, values, warning: null, index: last ? wizard.index : wizard.index + 1, step: last ? "scope" : "field", selected: 0 });
+  };
+
+  const wizardKey = (wizard: McpWizard, name: string): boolean => {
+    const count = wizard.step === "pick" ? MCP_CATALOG.length : wizard.step === "scope" ? SCOPES.length : 0;
+    if ((name === "up" || name === "down") && count > 0) {
+      setTray({ ...wizard, selected: (wizard.selected + (name === "up" ? -1 : 1) + count) % count });
+      return true;
+    }
+    if (name !== "return") {
+      return false;
+    }
+    if (wizard.step === "pick") {
+      const preset = MCP_CATALOG[wizard.selected]!;
+      const taken = client.projection.state.mcp.map((server) => server.name);
+      setTray({ ...wizard, step: "field", preset: wizard.selected, fields: wizardFields(preset, taken), index: 0, values: {}, warning: null });
+    } else if (wizard.step === "field") {
+      advance(wizard, "");
+    } else {
+      send(addCommand(MCP_CATALOG[wizard.preset]!, wizard.values, SCOPES[wizard.selected]!.scope));
+      setTray({ kind: "mcp", selected: 0, canManage: true });
+    }
+    return true;
+  };
+
+  const idleKey = (name: string): boolean => {
+    const current = trayRef.current;
+    if (current?.kind === "mcp-add") {
+      return wizardKey(current, name);
+    }
+    if (current?.kind === "mcp") {
+      const servers = client.projection.state.mcp;
+      const total = servers.length + (isHost ? 2 : 0);
+      if (total === 0) {
+        return false;
+      }
+      if (name === "up" || name === "down") {
+        const step = name === "up" ? -1 : 1;
+        setTray({ ...current, selected: (current.selected + step + total) % total });
+        return true;
+      }
+      const server = servers[current.selected];
+      if (!isHost) {
+        return false;
+      }
+      if (name === "return" && current.selected === servers.length) {
+        setTray({ kind: "mcp-add", step: "pick", selected: 0, preset: 0, fields: [], index: 0, values: {}, warning: null });
+        return true;
+      }
+      if (name === "return" && current.selected === servers.length + 1) {
+        send({ type: "mcp.import" });
+        return true;
+      }
+      if (!server) {
+        return false;
+      }
+      if (name === "return") {
+        send({ type: "mcp.toggle", name: server.name, enabled: server.status === "off" });
+        return true;
+      }
+      if (name === "ctrl+r") {
+        send({ type: "mcp.restart", name: server.name });
+        return true;
+      }
+      return false;
+    }
+    if (current?.kind !== "pick" || current.hits.length === 0) {
+      return false;
+    }
+    if (name === "up" || name === "down") {
+      const step = name === "up" ? -1 : 1;
+      setTray({ ...current, selected: (current.selected + step + current.hits.length) % current.hits.length });
+      return true;
+    }
+    if (name === "return" || name === "ctrl+g") {
+      install(name === "ctrl+g");
+      return current.canInstall;
+    }
+    return false;
   };
 
   const setMode = (next: PermissionMode): void => {
@@ -303,7 +481,9 @@ export function App({
   };
 
   const escape = (): void => {
-    if (editing) {
+    if (trayRef.current) {
+      setTray(null);
+    } else if (editing) {
       setEditing(null);
       setSeed({ text: "", key: Date.now() });
     } else if (isHost && running) {
@@ -315,15 +495,11 @@ export function App({
     const [name = "", ...rest] = text.slice(1).split(/\s+/);
     switch (name) {
       case "help":
-        notify("accent", helpText(me?.role));
+        show("help", helpRows(me?.role));
         return true;
-      case "who": {
-        const lines = Object.values(state.participants).map(
-          (participant) => `${participant.connected ? "●" : "○"} ${label(state, participant)} (${participant.role})`,
-        );
-        notify("accent", lines.join("\n"));
+      case "who":
+        show(`who · ${Object.values(state.participants).filter((person) => person.connected).length} here`, whoRows(projection));
         return true;
-      }
       case "invite":
         send({ type: "invite.create", role: rest[0] === "viewer" ? "viewer" : "participant", ttl_s: 3600 });
         return true;
@@ -336,7 +512,7 @@ export function App({
       case "cancel": {
         const entry = state.queue[Number(rest[0]) - 1];
         if (!entry) {
-          notify("warn", state.queue.length === 0 ? "the queue is empty" : "usage: /cancel <number from the queue>");
+          warn("cancel", state.queue.length === 0 ? "the queue is empty" : "usage: /cancel <number from the queue>");
         } else {
           send({ type: "queue.cancel", prompt_id: entry.prompt_id });
         }
@@ -351,7 +527,13 @@ export function App({
   };
 
   const submit = (text: string): void => {
+    const wizard = trayRef.current;
+    if (wizard?.kind === "mcp-add" && wizard.step === "field") {
+      advance(wizard, text);
+      return;
+    }
     stopTyping();
+    setTray(null);
     setPlanReady(false);
     scroll.current?.scrollTo(Number.MAX_SAFE_INTEGER);
     if (editing) {
@@ -363,7 +545,7 @@ export function App({
       const name = text.slice(1).split(/\s+/)[0] ?? "";
       const known = COMMANDS.find((command) => command.name === name);
       if (known?.hostOnly && !isHost) {
-        notify("warn", `/${name} is for the host`);
+        warn(`/${name}`, `/${name} is for the host`);
         return;
       }
       if (local(text)) {
@@ -374,17 +556,34 @@ export function App({
         if (parsed === null) {
           return;
         }
-        if (parsed.type === "show.policy") {
-          const rules = state.policy.length > 0 ? state.policy.map((rule) => `${ruleLine(rule)}  [${rule.id}]`) : ["no session rules"];
-          notify("accent", [`built-in rules: ${projection.basePolicy.length}`, ...rules].join("\n"));
+        if (parsed.type === "show.skills") {
+          show(`skills · ${state.skills.length}`, skillRows(projection, width - (showPanel ? SIDEBAR_WIDTH : 0) - 10));
           return;
         }
+        if (parsed.type === "show.mcp") {
+          setTray({ kind: "mcp", selected: 0, canManage: isHost });
+          return;
+        }
+        if (parsed.type === "show.policy") {
+          show("policy", policyRows(projection));
+          return;
+        }
+        if (parsed.type === "skills.search") {
+          setTray({ kind: "busy", title: "skills.sh", text: `searching for "${parsed.query}"`, key: Date.now() });
+        } else if (parsed.type === "skills.install") {
+          setTray({ kind: "busy", title: "skills", text: `installing ${parsed.package}${parsed.scope === "global" ? " for every project" : ""}`, key: Date.now() });
+        } else if (parsed.type === "skills.remove") {
+          setTray({ kind: "busy", title: "skills", text: `removing ${parsed.name}`, key: Date.now() });
+        }
         send(parsed);
-        if (parsed.type === "context.compact") {
-          notify("dim", "the context will be compacted before the next prompt");
+        if (parsed.type.startsWith("mcp.")) {
+          setTray({ kind: "mcp", selected: 0, canManage: isHost });
+        }
+        if (parsed.type === "context.compact" && running) {
+          show("compact", [[{ text: "the agent compacts the context before its next step", fg: theme.dim }]]);
         }
       } catch (error) {
-        notify("warn", error instanceof SlashError ? error.message : String(error));
+        warn(text.split(/\s+/)[0] ?? "command", error instanceof SlashError ? error.message : String(error));
       }
       return;
     }
@@ -466,6 +665,7 @@ export function App({
     copying.current = setTimeout(() => copy(text, `copied ${text.length} characters`), 250);
   });
 
+  const asking = tray?.kind === "mcp-add" && tray.step === "field" ? tray.fields[tray.index] : undefined;
   const placeholder =
     me?.role === "participant" && state.prompt_mode === "review"
       ? "Propose a prompt, the host approves it"
@@ -491,6 +691,19 @@ export function App({
     <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg}>
       <box flexDirection="column" flexGrow={1} minWidth={0}>
         <TopBar room={room} state={state} onSettings={() => setDialog(true)} />
+        {pinnedItem ? (
+          <PinnedPrompt
+            item={pinnedItem}
+            width={width - (showPanel ? SIDEBAR_WIDTH : 0) - 4}
+            onJump={() => {
+              const box = scroll.current;
+              const card = box?.findDescendantById(pinId(pinnedItem.id));
+              if (box && card) {
+                box.scrollBy(card.y - box.y - 1);
+              }
+            }}
+          />
+        ) : null}
         <scrollbox
           ref={scroll}
           stickyScroll
@@ -513,7 +726,11 @@ export function App({
           ))}
         </scrollbox>
         {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} /> : null}
-        {running ? <Working status={runStatus} canAbort={isHost} queued={state.queue.length} /> : null}
+        {projection.compacting ? (
+          <Compacting tokens={projection.compacting.tokens} />
+        ) : running ? (
+          <Working status={runStatus} canAbort={isHost} queued={state.queue.length} />
+        ) : null}
         {typers.length > 0 ? (
           <box paddingX={2} height={1} flexShrink={0}>
             <text fg={theme.dim}>
@@ -525,7 +742,9 @@ export function App({
         <Composer
           focused={focus === "composer" && !dialog}
           disabled={disabled}
-          placeholder={placeholder}
+          placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
+          remember={!asking?.secret}
+          tips={!asking}
           role={me?.role}
           seed={seed}
           label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
@@ -544,7 +763,21 @@ export function App({
             dirty.current = value;
           }}
           onActivity={announceTyping}
+          onFocus={() => setFocus("composer")}
+          onIdleKey={idleKey}
         />
+        {tray ? (
+          <TrayView
+            tray={tray}
+            servers={state.mcp}
+            maxRows={Math.max(4, Math.floor(height * 0.55))}
+            onClose={() => setTray(null)}
+            onSelect={(index) => {
+              setFocus("composer");
+              setTray((current) => (current?.kind === "pick" || current?.kind === "mcp" || current?.kind === "mcp-add" ? { ...current, selected: index } : current));
+            }}
+          />
+        ) : null}
         <ModeLine mode={mode} canCycle={isHost} />
         <StatusBar me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
       </box>
