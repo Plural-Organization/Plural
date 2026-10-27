@@ -91,6 +91,12 @@ export function modelRows(state: ModelState): Row[] {
       value: "", hint: "Claude Code uses its own saved sign-in", enabled: false,
     });
   }
+  if (choice.preset === "codex_cli") {
+    rows.push({
+      id: "codex-cli-login", kind: "note", label: "Install: npm install -g @openai/codex",
+      value: "", hint: "install on the host, then run codex login; Save checks both before switching", enabled: false,
+    });
+  }
   if (preset.provider !== "fake") {
     rows.push({
       id: "model",

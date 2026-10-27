@@ -215,7 +215,7 @@ describe("Model tab", () => {
     const { setup } = await mount(session(), control);
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
-    for (let step = 0; step < 5; step += 1) {
+    for (let step = 0; step < 6; step += 1) {
       await setup.mockInput.pressArrow("right");
     }
     const gemini = await frame(setup, "Google Gemini");

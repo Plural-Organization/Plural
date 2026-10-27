@@ -10,6 +10,7 @@ from plural.agent.providers.anthropic_api import AnthropicProvider
 from plural.agent.providers.anthropic_oauth import AnthropicOAuthProvider, load_credentials
 from plural.agent.providers.base import LLMProvider
 from plural.agent.providers.claude_code import ClaudeCodeProvider
+from plural.agent.providers.codex_cli import CodexCliProvider
 from plural.agent.providers.fake import DemoProvider
 from plural.agent.providers.openai_compat import OpenAIProvider
 from plural.agent.sandbox.base import Workspace
@@ -53,6 +54,7 @@ class Host:
     inbox: Inbox
     transport: HostTransport
     store: SqliteEventStore
+    agent_run: AgentRun
     invites: InviteBook
     host_token: str
     host_link: str
@@ -63,6 +65,7 @@ class Host:
             group.create_task(self.transport.serve(self.inbox), name="transport")
 
     async def close(self) -> None:
+        await self.agent_run.close()
         await self.store.close()
 
 
@@ -107,6 +110,11 @@ def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
             return ClaudeCodeProvider(
                 workspace=settings.workspace,
                 model=settings.model or "claude-sonnet-5-5",
+            )
+        case "codex_cli":
+            return CodexCliProvider(
+                workspace=settings.workspace,
+                model=settings.model or CodexCliProvider.DEFAULT_MODEL,
             )
         case "openai":
             if not settings.model:
@@ -173,13 +181,14 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         token_ttl_s=settings.token_ttl_s,
     )
     host = Participant(id=HOST_PARTICIPANT_ID, name=settings.host_name, role=Role.HOST)
+    agent_run = AgentRun(loop, inbox)
     actor = SessionActor(
         inbox=inbox,
         store=store,
         publisher=Publisher(room=room, ids=ids, clock=clock),
         gateway=gateway,
         invites=invites,
-        agent_run=AgentRun(loop, inbox),
+        agent_run=agent_run,
         approval_registry=registry,
         gate=gate,
         vault=AttachmentVault(state_dir / "attachments" / room),
@@ -205,6 +214,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         inbox=inbox,
         transport=transport,
         store=store,
+        agent_run=agent_run,
         invites=invites,
         host_token=host_token,
         host_link=f"{room_url}?token={host_token}",

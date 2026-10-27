@@ -42,6 +42,9 @@ class AgentRun:
     def swap_provider(self, provider: LLMProvider, *, context_window: int | None) -> None:
         self._loop.swap_provider(provider, context_window=context_window)
 
+    async def close(self) -> None:
+        await self._loop.close()
+
     def request_compaction(self) -> None:
         self._loop.request_compaction()
 

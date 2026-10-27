@@ -119,6 +119,7 @@ class AgentLoop:
         self._compact_requested = False
         self._compaction_failed = False
         self._verify_compaction = False
+        self._provider_close_tasks: set[asyncio.Task[None]] = set()
 
     @property
     def usage(self) -> Usage:
@@ -135,7 +136,13 @@ class AgentLoop:
         self._follow_up.append(turn)
 
     def swap_provider(self, provider: LLMProvider, *, context_window: int | None = None) -> None:
+        previous = self._provider
         self._provider = provider
+        close = getattr(previous, "close", None)
+        if close is not None:
+            task = asyncio.create_task(close())
+            self._provider_close_tasks.add(task)
+            task.add_done_callback(self._provider_close_tasks.discard)
         if context_window is not None:
             self._limits = replace(self._limits, context_window=context_window)
         self._conversation = [
@@ -146,6 +153,13 @@ class AgentLoop:
         ]
         self._context_tokens = 0
         self._compaction_failed = False
+
+    async def close(self) -> None:
+        close = getattr(self._provider, "close", None)
+        if close is not None:
+            await close()
+        if self._provider_close_tasks:
+            await asyncio.gather(*self._provider_close_tasks, return_exceptions=True)
 
     def request_compaction(self) -> None:
         self._compact_requested = True

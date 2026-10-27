@@ -3,6 +3,7 @@ export type PresetId =
   | "anthropic"
   | "anthropic_oauth"
   | "claude_code"
+  | "codex_cli"
   | "openai"
   | "gemini"
   | "openrouter"
@@ -14,7 +15,7 @@ export type PresetId =
 export interface Preset {
   id: PresetId;
   label: string;
-  provider: "fake" | "anthropic" | "anthropic_oauth" | "claude_code" | "openai";
+  provider: "fake" | "anthropic" | "anthropic_oauth" | "claude_code" | "codex_cli" | "openai";
   baseUrl: string;
   needsKey: boolean;
   editableUrl: boolean;
@@ -67,6 +68,19 @@ export const PRESETS: Preset[] = [
       "claude-opus-4-5-20251101", "claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250929",
     ],
     hint: "Uses the installed Claude Code CLI; sign in with claude auth login",
+  },
+  {
+    id: "codex_cli",
+    label: "Codex CLI",
+    provider: "codex_cli",
+    baseUrl: "",
+    needsKey: false,
+    editableUrl: false,
+    contextWindow: false,
+    models: [
+      "gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.5",
+    ],
+    hint: "Streams replies from Codex CLI and keeps one session for this room",
   },
   {
     id: "openai",
@@ -176,7 +190,7 @@ export interface AgentChoice {
 export const DEFAULT_CHOICE: AgentChoice = { preset: "demo", model: "", baseUrl: "", contextWindow: "" };
 
 export interface AgentConfig {
-  provider: "fake" | "anthropic" | "anthropic_oauth" | "claude_code" | "openai";
+  provider: "fake" | "anthropic" | "anthropic_oauth" | "claude_code" | "codex_cli" | "openai";
   model: string | null;
   base_url: string | null;
   api_key: string | null;
@@ -204,7 +218,7 @@ export function problemWith(choice: AgentChoice, key: string): string | null {
     return `${preset.label} needs an API key`;
   }
   const config = toConfig(choice, key);
-  if (preset.provider === "openai" && config.model === null) {
+  if ((preset.provider === "openai" || preset.provider === "codex_cli") && config.model === null) {
     return "choose a model";
   }
   if (preset.provider === "openai" && preset.editableUrl && config.base_url === null) {
