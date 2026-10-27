@@ -1,0 +1,16 @@
+.join { min-height: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 440px); gap: 64px; align-items: center; max-width: 1100px; margin: 0 auto; padding: 48px var(--gutter-right) 48px var(--gutter-left); }
+@media (max-width: 860px) { .join { grid-template-columns: minmax(0, 1fr); gap: 32px; padding-top: 32px; } }
+.join h1 { font: 750 clamp(40px, 6vw, 72px)/0.95 var(--font-display); letter-spacing: -0.04em; margin: 24px 0 0; }
+.logo { color: var(--fg); display: block; cursor: pointer; }
+.intro { color: var(--muted); max-width: 44ch; margin: 18px 0 0; }
+.panel { display: grid; gap: 22px; }
+.form { display: grid; gap: 8px; }
+.form label { margin-top: 6px; }
+.form input { font: 14px var(--font-mono); color: var(--fg); background: var(--panel); border: 1px solid var(--line); padding: 11px 12px; width: 100%; }
+.form input:focus { border-color: var(--muted); outline: none; }
+.form button { margin-top: 10px; justify-content: center; padding: 11px; }
+.recent { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
+.recent li { display: flex; gap: 8px; align-items: center; }
+.saved { flex: 1; min-width: 0; display: grid; text-align: left; gap: 2px; background: var(--panel); border: 1px solid var(--line); color: var(--fg); padding: 9px 12px; cursor: pointer; font: 13px var(--font-text); }
+.saved:hover { border-color: var(--muted); }
+.saved :global(.mono) { font-size: 12px; overflow: hidden; text-overflow: ellipsis; }

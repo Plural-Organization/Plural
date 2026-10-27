@@ -1,0 +1,13 @@
+.md { overflow-wrap: anywhere; min-width: 0; }
+.md > * { margin: 0 0 10px; }
+.md > :last-child { margin-bottom: 0; }
+.md p { white-space: pre-wrap; }
+.md h3, .md h4, .md h5 { font-family: var(--font-display); letter-spacing: -0.01em; margin-top: 16px; }
+.md ul, .md ol { padding-left: 22px; }
+.md blockquote { border-left: 2px solid var(--line); padding-left: 12px; color: var(--muted); }
+.code { background: var(--panel); border: 1px solid var(--line); padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
+.code code { background: none; padding: 0; }
+.code[data-lang]::before { content: attr(data-lang); display: block; font-size: 11px; color: var(--dim); margin-bottom: 6px; }
+.streaming > :last-child::after { content: ""; display: inline-block; width: 7px; height: 14px; background: var(--fg); margin-left: 3px; vertical-align: -2px; animation: blink 1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .streaming > :last-child::after { animation: none; } }

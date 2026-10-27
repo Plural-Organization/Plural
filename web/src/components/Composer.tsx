@@ -1,39 +1,9 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { ProposalView, Role } from "@plural/client";
+import { suggestions } from "../lib/commands";
+import styles from "./Composer.module.css";
 
-export interface CommandHint {
-  name: string;
-  usage: string;
-  description: string;
-  hostOnly?: boolean;
-}
-
-export const COMMANDS: CommandHint[] = [
-  { name: "help", usage: "/help", description: "show commands and keys" },
-  { name: "who", usage: "/who", description: "list participants" },
-  { name: "invite", usage: "/invite [participant|viewer]", description: "create an invite link", hostOnly: true },
-  { name: "mode", usage: "/mode open|review", description: "who may prompt directly", hostOnly: true },
-  { name: "policy", usage: "/policy [allow|ask|deny <tool> <pattern> | rm <id>]", description: "show or edit permission rules", hostOnly: true },
-  { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
-  { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
-  { name: "cancel", usage: "/cancel <n>", description: "remove a queued prompt" },
-  { name: "copy", usage: "/copy", description: "copy the last reply" },
-  { name: "leave", usage: "/leave", description: "leave the room" },
-];
-
-export function helpText(role: Role | undefined): string {
-  const commands = COMMANDS.filter((command) => !command.hostOnly || role === "host").map(
-    (command) => `${command.usage.padEnd(34)} ${command.description}`,
-  );
-  const keys = [
-    "enter                              send",
-    "shift+enter                        new line",
-    "y / a / n / b                      answer the approval card (host)",
-    "esc                                stop the run (host, with an empty input)",
-    "click a tool line                  open its output or diff",
-  ];
-  return ["commands", ...commands, "", "keys", ...keys].join("\n");
-}
+const MAX_HEIGHT = 240;
 
 interface ComposerProps {
   role: Role | undefined;
@@ -50,10 +20,7 @@ export function Composer({ role, placeholder, disabled, editing, onSubmit, onCan
   const [value, setValue] = useState("");
   const [pick, setPick] = useState(0);
   const area = useRef<HTMLTextAreaElement>(null);
-  const hints =
-    value.startsWith("/") && !/\s/.test(value)
-      ? COMMANDS.filter((command) => (!command.hostOnly || role === "host") && command.name.startsWith(value.slice(1).toLowerCase()))
-      : [];
+  const hints = suggestions(value, role);
 
   useEffect(() => {
     if (editing) {
@@ -66,7 +33,7 @@ export function Composer({ role, placeholder, disabled, editing, onSubmit, onCan
     const element = area.current;
     if (element) {
       element.style.height = "auto";
-      element.style.height = `${Math.min(element.scrollHeight, 240)}px`;
+      element.style.height = `${Math.min(element.scrollHeight, MAX_HEIGHT)}px`;
     }
   }, [value]);
 
@@ -109,9 +76,9 @@ export function Composer({ role, placeholder, disabled, editing, onSubmit, onCan
   };
 
   return (
-    <div className="composer">
+    <div className={styles.composer}>
       {hints.length > 0 ? (
-        <ul className="hints" role="listbox" aria-label="Commands">
+        <ul className={styles.hints} role="listbox" aria-label="Commands">
           {hints.map((hint, index) => (
             <li key={hint.name} role="option" aria-selected={index === pick}>
               <span className="mono">{hint.usage}</span>
@@ -120,9 +87,9 @@ export function Composer({ role, placeholder, disabled, editing, onSubmit, onCan
           ))}
         </ul>
       ) : null}
-      {editing ? <div className="editing">editing the proposal · enter sends it to the agent, esc cancels</div> : null}
-      <div className="composer-row">
-        <span className="caret" aria-hidden="true">
+      {editing ? <div className={styles.editing}>editing the proposal · enter sends it to the agent, esc cancels</div> : null}
+      <div className={styles.row}>
+        <span className={styles.caret} aria-hidden="true">
           ›
         </span>
         <textarea

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import type { JoinLink } from "@plural/client";
-import { JoinScreen } from "./JoinScreen";
-import { Room } from "./Room";
+import { JoinScreen } from "./screens/JoinScreen";
+import { RoomScreen } from "./screens/RoomScreen";
 
 interface Joined {
   link: JoinLink;
@@ -25,7 +25,7 @@ export function App() {
     );
   }
   return (
-    <Room
+    <RoomScreen
       key={joined.key}
       link={joined.link}
       name={joined.name}
