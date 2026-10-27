@@ -6,6 +6,7 @@ from plural.agent.tools.glob import GlobTool
 from plural.agent.tools.grep import GrepTool
 from plural.agent.tools.ls import LsTool
 from plural.agent.tools.read import ReadTool
+from plural.agent.tools.web import WebFetchTool, WebSearchTool
 from plural.agent.tools.write import WriteTool
 
 
@@ -46,6 +47,8 @@ def builtin_tools() -> ToolRegistry:
         GrepTool(),
         GlobTool(),
         LsTool(),
+        WebSearchTool(),
+        WebFetchTool(),
     ):
         registry.register(tool)
     return registry

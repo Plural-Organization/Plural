@@ -42,6 +42,8 @@ DEFAULT_RULES: Final = RuleSet.from_mapping(
         "grep": {"*": "allow"},
         "glob": {"*": "allow"},
         "ls": {"*": "allow"},
+        "web_search": {"*": "ask"},
+        "web_fetch": {"*": "ask"},
         "write": {"*": "ask"},
         "edit": {"*": "ask"},
         "multi_edit": {"*": "ask"},
