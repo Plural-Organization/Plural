@@ -39,6 +39,7 @@ export function helpText(role: Role | undefined): string {
     "  enter           send",
     "  shift+enter     new line (ctrl+j in any terminal)",
     "  tab             review approvals and proposals / complete a command",
+    "  shift+tab       cycle permissions: ask · accept edits · plan · auto (host)",
     "  esc             interrupt the run",
     "  pgup / pgdn     scroll the conversation",
     "  ctrl+o          expand or collapse tool details (or click a tool line)",

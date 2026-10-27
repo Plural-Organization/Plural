@@ -1,5 +1,18 @@
 import type { Projection } from "./projection";
-import type { Participant, PolicyRuleView, SessionState } from "./protocol";
+import type { Participant, PermissionMode, PolicyRuleView, SessionState } from "./protocol";
+
+export const PERMISSION_MODES: readonly PermissionMode[] = ["default", "accept_edits", "plan", "auto"];
+
+export const PERMISSION_LABELS: Record<PermissionMode, string> = {
+  default: "ask before changes",
+  accept_edits: "accept edits",
+  plan: "plan mode",
+  auto: "auto mode",
+};
+
+export function nextPermissionMode(mode: PermissionMode): PermissionMode {
+  return PERMISSION_MODES[(PERMISSION_MODES.indexOf(mode) + 1) % PERMISSION_MODES.length] ?? "default";
+}
 
 export function label(state: SessionState, participant: Participant): string {
   const twins = Object.values(state.participants).filter((other) => other.name === participant.name);

@@ -12,6 +12,7 @@ from plural.protocol.models import (
     DequeueReason,
     Model,
     Participant,
+    PermissionMode,
     PolicyRuleView,
     PromptMode,
     ProposalView,
@@ -56,6 +57,11 @@ class ParticipantRevoked(EventBase):
 class PromptModeChanged(EventBase):
     type: Literal["session.prompt_mode_changed"] = "session.prompt_mode_changed"
     mode: PromptMode
+
+
+class PermissionModeChanged(EventBase):
+    type: Literal["session.permission_mode_changed"] = "session.permission_mode_changed"
+    mode: PermissionMode
 
 
 class AgentChanged(EventBase):
@@ -230,6 +236,7 @@ Event = Annotated[
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | PermissionModeChanged
     | AgentChanged
     | PromptDequeued
     | ParticipantTyping

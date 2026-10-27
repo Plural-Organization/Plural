@@ -9,6 +9,7 @@ from plural.protocol.events import (
     ParticipantJoined,
     ParticipantLeft,
     ParticipantRevoked,
+    PermissionModeChanged,
     PromptModeChanged,
     ProposalApproved,
     ProposalCreated,
@@ -21,6 +22,7 @@ from plural.protocol.models import (
     Delivery,
     EntryKind,
     Participant,
+    PermissionMode,
     PromptMode,
     ProposalView,
     Role,
@@ -49,6 +51,13 @@ def test_prompt_mode_defaults_to_open_and_follows_events() -> None:
             PromptModeChanged(mode=PromptMode.REVIEW), PromptModeChanged(mode=PromptMode.OPEN)
         ).prompt_mode
         is PromptMode.OPEN
+    )
+
+
+def test_permission_mode_defaults_to_asking_and_follows_events() -> None:
+    assert SessionState().permission_mode is PermissionMode.DEFAULT
+    assert (
+        fold(PermissionModeChanged(mode=PermissionMode.PLAN)).permission_mode is PermissionMode.PLAN
     )
 
 

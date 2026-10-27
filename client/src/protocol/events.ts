@@ -40,6 +40,11 @@ export type Role = "host" | "participant" | "viewer";
 export type PromptMode = "open" | "review";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PermissionMode".
+ */
+export type PermissionMode = "default" | "accept_edits" | "plan" | "auto";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "DequeueReason".
  */
 export type DequeueReason = "delivered" | "cancelled" | "dropped";
@@ -87,6 +92,7 @@ export interface EventsSchema {
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | PermissionModeChanged
     | AgentChanged
     | PromptDequeued
     | ParticipantTyping
@@ -194,6 +200,14 @@ export interface ParticipantRevoked {
 export interface PromptModeChanged {
   mode: PromptMode;
   type: "session.prompt_mode_changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PermissionModeChanged".
+ */
+export interface PermissionModeChanged {
+  mode: PermissionMode;
+  type: "session.permission_mode_changed";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -505,6 +519,7 @@ export interface SessionState {
   participants: {
     [k: string]: Participant;
   };
+  permission_mode: "default" | "accept_edits" | "plan" | "auto";
   policy: PolicyRuleView[];
   prompt_mode: "open" | "review";
   proposals: {
@@ -579,6 +594,7 @@ export interface EventRecord {
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | PermissionModeChanged
     | AgentChanged
     | PromptDequeued
     | ParticipantTyping

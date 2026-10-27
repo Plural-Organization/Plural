@@ -173,6 +173,31 @@
       ],
       "type": "object"
     },
+    "PermissionMode": {
+      "enum": [
+        "default",
+        "accept_edits",
+        "plan",
+        "auto"
+      ],
+      "type": "string"
+    },
+    "PermissionModeSet": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/PermissionMode"
+        },
+        "type": {
+          "const": "session.set_permission_mode",
+          "default": "session.set_permission_mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
     "PolicyAction": {
       "enum": [
         "allow",
@@ -450,6 +475,7 @@
           "queue.cancel": "#/$defs/QueueCancel",
           "run.abort": "#/$defs/RunAbort",
           "session.hello": "#/$defs/SessionHello",
+          "session.set_permission_mode": "#/$defs/PermissionModeSet",
           "session.set_prompt_mode": "#/$defs/PromptModeSet"
         },
         "propertyName": "type"
@@ -487,6 +513,9 @@
         },
         {
           "$ref": "#/$defs/PromptModeSet"
+        },
+        {
+          "$ref": "#/$defs/PermissionModeSet"
         },
         {
           "$ref": "#/$defs/TypingSet"

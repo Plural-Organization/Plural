@@ -33,6 +33,13 @@ class PromptMode(StrEnum):
     REVIEW = "review"
 
 
+class PermissionMode(StrEnum):
+    DEFAULT = "default"
+    ACCEPT_EDITS = "accept_edits"
+    PLAN = "plan"
+    AUTO = "auto"
+
+
 class DequeueReason(StrEnum):
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
@@ -188,6 +195,7 @@ class TranscriptEntry(Model):
 class SessionState(Model):
     last_seq: int = 0
     prompt_mode: PromptMode = PromptMode.OPEN
+    permission_mode: PermissionMode = PermissionMode.DEFAULT
     participants: dict[str, Participant] = Field(default_factory=dict[str, Participant])
     proposals: dict[str, ProposalView] = Field(default_factory=dict[str, ProposalView])
     approvals: dict[str, ApprovalView] = Field(default_factory=dict[str, ApprovalView])

@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Final
 
 from plural.agent.gate import GateResult
-from plural.core.policy.engine import Policy, ToolInvocation, evaluate
+from plural.core.policy.engine import PLAN_MODE, Policy, ToolInvocation, evaluate
 from plural.core.policy.rejections import RejectionLedger
 from plural.core.policy.rules import RuleSet
 from plural.core.ports import Clock, IdGenerator
@@ -11,6 +11,7 @@ from plural.host.inbox import ApprovalNeeded, Inbox
 from plural.protocol.models import (
     ApprovalDecision,
     ApprovalView,
+    PermissionMode,
     PolicyAction,
     Provenance,
     ToolCallView,
@@ -46,6 +47,9 @@ class HostPolicyGate:
     def use_session_rules(self, rules: RuleSet) -> None:
         self._policy = self._policy.with_session(rules)
 
+    def use_mode(self, mode: PermissionMode) -> None:
+        self._policy = self._policy.with_mode(mode)
+
     def begin_run(self) -> None:
         self._rejections.reset()
 
@@ -56,6 +60,8 @@ class HostPolicyGate:
         decision = evaluate(self._policy, invocation, provenance)
         if decision.action is PolicyAction.ALLOW:
             return GateResult(allowed=True, reason=decision.reason)
+        if decision.reason == PLAN_MODE:
+            return GateResult(allowed=False, reason=PLAN_MODE)
         if decision.action is PolicyAction.DENY:
             return GateResult(allowed=False, reason=f"{decision.reason}. {FINAL}")
         if self._rejections.exhausted(invocation):

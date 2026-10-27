@@ -53,6 +53,7 @@ from plural.protocol.commands import (
     InviteCreate,
     ParticipantRevoke,
     ParticipantSetRole,
+    PermissionModeSet,
     PolicyAdd,
     PolicyRemove,
     PromptModeSet,
@@ -80,6 +81,7 @@ from plural.protocol.events import (
     ParticipantRevoked,
     ParticipantRoleChanged,
     ParticipantTyping,
+    PermissionModeChanged,
     PolicyRuleAdded,
     PolicyRuleRemoved,
     PromptAccepted,
@@ -102,6 +104,7 @@ from plural.protocol.models import (
     Delivery,
     DequeueReason,
     Participant,
+    PermissionMode,
     PromptMode,
     Provenance,
     Role,
@@ -112,6 +115,11 @@ from plural.protocol.models import (
 from plural.security.secrets import Redactor, is_denied_path
 
 log = structlog.get_logger(__name__)
+
+PLAN_NOTE = (
+    "[plan mode: research only. Read the code, do not change files or run commands that change "
+    "anything. End with a concrete step-by-step plan; the host approves it before you start]"
+)
 
 
 class SessionActor:
@@ -190,6 +198,7 @@ class SessionActor:
             await self._emit(AgentChanged(agent=self._agent_label), actor_id=self._host.id)
         if self._initial_mode is not None:
             await self._set_prompt_mode(self._initial_mode, actor_id=self._host.id)
+        await self._set_permission_mode(PermissionMode.DEFAULT, actor_id=self._host.id)
 
     async def run(self) -> None:
         while True:
@@ -283,6 +292,8 @@ class SessionActor:
                 self._agent.request_compaction()
             case PromptModeSet():
                 await self._set_prompt_mode(command.mode, actor_id=participant.id)
+            case PermissionModeSet():
+                await self._set_permission_mode(command.mode, actor_id=participant.id)
             case TypingSet():
                 await self._set_typing(participant.id, typing=command.typing)
             case QueueCancel():
@@ -426,6 +437,10 @@ class SessionActor:
         if mode is not self._state.prompt_mode:
             await self._emit(PromptModeChanged(mode=mode), actor_id=actor_id)
 
+    async def _set_permission_mode(self, mode: PermissionMode, *, actor_id: str) -> None:
+        if mode is not self._state.permission_mode:
+            await self._emit(PermissionModeChanged(mode=mode), actor_id=actor_id)
+
     async def _decide(self, participant: Participant, command: ProposalDecide) -> None:
         proposal = self._state.proposals.get(command.proposal_id)
         decided = proposals.decide(self._state, decided_by=participant.id, command=command)
@@ -463,11 +478,14 @@ class SessionActor:
         )
         await self._emit(accepted, actor_id=author.id)
         await self._set_typing(author.id, typing=False)
+        body = await self._with_attachments(text, attachments)
+        if self._state.permission_mode is PermissionMode.PLAN:
+            body = f"{body}\n\n{PLAN_NOTE}"
         turn = UserTurn(
             id=prompt_id,
             author=Actor(id=author.id, kind=ActorKind.HUMAN, name=author.name),
             provenance=provenance,
-            text=await self._with_attachments(text, attachments),
+            text=body,
         )
         if self._state.run is None:
             await self._start_run(turn)
@@ -620,9 +638,10 @@ class SessionActor:
             event, event_id=self._ids.new("e_"), ts=self._clock.now(), actor_id=actor_id
         )
         self._state = reduce(self._state, record)
-        if isinstance(event, PolicyRuleAdded | PolicyRuleRemoved):
+        if isinstance(event, PolicyRuleAdded | PolicyRuleRemoved | PermissionModeChanged):
             self._sync_policy()
         self._publisher.publish(record)
 
     def _sync_policy(self) -> None:
         self._gate.use_session_rules(policies.to_rules(self._state.policy))
+        self._gate.use_mode(self._state.permission_mode)

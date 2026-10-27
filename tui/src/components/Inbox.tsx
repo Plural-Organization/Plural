@@ -3,7 +3,8 @@ import { colorFor, theme } from "../theme";
 
 export type InboxItem =
   | { kind: "approval"; id: string; approval: ApprovalView }
-  | { kind: "proposal"; id: string; proposal: ProposalView };
+  | { kind: "proposal"; id: string; proposal: ProposalView }
+  | { kind: "plan"; id: string };
 
 export function inboxItems(state: SessionState): InboxItem[] {
   return [
@@ -59,7 +60,7 @@ export function Inbox({ items, state, selected, focused, now }: InboxProps) {
     >
       <text>
         <span fg={theme.warn}>
-          <b>{item.kind === "approval" ? "approval needed" : "proposal"}</b>
+          <b>{item.kind === "approval" ? "approval needed" : item.kind === "plan" ? "plan ready" : "proposal"}</b>
         </span>
         <span fg={theme.dim}>
           {"  "}
@@ -68,6 +69,8 @@ export function Inbox({ items, state, selected, focused, now }: InboxProps) {
       </text>
       {item.kind === "approval" ? (
         <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} />
+      ) : item.kind === "plan" ? (
+        <PlanBody focused={focused} />
       ) : (
         <ProposalBody proposal={item.proposal} state={state} focused={focused} />
       )}
@@ -113,6 +116,19 @@ function ProposalBody({ proposal, state, focused }: { proposal: ProposalView; st
       <text>{proposal.text}</text>
       {focused ? (
         <Keys items={[["y", "approve"], ["e", "edit first"], ["n", "reject"]]} />
+      ) : (
+        <text fg={theme.dim}>tab to answer</text>
+      )}
+    </>
+  );
+}
+
+function PlanBody({ focused }: { focused: boolean }) {
+  return (
+    <>
+      <text>The agent finished planning. Start the work?</text>
+      {focused ? (
+        <Keys items={[["a", "yes, auto mode"], ["e", "yes, accept edits"], ["y", "yes, ask before changes"], ["n", "keep planning"]]} />
       ) : (
         <text fg={theme.dim}>tab to answer</text>
       )}

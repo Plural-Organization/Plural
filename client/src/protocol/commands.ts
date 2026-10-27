@@ -27,6 +27,11 @@ export type Role = "host" | "participant" | "viewer";
 export type PromptMode = "open" | "review";
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "PermissionMode".
+ */
+export type PermissionMode = "default" | "accept_edits" | "plan" | "auto";
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "PolicyAction".
  */
 export type PolicyAction = "allow" | "ask" | "deny";
@@ -49,6 +54,7 @@ export interface CommandsSchema {
     | ParticipantRevoke
     | ContextCompact
     | PromptModeSet
+    | PermissionModeSet
     | TypingSet
     | QueueCancel
     | PolicyAdd
@@ -160,6 +166,14 @@ export interface ContextCompact {
 export interface PromptModeSet {
   mode: PromptMode;
   type?: "session.set_prompt_mode";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "PermissionModeSet".
+ */
+export interface PermissionModeSet {
+  mode: PermissionMode;
+  type?: "session.set_permission_mode";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

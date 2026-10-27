@@ -3,22 +3,26 @@ import { useKeyboard, useRenderer, useSelectionHandler, useTerminalDimensions } 
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   label,
+  nextPermissionMode,
   parseSlash,
   ruleLine,
   SlashError,
   status,
   type Command,
   type ConnectionStatus,
+  type PermissionMode,
   type Session,
 } from "@plural/client";
 import { COMMANDS, helpText } from "./commands";
 import { FeedItemView } from "./components/Cards";
 import { Composer } from "./components/Composer";
-import { Inbox, inboxItems } from "./components/Inbox";
+import { Inbox, inboxItems, type InboxItem } from "./components/Inbox";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { Splash } from "./components/Splash";
 import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
+import { ModeLine, Working } from "./components/Working";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
@@ -40,6 +44,7 @@ export interface AppProps {
   keys?: Keys;
   onKeys?: (preset: PresetId, key: string, remember: boolean) => void;
   startupNote?: string | null;
+  splash?: boolean;
   onQuit: () => void;
 }
 
@@ -49,6 +54,7 @@ const GUARD_MS = 400;
 const MIN_WIDTH_FOR_PANEL = 90;
 const TYPING_REFRESH_MS = 3000;
 const TYPING_IDLE_MS = 2500;
+const PLAN_APPROVED = "The host approved the plan. Implement it now.";
 
 export function App({
   client,
@@ -61,6 +67,7 @@ export function App({
   keys = {},
   onKeys,
   startupNote = null,
+  splash = false,
   onQuit,
 }: AppProps) {
   const renderer = useRenderer();
@@ -92,6 +99,8 @@ export function App({
   const [editing, setEditing] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
+  const [planReady, setPlanReady] = useState(false);
+  const [intro, setIntro] = useState(splash);
   const [, bump] = useReducer((value: number) => value + 1, 0);
   const scroll = useRef<ScrollBoxRenderable>(null);
   const armed = useRef(false);
@@ -125,6 +134,13 @@ export function App({
           if (event.type === "invite.created") {
             copy(event.link, "invite link copied to the clipboard");
           }
+          if (event.type === "run.started" || event.type === "session.permission_mode_changed") {
+            setPlanReady(false);
+          }
+          const { state: after, me: self } = client.projection;
+          if (event.type === "run.ended" && event.reason === "stop" && after.permission_mode === "plan" && self?.role === "host") {
+            setPlanReady(lastReply(feedRef.current) !== "");
+          }
         }
       } catch (error) {
         notify("danger", error instanceof Error ? error.message : String(error));
@@ -140,25 +156,33 @@ export function App({
   const state = projection.state;
   const me = projection.me;
   const isHost = me?.role === "host";
-  const items = useMemo(() => (isHost ? inboxItems(state) : []), [isHost, state.approvals, state.proposals]);
-  const approvals = Object.keys(state.approvals).length;
+  const mode = state.permission_mode;
   const running = state.run !== null;
+  const items = useMemo(
+    (): InboxItem[] => (isHost ? [...inboxItems(state), ...(planReady ? [{ kind: "plan", id: "plan" } as const] : [])] : []),
+    [isHost, state.approvals, state.proposals, planReady],
+  );
+  const approvals = Object.keys(state.approvals).length;
+  const queuedIds = useMemo(
+    () => new Map(state.queue.map((entry) => [entry.prompt_id, entry.delivery === "follow_up" ? ("follow_up" as const) : ("steer" as const)])),
+    [state.queue],
+  );
   const typers = [...projection.typing]
     .filter((id) => id !== projection.meId)
     .map((id) => state.participants[id])
     .filter((participant): participant is NonNullable<typeof participant> => participant !== undefined)
     .map((participant) => label(state, participant));
-  const runStatus = feed.items.some((item) => item.kind === "assistant" && item.streaming) ? "… writing" : status(projection);
+  const runStatus = feed.items.some((item) => item.kind === "assistant" && item.streaming && item.text !== "") ? "… writing" : status(projection);
 
   useEffect(() => {
     if (items.length === 0) {
       setFocus("composer");
       setSelected(0);
-    } else if (approvals > 0 && !dirty.current) {
+    } else if ((approvals > 0 || planReady) && !dirty.current) {
       guardUntil.current = Date.now() + GUARD_MS;
       setFocus("inbox");
     }
-  }, [items.length, approvals]);
+  }, [items.length, approvals, planReady]);
 
   const seenInbox = useRef(0);
   useEffect(() => {
@@ -199,6 +223,24 @@ export function App({
 
   const send = (command: Command): void => {
     client.send(command).catch((error: unknown) => notify("danger", error instanceof Error ? error.message : String(error)));
+  };
+
+  const setMode = (next: PermissionMode): void => {
+    if (next !== mode) {
+      send({ type: "session.set_permission_mode", mode: next });
+    }
+  };
+
+  const cycleMode = (): void => {
+    if (isHost) {
+      setMode(nextPermissionMode(mode));
+    }
+  };
+
+  const startPlan = (next: PermissionMode): void => {
+    setPlanReady(false);
+    setMode(next);
+    send({ type: "prompt.submit", text: PLAN_APPROVED, delivery: "now" });
   };
 
   const canType = me !== undefined && me.role !== "viewer" && settings.announceTyping;
@@ -310,6 +352,7 @@ export function App({
 
   const submit = (text: string): void => {
     stopTyping();
+    setPlanReady(false);
     scroll.current?.scrollTo(Number.MAX_SAFE_INTEGER);
     if (editing) {
       send({ type: "proposal.decide", proposal_id: editing, decision: "approve", edited_text: text });
@@ -349,7 +392,7 @@ export function App({
   };
 
   useKeyboard((key) => {
-    if (dialog) {
+    if (dialog || intro) {
       return;
     }
     if (key.name === "f2") {
@@ -390,6 +433,15 @@ export function App({
       if (decision) {
         send({ type: "approval.respond", approval_id: item.id, decision });
       }
+    } else if (item?.kind === "plan") {
+      const choices: Record<string, PermissionMode> = { a: "auto", e: "accept_edits", y: "default", return: "default" };
+      const choice = choices[key.name];
+      if (choice) {
+        startPlan(choice);
+      } else if (key.name === "n") {
+        setPlanReady(false);
+        flash("tell the agent what to change in the plan");
+      }
     } else if (item?.kind === "proposal") {
       if (key.name === "return" || key.name === "y") {
         send({ type: "proposal.decide", proposal_id: item.id, decision: "approve" });
@@ -421,6 +473,20 @@ export function App({
   const disabled = me?.role === "viewer" ? "viewers can only watch the session" : null;
   const showPanel = settings.panel && width >= MIN_WIDTH_FOR_PANEL;
 
+  if (intro) {
+    return (
+      <Splash
+        width={width}
+        height={height}
+        version={version}
+        ready={connection === "online" && me !== undefined}
+        status={connection === "online" ? "joining the session…" : connection === "connecting" ? "connecting to the session…" : "reconnecting…"}
+        onDone={() => setIntro(false)}
+        onQuit={onQuit}
+      />
+    );
+  }
+
   return (
     <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg}>
       <box flexDirection="column" flexGrow={1} minWidth={0}>
@@ -441,11 +507,13 @@ export function App({
               syntax={syntax}
               width={width - (showPanel ? SIDEBAR_WIDTH : 0) - 8}
               expanded={allOpen || opened.has(item.id)}
+              queued={queuedIds.get(item.id) ?? null}
               onToggle={toggle}
             />
           ))}
         </scrollbox>
         {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} /> : null}
+        {running ? <Working status={runStatus} canAbort={isHost} queued={state.queue.length} /> : null}
         {typers.length > 0 ? (
           <box paddingX={2} height={1} flexShrink={0}>
             <text fg={theme.dim}>
@@ -469,6 +537,7 @@ export function App({
               setFocus("inbox");
             }
           }}
+          onCycleMode={cycleMode}
           onInterrupt={interrupt}
           onCopy={copyReply}
           onDirty={(value) => {
@@ -476,6 +545,7 @@ export function App({
           }}
           onActivity={announceTyping}
         />
+        <ModeLine mode={mode} canCycle={isHost} />
         <StatusBar me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
       </box>
       {dialog ? (

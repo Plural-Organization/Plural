@@ -8,6 +8,7 @@ import { highlightLines } from "../lib/highlight";
 import { bodyLines, displayName, kindOf, lastLine, metaOf, oneLine } from "../lib/tools";
 import { truncate } from "../lib/wrap";
 import { colorFor, theme } from "../theme";
+import { Picture } from "./Splash";
 import { Spinner, useElapsed } from "./Spinner";
 
 const TONES: Record<Tone, { color: string; mark: string }> = {
@@ -22,24 +23,31 @@ const table = () => ({ widthMode: "content", cellPaddingY: 0, borderStyle: "roun
 
 export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }) {
   return (
-    <box flexDirection="column" marginBottom={1}>
-      <text>
-        <span fg={theme.accent}>
-          <b>◆ plural</b>
-        </span>
-        <span fg={theme.dim}>  v{item.version} · room {item.room.slice(0, 14)}…</span>
-      </text>
-      {item.guestLink ? (
-        <text fg={theme.dim}>
-          invite a teammate: <span fg={theme.info}>plural join "{item.guestLink}"</span>
+    <box flexDirection="row" alignItems="center" marginBottom={1}>
+      <box flexShrink={0} marginRight={3}>
+        <Picture />
+      </box>
+      <box flexDirection="column" flexShrink={1}>
+        <text>
+          <span fg={theme.accent}>
+            <b>◆ plural</b>
+          </span>
+          <span fg={theme.dim}>  v{item.version} · room {item.room.slice(0, 14)}…</span>
         </text>
-      ) : null}
-      <text fg={theme.dim}>/help for commands · esc interrupts · ctrl+o tool details · ctrl+c twice quits</text>
+        {item.guestLink ? (
+          <text fg={theme.dim}>
+            invite a teammate: <span fg={theme.info}>plural join "{item.guestLink}"</span>
+          </text>
+        ) : null}
+        <text fg={theme.dim}>/help for commands · esc interrupts · ctrl+o tool details · ctrl+c twice quits</text>
+      </box>
     </box>
   );
 }
 
-export function UserCard({ item }: { item: Extract<FeedItem, { kind: "user" }> }) {
+export type Queued = "steer" | "follow_up" | null;
+
+export function UserCard({ item, queued }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued }) {
   const color = colorFor(item.participantId);
   return (
     <box flexDirection="column" marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={color} paddingLeft={1}>
@@ -54,6 +62,11 @@ export function UserCard({ item }: { item: Extract<FeedItem, { kind: "user" }> }
         </span>
       </text>
       <text fg={theme.text}>{item.text}</text>
+      {queued ? (
+        <text fg={theme.warn}>
+          ⧗ queued · <span fg={theme.dim}>{queued === "steer" ? "the agent reads it after its current step" : "sent when the run ends"}</span>
+        </text>
+      ) : null}
     </box>
   );
 }
@@ -61,6 +74,9 @@ export function UserCard({ item }: { item: Extract<FeedItem, { kind: "user" }> }
 export function AssistantCard({ item, syntax }: { item: Extract<FeedItem, { kind: "assistant" }>; syntax: SyntaxStyle }) {
   const renderer = useRenderer();
   const renderNode = useMemo(() => codeBlockRenderer(renderer), [renderer]);
+  if (item.streaming && item.text.trim() === "") {
+    return null;
+  }
   return (
     <box flexDirection="column" marginBottom={1}>
       <text>
@@ -197,15 +213,16 @@ interface ViewProps {
   syntax: SyntaxStyle;
   width: number;
   expanded: boolean;
+  queued?: Queued;
   onToggle: (id: string) => void;
 }
 
-export function FeedItemView({ item, syntax, width, expanded, onToggle }: ViewProps) {
+export function FeedItemView({ item, syntax, width, expanded, queued = null, onToggle }: ViewProps) {
   switch (item.kind) {
     case "banner":
       return <Banner item={item} />;
     case "user":
-      return <UserCard item={item} />;
+      return <UserCard item={item} queued={queued} />;
     case "assistant":
       return <AssistantCard item={item} syntax={syntax} />;
     case "tool":

@@ -3,10 +3,10 @@ import string
 from hypothesis import given
 from hypothesis import strategies as st
 
-from plural.core.policy.engine import Policy, ToolInvocation, evaluate
+from plural.core.policy.engine import PLAN_MODE, Policy, ToolInvocation, evaluate
 from plural.core.policy.rules import PolicyAction, Rule, RuleSet
 from plural.core.provenance import direct, from_proposal
-from plural.protocol.models import Role, ToolRisk
+from plural.protocol.models import PermissionMode, Role, ToolRisk
 
 HOST = direct("p_host", Role.HOST)
 GUEST = from_proposal("p_alia", Role.PARTICIPANT)
@@ -73,3 +73,32 @@ def test_deny_is_never_overridden(
         assert decision.action is PolicyAction.DENY
     if guest:
         assert decision.action is not PolicyAction.ALLOW
+
+
+def edit(path: str) -> ToolInvocation:
+    return ToolInvocation(name="edit", risk=ToolRisk.WRITE, subject=path)
+
+
+def test_accept_edits_allows_edits_but_still_asks_for_commands() -> None:
+    policy = Policy().with_mode(PermissionMode.ACCEPT_EDITS)
+    assert evaluate(policy, edit("app.py"), HOST).action is PolicyAction.ALLOW
+    assert evaluate(policy, bash("pytest"), HOST).action is PolicyAction.ASK
+
+
+def test_auto_mode_allows_everything_but_deny_rules_and_guest_turns() -> None:
+    policy = Policy().with_mode(PermissionMode.AUTO)
+    assert evaluate(policy, edit("app.py"), HOST).action is PolicyAction.ALLOW
+    assert evaluate(policy, bash("pytest && ruff check"), HOST).action is PolicyAction.ALLOW
+    assert evaluate(policy, bash("rm -rf /"), HOST).action is PolicyAction.DENY
+    assert evaluate(policy, edit("app.py"), GUEST).action is PolicyAction.ASK
+
+
+def test_plan_mode_only_lets_reads_and_allowed_commands_through() -> None:
+    policy = Policy().with_mode(PermissionMode.PLAN)
+    read = ToolInvocation(name="read", risk=ToolRisk.READ, subject="app.py")
+    assert evaluate(policy, read, HOST).action is PolicyAction.ALLOW
+    assert evaluate(policy, bash("git status"), HOST).action is PolicyAction.ALLOW
+    for denied in (edit("app.py"), bash("pytest"), bash("git status; touch x")):
+        decision = evaluate(policy, denied, HOST)
+        assert decision.action is PolicyAction.DENY
+        assert decision.reason == PLAN_MODE

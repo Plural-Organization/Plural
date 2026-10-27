@@ -1,4 +1,4 @@
-import { label, type Participant, type Projection } from "@plural/client";
+import { label, PERMISSION_LABELS, type Participant, type Projection } from "@plural/client";
 import { useState, type ReactNode } from "react";
 import { colorFor, theme } from "../theme";
 import { truncate } from "../lib/wrap";
@@ -81,6 +81,10 @@ export function Sidebar({ projection, room, inbox, running, status, onSettings }
                 <text fg={theme.warn}>! {truncate(`${item.approval.call.name} ${item.approval.call.subject}`, SIDEBAR_WIDTH - 8)}</text>
                 <text fg={theme.dim}>  from {nameOf(projection, item.approval.provenance.initiator_id)}</text>
               </box>
+            ) : item.kind === "plan" ? (
+              <text key={item.id} fg={theme.info}>
+                ⏸ the plan is ready to start
+              </text>
             ) : (
               <box key={item.id} flexDirection="column">
                 <text fg={theme.warn}>? {nameOf(projection, item.proposal.author_id)} proposes</text>
@@ -110,6 +114,9 @@ export function Sidebar({ projection, room, inbox, running, status, onSettings }
         <text fg={theme.dim}>room {room.slice(0, 14)}…</text>
         <text fg={theme.dim}>
           prompts <span fg={state.prompt_mode === "open" ? theme.ok : theme.warn}>{state.prompt_mode}</span>
+        </text>
+        <text fg={theme.dim}>
+          permissions <span fg={state.permission_mode === "default" ? theme.dim : theme.warn}>{PERMISSION_LABELS[state.permission_mode]}</span>
         </text>
         <text fg={theme.dim}>{truncate(projection.agent || "agent", SIDEBAR_WIDTH - 4)}</text>
         <text fg={theme.dim}>
