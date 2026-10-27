@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { LOGO_ROWS } from "./logo-grid";
+import { LOGO_ROWS } from "../lib/logo-grid";
 
 const H = LOGO_ROWS.length;
 const W = Math.max(...LOGO_ROWS.map((row) => row.length));

@@ -1,0 +1,23 @@
+:root {
+  --bg: #08090a;
+  --panel: #0d0e10;
+  --raise: #141518;
+  --fg: #e9e8e4;
+  --muted: #8a8c90;
+  --dim: #55575d;
+  --line: #1c1d20;
+  --ok: #9be3b0;
+  --warn: #e8c27a;
+  --danger: #ff9a9a;
+  --accent: #b9b4ff;
+  --add-bg: rgba(155, 227, 176, 0.08);
+  --del-bg: rgba(255, 154, 154, 0.08);
+  --font-display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
+  --font-text: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --side: 290px;
+  --content: 860px;
+  --gutter-left: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-right: max(16px, env(safe-area-inset-right, 0px));
+  color-scheme: dark;
+}

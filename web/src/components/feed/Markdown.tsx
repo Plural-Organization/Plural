@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import { cx } from "../../lib/cx";
+import styles from "./Markdown.module.css";
 
 type Block =
   | { kind: "code"; lang: string; text: string }
@@ -117,14 +119,14 @@ function inline(text: string): ReactNode[] {
   return nodes;
 }
 
-export function Markdown({ text }: { text: string }) {
+export function Markdown({ text, streaming = false }: { text: string; streaming?: boolean }) {
   return (
-    <div className="md">
+    <div className={cx(styles.md, streaming && styles.streaming)}>
       {blocks(text).map((block, index) => {
         switch (block.kind) {
           case "code":
             return (
-              <pre key={index} className="code" data-lang={block.lang || undefined}>
+              <pre key={index} className={styles.code} data-lang={block.lang || undefined}>
                 <code>{block.text}</code>
               </pre>
             );

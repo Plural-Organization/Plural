@@ -1,0 +1,9 @@
+.dialog { background: var(--bg); color: var(--fg); border: 1px solid var(--fg); padding: 22px 24px; width: min(620px, calc(100vw - 32px)); }
+.dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
+.dialog h2 { font: 700 26px var(--font-display); letter-spacing: -0.02em; margin: 0 0 8px; }
+.dialog p { margin: 0 0 14px; font-size: 14px; }
+.share { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.link { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+.row { display: flex; gap: 8px; align-items: stretch; min-width: 0; }
+.row code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; background: var(--panel); border: 1px solid var(--line); padding: 8px 10px; font-size: 12px; }
+.actions { display: flex; justify-content: flex-end; margin-top: 18px; }
