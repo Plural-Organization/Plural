@@ -28,6 +28,9 @@ export function status(projection: Projection): string {
   if (state.run === null) {
     return "";
   }
+  if (projection.compacting !== null) {
+    return "… compacting the context";
+  }
   if (Object.keys(state.approvals).length > 0) {
     return "… waiting for host approval";
   }
@@ -39,4 +42,29 @@ export function status(projection: Projection): string {
     return `… thinking (${projection.reasoning} chars)`;
   }
   return "… waiting for the model";
+}
+
+export interface ContextMeter {
+  percent: number;
+  tokens: string;
+  window: string;
+  level: "ok" | "warn" | "danger";
+}
+
+export function contextMeter(state: SessionState): ContextMeter | null {
+  const context = state.context;
+  if (context === null || context.window <= 0) {
+    return null;
+  }
+  const share = context.tokens / context.window;
+  return {
+    percent: Math.min(100, Math.round(share * 100)),
+    tokens: shortTokens(context.tokens),
+    window: shortTokens(context.window),
+    level: share >= context.compact_at ? "danger" : share >= context.compact_at * 0.75 ? "warn" : "ok",
+  };
+}
+
+export function shortTokens(count: number): string {
+  return count >= 1_000_000 ? `${(count / 1_000_000).toFixed(1)}M` : count >= 1000 ? `${Math.round(count / 1000)}K` : String(count);
 }

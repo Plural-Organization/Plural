@@ -15,6 +15,8 @@
 | agent badgering the host with variants of a rejected action | rejection ledger per run and class, `Block (session)` deny rule (`host/policy_gate.py`, `core/policy/rejections.py`) |
 | agent or guest widening its own permissions | policy rules are events changed only by host commands (`core/roles.py`); an allow rule never overrides a built-in deny or the guest taint; rules are never read from the workspace the agent can write |
 | laundering injected text through a conversation summary | the summary is presented to the model as untrusted notes, runs keep their merged provenance, and write/exec by guest-originated turns still ask (`agent/messages.py`, ADR 0003) |
+| a third-party skill steering the agent | only the host installs skills: by command, or by approving the agent's `skill_install` like an edit, which plan mode refuses; archives are size-capped, links are skipped and paths may not leave the skill folder; the `skill` tool reads only inside an installed skill and keeps the secret deny-list (`agent/skills.py`, `agent/tools/skills.py`) |
+| an MCP server acting with the host's credentials | only the host adds or enables servers; every MCP call is an `exec` that asks the host, keeps the guest taint and is refused in plan mode; server env and headers stay in the host's files and are added to the redactor; tool hints like `readOnlyHint` are not trusted (`agent/mcp.py`) |
 | slow/flooding clients | bounded queues, rate limit and size limit on relay |
 
 Out of scope for MVP: E2E encryption (relay sees content), Docker isolation.

@@ -2,7 +2,7 @@ import type { KeyBinding, TextareaRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
 import type { Role } from "@plural/client";
-import { suggestions as suggest, type CommandHint } from "../commands";
+import { suggestions as suggest, visibleSuggestionWindow, type CommandHint } from "../commands";
 import { theme } from "../theme";
 
 interface ComposerProps {
@@ -20,7 +20,21 @@ interface ComposerProps {
   onCopy: () => void;
   onDirty: (dirty: boolean) => void;
   onActivity: (text: string) => void;
+  onFocus: () => void;
+  onIdleKey?: (key: string) => boolean;
+  remember?: boolean;
+  tips?: boolean;
 }
+
+const TIPS = [
+  "shift+tab switches between ask, accept edits, plan and auto",
+  "/skills search react finds skills to install",
+  "/who shows who is in the room",
+  "esc stops the agent mid-run",
+  "ctrl+o opens every tool call",
+  "shift+enter starts a new line",
+];
+const TIP_MS = 7000;
 
 const MAX_HISTORY = 100;
 
@@ -37,12 +51,14 @@ export function Composer(props: ComposerProps) {
   const [value, setValue] = useState("");
   const [choice, setChoice] = useState(0);
   const [dismissed, setDismissed] = useState(false);
+  const [tip, setTip] = useState(0);
   const history = useRef<string[]>([]);
   const position = useRef(-1);
   const draft = useRef("");
 
   const hints = dismissed ? [] : suggest(value, role);
   const selected: CommandHint | undefined = hints[Math.min(choice, Math.max(0, hints.length - 1))];
+  const hintWindow = visibleSuggestionWindow(hints, choice);
 
   const put = (text: string): void => {
     area.current?.setText(text);
@@ -61,12 +77,22 @@ export function Composer(props: ComposerProps) {
     props.onDirty(value !== "");
   }, [value === ""]);
 
+  useEffect(() => {
+    if (value !== "" || disabled) {
+      return;
+    }
+    const timer = setInterval(() => setTip((current) => (current + 1) % TIPS.length), TIP_MS);
+    return () => clearInterval(timer);
+  }, [value === "", disabled]);
+
   const submit = (): void => {
     const text = (area.current?.plainText ?? "").trim();
     if (text === "") {
       return;
     }
-    history.current = [text, ...history.current.filter((entry) => entry !== text)].slice(0, MAX_HISTORY);
+    if (props.remember !== false) {
+      history.current = [text, ...history.current.filter((entry) => entry !== text)].slice(0, MAX_HISTORY);
+    }
     position.current = -1;
     put("");
     props.onSubmit(text);
@@ -109,6 +135,12 @@ export function Composer(props: ComposerProps) {
       props.onCopy();
       return;
     }
+    const idle = (area.current?.plainText ?? value) === "" && hints.length === 0 && !key.meta && !key.shift;
+    const action = key.ctrl ? (["g", "r"].includes(key.name) ? `ctrl+${key.name}` : null) : ["up", "down", "return"].includes(key.name) ? key.name : null;
+    if (idle && action && props.onIdleKey?.(action)) {
+      key.preventDefault();
+      return;
+    }
     if (key.name === "escape") {
       key.preventDefault();
       if (hints.length > 0) {
@@ -149,20 +181,30 @@ export function Composer(props: ComposerProps) {
     }
   });
 
-  const color = disabled ? theme.dim : focused ? theme.accent : theme.dim;
+  const color = disabled ? theme.line : focused ? theme.accent : theme.dim;
+  const lines = value === "" ? 0 : value.split("\n").length;
+  const shown = disabled ?? (focused ? (props.remember === false || props.tips === false ? placeholder : `${placeholder}  ·  tip: ${TIPS[tip]}`) : `${placeholder}  ·  click or press tab to type`);
   return (
-    <box flexDirection="column" flexShrink={0} backgroundColor={theme.panel}>
-      <box flexDirection="column" border={["top"]} borderColor={color} paddingX={2}>
-        {label ? <text fg={theme.warn}>{label}</text> : null}
+    <box flexDirection="column" flexShrink={0} paddingX={1} onMouseDown={() => props.onFocus()}>
+      <box
+        flexDirection="column"
+        border
+        borderStyle="rounded"
+        borderColor={color}
+        backgroundColor={theme.panel}
+        paddingX={1}
+        title={label ? ` ${label} ` : undefined}
+        titleAlignment="left"
+      >
         <box flexDirection="row">
-          <text fg={color}>❯ </text>
+          <text fg={color}>{focused ? "❯ " : "› "}</text>
           <textarea
             ref={area}
             flexGrow={1}
-            minHeight={1}
-            maxHeight={6}
+            minHeight={2}
+            maxHeight={8}
             focused={focused && !disabled}
-            placeholder={disabled ?? placeholder}
+            placeholder={shown}
             placeholderColor={theme.dim}
             textColor={theme.text}
             backgroundColor={theme.panel}
@@ -179,11 +221,18 @@ export function Composer(props: ComposerProps) {
             onSubmit={submit}
           />
         </box>
+        <box flexDirection="row" justifyContent="flex-end" height={1}>
+          <text fg={theme.dim}>
+            {lines > 1 ? `${lines} lines · ` : ""}
+            {value.length > 0 ? `${value.length} chars · ` : ""}
+            <span fg={focused ? theme.accent : theme.dim}>↵</span> send · <span fg={focused ? theme.accent : theme.dim}>⇧↵</span> new line
+          </text>
+        </box>
       </box>
       {hints.length > 0 ? (
         <box flexDirection="column" paddingLeft={4}>
-          {hints.slice(0, 6).map((hint) => {
-            const on = hint === selected;
+          {hintWindow.items.map((hint, index) => {
+            const on = index === hintWindow.selectedIndex;
             return (
               <text key={hint.name} fg={on ? theme.accent : theme.dim}>
                 {on ? "› " : "  "}

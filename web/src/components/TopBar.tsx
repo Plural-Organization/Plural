@@ -1,4 +1,4 @@
-import type { ConnectionStatus, Projection } from "@plural/client";
+import { contextMeter, type ConnectionStatus, type Projection } from "@plural/client";
 import { cx } from "../lib/cx";
 import { Logo } from "./Logo";
 import styles from "./TopBar.module.css";
@@ -20,6 +20,7 @@ function connectionText(connection: ConnectionStatus, online: number): string {
 
 export function TopBar({ room, projection, connection, panelOpen, onCopyRoom, onTogglePanel, onLeave }: TopBarProps) {
   const state = projection.state;
+  const meter = contextMeter(state);
   const online = Object.values(state.participants).filter((person) => person.connected).length;
   return (
     <header className={styles.bar}>
@@ -32,6 +33,14 @@ export function TopBar({ room, projection, connection, panelOpen, onCopyRoom, on
       </button>
       <span className={cx(styles.pill, state.prompt_mode === "review" && styles.review)}>{state.prompt_mode} mode</span>
       <span className="grow" />
+      {meter ? (
+        <span className={cx(styles.meter, styles[meter.level])} title={`${meter.tokens} of ${meter.window} tokens in the context`}>
+          <span className={styles.meterTrack}>
+            <span className={styles.meterFill} style={{ width: `${meter.percent}%` }} />
+          </span>
+          context {meter.percent}%
+        </span>
+      ) : null}
       <span className={cx("mono", styles.agent)}>{state.agent || projection.agent}</span>
       <span className={cx(styles.connection, styles[connection])} title={connection}>
         <span className={styles.dot} />

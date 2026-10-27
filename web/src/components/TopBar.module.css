@@ -14,3 +14,11 @@
 @media (max-width: 640px) { .agent, .room, .pill { display: none; } .bar { gap: 8px; } }
 @keyframes blink { 50% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .offline .dot { animation: none; } }
+
+.meter { display: inline-flex; align-items: center; gap: 8px; font: 12px var(--font-mono); color: var(--muted, #8a8f98); white-space: nowrap; }
+.meterTrack { width: 64px; height: 6px; background: var(--line); display: inline-block; position: relative; overflow: hidden; }
+.meterFill { position: absolute; inset: 0 auto 0 0; background: var(--ok); transition: width 0.4s ease; }
+.warn .meterFill { background: var(--warn); }
+.danger .meterFill { background: var(--danger); }
+.danger { color: var(--danger); }
+@media (max-width: 640px) { .meter { display: none; } }

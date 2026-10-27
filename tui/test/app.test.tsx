@@ -20,6 +20,10 @@ function session(role: "host" | "participant" | "viewer" = "host"): FakeSession 
   return fake;
 }
 
+function feedText(fake: FakeSession): string {
+  return JSON.stringify(fake.projection.state.transcript);
+}
+
 const open: Setup[] = [];
 afterEach(() => {
   while (open.length > 0) {
@@ -72,6 +76,209 @@ describe("App", () => {
     expect(logo).toContain("▀");
     expect(logo).not.toContain("Message the agent");
     await frame(setup, "Message the agent");
+  });
+
+  test("/skills search opens a picker under the composer and enter installs the choice", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    await setup.mockInput.typeText("/skills search react");
+    await setup.mockInput.pressEnter();
+    await frame(setup, 'searching for "react"…');
+    fake.emit({
+      type: "skills.found",
+      query: "react",
+      hits: [
+        { package: "vercel-labs/agent-skills@vercel-react-best-practices", name: "vercel-react-best-practices", installs: 844260 },
+        { package: "vercel-labs/agent-skills@vercel-react-native-skills", name: "vercel-react-native-skills", installs: 257068 },
+      ],
+    });
+    const picker = await frame(setup, "skills.sh · react");
+    expect(picker).toContain("844K");
+    expect(picker).toContain("enter install here");
+    expect(feedText(fake)).not.toContain("vercel-react-native-skills");
+    await setup.mockInput.pressArrow("down");
+    await tick(50);
+    await setup.mockInput.pressKey("g", { ctrl: true });
+    await frame(setup, "installing vercel-labs/agent-skills@vercel-react-native-skills");
+    expect(fake.commands).toEqual([
+      { type: "skills.search", query: "react" },
+      { type: "skills.install", package: "vercel-labs/agent-skills@vercel-react-native-skills", scope: "global" },
+    ]);
+    fake.emit({ type: "skills.changed", skills: [{ name: "vercel-react-native-skills", description: "React Native.", scope: "global" }], added: ["vercel-react-native-skills"], removed: [] });
+    await frame(setup, "✓ vercel-react-native-skills installed");
+    await setup.mockInput.typeText("/skills");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "vercel-react-native-skills  global  React Native.");
+  });
+
+  test("/help and /who open in the tray, not in the conversation, and esc closes it", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    await setup.mockInput.typeText("/who");
+    await setup.mockInput.pressEnter();
+    expect(await frame(setup, "who · 1 here")).toContain("vlad (you)  host");
+    await setup.mockInput.typeText("/help");
+    await setup.mockInput.pressEnter();
+    const help = await frame(setup, "shift+tab");
+    expect(help).not.toContain("who · 1 here");
+    await setup.mockInput.pressEscape();
+    await tick(50);
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).not.toContain("esc close");
+    expect(fake.commands).toEqual([]);
+  });
+
+  test("clicking the composer takes the keys back from the inbox", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({
+      type: "approval.requested",
+      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [] },
+    });
+    await frame(setup, "approval needed");
+    await frame(setup, "answer above");
+    const text = setup.captureCharFrame().split("\n");
+    const row = text.findIndex((line) => line.includes("send ·"));
+    await setup.mockMouse.click(10, row - 1);
+    await tick(100);
+    await setup.mockInput.typeText("hi");
+    await setup.mockInput.pressEnter();
+    await tick(100);
+    expect(fake.commands).toEqual([{ type: "prompt.submit", text: "hi", delivery: "now" }]);
+  });
+
+  test("everyone sees the context fill up and a compaction squeeze it", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "context.usage", context: { tokens: 96_000, window: 128_000, compact_at: 0.75 } });
+    expect(await frame(setup, "75%")).toContain("96K/128K");
+    fake.emit({ type: "run.started", run_id: "rc", prompt_id: "", provenance: GUEST });
+    fake.emit({ type: "context.compacting", run_id: "rc", tokens_before: 96_000 });
+    expect(await frame(setup, "compacting the context")).toContain("96K tokens into a summary");
+    fake.emit({ type: "context.compacted", run_id: "rc", summary: "S", tokens_before: 96_000 });
+    fake.emit({ type: "context.usage", context: { tokens: 3_000, window: 128_000, compact_at: 0.75 } });
+    fake.emit({ type: "run.ended", run_id: "rc", reason: "stop", usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 }, error: null });
+    const done = await frame(setup, "context compacted: 96K tokens summarized");
+    expect(done).toContain("2%");
+    expect(done).not.toContain("compacting the context");
+  });
+
+  test("the prompt being answered stays pinned on top while its reply scrolls by", async () => {
+    const fake = session();
+    const setup = await mount(fake, 100, 24);
+    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_host", text: "bro which skills do you have?", delivery: "now", provenance: GUEST, attachments: [] });
+    const reply = Array.from({ length: 40 }, (_, i) => `- skill number ${i + 1}`).join("\n");
+    fake.emit({ type: "message.started", run_id: "r", message_id: "m1" });
+    fake.emit({ type: "message.ended", run_id: "r", message_id: "m1", text: reply, thinking: "" });
+    const pinned = await frame(setup, "↑ jump");
+    const top = pinned.split("\n").slice(0, 3).join("\n");
+    expect(top).toContain("bro which skills do you have?");
+    const row = pinned.split("\n").findIndex((line) => line.includes("↑ jump"));
+    await setup.mockMouse.click(20, row);
+    await tick(250);
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).not.toContain("↑ jump");
+  });
+
+  test("/mcp lists servers live and the host toggles or restarts one from the keyboard", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    await setup.mockInput.typeText("/mcp add plane npx -y plane-mcp --global");
+    await setup.mockInput.pressEnter();
+    await tick(100);
+    expect(fake.commands).toEqual([{ type: "mcp.add", name: "plane", command: "npx", args: ["-y", "plane-mcp"], url: null, scope: "global" }]);
+    fake.emit({ type: "mcp.changed", servers: [{ name: "plane", transport: "stdio", scope: "global", status: "connecting", tools: 0, error: null }] });
+    await frame(setup, "connecting…");
+    fake.emit({
+      type: "mcp.changed",
+      servers: [
+        { name: "plane", transport: "stdio", scope: "global", status: "ready", tools: 12, error: null },
+        { name: "pg", transport: "stdio", scope: "project", status: "failed", tools: 0, error: "command not found: pg-mcp" },
+      ],
+    });
+    const tray = await frame(setup, "mcp · 1/2 connected · 12 tools");
+    expect(tray).toContain("failed: command not found: pg-mcp");
+    expect(tray).toContain("mcp 1/2 · 12 tools");
+    await setup.mockInput.pressEnter();
+    await setup.mockInput.pressArrow("down");
+    await tick(50);
+    await setup.mockInput.pressKey("r", { ctrl: true });
+    await tick(100);
+    expect(fake.commands.slice(1)).toEqual([
+      { type: "mcp.toggle", name: "plane", enabled: false },
+      { type: "mcp.restart", name: "pg" },
+    ]);
+  });
+
+  test("the add-a-server wizard asks only what the preset needs and keeps the token out of history", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    await setup.mockInput.typeText("/mcp");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "+ add a server…");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "add an MCP server");
+    await setup.mockInput.pressArrow("down");
+    await setup.mockInput.pressArrow("down");
+    await tick(50);
+    await setup.mockInput.pressEnter();
+    await frame(setup, 'enter for "github"');
+    await setup.mockInput.pressEnter();
+    await frame(setup, "GitHub personal access token");
+    await setup.mockInput.typeText("ghp_secret123");
+    await setup.mockInput.pressEnter();
+    const scope = await frame(setup, "Save for every project");
+    expect(scope).toContain("••••••••");
+    expect(scope).not.toContain("ghp_secret123");
+    await setup.mockInput.pressArrow("down");
+    await tick(50);
+    await setup.mockInput.pressEnter();
+    await tick(100);
+    expect(fake.commands).toEqual([
+      {
+        type: "mcp.add",
+        name: "github",
+        url: "https://api.githubcopilot.com/mcp/",
+        command: null,
+        args: [],
+        env: {},
+        headers: { Authorization: "Bearer ghp_secret123" },
+        scope: "global",
+      },
+    ]);
+    await setup.mockInput.pressEscape();
+    await setup.mockInput.pressArrow("up");
+    await tick(50);
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).not.toContain("ghp_secret123");
+  });
+
+  test("a custom command server needs a name and a command", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    await setup.mockInput.typeText("/mcp");
+    await setup.mockInput.pressEnter();
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Your own command");
+    for (let step = 0; step < 9; step += 1) {
+      await setup.mockInput.pressArrow("down");
+    }
+    await tick(50);
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Name");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "name is needed");
+    await setup.mockInput.typeText("plane");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Command that starts it");
+    await setup.mockInput.typeText("npx -y @makeplane/plane-mcp-server");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Save for this project");
+    await setup.mockInput.pressEnter();
+    await tick(100);
+    expect(fake.commands).toEqual([
+      { type: "mcp.add", name: "plane", command: "npx", args: ["-y", "@makeplane/plane-mcp-server"], url: null, env: {}, headers: {}, scope: "project" },
+    ]);
   });
 
   test("typing a prompt and pressing enter sends it", async () => {

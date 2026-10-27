@@ -45,12 +45,34 @@ export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }
   );
 }
 
+export const pinId = (id: string): string => `user-${id}`;
+
+export function PinnedPrompt({ item, width, onJump }: { item: Extract<FeedItem, { kind: "user" }>; width: number; onJump: () => void }) {
+  const color = colorFor(item.participantId);
+  const first = item.text.split("\n")[0] ?? "";
+  const room = Math.max(10, width - item.name.length - item.role.length - 16);
+  return (
+    <box position="absolute" top={1} left={0} width="100%" zIndex={10} paddingX={2} backgroundColor={theme.panel} onMouseDown={onJump}>
+      <box border={["left"]} borderStyle="heavy" borderColor={color} paddingLeft={1}>
+        <text wrapMode="none">
+          <span fg={color}>
+            <b>{item.name}</b>
+          </span>
+          <span fg={theme.dim}> {item.role} · </span>
+          <span fg={theme.text}>{truncate(first, room)}</span>
+          <span fg={theme.dim}>{"  ↑ jump"}</span>
+        </text>
+      </box>
+    </box>
+  );
+}
+
 export type Queued = "steer" | "follow_up" | null;
 
 export function UserCard({ item, queued }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued }) {
   const color = colorFor(item.participantId);
   return (
-    <box flexDirection="column" marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={color} paddingLeft={1}>
+    <box id={pinId(item.id)} flexDirection="column" marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={color} paddingLeft={1}>
       <text>
         <span fg={color}>
           <b>{item.name}</b>

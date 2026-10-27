@@ -55,6 +55,13 @@ class ThinkingDelta(Model):
     text: str
 
 
+class ProviderActivity(Model):
+    """Real provider progress that does not contain user-visible content."""
+
+    kind: Literal["activity"] = "activity"
+    source: str
+
+
 class ToolCallReady(Model):
     kind: Literal["tool_call"] = "tool_call"
     call: ToolCallRequest
@@ -75,7 +82,9 @@ class Stop(Model):
     reason: StopReason = "end_turn"
 
 
-LlmEvent = TextDelta | ThinkingDelta | ToolCallReady | NativeReady | UsageReport | Stop
+LlmEvent = (
+    TextDelta | ThinkingDelta | ProviderActivity | ToolCallReady | NativeReady | UsageReport | Stop
+)
 
 
 class ProviderError(Exception):

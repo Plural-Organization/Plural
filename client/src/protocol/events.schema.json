@@ -177,6 +177,63 @@
       ],
       "type": "object"
     },
+    "ContextCompacting": {
+      "properties": {
+        "run_id": {
+          "type": "string"
+        },
+        "tokens_before": {
+          "type": "integer"
+        },
+        "type": {
+          "const": "context.compacting",
+          "default": "context.compacting",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "run_id",
+        "tokens_before"
+      ],
+      "type": "object"
+    },
+    "ContextUsage": {
+      "properties": {
+        "context": {
+          "$ref": "#/$defs/ContextView"
+        },
+        "type": {
+          "const": "context.usage",
+          "default": "context.usage",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "context"
+      ],
+      "type": "object"
+    },
+    "ContextView": {
+      "properties": {
+        "compact_at": {
+          "type": "number"
+        },
+        "tokens": {
+          "type": "integer"
+        },
+        "window": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "tokens",
+        "window",
+        "compact_at"
+      ],
+      "type": "object"
+    },
     "Delivery": {
       "enum": [
         "now",
@@ -403,8 +460,11 @@
               "approval.resolved": "#/$defs/ApprovalResolved",
               "attachment.added": "#/$defs/AttachmentAdded",
               "context.compacted": "#/$defs/ContextCompacted",
+              "context.compacting": "#/$defs/ContextCompacting",
+              "context.usage": "#/$defs/ContextUsage",
               "error": "#/$defs/ErrorRaised",
               "invite.created": "#/$defs/InviteCreated",
+              "mcp.changed": "#/$defs/McpChanged",
               "message.delta": "#/$defs/MessageDelta",
               "message.ended": "#/$defs/MessageEnded",
               "message.started": "#/$defs/MessageStarted",
@@ -426,6 +486,8 @@
               "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
               "session.snapshot": "#/$defs/SessionSnapshot",
               "session.welcome": "#/$defs/SessionWelcome",
+              "skills.changed": "#/$defs/SkillsChanged",
+              "skills.found": "#/$defs/SkillsFound",
               "tool.ended": "#/$defs/ToolEnded",
               "tool.output": "#/$defs/ToolOutput",
               "tool.started": "#/$defs/ToolStarted"
@@ -450,6 +512,12 @@
             },
             {
               "$ref": "#/$defs/PermissionModeChanged"
+            },
+            {
+              "$ref": "#/$defs/SkillsChanged"
+            },
+            {
+              "$ref": "#/$defs/SkillsFound"
             },
             {
               "$ref": "#/$defs/AgentChanged"
@@ -488,7 +556,16 @@
               "$ref": "#/$defs/MessageEnded"
             },
             {
+              "$ref": "#/$defs/ContextCompacting"
+            },
+            {
               "$ref": "#/$defs/ContextCompacted"
+            },
+            {
+              "$ref": "#/$defs/ContextUsage"
+            },
+            {
+              "$ref": "#/$defs/McpChanged"
             },
             {
               "$ref": "#/$defs/ToolStarted"
@@ -584,6 +661,75 @@
         "cmd",
         "evt",
         "ack"
+      ],
+      "type": "string"
+    },
+    "McpChanged": {
+      "properties": {
+        "servers": {
+          "items": {
+            "$ref": "#/$defs/McpServerView"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "mcp.changed",
+          "default": "mcp.changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "servers"
+      ],
+      "type": "object"
+    },
+    "McpServerView": {
+      "properties": {
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/SkillScope"
+        },
+        "status": {
+          "$ref": "#/$defs/McpStatus"
+        },
+        "tools": {
+          "default": 0,
+          "type": "integer"
+        },
+        "transport": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "transport",
+        "scope",
+        "status",
+        "tools",
+        "error"
+      ],
+      "type": "object"
+    },
+    "McpStatus": {
+      "enum": [
+        "connecting",
+        "ready",
+        "failed",
+        "off"
       ],
       "type": "string"
     },
@@ -1255,9 +1401,27 @@
           },
           "type": "object"
         },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContextView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "last_seq": {
           "default": 0,
           "type": "integer"
+        },
+        "mcp": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/McpServerView"
+          },
+          "type": "array"
         },
         "participants": {
           "additionalProperties": {
@@ -1304,6 +1468,13 @@
           ],
           "default": null
         },
+        "skills": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/SkillView"
+          },
+          "type": "array"
+        },
         "summary": {
           "anyOf": [
             {
@@ -1332,6 +1503,9 @@
         "approvals",
         "attachments",
         "policy",
+        "skills",
+        "context",
+        "mcp",
         "queue",
         "agent",
         "summary",
@@ -1375,6 +1549,112 @@
         "participant",
         "base_policy",
         "agent"
+      ],
+      "type": "object"
+    },
+    "SkillHit": {
+      "properties": {
+        "installs": {
+          "default": 0,
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "package": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "package",
+        "name",
+        "installs"
+      ],
+      "type": "object"
+    },
+    "SkillScope": {
+      "enum": [
+        "project",
+        "global"
+      ],
+      "type": "string"
+    },
+    "SkillView": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/SkillScope"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "scope"
+      ],
+      "type": "object"
+    },
+    "SkillsChanged": {
+      "properties": {
+        "added": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "removed": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/SkillView"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "skills.changed",
+          "default": "skills.changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "skills",
+        "added",
+        "removed"
+      ],
+      "type": "object"
+    },
+    "SkillsFound": {
+      "properties": {
+        "hits": {
+          "items": {
+            "$ref": "#/$defs/SkillHit"
+          },
+          "type": "array"
+        },
+        "query": {
+          "type": "string"
+        },
+        "type": {
+          "const": "skills.found",
+          "default": "skills.found",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "query",
+        "hits"
       ],
       "type": "object"
     },
@@ -1601,8 +1881,11 @@
           "approval.resolved": "#/$defs/ApprovalResolved",
           "attachment.added": "#/$defs/AttachmentAdded",
           "context.compacted": "#/$defs/ContextCompacted",
+          "context.compacting": "#/$defs/ContextCompacting",
+          "context.usage": "#/$defs/ContextUsage",
           "error": "#/$defs/ErrorRaised",
           "invite.created": "#/$defs/InviteCreated",
+          "mcp.changed": "#/$defs/McpChanged",
           "message.delta": "#/$defs/MessageDelta",
           "message.ended": "#/$defs/MessageEnded",
           "message.started": "#/$defs/MessageStarted",
@@ -1624,6 +1907,8 @@
           "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
           "session.snapshot": "#/$defs/SessionSnapshot",
           "session.welcome": "#/$defs/SessionWelcome",
+          "skills.changed": "#/$defs/SkillsChanged",
+          "skills.found": "#/$defs/SkillsFound",
           "tool.ended": "#/$defs/ToolEnded",
           "tool.output": "#/$defs/ToolOutput",
           "tool.started": "#/$defs/ToolStarted"
@@ -1648,6 +1933,12 @@
         },
         {
           "$ref": "#/$defs/PermissionModeChanged"
+        },
+        {
+          "$ref": "#/$defs/SkillsChanged"
+        },
+        {
+          "$ref": "#/$defs/SkillsFound"
         },
         {
           "$ref": "#/$defs/AgentChanged"
@@ -1686,7 +1977,16 @@
           "$ref": "#/$defs/MessageEnded"
         },
         {
+          "$ref": "#/$defs/ContextCompacting"
+        },
+        {
           "$ref": "#/$defs/ContextCompacted"
+        },
+        {
+          "$ref": "#/$defs/ContextUsage"
+        },
+        {
+          "$ref": "#/$defs/McpChanged"
         },
         {
           "$ref": "#/$defs/ToolStarted"

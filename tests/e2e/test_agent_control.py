@@ -60,13 +60,17 @@ async def test_the_new_agent_is_announced_to_everyone_and_used_for_the_next_run(
 
         await control.handle(
             request(
-                "configure", provider="openai", model="qwen3:4b", base_url="http://127.0.0.1:1/v1"
+                "configure",
+                provider="openai",
+                provider_name="Cerebras",
+                model="qwen3:4b",
+                base_url="http://127.0.0.1:1/v1",
             )
         )
-        assert (await replies.next())["agent"] == "openai · qwen3:4b · local"
+        assert (await replies.next())["agent"] == "Cerebras · qwen3:4b"
         changed = await guest.next(AgentChanged)
-        assert changed.agent == "openai · qwen3:4b · local"
-        assert guest.client.projection.state.agent == "openai · qwen3:4b · local"
+        assert changed.agent == "Cerebras · qwen3:4b"
+        assert guest.client.projection.state.agent == "Cerebras · qwen3:4b"
 
         await control.handle(request("configure", provider="fake"))
         await replies.next()

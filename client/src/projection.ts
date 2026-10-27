@@ -6,6 +6,7 @@ export class Projection {
   streaming: Record<string, string> = {};
   reasoning = 0;
   typing = new Set<string>();
+  compacting: { tokens: number; since: number } | null = null;
   basePolicy: PolicyRuleView[] = [];
   agent = "";
   meId: string | null = null;
@@ -20,6 +21,7 @@ export class Projection {
     this.streaming = { ...streaming };
     this.typing = new Set(typing);
     this.reasoning = 0;
+    this.compacting = null;
     this.ready = true;
   }
 
@@ -40,6 +42,10 @@ export class Projection {
       case "run.ended":
         this.streaming = {};
         this.reasoning = 0;
+        this.compacting = null;
+        break;
+      case "context.compacted":
+        this.compacting = null;
         break;
       case "participant.revoked":
         this.typing.delete(event.participant_id);
@@ -51,6 +57,10 @@ export class Projection {
   }
 
   observe(event: Event): void {
+    if (event.type === "context.compacting") {
+      this.compacting = { tokens: event.tokens_before, since: Date.now() };
+      return;
+    }
     if (event.type === "participant.typing") {
       if (event.typing) {
         this.typing.add(event.participant_id);
