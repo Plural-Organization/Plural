@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 import json
 from collections import deque
 from collections.abc import AsyncGenerator, AsyncIterator, Sequence
@@ -39,6 +40,7 @@ from plural.agent.providers.base import (
     LlmRequest,
     NativeContent,
     NativeReady,
+    ProviderBusy,
     ProviderError,
     Stop,
     StopReason,
@@ -71,6 +73,8 @@ class LoopLimits:
     idle_timeout_s: float = 60.0
     context_window: int = 128_000
     compact_at: float = 0.75
+    retries: int = 3
+    retry_delay_s: float = 2.0
 
 
 @dataclass(slots=True)
@@ -146,9 +150,9 @@ class AgentLoop:
     def request_compaction(self) -> None:
         self._compact_requested = True
 
-    def restore(self, summary: str) -> None:
-        self._conversation = [SummaryTurn(text=summary)]
-        self._context_tokens = 0
+    def restore(self, conversation: Sequence[Message]) -> None:
+        self._conversation = list(conversation)
+        self._context_tokens = sum(_estimate_tokens(message) for message in conversation)
 
     def cancel_pending(self, prompt_id: str) -> bool:
         for queue in (self._steer, self._follow_up):
@@ -231,20 +235,23 @@ class AgentLoop:
                     return
                 if turn.stop in _UNFINISHED:
                     for call in assistant.tool_calls:
-                        for event in self._skip(call, _UNFINISHED[turn.stop]):
-                            yield event
+                        start, end = self._skip(call, _UNFINISHED[turn.stop])
+                        self._answer(call, end.result)
+                        yield start
+                        yield end
                     if turn.stop == "refusal":
                         yield RunEnd(RunEndReason.ERROR, self._usage, "model declined the request")
                         return
                     continue
-                for call in assistant.tool_calls:
-                    recent.append(_signature(call))
-                    if len(recent) == recent.maxlen and len(set(recent)) == 1:
-                        yield RunEnd(
-                            RunEndReason.LIMIT, self._usage, "repeated identical tool call"
-                        )
-                        return
-                    async for event in self._execute(call, provenance, cancel):
+                for group in self._groups(assistant.tool_calls):
+                    for call in group:
+                        recent.append(_signature(call))
+                        if len(recent) == recent.maxlen and len(set(recent)) == 1:
+                            yield RunEnd(
+                                RunEndReason.LIMIT, self._usage, "repeated identical tool call"
+                            )
+                            return
+                    async for event in self._execute_group(group, provenance, cancel):
                         yield event
                     if cancel.is_set():
                         yield RunEnd(RunEndReason.ABORTED, self._usage)
@@ -316,6 +323,26 @@ class AgentLoop:
         return Compacted(summary, before)
 
     async def _events(self, request: LlmRequest, cancel: asyncio.Event) -> AsyncIterator[LlmEvent]:
+        for attempt in itertools.count():
+            started = False
+            try:
+                async for event in self._attempt(request, cancel):
+                    started = True
+                    yield event
+                return
+            except ProviderBusy as error:
+                if started or attempt >= self._limits.retries:
+                    raise
+                delay = self._limits.retry_delay_s * 2**attempt
+                log.warning(
+                    "agent.provider_busy", error=str(error), attempt=attempt + 1, delay=delay
+                )
+                try:
+                    await interruptible(asyncio.sleep(delay), cancel)
+                except Interrupted:
+                    return
+
+    async def _attempt(self, request: LlmRequest, cancel: asyncio.Event) -> AsyncIterator[LlmEvent]:
         stream = self._provider.stream(request, cancel=cancel).__aiter__()
         limit = self._limits.first_token_timeout_s
         try:
@@ -349,6 +376,64 @@ class AgentLoop:
             messages=to_llm(self._conversation),
             tools=self._tools.schemas(),
         )
+
+    def _groups(self, calls: Sequence[ToolCallRequest]) -> list[list[ToolCallRequest]]:
+        groups: list[list[ToolCallRequest]] = []
+        for call in calls:
+            if groups and self._reads_only(call) and self._reads_only(groups[-1][0]):
+                groups[-1].append(call)
+            else:
+                groups.append([call])
+        return groups
+
+    def _reads_only(self, call: ToolCallRequest) -> bool:
+        if call.parse_error is not None:
+            return False
+        try:
+            return self._tools.prepare(call).risk is ToolRisk.READ
+        except (UnknownTool, ValidationError):
+            return False
+
+    async def _execute_group(
+        self, group: Sequence[ToolCallRequest], provenance: Provenance, cancel: asyncio.Event
+    ) -> AsyncIterator[AgentEvent]:
+        if len(group) == 1:
+            async for event in self._execute(group[0], provenance, cancel):
+                if isinstance(event, ToolEnd):
+                    self._answer(group[0], event.result)
+                yield event
+            return
+        ended: dict[str, ToolEnd] = {}
+        queue: asyncio.Queue[AgentEvent | None] = asyncio.Queue()
+
+        async def pump(call: ToolCallRequest) -> None:
+            try:
+                async for event in self._execute(call, provenance, cancel):
+                    queue.put_nowait(event)
+            finally:
+                queue.put_nowait(None)
+
+        tasks = [asyncio.create_task(pump(call)) for call in group]
+        try:
+            running = len(tasks)
+            while running:
+                event = await queue.get()
+                if event is None:
+                    running -= 1
+                    continue
+                if isinstance(event, ToolEnd):
+                    ended[event.call_id] = event
+                yield event
+        finally:
+            for task in tasks:
+                task.cancel()
+            outcomes = await asyncio.gather(*tasks, return_exceptions=True)
+        for outcome in outcomes:
+            if isinstance(outcome, Exception):
+                raise outcome
+        for call in group:
+            if (end := ended.get(call.id)) is not None:
+                self._answer(call, end.result)
 
     async def _execute(
         self, call: ToolCallRequest, provenance: Provenance, cancel: asyncio.Event
@@ -396,7 +481,7 @@ class AgentLoop:
                 result = ToolResult(f"Denied: {verdict.reason}", is_error=True)
         except Interrupted:
             result = ToolResult(_ABORTED, is_error=True)
-        yield self._finish(call, result)
+        yield ToolEnd(call.id, result)
 
     async def _invoke(
         self, prepared: PreparedCall, cancel: asyncio.Event, ctx: ToolCtx
@@ -408,17 +493,16 @@ class AgentLoop:
         except (ToolError, SandboxError, OSError, UnicodeDecodeError) as error:
             return ToolResult(f"{type(error).__name__}: {error}", is_error=True)
 
-    def _skip(self, call: ToolCallRequest, reason: str) -> tuple[AgentEvent, ...]:
+    def _skip(self, call: ToolCallRequest, reason: str) -> tuple[ToolStart, ToolEnd]:
         view = ToolCallView(id=call.id, name=call.name, risk=ToolRisk.EXEC, args=call.args)
-        return ToolStart(view), self._finish(call, ToolResult(reason, is_error=True))
+        return ToolStart(view), ToolEnd(call.id, ToolResult(reason, is_error=True))
 
-    def _finish(self, call: ToolCallRequest, result: ToolResult) -> ToolEnd:
+    def _answer(self, call: ToolCallRequest, result: ToolResult) -> None:
         self._conversation.append(
             ToolResultTurn(
                 call_id=call.id, name=call.name, content=result.content, is_error=result.is_error
             )
         )
-        return ToolEnd(call.id, result)
 
     def _settle(self) -> None:
         for index in range(len(self._conversation) - 1, -1, -1):
@@ -448,6 +532,14 @@ _UNFINISHED: dict[StopReason, str] = {
     "max_tokens": "Not executed: the response hit the output limit before the call was complete",
     "refusal": "Not executed: the model declined the request",
 }
+
+
+def _estimate_tokens(message: Message) -> int:
+    match message:
+        case ToolResultTurn(content=text) | UserTurn(text=text) | SummaryTurn(text=text):
+            return len(text) // 4
+        case AssistantTurn(text=text, tool_calls=calls):
+            return (len(text) + sum(len(_signature(call)) for call in calls)) // 4
 
 
 def _signature(call: ToolCallRequest) -> str:

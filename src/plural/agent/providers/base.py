@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
-from typing import Literal, Protocol
+from typing import Final, Literal, Protocol
 
 from pydantic import Field, JsonValue
 
@@ -84,6 +84,17 @@ class ProviderError(Exception):
 
 class ContextOverflow(ProviderError):
     pass
+
+
+class ProviderBusy(ProviderError):
+    pass
+
+
+RETRYABLE_STATUS: Final = frozenset({408, 409, 429})
+
+
+def is_retryable_status(status: int) -> bool:
+    return status in RETRYABLE_STATUS or status >= 500
 
 
 class LLMProvider(Protocol):

@@ -44,6 +44,7 @@ DEFAULT_RULES: Final = RuleSet.from_mapping(
         "ls": {"*": "allow"},
         "write": {"*": "ask"},
         "edit": {"*": "ask"},
+        "multi_edit": {"*": "ask"},
         "bash": {
             "*": "ask",
             "git status*": "allow",
