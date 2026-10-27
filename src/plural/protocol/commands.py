@@ -6,6 +6,7 @@ from plural.protocol.models import (
     ApprovalDecision,
     Delivery,
     Model,
+    PermissionMode,
     PolicyAction,
     PromptMode,
     ProposalDecision,
@@ -85,6 +86,11 @@ class PromptModeSet(Model):
     mode: PromptMode
 
 
+class PermissionModeSet(Model):
+    type: Literal["session.set_permission_mode"] = "session.set_permission_mode"
+    mode: PermissionMode
+
+
 class TypingSet(Model):
     type: Literal["presence.typing"] = "presence.typing"
     typing: bool
@@ -126,6 +132,7 @@ Command = Annotated[
     | ParticipantRevoke
     | ContextCompact
     | PromptModeSet
+    | PermissionModeSet
     | TypingSet
     | QueueCancel
     | PolicyAdd

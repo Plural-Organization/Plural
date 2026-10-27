@@ -37,6 +37,19 @@ A teammate can also join from a browser: open the web client, paste the invite a
 
 Change it with `/mode open|review`, from the settings, or at start with `--prompts`. Tool calls need the host's approval in both modes. A run that contains a participant's prompt always asks, whatever the rules say.
 
+## Permission modes
+
+The host decides how much the agent may do without asking. `shift+tab` cycles the modes, and the line under the composer shows the current one to everyone.
+
+| Mode | What the agent may do |
+|---|---|
+| ask before changes (default) | Reads freely; every edit and command waits for the host, unless a rule allows it |
+| accept edits | Edits files without asking; commands still ask |
+| plan mode | Only reads and researches, then replies with a plan. Edits and commands are refused |
+| auto mode | Edits and runs commands without asking |
+
+Deny rules hold in every mode, and a run that contains a participant's prompt still asks before edits and commands, even in auto mode. When a plan is ready the host picks how to start it: `a` in auto mode, `e` accepting edits, `y` asking before changes, or `n` to keep planning. A restarted host always comes back in the default mode.
+
 ## The screen
 
 The conversation is on the left. The panel on the right shows who is in the room and who is typing, what needs the host, the prompt queue and the state of the agent. `ctrl+b` hides it, and it hides itself on narrow terminals.
@@ -82,6 +95,7 @@ Keys are ignored for a moment after a card appears, and a card never takes the k
 |---|---|
 | `enter` | Send |
 | `shift+enter`, `ctrl+j` | New line |
+| `shift+tab` | Cycle the permission mode (host) |
 | `esc` | Interrupt the run (host) |
 | `pgup`, `pgdn`, mouse wheel | Scroll the conversation |
 | `ctrl+o` | Expand or collapse tool details |

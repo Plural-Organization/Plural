@@ -62,6 +62,18 @@ describe("App", () => {
     expect(text).toContain("vlad (host)");
   });
 
+  test("the splash draws the logo, then opens the session once it is joined", async () => {
+    const setup = await testRender(
+      <App client={session()} room="r_1" version="0.2.0" guestLink={null} splash onQuit={() => undefined} />,
+      { width: 120, height: 40 },
+    );
+    open.push(setup);
+    const logo = await frame(setup, "plural  v0.2.0");
+    expect(logo).toContain("▀");
+    expect(logo).not.toContain("Message the agent");
+    await frame(setup, "Message the agent");
+  });
+
   test("typing a prompt and pressing enter sends it", async () => {
     const fake = session();
     const setup = await mount(fake);
@@ -184,6 +196,45 @@ describe("App", () => {
     expect(text.match(/● plural/g)?.length).toBe(1);
   });
 
+  test("a run shows a working line instead of an empty reply", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "run.started", run_id: "r", prompt_id: "pm0", provenance: GUEST });
+    fake.emit({ type: "message.started", run_id: "r", message_id: "m1" });
+    const text = await frame(setup, "thinking…");
+    expect(text).toContain("esc to interrupt");
+    expect(text).not.toContain("● plural");
+  });
+
+  test("shift+tab cycles the permission mode and the line under the composer follows it", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    await frame(setup, "ask before changes (shift+tab to cycle)");
+    await setup.mockInput.pressTab({ shift: true });
+    await tick(100);
+    expect(fake.commands).toEqual([{ type: "session.set_permission_mode", mode: "accept_edits" }]);
+    fake.emit({ type: "session.permission_mode_changed", mode: "plan" });
+    await frame(setup, "plan mode on (shift+tab to cycle)");
+  });
+
+  test("after a plan the host starts the work in auto mode", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "session.permission_mode_changed", mode: "plan" });
+    fake.emit({ type: "run.started", run_id: "r", prompt_id: "pm0", provenance: GUEST });
+    fake.emit({ type: "message.started", run_id: "r", message_id: "m1" });
+    fake.emit({ type: "message.ended", run_id: "r", message_id: "m1", text: "1. edit app.py", thinking: "" });
+    fake.emit({ type: "run.ended", run_id: "r", reason: "stop", usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 }, error: null });
+    await frame(setup, "plan ready");
+    await tick(500);
+    await setup.mockInput.pressKey("a");
+    await tick(100);
+    expect(fake.commands).toEqual([
+      { type: "session.set_permission_mode", mode: "auto" },
+      { type: "prompt.submit", text: "The host approved the plan. Implement it now.", delivery: "now" },
+    ]);
+  });
+
   test("a fenced code block is drawn in a box with its language", async () => {
     const fake = session();
     const setup = await mount(fake);
@@ -239,6 +290,20 @@ describe("App", () => {
     await watching.mockInput.typeText("hi");
     await tick(100);
     expect(viewer.sent).toEqual([]);
+  });
+
+  test("a prompt sent during a run is marked as queued until the agent reads it", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "run.started", run_id: "r", prompt_id: "pm0", provenance: GUEST });
+    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_host", text: "did you read other files?", delivery: "now", provenance: GUEST, attachments: [] });
+    const text = await frame(setup, "⧗ queued");
+    expect(text).toContain("the agent reads it after its current step");
+    expect(text).toContain("1 queued");
+    fake.emit({ type: "prompt.dequeued", prompt_id: "pm1", reason: "delivered" });
+    await tick(100);
+    await setup.renderOnce();
+    expect(setup.captureCharFrame()).not.toContain("⧗ queued");
   });
 
   test("the queue is listed in the panel and /cancel removes an entry", async () => {

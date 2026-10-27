@@ -15,6 +15,7 @@ interface ComposerProps {
   onSubmit: (text: string) => void;
   onEscape: () => void;
   onTab: () => void;
+  onCycleMode: () => void;
   onInterrupt: () => void;
   onCopy: () => void;
   onDirty: (dirty: boolean) => void;
@@ -115,6 +116,11 @@ export function Composer(props: ComposerProps) {
       } else {
         props.onEscape();
       }
+      return;
+    }
+    if (key.name === "tab" && key.shift) {
+      key.preventDefault();
+      props.onCycleMode();
       return;
     }
     if (key.name === "tab") {
