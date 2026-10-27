@@ -25,6 +25,7 @@ from plural.agent.providers.base import (
     LlmRequest,
     NativeContent,
     NativeReady,
+    ProviderBusy,
     ProviderError,
     Stop,
     StopReason,
@@ -34,6 +35,7 @@ from plural.agent.providers.base import (
     ToolCallRequest,
     ToolSchema,
     UsageReport,
+    is_retryable_status,
 )
 from plural.protocol.models import Usage
 
@@ -102,6 +104,8 @@ class AnthropicProvider:
         except anthropic.APIError as error:
             if _overflows(error):
                 raise ContextOverflow(_describe(error)) from error
+            if _busy(error):
+                raise ProviderBusy(_describe(error)) from error
             raise ProviderError(_describe(error)) from error
         for event in _finish(message):
             yield event
@@ -196,6 +200,12 @@ def _usage(usage: BetaUsage) -> Usage:
 
 def _overflows(error: anthropic.APIError) -> bool:
     return isinstance(error, anthropic.BadRequestError) and "prompt is too long" in error.message
+
+
+def _busy(error: anthropic.APIError) -> bool:
+    if isinstance(error, anthropic.APIStatusError):
+        return is_retryable_status(error.status_code)
+    return isinstance(error, anthropic.APIConnectionError)
 
 
 def _describe(error: anthropic.APIError) -> str:

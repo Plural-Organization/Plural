@@ -21,6 +21,7 @@ from plural.agent.providers.base import (
     LlmEvent,
     LlmMessage,
     LlmRequest,
+    ProviderBusy,
     ProviderError,
     Stop,
     StopReason,
@@ -30,6 +31,7 @@ from plural.agent.providers.base import (
     ToolCallRequest,
     ToolSchema,
     UsageReport,
+    is_retryable_status,
 )
 from plural.protocol.models import Usage
 
@@ -109,6 +111,8 @@ class OpenAIProvider:
         except openai.APIError as error:
             if _overflows(error):
                 raise ContextOverflow(_describe(error)) from error
+            if _busy(error):
+                raise ProviderBusy(_describe(error)) from error
             raise ProviderError(_describe(error)) from error
         for index in sorted(calls):
             yield ToolCallReady(call=calls[index].request())
@@ -201,6 +205,12 @@ def _usage(usage: CompletionUsage) -> Usage:
 
 def _overflows(error: openai.APIError) -> bool:
     return isinstance(error, openai.BadRequestError) and error.code == "context_length_exceeded"
+
+
+def _busy(error: openai.APIError) -> bool:
+    if isinstance(error, openai.APIStatusError):
+        return is_retryable_status(error.status_code)
+    return isinstance(error, openai.APIConnectionError)
 
 
 def _describe(error: openai.APIError) -> str:

@@ -1,7 +1,7 @@
 from plural.agent.providers.base import ToolCallRequest, ToolSchema
 from plural.agent.tools.base import PreparedCall, Tool
 from plural.agent.tools.bash import BashTool
-from plural.agent.tools.edit import EditTool
+from plural.agent.tools.edit import EditTool, MultiEditTool
 from plural.agent.tools.glob import GlobTool
 from plural.agent.tools.grep import GrepTool
 from plural.agent.tools.ls import LsTool
@@ -37,6 +37,15 @@ class ToolRegistry:
 
 def builtin_tools() -> ToolRegistry:
     registry = ToolRegistry()
-    for tool in (ReadTool(), WriteTool(), EditTool(), BashTool(), GrepTool(), GlobTool(), LsTool()):
+    for tool in (
+        ReadTool(),
+        WriteTool(),
+        EditTool(),
+        MultiEditTool(),
+        BashTool(),
+        GrepTool(),
+        GlobTool(),
+        LsTool(),
+    ):
         registry.register(tool)
     return registry

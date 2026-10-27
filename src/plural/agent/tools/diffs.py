@@ -15,8 +15,8 @@ def unified_diff(path: str, before: str, after: str) -> str:
     )
 
 
-async def current_text(ctx: ToolCtx, path: Path) -> str:
+async def current_bytes(ctx: ToolCtx, path: Path) -> bytes | None:
     try:
-        return (await ctx.backend.read_file(path)).decode()
+        return await ctx.backend.read_file(path)
     except FileNotFoundError:
-        return ""
+        return None

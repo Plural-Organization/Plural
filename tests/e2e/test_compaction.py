@@ -48,7 +48,9 @@ async def test_automatic_compaction_is_shared_and_survives_a_restart(tmp_path: P
         await owner.next(RunEnded)
         first = resumed.requests[0].messages
         assert first[0].content == f"{SUMMARY_HEADER}\nlisted the workspace"
-        assert "continue" in first[1].content
+        assert "look around" in first[1].content
+        assert (first[2].role, first[2].content) == ("assistant", "all done")
+        assert "continue" in first[3].content
 
 
 async def test_host_can_request_compaction_and_guests_cannot(tmp_path: Path) -> None:

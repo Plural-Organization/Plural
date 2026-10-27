@@ -24,7 +24,9 @@ class ReadTool(TypedTool[ReadArgs]):
 
     async def run(self, args: ReadArgs, ctx: ToolCtx) -> ToolResult:
         path = ctx.workspace.resolve(args.path)
-        lines = (await ctx.backend.read_file(path)).decode(errors="replace").splitlines()
+        data = await ctx.backend.read_file(path)
+        ctx.stamps.record(path, data)
+        lines = data.decode(errors="replace").splitlines()
         window = lines[args.offset : args.offset + args.limit]
         numbered = "\n".join(f"{args.offset + i + 1:>6}  {line}" for i, line in enumerate(window))
         return ToolResult(truncate_head(numbered) or "(empty file)")

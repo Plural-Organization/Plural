@@ -36,7 +36,7 @@ class LocalBackend:
         except TimeoutError:
             _kill_group(process)
             await process.wait()
-            return ProcResult(exit_code=-signal.SIGKILL, output="", timed_out=True)
+            return ProcResult(exit_code=-signal.SIGKILL, output="".join(collected), timed_out=True)
         except asyncio.CancelledError:
             _kill_group(process)
             raise
