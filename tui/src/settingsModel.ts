@@ -1,6 +1,6 @@
 import type { Role } from "@plural/client";
 import type { Keys } from "./credentials";
-import { PRESETS, presetOf, type AgentChoice } from "./presets";
+import { PRESETS, presetOf, type AgentChoice, type PresetId } from "./presets";
 import type { Settings } from "./settings";
 import { THEMES, THEME_NAMES } from "./theme";
 
@@ -33,6 +33,7 @@ export interface ModelState {
   mode: "open" | "review";
   role: Role | undefined;
   canConfigure: boolean;
+  oauthLoggedIn?: boolean;
 }
 
 export function maskKey(key: string): string {
@@ -55,7 +56,7 @@ export function modelRows(state: ModelState): Row[] {
         kind: "note",
         label: "The agent belongs to the host",
         value: "",
-        hint: "only the host chooses the model and holds the API key",
+        hint: "only the host chooses the model and holds its credentials",
         enabled: false,
       },
     ];
@@ -74,13 +75,29 @@ export function modelRows(state: ModelState): Row[] {
       enabled: true,
     });
   }
+  if (choice.preset === "anthropic_oauth") {
+    rows.push({
+      id: "oauth-login", kind: "action", label: state.oauthLoggedIn ? "Sign in again" : "Sign in with Claude",
+      value: state.oauthLoggedIn ? "connected" : "", hint: "open Claude in your browser; paste the code shown after sign in",
+      enabled: true,
+    });
+    if (state.oauthLoggedIn) {
+      rows.push({ id: "oauth-logout", kind: "action", label: "Sign out", value: "", hint: "remove the saved Claude login from this machine", enabled: true });
+    }
+  }
+  if (choice.preset === "claude_code") {
+    rows.push({
+      id: "claude-code-login", kind: "note", label: "Login: run claude auth login in a terminal",
+      value: "", hint: "Claude Code uses its own saved sign-in", enabled: false,
+    });
+  }
   if (preset.provider !== "fake") {
     rows.push({
       id: "model",
-      kind: "text",
+      kind: preset.models.length > 0 ? "choice" : "text",
       label: "Model",
       value: choice.model || preset.models[0] || "not set",
-      hint: preset.models.length > 0 ? "← → pick a suggestion, enter to type any model id" : "enter to type the model id",
+      hint: preset.models.length > 0 ? `← → choose a model (${preset.models.length} options); press e to type another ID` : "enter to type the model id",
       enabled: true,
     });
   }
@@ -187,6 +204,19 @@ export function nextModel(choice: AgentChoice, direction: 1 | -1): string {
   }
   const index = models.indexOf(choice.model);
   return models[(index === -1 ? (direction === 1 ? 0 : models.length - 1) : (index + direction + models.length) % models.length)] as string;
+}
+
+export function switchPreset(
+  choice: AgentChoice,
+  saved: Partial<Record<PresetId, AgentChoice>>,
+  direction: 1 | -1,
+): { choice: AgentChoice; saved: Partial<Record<PresetId, AgentChoice>> } {
+  const preset = nextPreset(choice.preset, direction);
+  const nextSaved = { ...saved, [choice.preset]: choice };
+  return {
+    choice: nextSaved[preset] ?? { preset, model: presetOf(preset).models[0] ?? "", baseUrl: "", contextWindow: "" },
+    saved: nextSaved,
+  };
 }
 
 export function friendlyError(text: string): string {

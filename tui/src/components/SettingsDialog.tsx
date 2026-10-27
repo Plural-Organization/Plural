@@ -3,6 +3,7 @@ import { useKeyboard, usePaste } from "@opentui/react";
 import { useReducer, useRef } from "react";
 import type { Role } from "@plural/client";
 import type { AgentControl } from "../control";
+import { beginOAuth, clearOAuth, exchangeCode, hasOAuth, openOAuth, saveOAuth, type OAuthAttempt } from "../anthropicOAuth";
 import type { Keys } from "../credentials";
 import { presetOf, problemWith, toConfig, type AgentChoice, type PresetId } from "../presets";
 import type { Settings } from "../settings";
@@ -10,8 +11,8 @@ import {
   friendlyError,
   maskKey,
   nextModel,
-  nextPreset,
   rowsFor,
+  switchPreset,
   TABS,
   type ModelState,
   type Row,
@@ -33,9 +34,11 @@ interface Local {
   index: number;
   editing: Editing | null;
   choice: AgentChoice;
+  savedChoices: Settings["agentChoices"];
   keys: Keys;
   status: { tone: Tone; text: string } | null;
   busy: boolean;
+  oauthAttempt: OAuthAttempt | null;
 }
 
 export interface DialogProps {
@@ -67,9 +70,11 @@ export function SettingsDialog(props: DialogProps) {
     index: 0,
     editing: null,
     choice: props.settings.agent,
+    savedChoices: { ...props.settings.agentChoices, [props.settings.agent.preset]: props.settings.agent },
     keys: { ...props.keys },
     status: null,
     busy: false,
+    oauthAttempt: null,
   });
   const live = useRef(props);
   live.current = props;
@@ -81,6 +86,7 @@ export function SettingsDialog(props: DialogProps) {
     mode: live.current.mode,
     role: live.current.role,
     canConfigure: live.current.control !== null && live.current.role === "host",
+    oauthLoggedIn: hasOAuth(),
   });
   const rows = (): Row[] => rowsFor(local.current.tab, state());
   const set = (patch: Partial<Local>): void => {
@@ -115,7 +121,13 @@ export function SettingsDialog(props: DialogProps) {
       return;
     }
     const current = live.current;
-    current.onSettings({ ...current.settings, agent: choice, setupSeen: true });
+    const appliedChoice = { ...choice, model: choice.model || presetOf(choice.preset).models[0] || "" };
+    current.onSettings({
+      ...current.settings,
+      agent: appliedChoice,
+      agentChoices: { ...local.current.savedChoices, [choice.preset]: appliedChoice },
+      setupSeen: true,
+    });
     current.onKeys(choice.preset, key, current.settings.rememberKey);
     say("ok", `✓ now using ${result.agent ?? presetOf(choice.preset).label}`);
   };
@@ -123,7 +135,19 @@ export function SettingsDialog(props: DialogProps) {
   const commit = (editing: Editing): void => {
     const { choice, keys } = local.current;
     const value = editing.buffer.trim();
-    if (editing.id === "key") {
+    if (editing.id === "oauth_code") {
+      const attempt = local.current.oauthAttempt;
+      if (!attempt) return;
+      set({ editing: null, busy: true, status: { tone: "info", text: "finishing Claude sign in…" } });
+      void exchangeCode(value, attempt.verifier).then((credentials) => {
+        saveOAuth(credentials);
+        set({ busy: false, oauthAttempt: null });
+        say("ok", "✓ signed in to Claude; choose Save and use");
+      }).catch((error: unknown) => {
+        set({ busy: false, oauthAttempt: null });
+        say("error", friendlyError(error instanceof Error ? error.message : String(error)));
+      });
+    } else if (editing.id === "key") {
       set({ editing: null, keys: { ...keys, [choice.preset]: value }, status: null });
     } else if (editing.id === "model") {
       set({ editing: null, choice: { ...choice, model: value }, status: null });
@@ -172,7 +196,8 @@ export function SettingsDialog(props: DialogProps) {
     }
     const { choice } = local.current;
     if (row.id === "preset") {
-      set({ choice: { preset: nextPreset(choice.preset, direction), model: "", baseUrl: "", contextWindow: "" }, status: null });
+      const switched = switchPreset(choice, local.current.savedChoices, direction);
+      set({ choice: switched.choice, savedChoices: switched.saved, status: null });
     } else if (row.id === "model") {
       set({ choice: { ...choice, model: nextModel(choice, direction) }, status: null });
     } else if (row.kind === "toggle") {
@@ -204,6 +229,13 @@ export function SettingsDialog(props: DialogProps) {
       case "action":
         if (row.id === "test" || row.id === "save") {
           void run(row.id);
+        } else if (row.id === "oauth-login") {
+          const attempt = beginOAuth();
+          set({ oauthAttempt: attempt, editing: { id: "oauth_code", buffer: "" }, status: { tone: "info", text: "Claude sign in opened; URL copied. Paste the code here." } });
+          void openOAuth(attempt);
+        } else if (row.id === "oauth-logout") {
+          clearOAuth();
+          say("ok", "Claude login removed from this machine");
         } else if (row.id === "reply") {
           live.current.onCopyReply();
         } else if (row.id === "invite") {
@@ -222,7 +254,7 @@ export function SettingsDialog(props: DialogProps) {
     const { editing, tab, index } = local.current;
     if (editing) {
       if (key.name === "escape") {
-        set({ editing: null });
+        set({ editing: null, oauthAttempt: editing.id === "oauth_code" ? null : local.current.oauthAttempt });
       } else if (key.name === "return") {
         commit(editing);
       } else if (key.name === "backspace") {
@@ -251,6 +283,8 @@ export function SettingsDialog(props: DialogProps) {
       change(row, 1);
     } else if ((key.name === "return" || key.name === "space") && row) {
       activate(row);
+    } else if (key.name === "e" && row?.id === "model") {
+      startEditing(row);
     }
   });
 
@@ -328,6 +362,9 @@ export function SettingsDialog(props: DialogProps) {
             }}
           />
         ))}
+        {editing?.id === "oauth_code" ? (
+          <text fg={theme.accent}>Authorization code: {"•".repeat(Math.min(editing.buffer.length, 24))}▏</text>
+        ) : null}
         <text>{" "}</text>
         {status ? <text fg={TONE[status.tone]}>{status.text}</text> : <text fg={theme.dim}>{selected?.hint ?? ""}</text>}
         <text fg={theme.dim}>

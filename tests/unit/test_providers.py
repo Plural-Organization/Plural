@@ -191,6 +191,54 @@ async def test_anthropic_request_shape() -> None:
     assert recorder.headers[0]["authorization"] == "Bearer test"
 
 
+async def test_anthropic_oauth_uses_bearer_auth_without_claiming_to_be_claude_code() -> None:
+    recorder = Recorder(200, ANTHROPIC_TOOL_TURN)
+    client = anthropic.AsyncAnthropic(
+        api_key=None,
+        auth_token="sk-ant-oat-test",
+        max_retries=0,
+        http_client=anthropic.DefaultAsyncHttpxClient(transport=httpx2.MockTransport(recorder)),
+    )
+    provider = AnthropicProvider(api_key="sk-ant-oat-test", client=client, oauth=True)
+    events = await drain(provider)
+    payload = recorder.payloads[0]
+    assert payload["system"] == [{"type": "text", "text": REQUEST.system}]
+    assert payload["tools"][0]["name"] == "read"
+    assert "claude-code-20250219" not in recorder.headers[0]["anthropic-beta"]
+    assert "oauth-2025-04-20" in recorder.headers[0]["anthropic-beta"]
+    assert recorder.headers[0]["authorization"] == "Bearer sk-ant-oat-test"
+    assert not recorder.headers[0].get("x-api-key")
+    assert [e.call.name for e in events if isinstance(e, ToolCallReady)] == ["read"]
+
+
+async def test_oauth_generic_429_explains_model_access() -> None:
+    body = json.dumps({"type": "error", "error": {"type": "rate_limit_error", "message": "Error"}})
+    recorder = Recorder(429, body)
+    client = anthropic.AsyncAnthropic(
+        auth_token="sk-ant-oat-test",
+        api_key=None,
+        max_retries=0,
+        http_client=anthropic.DefaultAsyncHttpxClient(transport=httpx2.MockTransport(recorder)),
+    )
+    provider = AnthropicProvider(api_key="sk-ant-oat-test", client=client, oauth=True)
+    with pytest.raises(ProviderError, match=r"Claude OAuth.*model access"):
+        await drain(provider)
+
+
+@pytest.mark.parametrize("model", ["claude-haiku-4-5", "claude-haiku-4-5-20251001"])
+async def test_older_haiku_does_not_request_adaptive_thinking(model: str) -> None:
+    recorder = Recorder(200, ANTHROPIC_TOOL_TURN)
+    client = anthropic.AsyncAnthropic(
+        auth_token="sk-ant-oat-test",
+        api_key=None,
+        max_retries=0,
+        http_client=anthropic.DefaultAsyncHttpxClient(transport=httpx2.MockTransport(recorder)),
+    )
+    provider = AnthropicProvider(api_key="sk-ant-oat-test", model=model, client=client, oauth=True)
+    await drain(provider)
+    assert "thinking" not in recorder.payloads[0]
+
+
 async def test_anthropic_fallbacks_only_for_supported_models() -> None:
     recorder = Recorder(200, ANTHROPIC_TOOL_TURN)
     await drain(anthropic_provider(recorder, model="claude-haiku-5-5"))

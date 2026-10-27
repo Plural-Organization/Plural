@@ -41,11 +41,13 @@ from plural.protocol.models import Usage
 
 PROVIDER: Final = "anthropic"
 DEFAULT_MODEL: Final = "claude-opus-5-5"
+DEFAULT_OAUTH_MODEL: Final = "claude-haiku-4-5"
 DEFAULT_MAX_TOKENS: Final = 64_000
 FALLBACK_BETA: Final = "server-side-fallback-2026-07-01"
 FALLBACK_MODELS: Final = frozenset(
     {"claude-fable-5-1", "claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5"}
 )
+OAUTH_BETA: Final = "oauth-2025-04-20"
 
 _STOP_REASONS: Final[dict[str, StopReason]] = {
     "tool_use": "tool_use",
@@ -65,11 +67,13 @@ class AnthropicProvider:
         effort: Effort | None = None,
         base_url: str | None = None,
         client: AsyncAnthropic | None = None,
+        oauth: bool = False,
     ) -> None:
         self._client = client or AsyncAnthropic(api_key=api_key, base_url=base_url)
         self._model = model
         self._max_tokens = max_tokens
         self._effort: Effort | None = effort
+        self._oauth = oauth
 
     async def stream(
         self, request: LlmRequest, *, cancel: asyncio.Event
@@ -83,10 +87,19 @@ class AnthropicProvider:
                 messages=to_messages(request.messages),
                 tools=[_tool(schema) for schema in request.tools] or omit,
                 cache_control={"type": "ephemeral"},
-                thinking={"type": "adaptive", "display": "summarized"},
+                thinking=(
+                    omit
+                    if self._model.startswith("claude-haiku-4-5")
+                    else {"type": "adaptive", "display": "summarized"}
+                ),
                 output_config={"effort": self._effort} if self._effort else omit,
                 fallbacks="default" if fallback else omit,
-                betas=[FALLBACK_BETA] if fallback else omit,
+                betas=[
+                    *([OAUTH_BETA] if self._oauth else []),
+                    *([FALLBACK_BETA] if fallback else []),
+                ]
+                if self._oauth or fallback
+                else omit,
             ) as stream:
                 async for event in stream:
                     if cancel.is_set():
@@ -104,6 +117,12 @@ class AnthropicProvider:
         except anthropic.APIError as error:
             if _overflows(error):
                 raise ContextOverflow(_describe(error)) from error
+            if self._oauth and _is_opaque_oauth_429(error):
+                raise ProviderError(
+                    f"Claude OAuth: model access to {self._model} was rejected (429). "
+                    "Try another model or use an Anthropic API key; "
+                    "Anthropic may restrict third-party OAuth usage."
+                ) from error
             if _busy(error):
                 raise ProviderBusy(_describe(error)) from error
             raise ProviderError(_describe(error)) from error
@@ -206,6 +225,18 @@ def _busy(error: anthropic.APIError) -> bool:
     if isinstance(error, anthropic.APIStatusError):
         return is_retryable_status(error.status_code)
     return isinstance(error, anthropic.APIConnectionError)
+
+
+def _is_opaque_oauth_429(error: anthropic.APIError) -> bool:
+    if not isinstance(error, anthropic.RateLimitError):
+        return False
+    if error.response.headers.get("retry-after"):
+        return False
+    body = error.body
+    if not isinstance(body, dict):
+        return False
+    detail = cast("dict[str, object]", body).get("error")
+    return isinstance(detail, dict) and cast("dict[str, object]", detail).get("message") == "Error"
 
 
 def _describe(error: anthropic.APIError) -> str:

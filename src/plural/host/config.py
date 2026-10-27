@@ -22,7 +22,7 @@ class HostSettings(BaseSettings):
     port: int = 7777
     public_url: str | None = None
     relay_url: str | None = None
-    provider: Literal["fake", "anthropic", "openai"] | None = None
+    provider: Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "openai"] | None = None
     model: str | None = None
     api_key: SecretStr | None = None
     base_url: str | None = None
@@ -41,7 +41,7 @@ class HostSettings(BaseSettings):
 
     def resolved_provider(
         self, environ: Mapping[str, str] | None = None
-    ) -> Literal["fake", "anthropic", "openai"]:
+    ) -> Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "openai"]:
         if self.provider is not None:
             return self.provider
         variables = os.environ if environ is None else environ
@@ -55,6 +55,10 @@ class HostSettings(BaseSettings):
         provider = self.resolved_provider(environ)
         if provider == "fake":
             return "demo agent (scripted)"
+        if provider == "anthropic_oauth":
+            return f"Claude OAuth · {self.model or 'claude-haiku-4-5'}"
+        if provider == "claude_code":
+            return f"Claude Code · {self.model or 'claude-sonnet-5-5'}"
         model = self.model or ("claude-opus-5-5" if provider == "anthropic" else "")
         where = " · local" if provider == "openai" and self.base_url else ""
         return f"{provider} · {model}{where}" if model else provider

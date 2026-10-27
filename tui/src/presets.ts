@@ -1,6 +1,8 @@
 export type PresetId =
   | "demo"
   | "anthropic"
+  | "anthropic_oauth"
+  | "claude_code"
   | "openai"
   | "gemini"
   | "openrouter"
@@ -12,7 +14,7 @@ export type PresetId =
 export interface Preset {
   id: PresetId;
   label: string;
-  provider: "fake" | "anthropic" | "openai";
+  provider: "fake" | "anthropic" | "anthropic_oauth" | "claude_code" | "openai";
   baseUrl: string;
   needsKey: boolean;
   editableUrl: boolean;
@@ -32,6 +34,39 @@ export const PRESETS: Preset[] = [
     contextWindow: false,
     models: ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"],
     hint: "Claude models with an Anthropic API key",
+  },
+  {
+    id: "anthropic_oauth",
+    label: "Claude OAuth",
+    provider: "anthropic_oauth",
+    baseUrl: "",
+    needsKey: false,
+    editableUrl: false,
+    contextWindow: false,
+    models: [
+      "claude-haiku-4-5-20251001",
+      "claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1",
+      "claude-opus-5", "claude-sonnet-5", "claude-fable-5",
+      "claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-opus-4-6",
+      "claude-opus-4-5-20251101", "claude-sonnet-4-5-20250929",
+    ],
+    hint: "Claude model IDs; Test connection checks access for your account",
+  },
+  {
+    id: "claude_code",
+    label: "Claude Code",
+    provider: "claude_code",
+    baseUrl: "",
+    needsKey: false,
+    editableUrl: false,
+    contextWindow: false,
+    models: [
+      "claude-sonnet-5-5", "claude-opus-5-5", "claude-haiku-5-5", "claude-fable-5-1",
+      "claude-sonnet-5", "claude-opus-5", "claude-fable-5",
+      "claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-opus-4-6",
+      "claude-opus-4-5-20251101", "claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250929",
+    ],
+    hint: "Uses the installed Claude Code CLI; sign in with claude auth login",
   },
   {
     id: "openai",
@@ -141,7 +176,7 @@ export interface AgentChoice {
 export const DEFAULT_CHOICE: AgentChoice = { preset: "demo", model: "", baseUrl: "", contextWindow: "" };
 
 export interface AgentConfig {
-  provider: "fake" | "anthropic" | "openai";
+  provider: "fake" | "anthropic" | "anthropic_oauth" | "claude_code" | "openai";
   model: string | null;
   base_url: string | null;
   api_key: string | null;

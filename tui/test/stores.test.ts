@@ -6,7 +6,7 @@ import { ControlLink, type ControlResult } from "../src/control";
 import { credentialsPath, loadKeys, parseKeys, saveKeys } from "../src/credentials";
 import { DEFAULT_CHOICE, PRESETS, presetOf, problemWith, toConfig } from "../src/presets";
 import { DEFAULT_SETTINGS, loadSettings, parseSettings, saveSettings } from "../src/settings";
-import { friendlyError, maskKey, nextModel, nextPreset } from "../src/settingsModel";
+import { friendlyError, maskKey, nextModel, nextPreset, switchPreset } from "../src/settingsModel";
 
 describe("credentials", () => {
   test("keys are stored for the owner only and never next to the preferences", () => {
@@ -87,6 +87,9 @@ describe("presets", () => {
       context_window: 2048,
     });
     expect(toConfig(DEFAULT_CHOICE, "")).toMatchObject({ provider: "fake", api_key: null });
+    expect(toConfig({ preset: "claude_code", model: "", baseUrl: "", contextWindow: "" }, "")).toMatchObject({
+      provider: "claude_code", model: "claude-sonnet-5-5", api_key: null,
+    });
   });
 
   test("what is missing is named", () => {
@@ -104,6 +107,17 @@ describe("presets", () => {
     expect(nextModel({ preset: "anthropic", model: "", baseUrl: "", contextWindow: "" }, 1)).toBe("claude-opus-5-5");
     expect(nextModel({ preset: "anthropic", model: "claude-fable-5-1", baseUrl: "", contextWindow: "" }, 1)).toBe("claude-opus-5-5");
     expect(nextModel({ preset: "custom", model: "mine", baseUrl: "", contextWindow: "" }, 1)).toBe("mine");
+    expect(presetOf("anthropic_oauth").models).toHaveLength(14);
+    expect(presetOf("anthropic_oauth").models[0]).toBe("claude-haiku-4-5-20251001");
+  });
+
+  test("switching providers restores the previous model choice", () => {
+    const oauth = { preset: "anthropic_oauth" as const, model: "claude-sonnet-5-5", baseUrl: "", contextWindow: "" };
+    const saved = { anthropic_oauth: oauth };
+    const next = switchPreset(oauth, saved, 1);
+    const back = switchPreset(next.choice, next.saved, -1);
+    expect(back.choice).toEqual(oauth);
+    expect(back.saved.anthropic_oauth).toEqual(oauth);
   });
 
   test("a key is shown only by its tail", () => {
