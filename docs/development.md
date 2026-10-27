@@ -20,6 +20,7 @@ uv run pytest
 
 npm run typecheck --workspace client && npm test --workspace client
 npm run typecheck --workspace tui && npm test --workspace tui
+npm run typecheck --workspace web && npm run build --workspace web
 ```
 
 ## Run from source
@@ -30,6 +31,8 @@ npm run dev --workspace tui -- --workspace ~/some-project
 ```
 
 `npm run demo --workspace tui` shows a busy session without a host, which is handy when working on the interface. `npm run build --workspace tui` compiles the client into `dist-bin/plural`.
+
+`npm run dev --workspace web` serves the browser client on http://localhost:5173. Join it with the invite or the host link of a running host. `npm run build --workspace web` writes a static site to `web/dist`.
 
 ## Layout
 
@@ -46,7 +49,7 @@ src/plural/
 └── cli/        plural-host entry point
 client/         @plural/client, the TypeScript protocol client
 tui/            the terminal client
-web/            browser client (in progress)
+web/            the browser client
 ```
 
 Layers are enforced with `import-linter`: `core` and `protocol` do no I/O, `agent` knows nothing about transports or storage, `relay` knows nothing about sessions, policy or content.

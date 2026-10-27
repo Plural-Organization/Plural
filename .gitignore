@@ -80,3 +80,4 @@ Thumbs.db
 # Local agent notes
 .claude/
 CLAUDE.local.md
+*.tsbuildinfo

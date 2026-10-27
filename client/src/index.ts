@@ -1,4 +1,6 @@
 export * from "./decode";
+export * from "./diff";
+export * from "./feed";
 export * from "./link";
 export * from "./presenter";
 export * from "./projection";
@@ -6,4 +8,5 @@ export * from "./protocol";
 export * from "./reduce";
 export * from "./session";
 export * from "./slash";
+export * from "./tools";
 export * from "./wire";
