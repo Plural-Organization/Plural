@@ -1,6 +1,8 @@
 <div align="center">
 
-# ◆ plural
+<img src="docs/assets/logo.png" alt="plural" width="96" height="96">
+
+# plural
 
 **the shared room for your coding agent.**
 
