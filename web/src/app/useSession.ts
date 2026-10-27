@@ -72,7 +72,17 @@ export function useSession(link: JoinLink, name: string, onFatal: (reason: strin
           if (event.type === "invite.created") {
             setInvite({ link: event.link, role: event.role, expiresAt: event.expires_at });
           }
-          commit(absorb(feedRef.current, event, current.projection));
+          commit(
+            event.type === "skills.found"
+              ? withNotice(
+                  feedRef.current,
+                  "accent",
+                  event.hits.length === 0
+                    ? `skills.sh has nothing for "${event.query}"`
+                    : [`skills.sh results for "${event.query}"`, ...event.hits.map((hit) => `  ${hit.package}  ${hit.installs} installs`), "add one with /skills add <package> [--global]"].join("\n"),
+                )
+              : absorb(feedRef.current, event, current.projection),
+          );
           bump();
         }
       } catch (error) {

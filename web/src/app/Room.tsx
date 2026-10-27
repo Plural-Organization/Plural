@@ -8,6 +8,7 @@ import {
   status,
   type JoinLink,
   type ProposalView,
+  contextMeter,
 } from "@plural/client";
 import { Composer, COMMANDS, helpText } from "./Composer";
 import { FeedItemView } from "./FeedView";
@@ -47,6 +48,7 @@ export function Room({ link, name, onLeave }: RoomProps) {
   const typingIdle = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const writing = feed.items.some((item) => item.kind === "assistant" && item.streaming);
+  const meter = contextMeter(state);
   const runStatus = writing ? "writing…" : status(projection).replace(/^… /, "");
   const typers = [...projection.typing]
     .filter((id) => id !== projection.meId)
@@ -176,6 +178,21 @@ export function Room({ link, name, onLeave }: RoomProps) {
         if (parsed === null) {
           return;
         }
+        if (parsed.type === "show.mcp") {
+          const lines = state.mcp.map((server) => `  ${server.status === "ready" ? "●" : server.status === "failed" ? "✕" : "○"} ${server.name}  ${server.status === "ready" ? `${server.tools} tools` : server.status}${server.error ? `: ${server.error}` : ""}`);
+          notify("accent", lines.length > 0 ? ["mcp", ...lines].join("\n") : "no MCP servers yet: /mcp import or /mcp add <name> <command|url>");
+          return;
+        }
+        if (parsed.type === "show.skills") {
+          const lines = state.skills.map((skill) => `  ${skill.name}${skill.scope === "global" ? " (global)" : ""}  ${skill.description}`);
+          notify(
+            "accent",
+            lines.length > 0
+              ? ["skills", ...lines, "", "/skills search <query> finds more on skills.sh"].join("\n")
+              : "no skills yet: /skills search <query> finds some on skills.sh",
+          );
+          return;
+        }
         if (parsed.type === "show.policy") {
           const rules = state.policy.length > 0 ? state.policy.map((rule) => `${ruleLine(rule)}  [${rule.id}]`) : ["no session rules"];
           notify("accent", [`built-in rules: ${projection.basePolicy.length}`, ...rules].join("\n"));
@@ -245,6 +262,14 @@ export function Room({ link, name, onLeave }: RoomProps) {
         </button>
         <span className={`pill ${state.prompt_mode}`}>{state.prompt_mode} mode</span>
         <span className="grow" />
+        {meter ? (
+          <span className={`meter ${meter.level}`} title={`${meter.tokens} of ${meter.window} tokens in the context`}>
+            <span className="meter-track">
+              <span className="meter-fill" style={{ width: `${meter.percent}%` }} />
+            </span>
+            context {meter.percent}%
+          </span>
+        ) : null}
         <span className="agent mono">{state.agent || projection.agent}</span>
         <span className={`conn ${connection}`} title={connection}>
           <span className="dot" />

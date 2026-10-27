@@ -4,6 +4,7 @@ import { colorFor, theme } from "../theme";
 import { truncate } from "../lib/wrap";
 import type { InboxItem } from "./Inbox";
 import { Spinner, useElapsed } from "./Spinner";
+import { ContextMeterView } from "./StatusBar";
 
 export const SIDEBAR_WIDTH = 30;
 
@@ -118,6 +119,19 @@ export function Sidebar({ projection, room, inbox, running, status, onSettings }
         <text fg={theme.dim}>
           permissions <span fg={state.permission_mode === "default" ? theme.dim : theme.warn}>{PERMISSION_LABELS[state.permission_mode]}</span>
         </text>
+        <text fg={theme.dim}>
+          skills <span fg={state.skills.length > 0 ? theme.text : theme.dim}>{state.skills.length}</span>
+        </text>
+        {state.mcp.length > 0 ? (
+          <text fg={theme.dim}>
+            mcp{" "}
+            <span fg={state.mcp.some((server) => server.status === "failed") ? theme.warn : theme.text}>
+              {state.mcp.filter((server) => server.status === "ready").length}/{state.mcp.length}
+            </span>
+            {` · ${state.mcp.reduce((sum, server) => sum + server.tools, 0)} tools`}
+          </text>
+        ) : null}
+        <ContextMeterView state={state} width={8} />
         <text fg={theme.dim}>{truncate(projection.agent || "agent", SIDEBAR_WIDTH - 4)}</text>
         <text fg={theme.dim}>
           {"  "}
