@@ -1,0 +1,13 @@
+[Unit]
+Description=Plural host
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/plural/host.env
+ExecStart=/bin/sh -c 'exec plural-host host --workspace "$PLURAL_WORKSPACE" --relay "$PLURAL_RELAY_URL" --room "$PLURAL_ROOM"'
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

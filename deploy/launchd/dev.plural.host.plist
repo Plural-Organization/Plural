@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.plural.host</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; set -a; . "$HOME/.config/plural/host.env"; exec plural-host host --workspace "$PLURAL_WORKSPACE" --relay "$PLURAL_RELAY_URL" --room "$PLURAL_ROOM"</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/tmp/plural-host.log</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/plural-host.log</string>
+</dict>
+</plist>

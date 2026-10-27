@@ -106,3 +106,13 @@ def test_ready_line_is_one_json_object() -> None:
 def test_host_rejects_an_unknown_prompt_mode(tmp_path: Path) -> None:
     result = runner.invoke(app, ["host", "--workspace", str(tmp_path), "--prompts", "closed"])
     assert result.exit_code == 2
+
+
+def test_plain_links_keep_each_link_on_one_line() -> None:
+    host_link = "wss://relay.example.com/r_1?token=" + "t" * 300
+    lines = main.plain_links("r_1", "wss://relay.example.com/r_1?invite=a", host_link).splitlines()
+    assert lines == [
+        "room r_1",
+        "guest link (one-time): wss://relay.example.com/r_1?invite=a",
+        f"host link: {host_link}",
+    ]

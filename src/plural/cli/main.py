@@ -80,13 +80,23 @@ def ready_line(room: str, guest_link: str, host_link: str) -> str:
     )
 
 
+def plain_links(room: str, guest_link: str, host_link: str) -> str:
+    return "\n".join(
+        (
+            f"room {room}",
+            f"guest link (one-time): {guest_link}",
+            f"host link: {host_link}",
+        )
+    )
+
+
 async def _host(settings: HostSettings, *, machine: bool) -> None:
     _configure_logging(settings.state_dir / "logs" / "host.log" if machine else None)
     plural_host = await build_host(settings)
     invite = plural_host.invites.create(Role.PARTICIPANT, settings.invite_ttl_s)
     if machine:
         print(ready_line(plural_host.room, invite.link, plural_host.host_link), flush=True)
-    else:
+    elif console.is_terminal:
         console.print(
             Panel(
                 f"[bold]Guest link[/bold] (one-time)\n{invite.link}\n\n"
@@ -94,6 +104,8 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
                 title=f"room {plural_host.room}",
             )
         )
+    else:
+        print(plain_links(plural_host.room, invite.link, plural_host.host_link), flush=True)
     try:
         if machine:
             await _serve_until_stdin_closes(plural_host, settings)

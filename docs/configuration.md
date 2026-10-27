@@ -66,4 +66,4 @@ plural relay --bind 0.0.0.0 --port 8787
 plural --relay wss://relay.example.com
 ```
 
-A ready-made deployment with Caddy and TLS is in [`deploy/`](../deploy/).
+Running the relay and a host on Railway, Render, any VM or your own machine is described in [running on a server](self-hosting.md).
