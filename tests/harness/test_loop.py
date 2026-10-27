@@ -4,11 +4,12 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
-from tests.doubles import StallingProvider
+from tests.doubles import ScriptedProvider, StallingProvider
 from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.context import ContextBuilder
 from plural.agent.events import AgentEvent, MessageEnd, RunEnd, ToolEnd, ToolStart
+from plural.agent.gate import GateResult
 from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.messages import AssistantTurn, ToolResultTurn, attribute
 from plural.agent.providers.base import (
@@ -16,6 +17,7 @@ from plural.agent.providers.base import (
     LlmRequest,
     NativeContent,
     NativeReady,
+    ProviderBusy,
     ProviderError,
     Stop,
     TextDelta,
@@ -29,8 +31,10 @@ from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.registry import builtin_tools
 from plural.host.system import UlidGenerator
 from plural.protocol.models import (
+    Provenance,
     Role,
     RunEndReason,
+    ToolCallView,
 )
 
 
@@ -292,3 +296,87 @@ async def test_each_run_starts_a_fresh_gate_window(tmp_path: Path) -> None:
     await collect(loop, turn("one"))
     await collect(loop, turn("two"))
     assert gate.runs == 2
+
+
+class CountingGate(StubGate):
+    def __init__(self) -> None:
+        super().__init__()
+        self.active = 0
+        self.peak = 0
+
+    async def check(
+        self, call: ToolCallView, *, subject: str, provenance: Provenance
+    ) -> GateResult:
+        self.active += 1
+        self.peak = max(self.peak, self.active)
+        await asyncio.sleep(0.05)
+        self.active -= 1
+        return await super().check(call, subject=subject, provenance=provenance)
+
+
+async def test_reads_in_one_turn_run_together_and_answer_in_order(tmp_path: Path) -> None:
+    calls = (
+        ToolCallRequest(id="c1", name="read", args={"path": "a.txt"}),
+        ToolCallRequest(id="c2", name="ls", args={"path": "."}),
+        ToolCallRequest(id="c3", name="bash", args={"command": "echo hi"}),
+        ToolCallRequest(id="c4", name="read", args={"path": "a.txt"}),
+    )
+    turn_events: tuple[LlmEvent, ...] = (
+        *(ToolCallReady(call=call) for call in calls),
+        Stop(reason="tool_use"),
+    )
+    provider = FakeProvider([turn_events, reply("done")])
+    gate = CountingGate()
+    loop = make_loop(tmp_path, provider, gate)
+    events = await collect(loop, turn("look"))
+
+    assert gate.peak == 2
+    assert [e.call.id for e in events if isinstance(e, ToolStart)][2:] == ["c3", "c4"]
+    answered = [m.call_id for m in loop.conversation if isinstance(m, ToolResultTurn)]
+    assert answered == ["c1", "c2", "c3", "c4"]
+    assert all(not m.is_error for m in loop.conversation if isinstance(m, ToolResultTurn))
+
+
+async def test_a_busy_provider_is_retried_before_any_output(tmp_path: Path) -> None:
+    provider = ScriptedProvider(
+        [ProviderBusy("anthropic 529: overloaded"), ProviderBusy("anthropic 429"), reply("ok")]
+    )
+    limits = LoopLimits(retry_delay_s=0.01)
+    events = await collect(make_loop(tmp_path, provider, StubGate(), limits), turn("hi"))
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.STOP
+    assert len(provider.requests) == 3
+
+
+async def test_retries_give_up_with_the_last_error(tmp_path: Path) -> None:
+    provider = ScriptedProvider([ProviderBusy("anthropic 529: overloaded")] * 3)
+    limits = LoopLimits(retries=2, retry_delay_s=0.01)
+    events = await collect(make_loop(tmp_path, provider, StubGate(), limits), turn("hi"))
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.ERROR
+    assert last.error == "anthropic 529: overloaded"
+    assert len(provider.requests) == 3
+
+
+class BusyMidStream:
+    def __init__(self) -> None:
+        self.requests = 0
+
+    async def stream(
+        self, request: LlmRequest, *, cancel: asyncio.Event
+    ) -> AsyncIterator[LlmEvent]:
+        self.requests += 1
+        yield TextDelta(text="partial")
+        raise ProviderBusy("anthropic 529: overloaded")
+
+
+async def test_a_reply_that_already_started_is_not_retried(tmp_path: Path) -> None:
+    provider = BusyMidStream()
+    limits = LoopLimits(retry_delay_s=0.01)
+    events = await collect(make_loop(tmp_path, provider, StubGate(), limits), turn("hi"))
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.ERROR
+    assert provider.requests == 1

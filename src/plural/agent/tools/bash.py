@@ -43,7 +43,8 @@ class BashTool(TypedTool[BashArgs]):
             )
         finally:
             stream.flush()
-        if result.timed_out:
-            return ToolResult(f"[timed out after {args.timeout_s:g}s]", is_error=True)
         body = truncate_tail(result.output)
+        if result.timed_out:
+            notice = f"[timed out after {args.timeout_s:g}s]"
+            return ToolResult(f"{body}\n{notice}" if body else notice, is_error=True)
         return ToolResult(f"{body}\n[exit {result.exit_code}]", is_error=result.exit_code != 0)

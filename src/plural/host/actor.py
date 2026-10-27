@@ -2,13 +2,14 @@ import asyncio
 import base64
 import binascii
 import hashlib
+from collections.abc import Sequence
 from pathlib import PurePath
 
 import structlog
 from pydantic import ValidationError
 
 from plural.agent import events as agent
-from plural.agent.messages import UserTurn
+from plural.agent.messages import Message, UserTurn
 from plural.core import approvals, policies, proposals
 from plural.core.errors import (
     Conflict,
@@ -22,6 +23,7 @@ from plural.core.ports import Clock, EventStore, IdGenerator
 from plural.core.provenance import direct, from_proposal
 from plural.core.roles import authorize
 from plural.core.state import reduce
+from plural.host import history
 from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.attachments import AttachmentVault
@@ -68,6 +70,7 @@ from plural.protocol.events import (
     AttachmentAdded,
     ContextCompacted,
     Event,
+    EventRecord,
     InviteCreated,
     MessageDelta,
     MessageEnded,
@@ -160,11 +163,12 @@ class SessionActor:
         return self._state
 
     async def start(self) -> None:
-        for record in await self._store.read():
+        records = await self._store.read()
+        for record in records:
             self._state = reduce(self._state, record)
         self._sync_policy()
-        if self._state.summary is not None:
-            self._agent.restore(self._state.summary)
+        if conversation := await self._history(records):
+            self._agent.restore(conversation)
         for resolved in approvals.abandon_all(self._state):
             await self._emit(resolved)
         if self._state.run is not None:
@@ -572,6 +576,20 @@ class SessionActor:
             owner_id=participant.id,
         )
         await self._emit(AttachmentAdded(attachment=meta), actor_id=participant.id)
+
+    async def _history(self, records: Sequence[EventRecord]) -> list[Message]:
+        names = {pid: participant.name for pid, participant in self._state.participants.items()}
+        texts: dict[str, str] = {}
+        for record in records:
+            event = record.event
+            if isinstance(event, PromptAccepted) and event.attachments:
+                try:
+                    texts[event.prompt_id] = await self._with_attachments(
+                        event.text, event.attachments
+                    )
+                except (KeyError, OSError):
+                    log.warning("actor.attachment_missing", prompt_id=event.prompt_id)
+        return history.replay(records, names=names, texts=texts)
 
     async def _with_attachments(self, text: str, attachment_ids: tuple[str, ...]) -> str:
         parts = [text]

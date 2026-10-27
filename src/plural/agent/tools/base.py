@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
@@ -35,6 +36,23 @@ class FileLocks:
         return self._locks.setdefault(path, asyncio.Lock())
 
 
+class FileStamps:
+    def __init__(self) -> None:
+        self._seen: dict[Path, str] = {}
+
+    def record(self, path: Path, data: bytes) -> None:
+        self._seen[path] = hashlib.sha256(data).hexdigest()
+
+    def check(self, path: Path, data: bytes | None) -> None:
+        seen = self._seen.get(path)
+        if seen is None or data is None or hashlib.sha256(data).hexdigest() == seen:
+            return
+        raise ToolError(
+            f"{path.name} changed since you last read it, possibly by someone in the session. "
+            "Read it again before changing it"
+        )
+
+
 def _discard(_text: str) -> None:
     return None
 
@@ -44,6 +62,7 @@ class ToolCtx:
     workspace: Workspace
     backend: ExecutionBackend
     locks: FileLocks = field(default_factory=FileLocks)
+    stamps: FileStamps = field(default_factory=FileStamps)
     emit: Callable[[str], None] = _discard
 
 

@@ -159,7 +159,7 @@ async def test_nothing_to_summarize_on_a_fresh_conversation(tmp_path: Path) -> N
 async def test_restored_summary_seeds_the_conversation(tmp_path: Path) -> None:
     provider = FakeProvider([reply("ok")])
     loop = build(tmp_path, provider)
-    loop.restore("earlier work")
+    loop.restore([SummaryTurn(text="earlier work")])
     await collect(loop, turn("continue"))
     messages = provider.requests[0].messages
     assert messages[0].content == f"{SUMMARY_HEADER}\nearlier work"
