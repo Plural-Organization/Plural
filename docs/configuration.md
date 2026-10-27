@@ -1,13 +1,13 @@
 # Configuration
 
-Every host setting can be passed as an environment variable with the `PLURAL_` prefix. The model and the API key are normally set from the settings screen of the client (`F2`): the choice is kept in `tui.json` and the key in `credentials.json`, readable only by you, both in the data directory. Environment variables still work and are used when nothing is chosen there.
+Every host setting can be passed as an environment variable with the `PLURAL_` prefix. The model and the API key are normally set from the settings screen of the client (`F2`): the choice is kept in `tui.json` and the key in `credentials.json`, readable only by you, both in the data directory. Claude OAuth tokens are kept separately in `anthropic-oauth.json` with owner-only permissions. Environment variables still work and are used when nothing is chosen there.
 
 ## Settings
 
 | Variable | Default | Description |
 |---|---|---|
-| `PLURAL_PROVIDER` | by key | `fake`, `anthropic` or `openai`. When unset it follows `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY` or `PLURAL_BASE_URL` with `PLURAL_MODEL`, and falls back to the demo agent |
-| `PLURAL_MODEL` | `claude-opus-5-5` for `anthropic` | Model id, required for `openai` |
+| `PLURAL_PROVIDER` | by key | `fake`, `anthropic`, `anthropic_oauth`, `claude_code` or `openai`. When unset it follows `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY` or `PLURAL_BASE_URL` with `PLURAL_MODEL`, and falls back to the demo agent |
+| `PLURAL_MODEL` | `claude-opus-5-5` for Anthropic API keys; `claude-haiku-4-5` for Claude OAuth; `claude-sonnet-5-5` for Claude Code | Model id, required for `openai` |
 | `PLURAL_API_KEY` | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Provider API key |
 | `PLURAL_BASE_URL` | provider default | Custom endpoint, for example a local server |
 | `PLURAL_EFFORT` | provider default | `low`, `medium`, `high`, `xhigh` or `max` |
@@ -33,8 +33,16 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 
 Two adapters cover most models. `anthropic` uses the official Anthropic SDK. `openai` speaks the OpenAI Chat Completions format, which also covers OpenRouter, Groq, Gemini, DeepSeek and local servers such as Ollama.
 
+For Claude OAuth, open `F2` → Model → Claude OAuth → Sign in with Claude. The authorization page opens in your browser and its URL is copied to the clipboard. Paste the code it shows into Plural, then choose *Save and use*. The host refreshes the token automatically. `PLURAL_PROVIDER=anthropic_oauth` also selects a previously saved login for a standalone host. Signing out in the Model tab removes Plural's saved OAuth credentials.
+
+For a direct Claude Code session, install the official `claude` CLI, run `claude auth login`, then select `F2` → Model → Claude Code. Plural invokes `claude -p` with the selected model. Claude Code's own tools are disabled so tool requests still run through Plural's host approval flow. This provider uses Claude Code's sign-in, not Plural's OAuth token. `PLURAL_PROVIDER=claude_code` also selects it for a standalone host.
+
+Claude OAuth defaults to Haiku 4.5 because an OAuth account can receive an opaque `429` for other models even when the token works. The Model row lists current Claude model IDs; use `← →` to choose one or `e` to enter another ID. The list is a catalog, not proof of access: use *Test connection* before *Save and use*. The choice for each provider is remembered in `tui.json`. This access behavior is controlled by Anthropic. The same models are available through an Anthropic API key when your API account has access. A generic OAuth `429` without `retry-after` is reported as a possible model-access restriction; usage-credit limits can also cause a `429`.
+
 ```bash
 ANTHROPIC_API_KEY=sk-ant-… plural
+
+PLURAL_PROVIDER=claude_code PLURAL_MODEL=claude-sonnet-5-5 plural
 
 PLURAL_PROVIDER=openai PLURAL_MODEL=gpt-5 OPENAI_API_KEY=sk-… plural
 
@@ -47,7 +55,7 @@ Without any of these the host runs a scripted demo agent: any text lists the wor
 > Local servers truncate silently when a prompt is longer than their window, and Ollama defaults to 4096 tokens. Start the server with a larger window (`OLLAMA_CONTEXT_LENGTH`) and set `PLURAL_CONTEXT_WINDOW` to the same value so compaction starts in time.
 
 > [!IMPORTANT]
-> Plural uses API keys only. It never reads subscription logins or other credentials stored by vendor tools.
+> Plural's Claude OAuth mode stores its own login and does not read credentials stored by Claude Code or pi. The separate Claude Code mode launches the installed CLI, which uses its own login. [Anthropic says](https://support.claude.com/en/articles/13189465-log-in-to-your-claude-account) third-party OAuth usage may draw from paid usage credits rather than subscription limits and may be restricted. Plural does not identify its own requests as Claude Code or promise subscription billing.
 
 ## Relay
 

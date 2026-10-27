@@ -30,10 +30,24 @@ describe("settings", () => {
       rememberKey: false,
       setupSeen: true,
       agent: { preset: "gemini" as const, model: "gemini-2.5-flash", baseUrl: "", contextWindow: "" },
+      agentChoices: {
+        gemini: { preset: "gemini" as const, model: "gemini-2.5-flash", baseUrl: "", contextWindow: "" },
+        anthropic_oauth: { preset: "anthropic_oauth" as const, model: "claude-haiku-4-5-20251001", baseUrl: "", contextWindow: "" },
+      },
     };
     saveSettings(chosen, path);
     expect(JSON.parse(readFileSync(path, "utf8"))).toEqual(chosen);
     expect(loadSettings(path)).toEqual(chosen);
+  });
+
+  test("stored provider choices are validated and old settings still load", () => {
+    expect(parseSettings({ agent: { preset: "anthropic_oauth", model: "claude-haiku-4-5" } }).agentChoices).toEqual({});
+    expect(parseSettings({ agentChoices: {
+      anthropic_oauth: { preset: "demo", model: "claude-haiku-4-5-20251001" },
+      unknown: { preset: "unknown", model: "x" },
+    } }).agentChoices).toEqual({
+      anthropic_oauth: { preset: "anthropic_oauth", model: "claude-haiku-4-5-20251001", baseUrl: "", contextWindow: "" },
+    });
   });
 
   test("the file lives in the data directory", () => {

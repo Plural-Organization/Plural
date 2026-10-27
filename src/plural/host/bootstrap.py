@@ -7,7 +7,9 @@ from plural.agent.context import ContextBuilder, Environment
 from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.providers import anthropic_api
 from plural.agent.providers.anthropic_api import AnthropicProvider
+from plural.agent.providers.anthropic_oauth import AnthropicOAuthProvider, load_credentials
 from plural.agent.providers.base import LLMProvider
+from plural.agent.providers.claude_code import ClaudeCodeProvider
 from plural.agent.providers.fake import DemoProvider
 from plural.agent.providers.openai_compat import OpenAIProvider
 from plural.agent.sandbox.base import Workspace
@@ -71,6 +73,13 @@ def resolve_api_key(settings: HostSettings, environ: Mapping[str, str]) -> str |
     return environ.get(variable) if variable else None
 
 
+def provider_secrets(settings: HostSettings, api_key: str | None) -> tuple[str, ...]:
+    if settings.resolved_provider() == "anthropic_oauth":
+        credentials = load_credentials(settings.state_dir / "anthropic-oauth.json")
+        return (credentials.access, credentials.refresh)
+    return (api_key,) if api_key else ()
+
+
 def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
     match settings.resolved_provider():
         case "fake":
@@ -86,6 +95,18 @@ def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
                 max_tokens=settings.max_output_tokens or anthropic_api.DEFAULT_MAX_TOKENS,
                 effort=settings.effort,
                 base_url=settings.base_url,
+            )
+        case "anthropic_oauth":
+            return AnthropicOAuthProvider(
+                credentials_path=settings.state_dir / "anthropic-oauth.json",
+                model=settings.model or anthropic_api.DEFAULT_OAUTH_MODEL,
+                max_tokens=settings.max_output_tokens or anthropic_api.DEFAULT_MAX_TOKENS,
+                effort=settings.effort,
+            )
+        case "claude_code":
+            return ClaudeCodeProvider(
+                workspace=settings.workspace,
+                model=settings.model or "claude-sonnet-5-5",
             )
         case "openai":
             if not settings.model:
@@ -162,7 +183,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         approval_registry=registry,
         gate=gate,
         vault=AttachmentVault(state_dir / "attachments" / room),
-        redactor=Redactor.from_environment(os.environ, extra=[api_key] if api_key else []),
+        redactor=Redactor.from_environment(os.environ, extra=provider_secrets(settings, api_key)),
         ids=ids,
         clock=clock,
         host=host,

@@ -19,13 +19,13 @@
 
 **one agent. one host. everyone in the room.**
 
-- **a shared live session** — the host runs the agent on their machine with their own key. teammates join from a terminal and watch every reply, tool call and diff as it happens.
+- **a shared live session** — the host runs the agent on their machine with their own credentials. teammates join from a terminal and watch every reply, tool call and diff as it happens.
 - **two ways to prompt** — in `open` mode everyone talks to the agent directly. in `review` mode the host approves each prompt first. switch any time.
 - **you approve what matters** — write and exec actions always wait for the host, and a run started by a guest can never be waved through by a rule.
 - **see who is doing what** — participants, who is typing, a prompt queue, and an attribution on every turn.
 - **tools you can follow** — each call is one line. open it to see the live output of a command or a numbered diff.
 - **full screen, in your terminal** — a side panel, themes, mouse and keyboard, copy on select. one binary, no runtime to install.
-- **your model, your key** — anthropic, any openai-compatible endpoint, or a local model through ollama. api keys only, never subscription logins.
+- **your model, your login** — anthropic by API key or Claude OAuth, any openai-compatible endpoint, or a local model through ollama.
 - **event-sourced** — an append-only log is the source of truth. reconnect, replay and audit come for free.
 - **direct or relayed** — connect over your network, or through a relay that never decides permissions and never stores content.
 
@@ -59,6 +59,10 @@ without a key the host runs a scripted demo agent. for a real model:
 ```bash
 ANTHROPIC_API_KEY=sk-ant-… plural
 ```
+
+or open `F2` → Model → Claude OAuth → Sign in with Claude, then paste the code shown in the browser. Anthropic may bill this third-party usage from usage credits rather than subscription limits. To use your actual Claude Code login, run `claude auth login` in a terminal and select `F2` → Model → Claude Code.
+
+Claude OAuth defaults to Haiku 4.5. Newer Claude models may reject third-party OAuth requests even when login succeeds; use an Anthropic API key for those models.
 
 `/help` lists the commands, `F2` opens the settings, `ctrl+o` opens the tool details.
 

@@ -40,7 +40,14 @@ def test_an_empty_model_or_url_means_the_default() -> None:
     assert settings.base_url is None
 
 
-def test_providers_are_built_from_a_config_and_missing_pieces_are_named() -> None:
+def test_providers_are_built_from_a_config_and_missing_pieces_are_named(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def claude_path(command: str) -> str:
+        assert command == "claude"
+        return "/usr/bin/claude"
+
+    monkeypatch.setattr("plural.agent.providers.claude_code.shutil.which", claude_path)
     provider, settings, key = provider_for(BASE, AgentConfig(provider="fake"))
     assert provider is not None
     assert key is None
@@ -50,6 +57,10 @@ def test_providers_are_built_from_a_config_and_missing_pieces_are_named() -> Non
     _, local_settings, local_key = provider_for(BASE, local)
     assert local_key is None
     assert local_settings.agent_label({}) == "openai · qwen3:4b · local"
+
+    _, cli_settings, cli_key = provider_for(BASE, AgentConfig(provider="claude_code"))
+    assert cli_key is None
+    assert cli_settings.agent_label({}) == "Claude Code · claude-sonnet-5-5"
 
     with pytest.raises(ConfigError, match="ANTHROPIC_API_KEY"):
         provider_for(HostSettings(), AgentConfig(provider="anthropic"))
@@ -70,6 +81,21 @@ def test_the_key_comes_from_the_config_and_never_from_the_host_environment(
 async def test_a_working_provider_is_reported_with_its_latency() -> None:
     message = await probe(FakeProvider([reply("ok")]))
     assert message.startswith("answered in ")
+
+
+async def test_probe_sends_a_nonempty_system_message() -> None:
+    class RecordingProvider:
+        system = ""
+
+        async def stream(
+            self, request: LlmRequest, *, cancel: asyncio.Event
+        ) -> AsyncIterator[LlmEvent]:
+            self.system = request.system
+            yield TextDelta(text="ok")
+
+    provider = RecordingProvider()
+    await probe(provider)
+    assert provider.system
 
 
 class Failing:

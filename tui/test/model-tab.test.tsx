@@ -127,7 +127,11 @@ describe("Model tab", () => {
         context_window: null,
       },
     ]);
-    expect(hooks.settings.at(-1)).toMatchObject({ setupSeen: true, agent: { preset: "anthropic" } });
+    expect(hooks.settings.at(-1)).toMatchObject({
+      setupSeen: true,
+      agent: { preset: "anthropic" },
+      agentChoices: { anthropic: { preset: "anthropic", model: "claude-opus-5-5" } },
+    });
     expect(hooks.keys).toEqual([["anthropic", "sk-ant-abcdefghijklmnop1234", true]]);
   });
 
@@ -211,7 +215,7 @@ describe("Model tab", () => {
     const { setup } = await mount(session(), control);
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
-    for (let step = 0; step < 3; step += 1) {
+    for (let step = 0; step < 5; step += 1) {
       await setup.mockInput.pressArrow("right");
     }
     const gemini = await frame(setup, "Google Gemini");

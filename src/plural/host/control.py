@@ -16,7 +16,13 @@ from plural.agent.providers.base import (
     TextDelta,
 )
 from plural.core.errors import DomainError
-from plural.host.bootstrap import ConfigError, Host, build_provider, resolve_api_key
+from plural.host.bootstrap import (
+    ConfigError,
+    Host,
+    build_provider,
+    provider_secrets,
+    resolve_api_key,
+)
 from plural.host.config import HostSettings
 from plural.host.inbox import Reconfigure
 
@@ -30,7 +36,7 @@ MAX_LINE_BYTES: Final = 64 * 1024
 class AgentConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    provider: Literal["fake", "anthropic", "openai"]
+    provider: Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "openai"]
     model: str | None = None
     base_url: str | None = None
     api_key: SecretStr | None = None
@@ -70,7 +76,7 @@ def provider_for(
 
 async def probe(provider: LLMProvider) -> str:
     request = LlmRequest(
-        system="",
+        system="You are a coding assistant.",
         messages=(LlmMessage(role="user", content=PROBE_PROMPT),),
     )
     started = time.monotonic()
@@ -123,7 +129,7 @@ class Control:
                 provider=provider,
                 label=label,
                 context_window=settings.context_window,
-                secrets=(key,) if key else (),
+                secrets=provider_secrets(settings, key),
                 reply=done,
             )
         )
