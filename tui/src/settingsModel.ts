@@ -63,6 +63,7 @@ export function modelRows(state: ModelState): Row[] {
   }
   const preset = presetOf(choice.preset);
   const rows: Row[] = [
+    { id: "connection", kind: "choice", label: "Connection type", value: connectionLabel(preset.connection), hint: "OAuth sign-in, API key, or a local model", enabled: true },
     { id: "preset", kind: "choice", label: "Provider", value: preset.label, hint: preset.hint, enabled: true },
   ];
   if (preset.needsKey || choice.preset === "custom") {
@@ -103,7 +104,9 @@ export function modelRows(state: ModelState): Row[] {
       kind: preset.models.length > 0 ? "choice" : "text",
       label: "Model",
       value: choice.model || preset.models[0] || "not set",
-      hint: preset.models.length > 0 ? `← → choose a model (${preset.models.length} options); press e to type another ID` : "enter to type the model id",
+      hint: preset.id === "azure"
+        ? "enter the Azure deployment name"
+        : preset.models.length > 0 ? `← → choose a model (${preset.models.length} options); press e to type another ID` : "enter to type the model id",
       enabled: true,
     });
   }
@@ -113,7 +116,11 @@ export function modelRows(state: ModelState): Row[] {
       kind: "text",
       label: "Endpoint",
       value: choice.baseUrl || preset.baseUrl || "not set",
-      hint: "the address of an OpenAI-compatible server, for example http://127.0.0.1:11434/v1",
+      hint: preset.id === "azure"
+        ? "Azure resource URL ending in /openai/v1/"
+        : preset.id === "amazon_bedrock"
+          ? "Bedrock runtime URL for your region, ending in /openai/v1"
+          : "the address of an OpenAI-compatible server, for example http://127.0.0.1:11434/v1",
       enabled: true,
     });
   }
@@ -203,6 +210,30 @@ export function nextPreset(current: AgentChoice["preset"], direction: 1 | -1): A
   return (PRESETS[(index + direction + PRESETS.length) % PRESETS.length] ?? PRESETS[0]!).id;
 }
 
+export type ConnectionType = "oauth" | "api_key" | "local";
+
+export function connectionLabel(connection: ConnectionType): string {
+  return connection === "oauth" ? "OAuth / account" : connection === "api_key" ? "API key" : "Local / demo";
+}
+
+export function nextConnection(current: AgentChoice["preset"], direction: 1 | -1): AgentChoice["preset"] {
+  const groups: ConnectionType[] = ["oauth", "api_key", "local"];
+  const currentGroup = presetOf(current).connection;
+  const currentIndex = groups.indexOf(currentGroup);
+  for (let offset = 1; offset <= groups.length; offset++) {
+    const group = groups[(currentIndex + direction * offset + groups.length * 2) % groups.length]!;
+    const candidate = PRESETS.find((preset) => preset.connection === group);
+    if (candidate) return candidate.id;
+  }
+  return current;
+}
+
+export function nextPresetInConnection(current: AgentChoice["preset"], direction: 1 | -1): AgentChoice["preset"] {
+  const choices = PRESETS.filter((preset) => preset.connection === presetOf(current).connection);
+  const index = choices.findIndex((preset) => preset.id === current);
+  return choices[(index + direction + choices.length) % choices.length]!.id;
+}
+
 export function nextModel(choice: AgentChoice, direction: 1 | -1): string {
   const models = presetOf(choice.preset).models;
   if (models.length === 0) {
@@ -216,12 +247,27 @@ export function switchPreset(
   choice: AgentChoice,
   saved: Partial<Record<PresetId, AgentChoice>>,
   direction: 1 | -1,
+  withinConnection = false,
 ): { choice: AgentChoice; saved: Partial<Record<PresetId, AgentChoice>> } {
-  const preset = nextPreset(choice.preset, direction);
+  const preset = withinConnection
+    ? nextPresetInConnection(choice.preset, direction)
+    : nextPreset(choice.preset, direction);
   const nextSaved = { ...saved, [choice.preset]: choice };
   return {
     choice: nextSaved[preset] ?? { preset, model: presetOf(preset).models[0] ?? "", baseUrl: "", contextWindow: "" },
     saved: nextSaved,
+  };
+}
+
+export function switchConnection(
+  choice: AgentChoice,
+  saved: Partial<Record<PresetId, AgentChoice>>,
+  direction: 1 | -1,
+): { choice: AgentChoice; saved: Partial<Record<PresetId, AgentChoice>> } {
+  const preset = nextConnection(choice.preset, direction);
+  return {
+    choice: saved[preset] ?? { preset, model: presetOf(preset).models[0] ?? "", baseUrl: "", contextWindow: "" },
+    saved: { ...saved, [choice.preset]: choice },
   };
 }
 

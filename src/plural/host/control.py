@@ -38,6 +38,7 @@ class AgentConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     provider: Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"]
+    provider_name: str | None = Field(default=None, max_length=64)
     model: str | None = None
     base_url: str | None = None
     api_key: SecretStr | None = None
@@ -126,7 +127,11 @@ class Control:
         if isinstance(provider, CodexCliProvider):
             await provider.check_available()
         done: asyncio.Future[None] = asyncio.get_running_loop().create_future()
-        label = settings.agent_label({})
+        label = (
+            f"{config.provider_name} · {settings.model or 'default'}"
+            if config.provider_name and config.provider != "fake"
+            else settings.agent_label({})
+        )
         self._host.inbox.put(
             Reconfigure(
                 provider=provider,
