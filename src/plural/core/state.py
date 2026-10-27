@@ -12,6 +12,7 @@ from plural.protocol.events import (
     ParticipantLeft,
     ParticipantRevoked,
     ParticipantRoleChanged,
+    PermissionModeChanged,
     PolicyRuleAdded,
     PolicyRuleRemoved,
     PromptAccepted,
@@ -60,6 +61,8 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             return state.model_copy(update={"agent": agent})
         case PromptModeChanged(mode=mode):
             return state.model_copy(update={"prompt_mode": mode})
+        case PermissionModeChanged(mode=mode):
+            return state.model_copy(update={"permission_mode": mode})
         case ProposalCreated(proposal=proposal):
             return state.model_copy(
                 update={"proposals": {**state.proposals, proposal.id: proposal}}

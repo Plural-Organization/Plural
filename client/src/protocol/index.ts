@@ -16,6 +16,7 @@ export type {
   EventRecord,
   JsonValue,
   Participant,
+  PermissionMode,
   PolicyRuleView,
   PromptMode,
   ProposalView,

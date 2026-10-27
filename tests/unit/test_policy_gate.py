@@ -3,7 +3,7 @@ from contextlib import suppress
 
 import pytest
 
-from plural.core.policy.engine import Policy
+from plural.core.policy.engine import PLAN_MODE, Policy
 from plural.core.policy.rules import Rule, RuleSet
 from plural.core.provenance import direct
 from plural.host.approval_registry import ApprovalRegistry
@@ -12,6 +12,7 @@ from plural.host.policy_gate import HostPolicyGate
 from plural.host.system import SystemClock, UlidGenerator
 from plural.protocol.models import (
     ApprovalDecision,
+    PermissionMode,
     PolicyAction,
     Role,
     ToolCallView,
@@ -102,3 +103,12 @@ async def test_approval_is_not_counted_as_rejection(answer: ApprovalDecision) ->
     await harness.check("make a", answer)
     allowed, _ = await harness.check("make b", ApprovalDecision.ONCE)
     assert allowed
+
+
+async def test_plan_mode_explains_itself_instead_of_asking_the_host() -> None:
+    harness = Harness()
+    harness.gate.use_mode(PermissionMode.PLAN)
+    allowed, reason = await harness.check("pytest", ApprovalDecision.ONCE)
+    assert not allowed
+    assert harness.asked == []
+    assert reason == PLAN_MODE

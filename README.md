@@ -62,6 +62,8 @@ ANTHROPIC_API_KEY=sk-ant-… plural
 
 or open `F2` → Model → Claude OAuth → Sign in with Claude, then paste the code shown in the browser. Anthropic may bill this third-party usage from usage credits rather than subscription limits. To use your actual Claude Code login, run `claude auth login` in a terminal and select `F2` → Model → Claude Code.
 
+To use your Codex sign-in, run `codex login` in a terminal and select `F2` → Model → Codex CLI. Choose a model available to your Codex account. Plural streams replies from one Codex session for the room while its host is running.
+
 Claude OAuth defaults to Haiku 4.5. Newer Claude models may reject third-party OAuth requests even when login succeeds; use an Anthropic API key for those models.
 
 `/help` lists the commands, `F2` opens the settings, `ctrl+o` opens the tool details.

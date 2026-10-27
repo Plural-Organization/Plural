@@ -7,6 +7,7 @@ export function emptyState(): SessionState {
   return {
     last_seq: 0,
     prompt_mode: "open",
+    permission_mode: "default",
     participants: {},
     proposals: {},
     approvals: {},
@@ -42,6 +43,8 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return { ...state, agent: event.agent };
     case "session.prompt_mode_changed":
       return { ...state, prompt_mode: event.mode };
+    case "session.permission_mode_changed":
+      return { ...state, permission_mode: event.mode };
     case "proposal.created":
       return { ...state, proposals: { ...state.proposals, [event.proposal.id]: event.proposal } };
     case "proposal.approved":

@@ -15,6 +15,7 @@
       "state": {
         "last_seq": 1,
         "prompt_mode": "open",
+        "permission_mode": "default",
         "participants": {},
         "proposals": {},
         "approvals": {},
@@ -49,6 +50,7 @@
       "state": {
         "last_seq": 2,
         "prompt_mode": "open",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -90,6 +92,7 @@
       "state": {
         "last_seq": 3,
         "prompt_mode": "open",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -137,6 +140,7 @@
       "state": {
         "last_seq": 4,
         "prompt_mode": "open",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -190,6 +194,7 @@
       "state": {
         "last_seq": 5,
         "prompt_mode": "open",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -245,6 +250,7 @@
       "state": {
         "last_seq": 6,
         "prompt_mode": "open",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -299,6 +305,7 @@
       "state": {
         "last_seq": 7,
         "prompt_mode": "open",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -353,6 +360,7 @@
       "state": {
         "last_seq": 8,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -407,6 +415,7 @@
       "state": {
         "last_seq": 9,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -467,6 +476,7 @@
       "state": {
         "last_seq": 10,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -531,6 +541,7 @@
       "state": {
         "last_seq": 11,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -591,6 +602,7 @@
       "state": {
         "last_seq": 12,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -654,6 +666,7 @@
       "state": {
         "last_seq": 13,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -717,6 +730,7 @@
       "state": {
         "last_seq": 14,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -787,6 +801,7 @@
       "state": {
         "last_seq": 15,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -868,6 +883,7 @@
       "state": {
         "last_seq": 16,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -965,6 +981,7 @@
       "state": {
         "last_seq": 17,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1069,6 +1086,7 @@
       "state": {
         "last_seq": 18,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1167,6 +1185,7 @@
       "state": {
         "last_seq": 19,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1253,6 +1272,7 @@
       "state": {
         "last_seq": 19,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1344,6 +1364,7 @@
       "state": {
         "last_seq": 21,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1432,6 +1453,7 @@
       "state": {
         "last_seq": 21,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1520,6 +1542,7 @@
       "state": {
         "last_seq": 21,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1615,6 +1638,7 @@
       "state": {
         "last_seq": 24,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1721,6 +1745,7 @@
       "state": {
         "last_seq": 25,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1853,6 +1878,7 @@
       "state": {
         "last_seq": 26,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1989,6 +2015,7 @@
       "state": {
         "last_seq": 27,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2107,6 +2134,7 @@
       "state": {
         "last_seq": 28,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2228,6 +2256,7 @@
       "state": {
         "last_seq": 29,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2361,6 +2390,7 @@
       "state": {
         "last_seq": 30,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2495,6 +2525,7 @@
       "state": {
         "last_seq": 31,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2631,6 +2662,7 @@
       "state": {
         "last_seq": 32,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2766,6 +2798,7 @@
       "state": {
         "last_seq": 33,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2905,6 +2938,7 @@
       "state": {
         "last_seq": 34,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3069,6 +3103,7 @@
       "state": {
         "last_seq": 35,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3237,6 +3272,7 @@
       "state": {
         "last_seq": 36,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3392,6 +3428,7 @@
       "state": {
         "last_seq": 37,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3562,6 +3599,7 @@
       "state": {
         "last_seq": 38,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3724,6 +3762,7 @@
       "state": {
         "last_seq": 39,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3878,6 +3917,7 @@
       "state": {
         "last_seq": 40,
         "prompt_mode": "review",
+        "permission_mode": "default",
         "participants": {
           "p_host": {
             "id": "p_host",

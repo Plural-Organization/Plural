@@ -15,6 +15,7 @@ from plural.agent.providers.base import (
     Stop,
     TextDelta,
 )
+from plural.agent.providers.codex_cli import CodexCliProvider
 from plural.core.errors import DomainError
 from plural.host.bootstrap import (
     ConfigError,
@@ -36,7 +37,7 @@ MAX_LINE_BYTES: Final = 64 * 1024
 class AgentConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    provider: Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "openai"]
+    provider: Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"]
     model: str | None = None
     base_url: str | None = None
     api_key: SecretStr | None = None
@@ -122,6 +123,8 @@ class Control:
 
     async def _configure(self, config: AgentConfig) -> str:
         provider, settings, key = provider_for(self._base, config)
+        if isinstance(provider, CodexCliProvider):
+            await provider.check_available()
         done: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         label = settings.agent_label({})
         self._host.inbox.put(

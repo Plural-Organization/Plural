@@ -9,6 +9,7 @@ import { loadKeys, saveKeys } from "./credentials";
 import { toConfig } from "./presets";
 import { loadSettings, saveSettings } from "./settings";
 import { HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
+import { startProgress } from "./lib/progress";
 
 const USAGE = `plural ${pkg.version}
 
@@ -29,7 +30,10 @@ function option(args: string[], name: string): string | undefined {
   return index === -1 ? undefined : args[index + 1];
 }
 
+const progress = startProgress();
+
 function fail(message: string): never {
+  progress.done();
   process.stderr.write(`${message}\n`);
   process.exit(1);
 }
@@ -72,6 +76,7 @@ async function main(): Promise<void> {
   } else {
     const args = first === "host" ? rest : process.argv.slice(2);
     name = option(args, "--name") ?? userInfo().username;
+    progress.step("starting the host…");
     try {
       host = await startLocalHost(args.includes("--name") ? args : [...args, "--name", name]);
     } catch (error) {
@@ -95,13 +100,16 @@ async function main(): Promise<void> {
   const control = host?.control ?? null;
   let startupNote: string | null = null;
   if (control && settings.agent.preset !== "demo") {
+    progress.step(`loading the saved model (${settings.agent.preset})…`);
     const applied = await control.configure(toConfig(settings.agent, keys[settings.agent.preset] ?? ""));
     if (!applied.ok) {
       startupNote = `could not use the saved model: ${applied.error ?? "unknown error"}. Open the settings (F2) to fix it.`;
     }
   }
   const client = new SessionClient(parsed, { name, client: { kind: "tui", version: pkg.version } });
+  progress.step("opening the session…");
   const renderer = await createCliRenderer({ exitOnCtrlC: false, useMouse: true });
+  progress.done();
   const quit = new Promise<void>((resolve) => {
     createRoot(renderer).render(
       <App
@@ -123,6 +131,7 @@ async function main(): Promise<void> {
           saveKeys(stored);
         }}
         startupNote={startupNote}
+        splash
         onQuit={() => {
           resolve();
         }}

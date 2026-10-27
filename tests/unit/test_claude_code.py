@@ -24,10 +24,18 @@ def fake_cli(tmp_path: Path, response: dict[str, object], *, exit_code: int = 0)
     script.write_text(
         f"#!{sys.executable}\n"
         "import json, os, sys\n"
+        f"response = json.loads({json.dumps(response)!r})\n"
         f"with open({str(record)!r}, 'w') as target:\n"
         "    json.dump({'argv': sys.argv[1:], 'prompt': sys.stdin.read(), "
         "'api_key': os.getenv('ANTHROPIC_API_KEY')}, target)\n"
-        f"print({json.dumps(json.dumps(response))})\n"
+        "answer = response.get('structured_output')\n"
+        "if isinstance(answer, dict):\n"
+        "    encoded = json.dumps(answer, ensure_ascii=False)\n"
+        "    for offset in range(0, len(encoded), 7):\n"
+        "        print(json.dumps({'type': 'stream_event', "
+        "'event': {'type': 'content_block_delta', "
+        "'delta': {'type': 'input_json_delta', 'partial_json': encoded[offset:offset + 7]}}}))\n"
+        "print(json.dumps({'type': 'result', **response}))\n"
         f"sys.exit({exit_code})\n"
     )
     script.chmod(0o755)
@@ -56,15 +64,19 @@ async def test_claude_code_cli_uses_selected_model_and_returns_plural_tool_calls
         tools=(ToolSchema(name="read", description="Read file", parameters={"type": "object"}),),
     )
     events = [event async for event in provider.stream(request, cancel=asyncio.Event())]
-    assert events[0] == TextDelta(text="I will read it.")
-    assert isinstance(events[1], ToolCallReady)
-    assert events[1].call.name == "read"
-    assert events[1].call.args == {"path": "a.txt"}
+    text = "".join(event.text for event in events if isinstance(event, TextDelta))
+    assert text == "I will read it."
+    calls = [event for event in events if isinstance(event, ToolCallReady)]
+    assert len(calls) == 1
+    assert calls[0].call.name == "read"
+    assert calls[0].call.args == {"path": "a.txt"}
     assert events[-1] == Stop(reason="tool_use")
     sent = json.loads((tmp_path / "request.json").read_text())
     assert sent["argv"][sent["argv"].index("--model") + 1] == "claude-sonnet-5-5"
     assert sent["argv"][sent["argv"].index("--tools") + 1] == ""
     assert "--safe-mode" in sent["argv"]
+    assert sent["argv"][sent["argv"].index("--output-format") + 1] == "stream-json"
+    assert "--include-partial-messages" in sent["argv"]
     schema = json.loads(sent["argv"][sent["argv"].index("--json-schema") + 1])
     assert schema["required"] == ["text", "tool_calls"]
     assert "Read a.txt" in sent["prompt"]

@@ -422,6 +422,7 @@
               "proposal.rejected": "#/$defs/ProposalRejected",
               "run.ended": "#/$defs/RunEnded",
               "run.started": "#/$defs/RunStarted",
+              "session.permission_mode_changed": "#/$defs/PermissionModeChanged",
               "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
               "session.snapshot": "#/$defs/SessionSnapshot",
               "session.welcome": "#/$defs/SessionWelcome",
@@ -446,6 +447,9 @@
             },
             {
               "$ref": "#/$defs/PromptModeChanged"
+            },
+            {
+              "$ref": "#/$defs/PermissionModeChanged"
             },
             {
               "$ref": "#/$defs/AgentChanged"
@@ -781,6 +785,32 @@
         "type",
         "participant_id",
         "typing"
+      ],
+      "type": "object"
+    },
+    "PermissionMode": {
+      "enum": [
+        "default",
+        "accept_edits",
+        "plan",
+        "auto"
+      ],
+      "type": "string"
+    },
+    "PermissionModeChanged": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/PermissionMode"
+        },
+        "type": {
+          "const": "session.permission_mode_changed",
+          "default": "session.permission_mode_changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "mode"
       ],
       "type": "object"
     },
@@ -1235,6 +1265,10 @@
           },
           "type": "object"
         },
+        "permission_mode": {
+          "$ref": "#/$defs/PermissionMode",
+          "default": "default"
+        },
         "policy": {
           "default": [],
           "items": {
@@ -1292,6 +1326,7 @@
       "required": [
         "last_seq",
         "prompt_mode",
+        "permission_mode",
         "participants",
         "proposals",
         "approvals",
@@ -1585,6 +1620,7 @@
           "proposal.rejected": "#/$defs/ProposalRejected",
           "run.ended": "#/$defs/RunEnded",
           "run.started": "#/$defs/RunStarted",
+          "session.permission_mode_changed": "#/$defs/PermissionModeChanged",
           "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
           "session.snapshot": "#/$defs/SessionSnapshot",
           "session.welcome": "#/$defs/SessionWelcome",
@@ -1609,6 +1645,9 @@
         },
         {
           "$ref": "#/$defs/PromptModeChanged"
+        },
+        {
+          "$ref": "#/$defs/PermissionModeChanged"
         },
         {
           "$ref": "#/$defs/AgentChanged"
