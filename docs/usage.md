@@ -26,6 +26,8 @@ plural join "ws://host:7777/r_…?invite=…" --name alia
 
 An invite is single-use and expires after an hour. The host creates a new one with `/invite` or from the settings. The link is copied to the clipboard.
 
+A teammate can also join from a browser: open the web client, paste the invite and type a name. The web client shows the same session, approvals and queue as the terminal. A page served over https can only reach a host through a relay with `wss://`; over plain `ws://` serve the web client over http on the same network.
+
 ## Prompt modes
 
 | Mode | What happens to a participant's prompt |
