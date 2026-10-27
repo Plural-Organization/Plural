@@ -64,6 +64,130 @@ def _prompt(request: LlmRequest) -> str:
     )
 
 
+def _string_end(raw: str, start: int) -> int | None:
+    """Return the position after a complete JSON string, or None while it is partial."""
+    index = start + 1
+    while index < len(raw):
+        char = raw[index]
+        if char == '"':
+            return index + 1
+        if char == "\\":
+            if index + 1 >= len(raw):
+                return None
+            index += 2
+            if raw[index - 1] == "u":
+                if len(raw) < index + 4:
+                    return None
+                index += 4
+        else:
+            index += 1
+    return None
+
+
+def _value_end(raw: str, start: int) -> int | None:
+    if start >= len(raw):
+        return None
+    if raw[start] == '"':
+        return _string_end(raw, start)
+    depth = 0
+    index = start
+    while index < len(raw):
+        char = raw[index]
+        if char == '"':
+            end = _string_end(raw, index)
+            if end is None:
+                return None
+            index = end
+            continue
+        if char in "[{":
+            depth += 1
+        elif char in "]}":
+            if depth == 0:
+                return index
+            depth -= 1
+            if depth == 0:
+                return index + 1
+        elif char == "," and depth == 0:
+            return index
+        index += 1
+    return None
+
+
+def _text_value_start(raw: str) -> int | None:
+    """Find the top-level `text` string in the incremental structured output."""
+    index = 0
+    while index < len(raw) and raw[index].isspace():
+        index += 1
+    if index >= len(raw) or raw[index] != "{":
+        return None
+    index += 1
+    while index < len(raw):
+        while index < len(raw) and (raw[index].isspace() or raw[index] == ","):
+            index += 1
+        if index >= len(raw) or raw[index] == "}":
+            return None
+        if raw[index] != '"':
+            return None
+        key_start = index
+        key_end = _string_end(raw, index)
+        if key_end is None:
+            return None
+        key = json.loads(raw[key_start:key_end])
+        index = key_end
+        while index < len(raw) and raw[index].isspace():
+            index += 1
+        if index >= len(raw) or raw[index] != ":":
+            return None
+        index += 1
+        while index < len(raw) and raw[index].isspace():
+            index += 1
+        if key == "text":
+            return index + 1 if index < len(raw) and raw[index] == '"' else None
+        index = _value_end(raw, index)
+        if index is None:
+            return None
+    return None
+
+
+class _TextFieldStream:
+    def __init__(self) -> None:
+        self.raw = ""
+        self.start: int | None = None
+        self.emitted = ""
+
+    def feed(self, fragment: str) -> str:
+        self.raw += fragment
+        if self.start is None:
+            self.start = _text_value_start(self.raw)
+        if self.start is None:
+            return ""
+        end = self.start
+        while end < len(self.raw):
+            char = self.raw[end]
+            if char == '"':
+                break
+            if char == "\\":
+                if end + 1 >= len(self.raw):
+                    break
+                if self.raw[end + 1] == "u":
+                    if len(self.raw) < end + 6:
+                        break
+                    end += 6
+                else:
+                    end += 2
+            else:
+                end += 1
+        try:
+            decoded = json.loads(f'"{self.raw[self.start : end]}"')
+        except json.JSONDecodeError:
+            return ""
+        if not isinstance(decoded, str) or not decoded.startswith(self.emitted):
+            return ""
+        delta = decoded[len(self.emitted) :]
+        self.emitted = decoded
+        return delta
+
+
 class ClaudeCodeProvider:
     def __init__(
         self, *, model: str = DEFAULT_MODEL, workspace: Path, cli: str | None = None
@@ -91,7 +215,9 @@ class ClaudeCodeProvider:
             "--permission-mode",
             "dontAsk",
             "--output-format",
-            "json",
+            "stream-json",
+            "--verbose",
+            "--include-partial-messages",
             "--json-schema",
             json.dumps(_schema(request)),
             "--model",
@@ -106,6 +232,7 @@ class ClaudeCodeProvider:
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                limit=16 * 1024 * 1024,
                 env={
                     key: value
                     for key, value in os.environ.items()
@@ -114,35 +241,79 @@ class ClaudeCodeProvider:
             )
         except OSError as error:
             raise ProviderError(f"Could not start Claude Code: {error}") from error
-        communicating = asyncio.create_task(process.communicate(_prompt(request).encode()))
+        assert process.stdin is not None
+        assert process.stdout is not None
+        assert process.stderr is not None
+        process.stdin.write(_prompt(request).encode())
+        await process.stdin.drain()
+        process.stdin.close()
+        stderr_reader = asyncio.create_task(process.stderr.read())
         stopping = asyncio.create_task(cancel.wait())
+        text_stream = _TextFieldStream()
+        streamed_plain_text = ""
+        result: dict[str, object] | None = None
         try:
-            done, _ = await asyncio.wait(
-                {communicating, stopping}, return_when=asyncio.FIRST_COMPLETED
-            )
-            if stopping in done and communicating not in done:
-                return
-            stdout, stderr = await communicating
+            while True:
+                line_reader = asyncio.create_task(process.stdout.readline())
+                done, _ = await asyncio.wait(
+                    {line_reader, stopping}, return_when=asyncio.FIRST_COMPLETED
+                )
+                if stopping in done:
+                    line_reader.cancel()
+                    await asyncio.gather(line_reader, return_exceptions=True)
+                    return
+                line = await line_reader
+                if not line:
+                    break
+                try:
+                    decoded: object = json.loads(line)
+                except (ValueError, UnicodeDecodeError):
+                    continue
+                if not isinstance(decoded, dict):
+                    continue
+                event = cast("dict[str, object]", decoded)
+                if event.get("type") == "result":
+                    result = event
+                    continue
+                if event.get("type") != "stream_event":
+                    continue
+                inner = event.get("event")
+                if not isinstance(inner, dict):
+                    continue
+                delta = cast("dict[str, object]", inner).get("delta")
+                if not isinstance(delta, dict):
+                    continue
+                delta_data = cast("dict[str, object]", delta)
+                match delta_data.get("type"):
+                    case "text_delta":
+                        text = delta_data.get("text")
+                        if isinstance(text, str) and text:
+                            streamed_plain_text += text
+                            yield TextDelta(text=text)
+                    case "input_json_delta":
+                        partial = delta_data.get("partial_json")
+                        if isinstance(partial, str):
+                            text = text_stream.feed(partial)
+                            if text:
+                                streamed_plain_text += text
+                                yield TextDelta(text=text)
+                    case _:
+                        pass
+            await process.wait()
         finally:
             stopping.cancel()
             if process.returncode is None:
                 process.kill()
                 await process.wait()
-            if not communicating.done():
-                communicating.cancel()
-            await asyncio.gather(communicating, stopping, return_exceptions=True)
+            await asyncio.gather(stderr_reader, stopping, return_exceptions=True)
         if cancel.is_set():
             return
-        try:
-            decoded: object = json.loads(stdout)
-        except (ValueError, UnicodeDecodeError) as error:
+        stderr = stderr_reader.result()
+        if result is None:
             detail = stderr.decode(errors="replace").strip()[:300]
             raise ProviderError(
-                f"Claude Code did not return JSON: {detail or 'check claude auth login'}"
-            ) from error
-        if not isinstance(decoded, dict):
-            raise ProviderError("Claude Code returned an invalid response")
-        result = cast("dict[str, object]", decoded)
+                f"Claude Code did not return a result: {detail or 'check claude auth login'}"
+            )
         if process.returncode != 0 or result.get("is_error") is True:
             result_detail = result.get("result")
             detail = (
@@ -161,8 +332,12 @@ class ClaudeCodeProvider:
         calls = answer.get("tool_calls")
         if not isinstance(text, str) or not isinstance(calls, list):
             raise ProviderError("Claude Code returned an invalid answer")
-        if text:
-            yield TextDelta(text=text)
+        if text.startswith(streamed_plain_text):
+            remaining_text = text[len(streamed_plain_text) :]
+        else:
+            remaining_text = text if streamed_plain_text == "" else ""
+        if remaining_text:
+            yield TextDelta(text=remaining_text)
         for raw_call in cast("list[object]", calls):
             if not isinstance(raw_call, dict):
                 raise ProviderError("Claude Code returned an invalid tool call")
