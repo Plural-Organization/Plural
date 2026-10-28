@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { DEFAULT_CHOICE, isPresetId, type AgentChoice, type PresetId } from "./presets";
+import { isShareMode, type ShareMode } from "./share";
 import { THEME_NAMES, type ThemeName } from "./theme";
 
 export interface Settings {
@@ -12,6 +13,8 @@ export interface Settings {
   announceTyping: boolean;
   rememberKey: boolean;
   setupSeen: boolean;
+  share: ShareMode;
+  relayUrl: string;
   agent: AgentChoice;
   agentChoices: Partial<Record<PresetId, AgentChoice>>;
 }
@@ -24,6 +27,8 @@ export const DEFAULT_SETTINGS: Settings = {
   announceTyping: true,
   rememberKey: true,
   setupSeen: false,
+  share: "local",
+  relayUrl: "",
   agent: DEFAULT_CHOICE,
   agentChoices: {},
 };
@@ -65,6 +70,8 @@ export function parseSettings(raw: unknown): Settings {
     announceTyping: flag("announceTyping"),
     rememberKey: flag("rememberKey"),
     setupSeen: flag("setupSeen"),
+    share: isShareMode(value["share"]) ? value["share"] : DEFAULT_SETTINGS.share,
+    relayUrl: typeof value["relayUrl"] === "string" ? value["relayUrl"] : DEFAULT_SETTINGS.relayUrl,
     agent,
     agentChoices,
   };

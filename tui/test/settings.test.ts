@@ -29,6 +29,8 @@ describe("settings", () => {
       announceTyping: false,
       rememberKey: false,
       setupSeen: true,
+      share: "relay" as const,
+      relayUrl: "wss://relay.example.com",
       agent: { preset: "gemini" as const, model: "gemini-2.5-flash", baseUrl: "", contextWindow: "" },
       agentChoices: {
         gemini: { preset: "gemini" as const, model: "gemini-2.5-flash", baseUrl: "", contextWindow: "" },
@@ -47,6 +49,15 @@ describe("settings", () => {
       unknown: { preset: "unknown", model: "x" },
     } }).agentChoices).toEqual({
       anthropic_oauth: { preset: "anthropic_oauth", model: "claude-haiku-4-5-20251001", baseUrl: "", contextWindow: "" },
+    });
+  });
+
+  test("the sharing choice falls back to this machine when it is not valid", () => {
+    expect(parseSettings({}).share).toBe("local");
+    expect(parseSettings({ share: "everywhere", relayUrl: 7 })).toMatchObject({ share: "local", relayUrl: "" });
+    expect(parseSettings({ share: "network", relayUrl: "wss://r.example.com" })).toMatchObject({
+      share: "network",
+      relayUrl: "wss://r.example.com",
     });
   });
 

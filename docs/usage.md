@@ -16,7 +16,12 @@ plural
 | `--name <name>` | Your display name |
 | `--port <n>`, `--bind <addr>` | Where the host listens in direct mode |
 | `--relay <url>`, `--public-url <url>` | Connect through a relay and set the address in invite links |
+| `--tunnel cloudflared\|ngrok` | Start a tunnel and put its address in the invite links, see [sharing a session](self-hosting.md) |
 | `--room <id>` | Resume a room, its log and settings are kept |
+
+## Share a session
+
+By default the invite works only on your computer. To let others in, open `F2` → Session and choose *Same network* or *Over the internet*, then start `plural` again. [Sharing a session](self-hosting.md) explains the three ways and how to run a relay.
 
 ## Join a session
 

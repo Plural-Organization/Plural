@@ -5,7 +5,7 @@ import os
 import sys
 from contextlib import suppress
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import structlog
 import typer
@@ -21,24 +21,26 @@ from plural.host.control import MAX_LINE_BYTES, Control, read_lines
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import PromptMode, Role
 from plural.relay.app import create_app
+from plural.relay.limits import RelayLimits
 from plural.storage.jsonl_export import export_jsonl
 from plural.storage.sqlite_store import SqliteEventStore
 
 app = typer.Typer(name="plural-host", no_args_is_help=True, add_completion=False)
 console = Console()
+DEFAULT_LIMITS = RelayLimits()
 
 
 @app.command()
 def host(
-    workspace: Annotated[Path, typer.Option(help="Project directory the agent works in.")] = Path(
-        "."
-    ),
-    bind: Annotated[str, typer.Option(help="Address for direct mode.")] = "127.0.0.1",
-    port: Annotated[int, typer.Option(help="Port for direct mode.")] = 7777,
+    workspace: Annotated[
+        Path | None, typer.Option(help="Project directory the agent works in.")
+    ] = None,
+    bind: Annotated[str | None, typer.Option(help="Address for direct mode.")] = None,
+    port: Annotated[int | None, typer.Option(help="Port for direct mode.")] = None,
     relay: Annotated[str | None, typer.Option(help="Relay URL; direct mode when omitted.")] = None,
     public_url: Annotated[str | None, typer.Option(help="Public ws(s) URL for links.")] = None,
     room: Annotated[str | None, typer.Option(help="Resume an existing room.")] = None,
-    name: Annotated[str, typer.Option(help="Host display name.")] = getpass.getuser(),
+    name: Annotated[str | None, typer.Option(help="Host display name.")] = None,
     prompts: Annotated[
         PromptMode | None,
         typer.Option(help="open: participants prompt directly; review: the host approves them."),
@@ -50,16 +52,20 @@ def host(
         ),
     ] = False,
 ) -> None:
-    settings = HostSettings(
-        workspace=workspace,
-        bind_host=bind,
-        port=port,
-        relay_url=relay,
-        public_url=public_url,
-        room=room,
-        host_name=name,
-        prompt_mode=prompts,
-    )
+    given: dict[str, Any] = {
+        "workspace": workspace,
+        "bind_host": bind,
+        "port": port,
+        "relay_url": relay,
+        "public_url": public_url,
+        "room": room,
+        "host_name": name,
+        "prompt_mode": prompts,
+    }
+    options = {key: value for key, value in given.items() if value is not None}
+    if name is None and "PLURAL_HOST_NAME" not in os.environ:
+        options["host_name"] = getpass.getuser()
+    settings = HostSettings(**options)
     try:
         asyncio.run(_host(settings, machine=machine))
     except ConfigError as error:
@@ -80,13 +86,23 @@ def ready_line(room: str, guest_link: str, host_link: str) -> str:
     )
 
 
+def plain_links(room: str, guest_link: str, host_link: str) -> str:
+    return "\n".join(
+        (
+            f"room {room}",
+            f"guest link (one-time): {guest_link}",
+            f"host link: {host_link}",
+        )
+    )
+
+
 async def _host(settings: HostSettings, *, machine: bool) -> None:
     _configure_logging(settings.state_dir / "logs" / "host.log" if machine else None)
     plural_host = await build_host(settings)
     invite = plural_host.invites.create(Role.PARTICIPANT, settings.invite_ttl_s)
     if machine:
         print(ready_line(plural_host.room, invite.link, plural_host.host_link), flush=True)
-    else:
+    elif console.is_terminal:
         console.print(
             Panel(
                 f"[bold]Guest link[/bold] (one-time)\n{invite.link}\n\n"
@@ -94,6 +110,8 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
                 title=f"room {plural_host.room}",
             )
         )
+    else:
+        print(plain_links(plural_host.room, invite.link, plural_host.host_link), flush=True)
     try:
         if machine:
             await _serve_until_stdin_closes(plural_host, settings)
@@ -129,10 +147,47 @@ async def _control_until_stdin_closes(plural_host: Host, settings: HostSettings)
 
 @app.command()
 def relay(
-    bind: Annotated[str, typer.Option(help="Bind address.")] = "127.0.0.1",
-    port: Annotated[int, typer.Option(help="Port.")] = 8787,
+    bind: Annotated[str, typer.Option(help="Bind address.", envvar="PLURAL_RELAY_BIND")] = (
+        "127.0.0.1"
+    ),
+    port: Annotated[int, typer.Option(help="Port.", envvar="PORT")] = 8787,
+    proxy_hops: Annotated[
+        int,
+        typer.Option(
+            min=0,
+            help="Proxies in front of the relay, to tell guests apart. 0 when it is exposed.",
+            envvar="PLURAL_RELAY_PROXY_HOPS",
+        ),
+    ] = 0,
+    max_rooms: Annotated[
+        int, typer.Option(min=1, help="Rooms at once.", envvar="PLURAL_RELAY_MAX_ROOMS")
+    ] = DEFAULT_LIMITS.max_rooms,
+    rooms_per_peer: Annotated[
+        int,
+        typer.Option(
+            min=1, help="Rooms one address may host.", envvar="PLURAL_RELAY_ROOMS_PER_PEER"
+        ),
+    ] = DEFAULT_LIMITS.max_rooms_per_peer,
+    guests_per_peer: Annotated[
+        int,
+        typer.Option(
+            min=1, help="Guests one address may bring.", envvar="PLURAL_RELAY_GUESTS_PER_PEER"
+        ),
+    ] = DEFAULT_LIMITS.max_guests_per_peer,
 ) -> None:
-    uvicorn.run(create_app(), host=bind, port=port, log_level="info", ws_max_size=4 * 1024 * 1024)
+    limits = RelayLimits(
+        max_rooms=max_rooms,
+        max_rooms_per_peer=rooms_per_peer,
+        max_guests_per_peer=guests_per_peer,
+    )
+    uvicorn.run(
+        create_app(limits, proxy_hops=proxy_hops),
+        host=bind,
+        port=port,
+        log_level="info",
+        ws_max_size=4 * 1024 * 1024,
+        proxy_headers=False,
+    )
 
 
 @app.command()

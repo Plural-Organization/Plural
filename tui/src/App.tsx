@@ -27,6 +27,7 @@ import { SCOPES, TrayView, type McpWizard, type Row, type Tray } from "./compone
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, ModeLine, Working } from "./components/Working";
 import { helpRows, policyRows, skillRows, whoRows } from "./trays";
+import type { Alerts } from "./alerts";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
@@ -48,6 +49,7 @@ export interface AppProps {
   keys?: Keys;
   onKeys?: (preset: PresetId, key: string, remember: boolean) => void;
   startupNote?: string | null;
+  alerts?: Alerts;
   splash?: boolean;
   onQuit: () => void;
 }
@@ -77,6 +79,7 @@ export function App({
   keys = {},
   onKeys,
   startupNote = null,
+  alerts,
   splash = false,
   onQuit,
 }: AppProps) {
@@ -282,6 +285,8 @@ export function App({
       notify("warn", startupNote);
     }
   }, []);
+
+  useEffect(() => alerts?.subscribe((tone, text) => notify(tone, text)), [alerts]);
 
   const send = (command: Command): void => {
     client.send(command).catch((error: unknown) => {

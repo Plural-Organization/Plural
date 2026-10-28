@@ -2,6 +2,7 @@ import type { Role } from "@plural/client";
 import type { Keys } from "./credentials";
 import { PRESETS, presetOf, type AgentChoice, type PresetId } from "./presets";
 import type { Settings } from "./settings";
+import { relayProblem, type ShareMode } from "./share";
 import { THEMES, THEME_NAMES } from "./theme";
 
 export type Tab = "model" | "session" | "appearance";
@@ -142,6 +143,42 @@ export function modelRows(state: ModelState): Row[] {
   return rows;
 }
 
+const SHARING: { mode: ShareMode; label: string; description: string }[] = [
+  { mode: "local", label: "This machine", description: "only you. Invite links work on this computer, good for trying things out" },
+  { mode: "network", label: "Same network", description: "teammates on your Wi-Fi, office network or VPN join with a link that carries your network address" },
+  { mode: "relay", label: "Over the internet", description: "through a relay server, so nobody needs an open port. Needs the address of a relay" },
+];
+
+function shareRows(state: ModelState, host: boolean): Row[] {
+  const rows: Row[] = [
+    { id: "share-title", kind: "note", label: "Who can join", value: "", hint: "how the invite link reaches your teammates", enabled: false },
+    ...SHARING.map(
+    (entry): Row => ({
+      id: `share-${entry.mode}`,
+      kind: "radio",
+      label: entry.label,
+      value: "",
+      description: entry.description,
+      hint: host ? "takes effect the next time you start plural" : "only the host chooses how the room is shared",
+      selected: state.settings.share === entry.mode,
+      enabled: host,
+    }),
+    ),
+  ];
+  if (state.settings.share === "relay") {
+    const problem = state.settings.relayUrl === "" ? null : relayProblem(state.settings.relayUrl);
+    rows.push({
+      id: "relay",
+      kind: "text",
+      label: "Relay address",
+      value: state.settings.relayUrl || "not set",
+      hint: problem ?? "for example wss://relay.example.com, see docs/self-hosting.md",
+      enabled: host,
+    });
+  }
+  return rows;
+}
+
 export function sessionRows(state: ModelState): Row[] {
   const host = state.role === "host";
   const viewer = state.role === "viewer";
@@ -166,6 +203,7 @@ export function sessionRows(state: ModelState): Row[] {
       selected: state.mode === "review",
       enabled: host,
     },
+    ...shareRows(state, host),
     toggle("typing", "Show my typing", state.settings.announceTyping, "let others see when you are writing", !viewer),
     toggle("bell", "Bell on requests", state.settings.bell, "ring the terminal when something needs the host", host),
   ];

@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: plural-relay
+    runtime: docker
+    dockerfilePath: ./deploy/relay.Dockerfile
+    plan: starter
+    healthCheckPath: /healthz
+
+  - type: worker
+    name: plural-host
+    runtime: docker
+    dockerfilePath: ./deploy/host.Dockerfile
+    plan: starter
+    disk:
+      name: plural-data
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      - key: PLURAL_RELAY_URL
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: GIT_URL
+        sync: false
