@@ -162,15 +162,23 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
         </article>
       );
     case "notice":
-      return (
-        <div className={cx(styles.notice, styles[item.tone])}>
-          {item.text}
-          {item.action === "board" && onOpenBoard ? (
-            <button type="button" className={styles.action} onClick={onOpenBoard}>
-              open board ›
-            </button>
-          ) : null}
-        </div>
-      );
+      if (item.action === "board") {
+        return (
+          <div className={styles.event}>
+            <span className={styles.eventIcon} aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M4 20l4-1L19 8l-3-3L5 16l-1 4z" />
+              </svg>
+            </span>
+            <span className={styles.eventText}>{item.text}</span>
+            {onOpenBoard ? (
+              <button type="button" className="button small primary" onClick={onOpenBoard}>
+                open board
+              </button>
+            ) : null}
+          </div>
+        );
+      }
+      return <div className={cx(styles.notice, styles[item.tone])}>{item.text}</div>;
   }
 }
