@@ -7,7 +7,7 @@ from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from plural.agent.providers.base import Effort
-from plural.protocol.models import PromptMode
+from plural.protocol.models import AdmissionMode, PromptMode
 
 
 class HostSettings(BaseSettings):
@@ -19,6 +19,7 @@ class HostSettings(BaseSettings):
     title: str | None = Field(default=None, min_length=1, max_length=80)
     host_name: str = "host"
     prompt_mode: PromptMode | None = None
+    admission: AdmissionMode | None = None
     bind_host: str = "127.0.0.1"
     port: int = 7777
     public_url: str | None = None
@@ -43,6 +44,9 @@ class HostSettings(BaseSettings):
     # base64 grows an upload by a third, and a WebSocket frame holds at most 4 MB
     max_image_bytes: int = Field(default=2_500_000, gt=0, le=2_900_000)
     typing_ttl_s: float = Field(default=6, gt=0)
+    join_timeout_s: float = Field(default=120, gt=0)
+    max_pending_joins: int = Field(default=5, gt=0)
+    max_participants: int = Field(default=20, gt=1)
     browser: str = "launch"
     web_search: bool = True
     web_search_model: str | None = None

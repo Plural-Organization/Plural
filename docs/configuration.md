@@ -19,6 +19,10 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 | `PLURAL_PORT` | `7777` | Port for direct mode |
 | `PLURAL_RELAY_URL` | none | Relay URL |
 | `PLURAL_PUBLIC_URL` | none | Public URL used in invite links |
+| `PLURAL_ADMISSION` | `approve` | `approve`: the host lets in everyone who uses the room link; `open`: anyone with it goes in at once |
+| `PLURAL_JOIN_TIMEOUT_S` | `120` | Seconds before an unanswered request to join lapses |
+| `PLURAL_MAX_PENDING_JOINS` | `5` | People who may wait to be let in at once |
+| `PLURAL_MAX_PARTICIPANTS` | `20` | People in the room at once |
 | `PLURAL_FIRST_TOKEN_TIMEOUT_S` | `120` | Seconds to wait for the model's first output before the run fails |
 | `PLURAL_IDLE_TIMEOUT_S` | `60` | Seconds of silence mid-response before the run fails |
 | `PLURAL_CONTEXT_WINDOW` | `128000` | Model context size in tokens. Set it to the real window for local models |

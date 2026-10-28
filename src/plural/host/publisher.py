@@ -1,5 +1,5 @@
-from plural.core.chat import record_visible_to
 from plural.core.ports import Clock, IdGenerator
+from plural.core.visibility import record_visible_to
 from plural.host.transport.base import Connection
 from plural.protocol.codec import encode_ack, encode_event, encode_record
 from plural.protocol.envelope import ErrorInfo

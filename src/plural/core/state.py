@@ -1,6 +1,7 @@
 from typing import Final
 
 from plural.protocol.events import (
+    AdmissionChanged,
     AgentChanged,
     ApprovalRequested,
     ApprovalResolved,
@@ -9,6 +10,8 @@ from plural.protocol.events import (
     ContextCompacted,
     ContextUsage,
     EventRecord,
+    JoinRequested,
+    JoinResolved,
     McpChanged,
     MessageEnded,
     ParticipantJoined,
@@ -62,6 +65,16 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
         case ParticipantRevoked(participant_id=participant_id):
             return state.model_copy(
                 update={"participants": _without(state.participants, participant_id)}
+            )
+        case AdmissionChanged(mode=mode):
+            return state.model_copy(update={"admission": mode})
+        case JoinRequested(request=request):
+            return state.model_copy(
+                update={"join_requests": {**state.join_requests, request.id: request}}
+            )
+        case JoinResolved(request_id=request_id):
+            return state.model_copy(
+                update={"join_requests": _without(state.join_requests, request_id)}
             )
         case AgentChanged(agent=agent):
             return state.model_copy(update={"agent": agent})

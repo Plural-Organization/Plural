@@ -21,7 +21,7 @@ from plural.host.bootstrap import ConfigError, Host, build_host, build_provider,
 from plural.host.config import HostSettings
 from plural.host.control import MAX_LINE_BYTES, Control, read_lines
 from plural.protocol.envelope import PROTOCOL_VERSION
-from plural.protocol.models import PromptMode, Role
+from plural.protocol.models import AdmissionMode, PromptMode
 from plural.relay.app import create_app
 from plural.relay.limits import RelayLimits
 from plural.storage.jsonl_export import export_jsonl
@@ -49,6 +49,10 @@ def host(
         PromptMode | None,
         typer.Option(help="open: participants prompt directly; review: the host approves them."),
     ] = None,
+    admission: Annotated[
+        AdmissionMode | None,
+        typer.Option(help="approve: the host lets in whoever uses the room link; open: anyone."),
+    ] = None,
     machine: Annotated[
         bool,
         typer.Option(
@@ -66,6 +70,7 @@ def host(
         "title": title,
         "host_name": name,
         "prompt_mode": prompts,
+        "admission": admission,
     }
     options = {key: value for key, value in given.items() if value is not None}
     if room is not None and workspace is None and "PLURAL_WORKSPACE" not in os.environ:
@@ -122,7 +127,7 @@ def plain_links(room: str, guest_link: str, host_link: str) -> str:
     return "\n".join(
         (
             f"room {room}",
-            f"guest link (one-time): {guest_link}",
+            f"room link (the host lets people in): {guest_link}",
             f"host link: {host_link}",
         )
     )
@@ -131,19 +136,19 @@ def plain_links(room: str, guest_link: str, host_link: str) -> str:
 async def _host(settings: HostSettings, *, machine: bool) -> None:
     _configure_logging(settings.state_dir / "logs" / "host.log" if machine else None)
     plural_host = await build_host(settings)
-    invite = plural_host.invites.create(Role.PARTICIPANT, settings.invite_ttl_s)
+    room_link = plural_host.room_link.link
     if machine:
-        print(ready_line(plural_host.room, invite.link, plural_host.host_link), flush=True)
+        print(ready_line(plural_host.room, room_link, plural_host.host_link), flush=True)
     elif console.is_terminal:
         console.print(
             Panel(
-                f"[bold]Guest link[/bold] (one-time)\n{invite.link}\n\n"
+                f"[bold]Room link[/bold] (the host lets people in)\n{room_link}\n\n"
                 f"[bold]Host link[/bold]\n{plural_host.host_link}",
                 title=f"room {plural_host.room}",
             )
         )
     else:
-        print(plain_links(plural_host.room, invite.link, plural_host.host_link), flush=True)
+        print(plain_links(plural_host.room, room_link, plural_host.host_link), flush=True)
     try:
         if machine:
             await _serve_until_stdin_closes(plural_host, settings)

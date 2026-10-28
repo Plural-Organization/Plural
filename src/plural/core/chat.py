@@ -1,6 +1,6 @@
 from plural.core.errors import Invalid, NotFound
 from plural.protocol.commands import MAX_MENTIONS, ChatSend
-from plural.protocol.events import ChatPosted, Event, EventRecord
+from plural.protocol.events import ChatPosted
 from plural.protocol.models import Participant, Role, SessionState
 
 
@@ -31,24 +31,3 @@ def post(
         to=to,
         mentions=tuple(mentions),
     )
-
-
-def visible_to(event: Event, viewer_id: str) -> bool:
-    if isinstance(event, ChatPosted) and event.to is not None:
-        return viewer_id in (event.author_id, event.to)
-    return True
-
-
-def record_visible_to(record: EventRecord, viewer_id: str) -> bool:
-    return visible_to(record.event, viewer_id)
-
-
-def state_for(state: SessionState, viewer_id: str) -> SessionState:
-    chat = tuple(
-        entry
-        for entry in state.chat
-        if entry.to is None or viewer_id in (entry.author_id, entry.to)
-    )
-    if len(chat) == len(state.chat):
-        return state
-    return state.model_copy(update={"chat": chat})

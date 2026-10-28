@@ -50,6 +50,16 @@ export type PermissionMode = "default" | "accept_edits" | "plan" | "auto";
 export type SkillScope = "project" | "global";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AdmissionMode".
+ */
+export type AdmissionMode = "approve" | "open";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinDecision".
+ */
+export type JoinDecision = "allow" | "viewer" | "deny" | "expired" | "gone" | "revoked";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "DequeueReason".
  */
 export type DequeueReason = "delivered" | "cancelled" | "dropped";
@@ -106,6 +116,11 @@ export interface EventsSchema {
     | SkillsChanged
     | SkillsFound
     | AgentChanged
+    | AdmissionChanged
+    | JoinRequested
+    | JoinResolved
+    | JoinPending
+    | JoinRefused
     | PromptDequeued
     | ParticipantTyping
     | ChatPosted
@@ -269,6 +284,58 @@ export interface SkillHit {
 export interface AgentChanged {
   agent: string;
   type: "agent.changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AdmissionChanged".
+ */
+export interface AdmissionChanged {
+  mode: AdmissionMode;
+  type: "link.admission_changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinRequested".
+ */
+export interface JoinRequested {
+  request: JoinRequestView;
+  type: "join.requested";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinRequestView".
+ */
+export interface JoinRequestView {
+  client: string;
+  id: string;
+  name: string;
+  requested_at: string;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinResolved".
+ */
+export interface JoinResolved {
+  decided_by: string | null;
+  decision: JoinDecision;
+  request_id: string;
+  type: "join.resolved";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinPending".
+ */
+export interface JoinPending {
+  type: "session.pending";
+  waiting: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinRefused".
+ */
+export interface JoinRefused {
+  reason: string;
+  type: "session.refused";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -619,6 +686,7 @@ export interface SessionSnapshot {
  * via the `definition` "SessionState".
  */
 export interface SessionState {
+  admission: "approve" | "open";
   agent: string;
   approvals: {
     [k: string]: ApprovalView;
@@ -628,6 +696,9 @@ export interface SessionState {
   };
   chat: ChatEntry[];
   context: ContextView | null;
+  join_requests: {
+    [k: string]: JoinRequestView;
+  };
   last_seq: number;
   mcp: McpServerView[];
   participants: {
@@ -695,8 +766,9 @@ export interface TranscriptEntry {
  */
 export interface InviteCreated {
   code: string;
-  expires_at: string;
+  expires_at: string | null;
   link: string;
+  reusable: boolean;
   role: Role;
   type: "invite.created";
 }
@@ -725,6 +797,11 @@ export interface EventRecord {
     | SkillsChanged
     | SkillsFound
     | AgentChanged
+    | AdmissionChanged
+    | JoinRequested
+    | JoinResolved
+    | JoinPending
+    | JoinRefused
     | PromptDequeued
     | ParticipantTyping
     | ChatPosted

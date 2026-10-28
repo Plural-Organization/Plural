@@ -1,3 +1,4 @@
+import hmac
 import secrets
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -37,3 +38,24 @@ class InviteBook:
         if invite is None or invite.expires_at <= self._clock.now():
             raise Unauthorized("invite is invalid or expired")
         return invite
+
+
+class RoomLink:
+    def __init__(self, *, code: str, link_base: str) -> None:
+        self._code = code
+        self._link_base = link_base
+
+    @property
+    def code(self) -> str:
+        return self._code
+
+    @property
+    def link(self) -> str:
+        return f"{self._link_base}?join={self._code}"
+
+    def matches(self, candidate: str) -> bool:
+        return hmac.compare_digest(candidate.encode(), self._code.encode())
+
+    def rotate(self) -> str:
+        self._code = secrets.token_urlsafe(18)
+        return self._code

@@ -1,5 +1,28 @@
 {
   "$defs": {
+    "AdmissionMode": {
+      "enum": [
+        "approve",
+        "open"
+      ],
+      "type": "string"
+    },
+    "AdmissionSet": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/AdmissionMode"
+        },
+        "type": {
+          "const": "link.set_admission",
+          "default": "link.set_admission",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
     "ApprovalDecision": {
       "enum": [
         "once",
@@ -155,6 +178,10 @@
     },
     "InviteCreate": {
       "properties": {
+        "reusable": {
+          "default": false,
+          "type": "boolean"
+        },
         "role": {
           "$ref": "#/$defs/Role",
           "default": "participant"
@@ -168,6 +195,41 @@
         "type": {
           "const": "invite.create",
           "default": "invite.create",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "JoinDecide": {
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow",
+            "viewer",
+            "deny"
+          ],
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "join.decide",
+          "default": "join.decide",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "LinkRevoke": {
+      "properties": {
+        "type": {
+          "const": "link.revoke",
+          "default": "link.revoke",
           "type": "string"
         }
       },
@@ -561,6 +623,17 @@
           ],
           "default": null
         },
+        "join": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "name": {
           "anyOf": [
             {
@@ -700,6 +773,9 @@
           "file.attach": "#/$defs/FileAttach",
           "history.get": "#/$defs/HistoryGet",
           "invite.create": "#/$defs/InviteCreate",
+          "join.decide": "#/$defs/JoinDecide",
+          "link.revoke": "#/$defs/LinkRevoke",
+          "link.set_admission": "#/$defs/AdmissionSet",
           "mcp.add": "#/$defs/McpAdd",
           "mcp.import": "#/$defs/McpImport",
           "mcp.remove": "#/$defs/McpRemove",
@@ -747,6 +823,15 @@
         },
         {
           "$ref": "#/$defs/InviteCreate"
+        },
+        {
+          "$ref": "#/$defs/JoinDecide"
+        },
+        {
+          "$ref": "#/$defs/LinkRevoke"
+        },
+        {
+          "$ref": "#/$defs/AdmissionSet"
         },
         {
           "$ref": "#/$defs/ParticipantSetRole"

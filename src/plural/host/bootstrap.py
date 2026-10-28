@@ -1,5 +1,6 @@
 import asyncio
 import os
+import secrets
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -37,20 +38,19 @@ from plural.host.attachments import AttachmentVault
 from plural.host.config import HostSettings
 from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
-from plural.host.invites import InviteBook
+from plural.host.invites import InviteBook, RoomLink
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.publisher import Publisher
 from plural.host.system import SystemClock, UlidGenerator
 from plural.host.transport.base import HostTransport
 from plural.host.transport.direct import DirectTransport
 from plural.host.transport.relay_link import RelayLink
-from plural.protocol.models import Participant, Role
+from plural.protocol.models import HOST_PARTICIPANT_ID, Participant, Role
 from plural.security.keys import load_or_create_host_key
 from plural.security.secrets import Redactor
 from plural.security.tokens import TokenSigner
 from plural.storage.sqlite_store import SqliteEventStore
 
-HOST_PARTICIPANT_ID = "p_host"
 KEY_VARIABLES = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
 LOCAL_SERVER_KEY = "not-needed"
 
@@ -68,6 +68,7 @@ class Host:
     store: SqliteEventStore
     agent_run: AgentRun
     invites: InviteBook
+    room_link: RoomLink
     host_token: str
     host_link: str
     mcp: McpHub | None = None
@@ -258,10 +259,16 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     )
     room_url = settings.room_url(room)
     invites = InviteBook(clock=clock, link_base=room_url)
+    link_code = await store.meta("room_link")
+    if link_code is None:
+        link_code = secrets.token_urlsafe(18)
+        await store.set_meta("room_link", link_code)
+    room_link = RoomLink(code=link_code, link_base=room_url)
     gateway = Gateway(
         room=room,
         signer=signer,
         invites=invites,
+        link=room_link,
         ids=ids,
         clock=clock,
         token_ttl_s=settings.token_ttl_s,
@@ -274,6 +281,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         publisher=Publisher(room=room, ids=ids, clock=clock),
         gateway=gateway,
         invites=invites,
+        link=room_link,
         agent_run=agent_run,
         approval_registry=registry,
         gate=gate,
@@ -287,10 +295,14 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         max_attachment_bytes=settings.max_attachment_bytes,
         max_image_bytes=settings.max_image_bytes,
         prompt_mode=settings.prompt_mode,
+        admission=settings.admission,
         skills=skills,
         mcp=mcp,
         typing_ttl_s=settings.typing_ttl_s,
         agent_label=settings.agent_label(),
+        join_timeout_s=settings.join_timeout_s,
+        max_pending_joins=settings.max_pending_joins,
+        max_participants=settings.max_participants,
     )
     await actor.start()
     transport: HostTransport = (
@@ -307,6 +319,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         store=store,
         agent_run=agent_run,
         invites=invites,
+        room_link=room_link,
         host_token=host_token,
         host_link=f"{room_url}?token={host_token}",
         mcp=mcp,

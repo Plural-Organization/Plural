@@ -1,5 +1,29 @@
 {
   "$defs": {
+    "AdmissionChanged": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/AdmissionMode"
+        },
+        "type": {
+          "const": "link.admission_changed",
+          "default": "link.admission_changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "AdmissionMode": {
+      "enum": [
+        "approve",
+        "open"
+      ],
+      "type": "string"
+    },
     "AgentChanged": {
       "properties": {
         "agent": {
@@ -554,6 +578,9 @@
               "context.usage": "#/$defs/ContextUsage",
               "error": "#/$defs/ErrorRaised",
               "invite.created": "#/$defs/InviteCreated",
+              "join.requested": "#/$defs/JoinRequested",
+              "join.resolved": "#/$defs/JoinResolved",
+              "link.admission_changed": "#/$defs/AdmissionChanged",
               "mcp.changed": "#/$defs/McpChanged",
               "message.delta": "#/$defs/MessageDelta",
               "message.ended": "#/$defs/MessageEnded",
@@ -572,8 +599,10 @@
               "proposal.rejected": "#/$defs/ProposalRejected",
               "run.ended": "#/$defs/RunEnded",
               "run.started": "#/$defs/RunStarted",
+              "session.pending": "#/$defs/JoinPending",
               "session.permission_mode_changed": "#/$defs/PermissionModeChanged",
               "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
+              "session.refused": "#/$defs/JoinRefused",
               "session.snapshot": "#/$defs/SessionSnapshot",
               "session.welcome": "#/$defs/SessionWelcome",
               "skills.changed": "#/$defs/SkillsChanged",
@@ -611,6 +640,21 @@
             },
             {
               "$ref": "#/$defs/AgentChanged"
+            },
+            {
+              "$ref": "#/$defs/AdmissionChanged"
+            },
+            {
+              "$ref": "#/$defs/JoinRequested"
+            },
+            {
+              "$ref": "#/$defs/JoinResolved"
+            },
+            {
+              "$ref": "#/$defs/JoinPending"
+            },
+            {
+              "$ref": "#/$defs/JoinRefused"
             },
             {
               "$ref": "#/$defs/PromptDequeued"
@@ -724,11 +768,23 @@
           "type": "string"
         },
         "expires_at": {
-          "format": "date-time",
-          "type": "string"
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "link": {
           "type": "string"
+        },
+        "reusable": {
+          "default": false,
+          "type": "boolean"
         },
         "role": {
           "$ref": "#/$defs/Role"
@@ -744,7 +800,128 @@
         "code",
         "role",
         "expires_at",
-        "link"
+        "link",
+        "reusable"
+      ],
+      "type": "object"
+    },
+    "JoinDecision": {
+      "enum": [
+        "allow",
+        "viewer",
+        "deny",
+        "expired",
+        "gone",
+        "revoked"
+      ],
+      "type": "string"
+    },
+    "JoinPending": {
+      "properties": {
+        "type": {
+          "const": "session.pending",
+          "default": "session.pending",
+          "type": "string"
+        },
+        "waiting": {
+          "default": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "waiting"
+      ],
+      "type": "object"
+    },
+    "JoinRefused": {
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "type": {
+          "const": "session.refused",
+          "default": "session.refused",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "JoinRequestView": {
+      "properties": {
+        "client": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "client",
+        "requested_at"
+      ],
+      "type": "object"
+    },
+    "JoinRequested": {
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/JoinRequestView"
+        },
+        "type": {
+          "const": "join.requested",
+          "default": "join.requested",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request"
+      ],
+      "type": "object"
+    },
+    "JoinResolved": {
+      "properties": {
+        "decided_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "decision": {
+          "$ref": "#/$defs/JoinDecision"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "join.resolved",
+          "default": "join.resolved",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "decision",
+        "decided_by"
       ],
       "type": "object"
     },
@@ -1478,6 +1655,10 @@
     },
     "SessionState": {
       "properties": {
+        "admission": {
+          "$ref": "#/$defs/AdmissionMode",
+          "default": "approve"
+        },
         "agent": {
           "default": "",
           "type": "string"
@@ -1511,6 +1692,12 @@
             }
           ],
           "default": null
+        },
+        "join_requests": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JoinRequestView"
+          },
+          "type": "object"
         },
         "last_seq": {
           "default": 0,
@@ -1598,6 +1785,8 @@
         "last_seq",
         "prompt_mode",
         "permission_mode",
+        "admission",
+        "join_requests",
         "participants",
         "proposals",
         "approvals",
@@ -1987,6 +2176,9 @@
           "context.usage": "#/$defs/ContextUsage",
           "error": "#/$defs/ErrorRaised",
           "invite.created": "#/$defs/InviteCreated",
+          "join.requested": "#/$defs/JoinRequested",
+          "join.resolved": "#/$defs/JoinResolved",
+          "link.admission_changed": "#/$defs/AdmissionChanged",
           "mcp.changed": "#/$defs/McpChanged",
           "message.delta": "#/$defs/MessageDelta",
           "message.ended": "#/$defs/MessageEnded",
@@ -2005,8 +2197,10 @@
           "proposal.rejected": "#/$defs/ProposalRejected",
           "run.ended": "#/$defs/RunEnded",
           "run.started": "#/$defs/RunStarted",
+          "session.pending": "#/$defs/JoinPending",
           "session.permission_mode_changed": "#/$defs/PermissionModeChanged",
           "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
+          "session.refused": "#/$defs/JoinRefused",
           "session.snapshot": "#/$defs/SessionSnapshot",
           "session.welcome": "#/$defs/SessionWelcome",
           "skills.changed": "#/$defs/SkillsChanged",
@@ -2044,6 +2238,21 @@
         },
         {
           "$ref": "#/$defs/AgentChanged"
+        },
+        {
+          "$ref": "#/$defs/AdmissionChanged"
+        },
+        {
+          "$ref": "#/$defs/JoinRequested"
+        },
+        {
+          "$ref": "#/$defs/JoinResolved"
+        },
+        {
+          "$ref": "#/$defs/JoinPending"
+        },
+        {
+          "$ref": "#/$defs/JoinRefused"
         },
         {
           "$ref": "#/$defs/PromptDequeued"

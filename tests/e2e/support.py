@@ -61,7 +61,7 @@ class Watcher:
 
     async def stop(self) -> None:
         self._task.cancel()
-        with suppress(asyncio.CancelledError):
+        with suppress(asyncio.CancelledError, CommandRejected):
             await self._task
 
 

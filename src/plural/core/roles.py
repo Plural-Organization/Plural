@@ -4,6 +4,7 @@ from typing import Final
 
 from plural.core.errors import Forbidden
 from plural.protocol.commands import (
+    AdmissionSet,
     ApprovalRespond,
     ChatSend,
     Command,
@@ -11,6 +12,8 @@ from plural.protocol.commands import (
     FileAttach,
     HistoryGet,
     InviteCreate,
+    JoinDecide,
+    LinkRevoke,
     McpAdd,
     McpImport,
     McpRemove,
@@ -50,6 +53,9 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         RunAbort: HOST_ONLY,
         ContextCompact: HOST_ONLY,
         InviteCreate: HOST_ONLY,
+        JoinDecide: HOST_ONLY,
+        LinkRevoke: HOST_ONLY,
+        AdmissionSet: HOST_ONLY,
         ParticipantSetRole: HOST_ONLY,
         ParticipantRevoke: HOST_ONLY,
         PolicyAdd: HOST_ONLY,

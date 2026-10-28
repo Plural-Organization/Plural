@@ -12,7 +12,7 @@ from tests.e2e.support import free_port
 from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed
 
-from plural.protocol.relay import RelayOpen
+from plural.protocol.relay import RelayClosed, RelayFrame, RelayOpen
 from plural.relay.app import create_app
 from plural.relay.limits import PeerGate, RelayLimits
 from plural.relay.rooms import CLOSE_RATE_LIMITED, CLOSE_ROOM_TAKEN
@@ -227,3 +227,17 @@ def test_idle_addresses_are_forgotten() -> None:
         gate.release(f"10.0.{index // 250}.{index % 250}", host=False)
         clock.advance(10)
     assert len(gate._peers) < 1100  # pyright: ignore[reportPrivateUsage]
+
+
+async def test_a_last_message_reaches_the_guest_before_the_relay_closes_it() -> None:
+    async with running_relay(RelayLimits()) as relay:
+        host = await relay.host("r_last")
+        await settle(relay, 1)
+        guest = await relay.guest("r_last")
+        await guest.send("hello")
+        asked = RelayFrame.model_validate_json(await host.recv())
+        await host.send(RelayFrame(conn=asked.conn, data="the reason").model_dump_json())
+        await host.send(RelayClosed(conn=asked.conn).model_dump_json())
+
+        assert await guest.recv() == "the reason"
+        assert await closed_with(guest) == 1000

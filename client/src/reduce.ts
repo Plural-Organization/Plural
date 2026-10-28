@@ -23,6 +23,8 @@ export function emptyState(): SessionState {
     run: null,
     transcript: [],
     chat: [],
+    admission: "approve",
+    join_requests: {},
   };
 }
 
@@ -49,6 +51,12 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return patchParticipant(state, event.participant_id, { role: event.role });
     case "participant.revoked":
       return { ...state, participants: without(state.participants, event.participant_id) };
+    case "link.admission_changed":
+      return { ...state, admission: event.mode };
+    case "join.requested":
+      return { ...state, join_requests: { ...state.join_requests, [event.request.id]: event.request } };
+    case "join.resolved":
+      return { ...state, join_requests: without(state.join_requests, event.request_id) };
     case "chat.posted":
       return {
         ...state,

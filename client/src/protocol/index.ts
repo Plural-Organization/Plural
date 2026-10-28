@@ -11,6 +11,7 @@ export type {
   ApprovalView,
   AttachmentMeta,
   ChatEntry,
+  JoinRequestView,
   ContextView,
   Envelope,
   ErrorCode,

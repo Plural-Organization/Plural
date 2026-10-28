@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from plural.core import chat
+from plural.core import chat, visibility
 from plural.core.errors import Forbidden, Invalid, NotFound
 from plural.core.roles import authorize
 from plural.core.state import CHAT_LIMIT, reduce
@@ -104,13 +104,15 @@ def test_a_message_cannot_mention_a_crowd() -> None:
 def test_who_may_see_a_message() -> None:
     private = ChatPosted(message_id="c", author_id="p_alia", text="x", to="p_bek")
     team = ChatPosted(message_id="c", author_id="p_alia", text="x")
-    assert [chat.visible_to(private, who) for who in ("p_alia", "p_bek", "p_host", "p_view")] == [
+    assert [
+        visibility.visible_to(private, who) for who in ("p_alia", "p_bek", "p_host", "p_view")
+    ] == [
         True,
         True,
         False,
         False,
     ]
-    assert all(chat.visible_to(team, who) for who in ("p_alia", "p_bek", "p_host", "p_view"))
+    assert all(visibility.visible_to(team, who) for who in ("p_alia", "p_bek", "p_host", "p_view"))
 
 
 def test_the_state_sent_to_someone_holds_only_what_they_may_read() -> None:
@@ -125,13 +127,13 @@ def test_the_state_sent_to_someone_holds_only_what_they_may_read() -> None:
     ):
         state = reduce(state, record(seq, event))
     assert [entry.text for entry in state.chat] == ["team", "to bek", "to alia"]
-    assert [entry.text for entry in chat.state_for(state, "p_host").chat] == ["team"]
-    assert [entry.text for entry in chat.state_for(state, "p_bek").chat] == [
+    assert [entry.text for entry in visibility.state_for(state, "p_host").chat] == ["team"]
+    assert [entry.text for entry in visibility.state_for(state, "p_bek").chat] == [
         "team",
         "to bek",
         "to alia",
     ]
-    assert chat.state_for(state, "p_host").participants == state.participants
+    assert visibility.state_for(state, "p_host").participants == state.participants
 
 
 def test_the_chat_in_the_state_is_capped() -> None:

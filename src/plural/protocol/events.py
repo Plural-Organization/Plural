@@ -5,12 +5,15 @@ from pydantic import Field
 
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.models import (
+    AdmissionMode,
     ApprovalDecision,
     ApprovalView,
     AttachmentMeta,
     ContextView,
     Delivery,
     DequeueReason,
+    JoinDecision,
+    JoinRequestView,
     McpServerView,
     Model,
     Participant,
@@ -84,6 +87,33 @@ class SkillsFound(TransientEvent):
 class AgentChanged(EventBase):
     type: Literal["agent.changed"] = "agent.changed"
     agent: str
+
+
+class AdmissionChanged(EventBase):
+    type: Literal["link.admission_changed"] = "link.admission_changed"
+    mode: AdmissionMode
+
+
+class JoinRequested(EventBase):
+    type: Literal["join.requested"] = "join.requested"
+    request: JoinRequestView
+
+
+class JoinResolved(EventBase):
+    type: Literal["join.resolved"] = "join.resolved"
+    request_id: str
+    decision: JoinDecision
+    decided_by: str | None = None
+
+
+class JoinPending(TransientEvent):
+    type: Literal["session.pending"] = "session.pending"
+    waiting: int = 1
+
+
+class JoinRefused(TransientEvent):
+    type: Literal["session.refused"] = "session.refused"
+    reason: str
 
 
 class PromptDequeued(EventBase):
@@ -262,8 +292,9 @@ class InviteCreated(TransientEvent):
     type: Literal["invite.created"] = "invite.created"
     code: str
     role: Role
-    expires_at: datetime
+    expires_at: datetime | None = None
     link: str
+    reusable: bool = False
 
 
 class ErrorRaised(TransientEvent):
@@ -282,6 +313,11 @@ Event = Annotated[
     | SkillsChanged
     | SkillsFound
     | AgentChanged
+    | AdmissionChanged
+    | JoinRequested
+    | JoinResolved
+    | JoinPending
+    | JoinRefused
     | PromptDequeued
     | ParticipantTyping
     | ChatPosted

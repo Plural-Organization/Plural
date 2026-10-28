@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import Self
+from typing import Final, Self
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
@@ -38,6 +38,23 @@ class PermissionMode(StrEnum):
     ACCEPT_EDITS = "accept_edits"
     PLAN = "plan"
     AUTO = "auto"
+
+
+HOST_PARTICIPANT_ID: Final = "p_host"
+
+
+class AdmissionMode(StrEnum):
+    APPROVE = "approve"
+    OPEN = "open"
+
+
+class JoinDecision(StrEnum):
+    ALLOW = "allow"
+    VIEWER = "viewer"
+    DENY = "deny"
+    EXPIRED = "expired"
+    GONE = "gone"
+    REVOKED = "revoked"
 
 
 class SkillScope(StrEnum):
@@ -240,10 +257,19 @@ class ChatEntry(Model):
     mentions: tuple[str, ...] = ()
 
 
+class JoinRequestView(Model):
+    id: str
+    name: str
+    client: str
+    requested_at: datetime
+
+
 class SessionState(Model):
     last_seq: int = 0
     prompt_mode: PromptMode = PromptMode.OPEN
     permission_mode: PermissionMode = PermissionMode.DEFAULT
+    admission: AdmissionMode = AdmissionMode.APPROVE
+    join_requests: dict[str, JoinRequestView] = Field(default_factory=dict[str, JoinRequestView])
     participants: dict[str, Participant] = Field(default_factory=dict[str, Participant])
     proposals: dict[str, ProposalView] = Field(default_factory=dict[str, ProposalView])
     approvals: dict[str, ApprovalView] = Field(default_factory=dict[str, ApprovalView])

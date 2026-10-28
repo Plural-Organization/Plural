@@ -27,7 +27,7 @@ log = structlog.get_logger(__name__)
 class Outbox:
     def __init__(self, socket: WebSocket, size: int) -> None:
         self._socket = socket
-        self._queue: asyncio.Queue[str] = asyncio.Queue(maxsize=size)
+        self._queue: asyncio.Queue[str | int] = asyncio.Queue(maxsize=size)
 
     def push(self, text: str) -> bool:
         try:
@@ -39,11 +39,18 @@ class Outbox:
     async def pump(self) -> None:
         with suppress(WebSocketDisconnect, RuntimeError):
             while True:
-                await self._socket.send_text(await self._queue.get())
+                item = await self._queue.get()
+                if isinstance(item, int):
+                    await self._socket.close(item)
+                    return
+                await self._socket.send_text(item)
 
     async def close(self, code: int) -> None:
-        with suppress(RuntimeError):
-            await self._socket.close(code)
+        try:
+            self._queue.put_nowait(code)
+        except asyncio.QueueFull:
+            with suppress(RuntimeError):
+                await self._socket.close(code)
 
 
 @dataclass(slots=True)

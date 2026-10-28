@@ -17,6 +17,11 @@ export type ProposalDecision = "approve" | "reject";
 export type ApprovalDecision = "once" | "always" | "reject" | "block";
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "AdmissionMode".
+ */
+export type AdmissionMode = "approve" | "open";
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "Role".
  */
 export type Role = "host" | "participant" | "viewer";
@@ -56,6 +61,9 @@ export interface CommandsSchema {
     | ApprovalRespond
     | RunAbort
     | InviteCreate
+    | JoinDecide
+    | LinkRevoke
+    | AdmissionSet
     | ParticipantSetRole
     | ParticipantRevoke
     | ContextCompact
@@ -82,6 +90,7 @@ export interface CommandsSchema {
 export interface SessionHello {
   client: ClientInfo;
   invite?: string | null;
+  join?: string | null;
   name?: string | null;
   since?: number | null;
   token?: string | null;
@@ -155,9 +164,34 @@ export interface RunAbort {
  * via the `definition` "InviteCreate".
  */
 export interface InviteCreate {
+  reusable?: boolean;
   role?: "host" | "participant" | "viewer";
   ttl_s?: number;
   type?: "invite.create";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "JoinDecide".
+ */
+export interface JoinDecide {
+  decision: "allow" | "viewer" | "deny";
+  request_id: string;
+  type?: "join.decide";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "LinkRevoke".
+ */
+export interface LinkRevoke {
+  type?: "link.revoke";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "AdmissionSet".
+ */
+export interface AdmissionSet {
+  mode: AdmissionMode;
+  type?: "link.set_admission";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

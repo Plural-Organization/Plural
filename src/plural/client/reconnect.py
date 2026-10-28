@@ -11,8 +11,8 @@ from plural.client.connection import CommandRejected, Wire
 from plural.client.projection import Projection
 from plural.protocol.codec import ProtocolError, decode_event, decode_record
 from plural.protocol.commands import ClientInfo, Command, SessionHello
-from plural.protocol.envelope import Envelope, ErrorCode
-from plural.protocol.events import Event, SessionSnapshot, SessionWelcome
+from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo
+from plural.protocol.events import Event, JoinRefused, SessionSnapshot, SessionWelcome
 
 INITIAL_DELAY_S: Final = 0.25
 MAX_DELAY_S: Final = 2.0
@@ -25,6 +25,7 @@ class JoinLink:
     room: str
     invite: str | None = None
     token: str | None = None
+    join: str | None = None
 
     @classmethod
     def parse(cls, raw: str) -> Self:
@@ -40,6 +41,7 @@ class JoinLink:
             room=room,
             invite=query.get("invite", [None])[0],
             token=query.get("token", [None])[0],
+            join=query.get("join", [None])[0],
         )
 
 
@@ -84,6 +86,7 @@ class SessionClient:
             client=self._client,
             name=self._name,
             invite=None if self._token else self._link.invite,
+            join=None if self._token else self._link.join,
             token=self._token,
             since=self.projection.state.last_seq if self.projection.ready else None,
         )
@@ -97,8 +100,11 @@ class SessionClient:
         if record is not None:
             return event if self.projection.apply(record) else None
         match event:
+            case JoinRefused(reason=reason):
+                raise CommandRejected(ErrorInfo(code=ErrorCode.FORBIDDEN, message=reason))
             case SessionWelcome(token=token, participant=participant, base_policy=base):
                 self._token = token
+                self.projection.waiting = False
                 self.projection.me_id = participant.id
                 self.projection.base_policy = base
             case SessionSnapshot(state=state, streaming=streaming):

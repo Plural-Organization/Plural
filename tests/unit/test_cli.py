@@ -114,7 +114,7 @@ def test_plain_links_keep_each_link_on_one_line() -> None:
     lines = main.plain_links("r_1", "wss://relay.example.com/r_1?invite=a", host_link).splitlines()
     assert lines == [
         "room r_1",
-        "guest link (one-time): wss://relay.example.com/r_1?invite=a",
+        "room link (the host lets people in): wss://relay.example.com/r_1?invite=a",
         f"host link: {host_link}",
     ]
 

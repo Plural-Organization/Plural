@@ -3,6 +3,7 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from plural.protocol.models import (
+    AdmissionMode,
     ApprovalDecision,
     Delivery,
     Model,
@@ -29,6 +30,7 @@ class SessionHello(Model):
     client: ClientInfo
     name: str | None = Field(default=None, min_length=1, max_length=40)
     invite: str | None = None
+    join: str | None = None
     token: str | None = None
     since: int | None = Field(default=None, ge=0)
 
@@ -74,6 +76,22 @@ class InviteCreate(Model):
     type: Literal["invite.create"] = "invite.create"
     role: Role = Role.PARTICIPANT
     ttl_s: int = Field(default=3600, ge=60, le=86_400)
+    reusable: bool = False
+
+
+class JoinDecide(Model):
+    type: Literal["join.decide"] = "join.decide"
+    request_id: str
+    decision: Literal["allow", "viewer", "deny"]
+
+
+class LinkRevoke(Model):
+    type: Literal["link.revoke"] = "link.revoke"
+
+
+class AdmissionSet(Model):
+    type: Literal["link.set_admission"] = "link.set_admission"
+    mode: AdmissionMode
 
 
 class ParticipantSetRole(Model):
@@ -186,6 +204,9 @@ Command = Annotated[
     | ApprovalRespond
     | RunAbort
     | InviteCreate
+    | JoinDecide
+    | LinkRevoke
+    | AdmissionSet
     | ParticipantSetRole
     | ParticipantRevoke
     | ContextCompact
