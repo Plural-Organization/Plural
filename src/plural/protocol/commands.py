@@ -11,6 +11,7 @@ from plural.protocol.models import (
     PromptMode,
     ProposalDecision,
     Role,
+    SkillScope,
 )
 
 MAX_PROMPT_CHARS = 32_000
@@ -91,6 +92,53 @@ class PermissionModeSet(Model):
     mode: PermissionMode
 
 
+class SkillsSearch(Model):
+    type: Literal["skills.search"] = "skills.search"
+    query: str = Field(min_length=1, max_length=100)
+
+
+class SkillsInstall(Model):
+    type: Literal["skills.install"] = "skills.install"
+    package: str = Field(min_length=3, max_length=200)
+    scope: SkillScope = SkillScope.PROJECT
+
+
+class SkillsRemove(Model):
+    type: Literal["skills.remove"] = "skills.remove"
+    name: str = Field(min_length=1, max_length=64)
+
+
+class McpAdd(Model):
+    type: Literal["mcp.add"] = "mcp.add"
+    name: str = Field(min_length=1, max_length=32)
+    command: str | None = Field(default=None, max_length=500)
+    args: tuple[str, ...] = ()
+    url: str | None = Field(default=None, max_length=500)
+    env: dict[str, str] = Field(default_factory=dict[str, str])
+    headers: dict[str, str] = Field(default_factory=dict[str, str])
+    scope: SkillScope = SkillScope.PROJECT
+
+
+class McpRemove(Model):
+    type: Literal["mcp.remove"] = "mcp.remove"
+    name: str = Field(min_length=1, max_length=32)
+
+
+class McpToggle(Model):
+    type: Literal["mcp.toggle"] = "mcp.toggle"
+    name: str = Field(min_length=1, max_length=32)
+    enabled: bool
+
+
+class McpRestart(Model):
+    type: Literal["mcp.restart"] = "mcp.restart"
+    name: str = Field(min_length=1, max_length=32)
+
+
+class McpImport(Model):
+    type: Literal["mcp.import"] = "mcp.import"
+
+
 class TypingSet(Model):
     type: Literal["presence.typing"] = "presence.typing"
     typing: bool
@@ -133,6 +181,14 @@ Command = Annotated[
     | ContextCompact
     | PromptModeSet
     | PermissionModeSet
+    | SkillsSearch
+    | SkillsInstall
+    | SkillsRemove
+    | McpAdd
+    | McpRemove
+    | McpToggle
+    | McpRestart
+    | McpImport
     | TypingSet
     | QueueCancel
     | PolicyAdd

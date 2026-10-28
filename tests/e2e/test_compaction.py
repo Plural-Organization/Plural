@@ -8,7 +8,7 @@ from plural.agent.providers.base import UsageReport
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import ContextCompact, PromptSubmit
-from plural.protocol.events import ContextCompacted, RunEnded
+from plural.protocol.events import ContextCompacted, ContextCompacting, ContextUsage, RunEnded
 from plural.protocol.models import EntryKind, Usage
 from tests.e2e.support import running_session
 
@@ -69,3 +69,39 @@ async def test_host_can_request_compaction_and_guests_cannot(tmp_path: Path) -> 
         compacted = await owner.next(ContextCompacted)
         assert compacted.summary == "S"
         assert provider.requests[1].messages[-1].content == SUMMARY_PROMPT
+
+
+async def test_an_idle_compaction_runs_now_and_everyone_watches_it(tmp_path: Path) -> None:
+    provider = FakeProvider(
+        [
+            (UsageReport(usage=Usage(input_tokens=400)), *reply("first")),
+            reply("<summary>talked about the repo</summary>"),
+        ]
+    )
+    async with running_session(
+        tmp_path, relayed=False, provider=provider, overrides=SMALL_WINDOW
+    ) as session:
+        owner = await session.owner()
+        guest = await session.guest("Alia")
+        await owner.client.send(PromptSubmit(text="one"))
+        usage = await guest.next(ContextUsage)
+        assert (usage.context.tokens, usage.context.window) == (400, 1000)
+        await guest.next(RunEnded)
+
+        await owner.client.send(ContextCompact())
+        compacting = await guest.next(ContextCompacting)
+        assert compacting.tokens_before == 400
+        assert (await guest.next(ContextCompacted)).summary == "talked about the repo"
+        after = await guest.next(ContextUsage)
+        assert after.context.tokens < 400
+        ended = await guest.next(RunEnded)
+        assert ended.error is None
+        assert guest.client.projection.state.context == after.context
+
+
+async def test_there_is_nothing_to_compact_in_a_new_session(tmp_path: Path) -> None:
+    async with running_session(tmp_path, relayed=False, provider=FakeProvider()) as session:
+        owner = await session.owner()
+        with pytest.raises(CommandRejected) as rejected:
+            await owner.client.send(ContextCompact())
+        assert "nothing to compact" in rejected.value.error.message

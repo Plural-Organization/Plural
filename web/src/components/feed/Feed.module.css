@@ -1,0 +1,12 @@
+.feed { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.msg { display: grid; gap: 4px; min-width: 0; }
+.msg header { display: flex; gap: 10px; align-items: baseline; font: 12px var(--font-mono); }
+.who { font-weight: 600; }
+.user { border-left: 2px solid var(--who, var(--accent)); padding-left: 12px; }
+.user .who { color: var(--who, var(--accent)); }
+.text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.notice { font: 13px var(--font-mono); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
+.ok { color: var(--ok); }
+.warn { color: var(--warn); }
+.danger { color: var(--danger); }
+.accent { color: var(--fg); background: var(--panel); border: 1px solid var(--line); padding: 10px 12px; }

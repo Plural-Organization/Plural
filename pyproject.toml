@@ -21,6 +21,7 @@ dependencies = [
   "aiosqlite>=0.21",
   "anthropic>=2.3.0",
   "cryptography>=44",
+  "mcp>=1.20",
   "openai>=3.37.0",
   "pydantic>=2.11",
   "pydantic-settings>=2.8",

@@ -16,6 +16,7 @@ from plural.agent.providers.base import (
     LlmEvent,
     LlmMessage,
     LlmRequest,
+    ProviderActivity,
     ProviderError,
     Stop,
     TextDelta,
@@ -346,22 +347,18 @@ class CodexCliProvider:
             raise ProviderError("Codex app server is not running")
         read_task = asyncio.create_task(self._incoming.get())
         cancel_task = asyncio.create_task(cancel.wait())
-        done, _ = await asyncio.wait(
-            {read_task, cancel_task},
-            timeout=RPC_TIMEOUT_S,
-            return_when=asyncio.FIRST_COMPLETED,
-        )
-        if cancel_task in done:
-            read_task.cancel()
-            await asyncio.gather(read_task, return_exceptions=True)
-            raise _Cancelled
-        cancel_task.cancel()
-        await asyncio.gather(cancel_task, return_exceptions=True)
-        if not done:
-            read_task.cancel()
-            await asyncio.gather(read_task, return_exceptions=True)
-            raise ProviderError("Codex app server timed out")
-        message = read_task.result()
+        try:
+            done, _ = await asyncio.wait(
+                {read_task, cancel_task}, return_when=asyncio.FIRST_COMPLETED
+            )
+            if cancel_task in done:
+                raise _Cancelled
+            message = read_task.result()
+        finally:
+            for task in (read_task, cancel_task):
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(read_task, cancel_task, return_exceptions=True)
         if message is None:
             raise ProviderError("Codex app server stopped unexpectedly")
         return message
@@ -379,18 +376,21 @@ class CodexCliProvider:
         await self._write({"id": request_id, "method": method, "params": params, "jsonrpc": "2.0"})
         deferred: list[dict[str, object]] = []
         try:
-            while True:
-                message = await self._read_incoming(cancel)
-                if message.get("id") == request_id:
-                    error = _as_dict(message.get("error"))
-                    if error is not None:
-                        detail = _as_str(error.get("message"))
-                        raise ProviderError(f"Codex app server: {detail or 'request failed'}")
-                    result = message.get("result")
-                    if not isinstance(result, dict):
-                        raise ProviderError("Codex app server returned an invalid RPC response")
-                    return cast("dict[str, object]", result)
-                deferred.append(message)
+            async with asyncio.timeout(RPC_TIMEOUT_S):
+                while True:
+                    message = await self._read_incoming(cancel)
+                    if message.get("id") == request_id:
+                        error = _as_dict(message.get("error"))
+                        if error is not None:
+                            detail = _as_str(error.get("message"))
+                            raise ProviderError(f"Codex app server: {detail or 'request failed'}")
+                        result = message.get("result")
+                        if not isinstance(result, dict):
+                            raise ProviderError("Codex app server returned an invalid RPC response")
+                        return cast("dict[str, object]", result)
+                    deferred.append(message)
+        except TimeoutError:
+            raise ProviderError(f"Codex app server timed out waiting for {method}") from None
         finally:
             self._notifications.extend(deferred)
 
@@ -501,10 +501,21 @@ class CodexCliProvider:
                     event = cast("dict[str, object]", params)
                     if method == "item/agentMessage/delta":
                         delta = event.get("delta")
-                        if isinstance(delta, str):
+                        if isinstance(delta, str) and delta:
                             text = text_stream.feed(delta)
                             if text:
                                 yield TextDelta(text=text)
+                            else:
+                                yield ProviderActivity(source=method)
+                    elif method in {
+                        "item/reasoning/summaryTextDelta",
+                        "item/reasoning/textDelta",
+                        "item/reasoning/summaryPartAdded",
+                        "item/started",
+                        "item/completed",
+                        "turn/started",
+                    }:
+                        yield ProviderActivity(source=method)
                     elif method == "turn/completed":
                         turn = _as_dict(event.get("turn"))
                         if turn is None:

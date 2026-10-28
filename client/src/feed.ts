@@ -1,4 +1,4 @@
-import { label } from "./presenter";
+import { label, shortTokens } from "./presenter";
 import type { Projection } from "./projection";
 import type { Event, Participant, Role, SessionState, ToolCallView, TranscriptEntry } from "./protocol";
 
@@ -88,6 +88,13 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
           ? "prompts are open: participants prompt the agent directly"
           : "prompts are in review: the host approves each participant prompt",
       );
+    case "skills.changed": {
+      const parts = [
+        event.added.length > 0 ? `added ${event.added.join(", ")}` : "",
+        event.removed.length > 0 ? `removed ${event.removed.join(", ")}` : "",
+      ].filter(Boolean);
+      return parts.length > 0 ? note("accent", `skills: ${parts.join(" · ")}`) : feed;
+    }
     case "prompt.dequeued":
       return event.reason === "cancelled" ? note("dim", "a queued prompt was cancelled") : feed;
     case "proposal.created":
@@ -229,7 +236,7 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
     case "policy.rule_removed":
       return note("accent", `policy - ${event.rule_id}`);
     case "context.compacted":
-      return note("dim", `context compacted (${event.tokens_before} tokens summarized)`);
+      return note("dim", `context compacted: ${shortTokens(event.tokens_before)} tokens summarized`);
     case "attachment.added":
       return note("dim", `${nameOf(event.attachment.owner_id)} attached ${event.attachment.name}`);
     case "invite.created":

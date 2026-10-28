@@ -2,7 +2,7 @@ import platform
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Final
+from typing import Final, Protocol
 
 DEFAULT_SYSTEM_PROMPT: Final = """\
 You are a coding agent in a shared Plural session. The host runs you on their machine with their \
@@ -59,11 +59,16 @@ class Environment:
         )
 
 
+class SkillCatalog(Protocol):
+    def describe(self) -> str: ...
+
+
 @dataclass(frozen=True, slots=True)
 class ContextBuilder:
     system_prompt: str = DEFAULT_SYSTEM_PROMPT
     environment: Environment | None = None
     project_notes: str | None = None
+    skills: SkillCatalog | None = None
 
     def system(self) -> str:
         parts = [self.system_prompt]
@@ -71,4 +76,6 @@ class ContextBuilder:
             parts.append(self.environment.describe())
         if self.project_notes:
             parts.append(f"# Project notes (AGENTS.md)\n{self.project_notes}")
+        if self.skills is not None:
+            parts.append(self.skills.describe())
         return "\n\n".join(parts)

@@ -1,4 +1,4 @@
-import { label, type ConnectionStatus, type Participant, type SessionState } from "@plural/client";
+import { contextMeter, label, type ConnectionStatus, type Participant, type SessionState } from "@plural/client";
 import { theme } from "../theme";
 import { Spinner } from "./Spinner";
 
@@ -32,7 +32,31 @@ export function StatusBar({ me, state, connection, inbox, focused, hint }: Statu
         {loading ? <Spinner color={dot} /> : <span fg={dot}>●</span>} {who} · <span fg={state.prompt_mode === "review" ? theme.warn : theme.dim}>{state.prompt_mode}</span>
         {names.length > 0 ? ` · with ${names.join(", ")}${extra > 0 ? ` +${extra}` : ""}` : ""}
       </text>
-      <text fg={theme.dim}>{right}</text>
+      <box flexDirection="row">
+        <ContextMeterView state={state} />
+        <text fg={theme.dim}>
+          {state.context ? "  ·  " : ""}
+          {right}
+        </text>
+      </box>
     </box>
+  );
+}
+
+const METER = 10;
+
+export function ContextMeterView({ state, width = METER }: { state: SessionState; width?: number }) {
+  const meter = contextMeter(state);
+  if (meter === null) {
+    return null;
+  }
+  const color = meter.level === "danger" ? theme.danger : meter.level === "warn" ? theme.warn : theme.ok;
+  const filled = Math.min(width, Math.round((meter.percent / 100) * width));
+  return (
+    <text fg={theme.dim}>
+      context <span fg={color}>{"▰".repeat(filled)}</span>
+      <span fg={theme.line}>{"▱".repeat(width - filled)}</span> <span fg={color}>{meter.percent}%</span>
+      {` · ${meter.tokens}/${meter.window}`}
+    </text>
   );
 }

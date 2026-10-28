@@ -13,6 +13,8 @@ from plural.agent.context import ContextBuilder
 from plural.agent.events import (
     AgentEvent,
     Compacted,
+    Compacting,
+    ContextFill,
     Delivered,
     MessageDelta,
     MessageEnd,
@@ -40,6 +42,7 @@ from plural.agent.providers.base import (
     LlmRequest,
     NativeContent,
     NativeReady,
+    ProviderActivity,
     ProviderBusy,
     ProviderError,
     Stop,
@@ -164,6 +167,27 @@ class AgentLoop:
     def request_compaction(self) -> None:
         self._compact_requested = True
 
+    def fill(self) -> ContextFill:
+        return ContextFill(
+            self._context_tokens, self._limits.context_window, self._limits.compact_at
+        )
+
+    @property
+    def can_compact(self) -> bool:
+        return len(self._conversation) >= 2
+
+    async def compact(self, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
+        """Summarize the conversation now, outside a prompt, so everyone sees it happen."""
+        self._usage = Usage()
+        yield Compacting(self._context_tokens)
+        try:
+            yield await self._compact(None, cancel)
+        except CompactionFailed as error:
+            yield RunEnd(RunEndReason.ERROR, self._usage, f"compaction failed: {error}")
+            return
+        yield self.fill()
+        yield RunEnd(RunEndReason.ABORTED if cancel.is_set() else RunEndReason.STOP, self._usage)
+
     def restore(self, conversation: Sequence[Message]) -> None:
         self._conversation = list(conversation)
         self._context_tokens = sum(_estimate_tokens(message) for message in conversation)
@@ -194,8 +218,10 @@ class AgentLoop:
         try:
             for _ in range(self._limits.max_turns):
                 if self._should_compact():
+                    yield Compacting(self._context_tokens)
                     try:
                         yield await self._compact(prompt, cancel)
+                        yield self.fill()
                     except CompactionFailed as error:
                         self._compaction_failed = True
                         log.warning("agent.compaction_failed", error=str(error))
@@ -213,6 +239,8 @@ class AgentLoop:
                             case ThinkingDelta(text=text):
                                 turn.thinking.append(text)
                                 yield MessageDelta(turn.message_id, text, thinking=True)
+                            case ProviderActivity():
+                                pass
                             case ToolCallReady(call=call):
                                 turn.calls.append(call)
                             case NativeReady(content=content):
@@ -221,6 +249,7 @@ class AgentLoop:
                                 self._usage = self._usage + delta
                                 self._context_tokens = delta.prompt_tokens
                                 self._check_compaction_helped()
+                                yield self.fill()
                             case Stop(reason=reason):
                                 turn.stop = reason
                 except ContextOverflow as error:
@@ -229,8 +258,10 @@ class AgentLoop:
                         yield RunEnd(RunEndReason.ERROR, self._usage, str(error))
                         return
                     recovering = True
+                    yield Compacting(self._context_tokens)
                     try:
                         yield await self._compact(prompt, cancel)
+                        yield self.fill()
                     except CompactionFailed as failure:
                         yield RunEnd(RunEndReason.ERROR, self._usage, f"context is full: {failure}")
                         return
@@ -305,7 +336,7 @@ class AgentLoop:
                 window=self._limits.context_window,
             )
 
-    async def _compact(self, prompt: UserTurn, cancel: asyncio.Event) -> Compacted:
+    async def _compact(self, prompt: UserTurn | None, cancel: asyncio.Event) -> Compacted:
         self._compact_requested = False
         request = LlmRequest(
             system=self._context.system(),
@@ -331,8 +362,8 @@ class AgentLoop:
         if cancel.is_set() or called or not summary:
             raise CompactionFailed("the model did not produce a summary")
         before = self._context_tokens
-        self._conversation = [SummaryTurn(text=summary), prompt]
-        self._context_tokens = 0
+        self._conversation = [SummaryTurn(text=summary), *([prompt] if prompt is not None else [])]
+        self._context_tokens = sum(_estimate_tokens(message) for message in self._conversation)
         self._verify_compaction = True
         return Compacted(summary, before)
 
@@ -359,6 +390,8 @@ class AgentLoop:
     async def _attempt(self, request: LlmRequest, cancel: asyncio.Event) -> AsyncIterator[LlmEvent]:
         stream = self._provider.stream(request, cancel=cancel).__aiter__()
         limit = self._limits.first_token_timeout_s
+        event_count = 0
+        last_event_kind: str | None = None
         try:
             while True:
                 try:
@@ -368,7 +401,19 @@ class AgentLoop:
                 except Interrupted:
                     return
                 except TimedOut:
+                    log.warning(
+                        "agent.provider_timeout",
+                        provider=type(self._provider).__name__,
+                        timeout_s=limit,
+                        events_received=event_count,
+                        last_event_kind=last_event_kind,
+                    )
                     raise ProviderError(f"model produced no output for {limit:g}s") from None
+                event_count += 1
+                last_event_kind = event.kind
+                if isinstance(event, ProviderActivity):
+                    last_event_kind = event.source
+                    continue
                 limit = self._limits.idle_timeout_s
                 yield event
         finally:

@@ -5,6 +5,7 @@ from plural.agent.events import AgentEvent
 from plural.agent.providers.base import LLMProvider
 from plural.host.transport.base import Connection
 from plural.protocol.envelope import Envelope
+from plural.protocol.events import SkillsFound
 from plural.protocol.models import ApprovalView
 
 
@@ -49,6 +50,24 @@ class Reconfigure:
     reply: "asyncio.Future[None]"
 
 
+@dataclass(frozen=True, slots=True)
+class McpUpdated:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class SkillsUpdated:
+    connection: Connection | None = None
+    error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class SkillsReply:
+    connection: Connection
+    event: SkillsFound | None = None
+    error: str | None = None
+
+
 InboxMessage = (
     Incoming
     | Disconnected
@@ -57,6 +76,9 @@ InboxMessage = (
     | ApprovalExpired
     | TypingExpired
     | Reconfigure
+    | SkillsUpdated
+    | McpUpdated
+    | SkillsReply
 )
 
 

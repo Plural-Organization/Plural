@@ -13,6 +13,9 @@ export function emptyState(): SessionState {
     approvals: {},
     attachments: {},
     policy: [],
+    skills: [],
+    context: null,
+    mcp: [],
     queue: [],
     agent: "",
     summary: null,
@@ -45,6 +48,12 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return { ...state, prompt_mode: event.mode };
     case "session.permission_mode_changed":
       return { ...state, permission_mode: event.mode };
+    case "mcp.changed":
+      return { ...state, mcp: event.servers };
+    case "context.usage":
+      return { ...state, context: event.context };
+    case "skills.changed":
+      return { ...state, skills: event.skills };
     case "proposal.created":
       return { ...state, proposals: { ...state.proposals, [event.proposal.id]: event.proposal } };
     case "proposal.approved":

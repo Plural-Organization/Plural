@@ -43,6 +43,7 @@ jobs:
       - run: npm run typecheck --workspace tui
       - run: npm test --workspace tui
       - run: npm run typecheck --workspace web
+      - run: npm test --workspace web
       - run: npm run build --workspace web
       - run: sh scripts/install-native-renderer.sh
       - run: npm run build --workspace tui

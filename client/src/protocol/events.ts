@@ -45,6 +45,11 @@ export type PromptMode = "open" | "review";
 export type PermissionMode = "default" | "accept_edits" | "plan" | "auto";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "SkillScope".
+ */
+export type SkillScope = "project" | "global";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "DequeueReason".
  */
 export type DequeueReason = "delivered" | "cancelled" | "dropped";
@@ -63,6 +68,11 @@ export type Origin = "direct" | "proposal";
  * via the `definition` "RunEndReason".
  */
 export type RunEndReason = "stop" | "aborted" | "error" | "limit";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "McpStatus".
+ */
+export type McpStatus = "connecting" | "ready" | "failed" | "off";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "ToolRisk".
@@ -93,6 +103,8 @@ export interface EventsSchema {
     | ParticipantRevoked
     | PromptModeChanged
     | PermissionModeChanged
+    | SkillsChanged
+    | SkillsFound
     | AgentChanged
     | PromptDequeued
     | ParticipantTyping
@@ -105,7 +117,10 @@ export interface EventsSchema {
     | MessageStarted
     | MessageDelta
     | MessageEnded
+    | ContextCompacting
     | ContextCompacted
+    | ContextUsage
+    | McpChanged
     | ToolStarted
     | ToolOutput
     | ToolEnded
@@ -208,6 +223,43 @@ export interface PromptModeChanged {
 export interface PermissionModeChanged {
   mode: PermissionMode;
   type: "session.permission_mode_changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "SkillsChanged".
+ */
+export interface SkillsChanged {
+  added: string[];
+  removed: string[];
+  skills: SkillView[];
+  type: "skills.changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "SkillView".
+ */
+export interface SkillView {
+  description: string;
+  name: string;
+  scope: SkillScope;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "SkillsFound".
+ */
+export interface SkillsFound {
+  hits: SkillHit[];
+  query: string;
+  type: "skills.found";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "SkillHit".
+ */
+export interface SkillHit {
+  installs: number;
+  name: string;
+  package: string;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -354,6 +406,15 @@ export interface MessageEnded {
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ContextCompacting".
+ */
+export interface ContextCompacting {
+  run_id: string;
+  tokens_before: number;
+  type: "context.compacting";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "ContextCompacted".
  */
 export interface ContextCompacted {
@@ -361,6 +422,43 @@ export interface ContextCompacted {
   summary: string;
   tokens_before: number;
   type: "context.compacted";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ContextUsage".
+ */
+export interface ContextUsage {
+  context: ContextView;
+  type: "context.usage";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ContextView".
+ */
+export interface ContextView {
+  compact_at: number;
+  tokens: number;
+  window: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "McpChanged".
+ */
+export interface McpChanged {
+  servers: McpServerView[];
+  type: "mcp.changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "McpServerView".
+ */
+export interface McpServerView {
+  error: string | null;
+  name: string;
+  scope: SkillScope;
+  status: McpStatus;
+  tools: number;
+  transport: string;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -515,7 +613,9 @@ export interface SessionState {
   attachments: {
     [k: string]: AttachmentMeta;
   };
+  context: ContextView | null;
   last_seq: number;
+  mcp: McpServerView[];
   participants: {
     [k: string]: Participant;
   };
@@ -527,6 +627,7 @@ export interface SessionState {
   };
   queue: QueuedPrompt[];
   run: RunView | null;
+  skills: SkillView[];
   summary: string | null;
   transcript: TranscriptEntry[];
 }
@@ -595,6 +696,8 @@ export interface EventRecord {
     | ParticipantRevoked
     | PromptModeChanged
     | PermissionModeChanged
+    | SkillsChanged
+    | SkillsFound
     | AgentChanged
     | PromptDequeued
     | ParticipantTyping
@@ -607,7 +710,10 @@ export interface EventRecord {
     | MessageStarted
     | MessageDelta
     | MessageEnded
+    | ContextCompacting
     | ContextCompacted
+    | ContextUsage
+    | McpChanged
     | ToolStarted
     | ToolOutput
     | ToolEnded

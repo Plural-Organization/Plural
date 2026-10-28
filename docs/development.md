@@ -20,7 +20,7 @@ uv run pytest
 
 npm run typecheck --workspace client && npm test --workspace client
 npm run typecheck --workspace tui && npm test --workspace tui
-npm run typecheck --workspace web && npm run build --workspace web
+npm run typecheck --workspace web && npm test --workspace web && npm run build --workspace web
 ```
 
 ## Run from source
@@ -49,7 +49,7 @@ src/plural/
 └── cli/        plural-host entry point
 client/         @plural/client, the TypeScript protocol client
 tui/            the terminal client
-web/            the browser client
+web/            the browser client: screens, components, hooks and lib in web/src
 ```
 
 Layers are enforced with `import-linter`: `core` and `protocol` do no I/O, `agent` knows nothing about transports or storage, `relay` knows nothing about sessions, policy or content.

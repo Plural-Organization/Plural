@@ -47,6 +47,18 @@ class Compacted:
 
 
 @dataclass(frozen=True, slots=True)
+class Compacting:
+    tokens_before: int
+
+
+@dataclass(frozen=True, slots=True)
+class ContextFill:
+    tokens: int
+    window: int
+    compact_at: float
+
+
+@dataclass(frozen=True, slots=True)
 class Delivered:
     prompt_ids: tuple[str, ...]
 
@@ -65,7 +77,9 @@ AgentEvent = (
     | ToolStart
     | ToolOutput
     | ToolEnd
+    | Compacting
     | Compacted
+    | ContextFill
     | Delivered
     | RunEnd
 )
