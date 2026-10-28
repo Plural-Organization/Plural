@@ -15,11 +15,18 @@ from plural.agent.providers.claude_code import ClaudeCodeProvider
 from plural.agent.providers.codex_cli import CodexCliProvider
 from plural.agent.providers.fake import DemoProvider
 from plural.agent.providers.openai_compat import OpenAIProvider
+from plural.agent.providers.web_search import (
+    anthropic_oauth_search,
+    anthropic_search,
+    openai_search,
+    web_search_tool,
+)
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.skills import SkillLibrary
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.registry import builtin_tools
+from plural.agent.tools.search import Searcher, WebSearchSlot
 from plural.agent.tools.skills import skill_tools
 from plural.core.policy.engine import Policy
 from plural.host.actor import SessionActor
@@ -63,6 +70,7 @@ class Host:
     host_token: str
     host_link: str
     mcp: McpHub | None = None
+    web_search: WebSearchSlot | None = None
 
     async def serve(self) -> None:
         async with asyncio.TaskGroup() as group:
@@ -137,6 +145,42 @@ def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
             )
 
 
+def build_web_search(
+    settings: HostSettings, api_key: str | None, provider: LLMProvider
+) -> Searcher | None:
+    """Search through the session provider's own search engine, when it has one."""
+    if not settings.web_search or settings.base_url is not None:
+        return None
+    place = {
+        "city": settings.web_search_city,
+        "region": settings.web_search_region,
+        "country": settings.web_search_country,
+        "timezone": settings.web_search_timezone,
+    }
+    tool = web_search_tool(
+        context_size=settings.web_search_context_size,
+        max_uses=settings.web_search_max_uses,
+        allowed_domains=settings.web_search_allowed_domains,
+        blocked_domains=settings.web_search_blocked_domains,
+        location={key: value for key, value in place.items() if value},
+    )
+    provider_name = settings.resolved_provider()
+    family = "anthropic" if provider_name in {"anthropic", "anthropic_oauth"} else provider_name
+    chosen, _, named = (settings.web_search_model or "").rpartition(":")
+    model = named if chosen == family else settings.model
+    match provider_name:
+        case "anthropic" if api_key:
+            return anthropic_search(model or anthropic_api.DEFAULT_MODEL, api_key, tool)
+        case "anthropic_oauth" if isinstance(provider, AnthropicOAuthProvider):
+            return anthropic_oauth_search(
+                model or anthropic_api.DEFAULT_OAUTH_MODEL, provider.token, tool
+            )
+        case "openai" if api_key and model:
+            return openai_search(model, api_key, tool)
+        case _:
+            return None
+
+
 async def build_host(settings: HostSettings, *, provider: LLMProvider | None = None) -> Host:
     api_key = resolve_api_key(settings, os.environ)
     ids, clock = UlidGenerator(), SystemClock()
@@ -148,6 +192,10 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     inbox = Inbox()
     skills = SkillLibrary(project=workspace.root, home=Path.home())
     tools = builtin_tools()
+    agent = provider or build_provider(settings, api_key)
+    web_search = WebSearchSlot()
+    web_search.use(build_web_search(settings, api_key, agent))
+    tools.add_source(web_search)
     for tool in skill_tools(skills, lambda: inbox.put(SkillsUpdated())):
         tools.register(tool)
     mcp = McpHub(
@@ -174,7 +222,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         rejection_limit=settings.rejection_limit,
     )
     loop = AgentLoop(
-        provider=provider or build_provider(settings, api_key),
+        provider=agent,
         tools=tools,
         gate=gate,
         context=ContextBuilder(
@@ -249,6 +297,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         host_token=host_token,
         host_link=f"{room_url}?token={host_token}",
         mcp=mcp,
+        web_search=web_search,
     )
 
 
