@@ -30,5 +30,6 @@
 .dim { color: var(--dim); }
 .files { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); }
 .files li { background: color-mix(in srgb, var(--fg) 6%, transparent); border-radius: 6px; padding: 1px 8px; }
-.action { margin-left: 10px; background: none; border: 0; padding: 0; font: 600 12px var(--font-text); color: var(--accent); cursor: pointer; }
-.action:hover { text-decoration: underline; }
+.event { display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius-small); min-width: 0; }
+.eventIcon { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--raise); color: var(--fg); }
+.eventText { flex: 1; min-width: 0; font-size: 14px; color: var(--fg); }
