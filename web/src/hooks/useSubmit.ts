@@ -9,9 +9,10 @@ interface Submit {
   onEdited: () => void;
   onLeave: () => void;
   flash: (text: string) => void;
+  onDraw: () => void;
 }
 
-export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit) {
+export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }: Submit) {
   const { projection, feed, send, notify } = session;
   const state = projection.state;
   const isHost = projection.me?.role === "host";
@@ -74,6 +75,9 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
       }
       case "leave":
         onLeave();
+        return true;
+      case "draw":
+        onDraw();
         return true;
       default:
         return false;

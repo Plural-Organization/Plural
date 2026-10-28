@@ -5,7 +5,8 @@
 .meta { font-size: 12px; color: var(--muted); white-space: nowrap; }
 .live { color: var(--accent); }
 .live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.4s ease-in-out infinite; }
-.body { overflow: auto; min-height: 0; }
+.body { position: relative; overflow: auto; min-height: 0; }
+.diff { padding: 14px 0 40px; }
 .doc { max-width: 720px; margin: 0 auto; padding: 24px 28px 40px; }
 .code { margin: 0; padding: 16px 0 40px; font: 13px/1.6 var(--font-mono); counter-reset: line; min-width: max-content; }
 .line { display: block; min-height: 1.6em; padding: 0 20px 0 0; white-space: pre; }

@@ -52,6 +52,159 @@
       ],
       "type": "object"
     },
+    "BoardClear": {
+      "properties": {
+        "type": {
+          "const": "board.clear",
+          "default": "board.clear",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "BoardCursor": {
+      "description": "Where someone points on the board; with ink, the pen is down and draws.",
+      "properties": {
+        "color": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ink": {
+          "default": false,
+          "type": "boolean"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "maximum": 40,
+              "minimum": 0.5,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "x": {
+          "maximum": 4,
+          "minimum": 0,
+          "type": "number"
+        },
+        "y": {
+          "maximum": 4,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "BoardDraw": {
+      "properties": {
+        "color": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/BoardShape",
+          "default": "pen"
+        },
+        "points": {
+          "items": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "number"
+          },
+          "maxItems": 4000,
+          "minItems": 2,
+          "type": "array"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "board.draw",
+          "default": "board.draw",
+          "type": "string"
+        },
+        "width": {
+          "maximum": 40,
+          "minimum": 0.5,
+          "type": "number"
+        }
+      },
+      "required": [
+        "color",
+        "width",
+        "points"
+      ],
+      "type": "object"
+    },
+    "BoardErase": {
+      "properties": {
+        "stroke_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "board.erase",
+          "default": "board.erase",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stroke_id"
+      ],
+      "type": "object"
+    },
+    "BoardOpen": {
+      "properties": {
+        "open": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "board.open",
+          "default": "board.open",
+          "type": "string"
+        }
+      },
+      "required": [
+        "open"
+      ],
+      "type": "object"
+    },
+    "BoardShape": {
+      "enum": [
+        "pen",
+        "line",
+        "arrow",
+        "rect",
+        "ellipse",
+        "text"
+      ],
+      "type": "string"
+    },
     "ChatSend": {
       "properties": {
         "mentions": {
@@ -111,6 +264,29 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "CursorSet": {
+      "properties": {
+        "cursor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoardCursor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "presence.cursor",
+          "default": "presence.cursor",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cursor"
+      ],
       "type": "object"
     },
     "Delivery": {
@@ -607,6 +783,29 @@
       },
       "type": "object"
     },
+    "SelectionSet": {
+      "properties": {
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "presence.select",
+          "default": "presence.select",
+          "type": "string"
+        }
+      },
+      "required": [
+        "selection"
+      ],
+      "type": "object"
+    },
     "SessionHello": {
       "properties": {
         "client": {
@@ -746,6 +945,32 @@
       ],
       "type": "object"
     },
+    "TextSelection": {
+      "description": "Text someone has selected, as offsets into the text of one item on screen.\n\nThe anchor names the item (a feed entry or a canvas document); every client lays\nout the same items, so the offsets point at the same words for everyone.",
+      "properties": {
+        "anchor": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "end": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "anchor",
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
     "TypingSet": {
       "properties": {
         "type": {
@@ -768,6 +993,10 @@
       "discriminator": {
         "mapping": {
           "approval.respond": "#/$defs/ApprovalRespond",
+          "board.clear": "#/$defs/BoardClear",
+          "board.draw": "#/$defs/BoardDraw",
+          "board.erase": "#/$defs/BoardErase",
+          "board.open": "#/$defs/BoardOpen",
           "chat.send": "#/$defs/ChatSend",
           "context.compact": "#/$defs/ContextCompact",
           "file.attach": "#/$defs/FileAttach",
@@ -785,6 +1014,8 @@
           "participant.set_role": "#/$defs/ParticipantSetRole",
           "policy.add": "#/$defs/PolicyAdd",
           "policy.remove": "#/$defs/PolicyRemove",
+          "presence.cursor": "#/$defs/CursorSet",
+          "presence.select": "#/$defs/SelectionSet",
           "presence.typing": "#/$defs/TypingSet",
           "prompt.submit": "#/$defs/PromptSubmit",
           "proposal.decide": "#/$defs/ProposalDecide",
@@ -874,6 +1105,24 @@
         },
         {
           "$ref": "#/$defs/TypingSet"
+        },
+        {
+          "$ref": "#/$defs/SelectionSet"
+        },
+        {
+          "$ref": "#/$defs/CursorSet"
+        },
+        {
+          "$ref": "#/$defs/BoardOpen"
+        },
+        {
+          "$ref": "#/$defs/BoardDraw"
+        },
+        {
+          "$ref": "#/$defs/BoardErase"
+        },
+        {
+          "$ref": "#/$defs/BoardClear"
         },
         {
           "$ref": "#/$defs/QueueCancel"

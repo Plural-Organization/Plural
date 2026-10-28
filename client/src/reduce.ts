@@ -3,6 +3,8 @@ import type { EventRecord, SessionState, TranscriptEntry } from "./protocol";
 export const TRANSCRIPT_LIMIT = 200;
 export const OUTPUT_PREVIEW_CHARS = 2000;
 export const CHAT_LIMIT = 200;
+export const BOARD_STROKES_LIMIT = 2000;
+export const BOARD_TOTAL_POINTS = 200_000;
 
 export function emptyState(): SessionState {
   return {
@@ -25,12 +27,24 @@ export function emptyState(): SessionState {
     chat: [],
     admission: "approve",
     join_requests: {},
+    board: { open: false, strokes: [] },
   };
 }
 
 // A host from an older release leaves out fields added since, such as chat.
 export function withDefaults(state: SessionState): SessionState {
   return { ...emptyState(), ...state };
+}
+
+// Mirrors the host: all strokes together keep at most BOARD_TOTAL_POINTS numbers, the oldest go first.
+function withinBudget<T extends { points: unknown[] }>(strokes: T[]): T[] {
+  let total = strokes.reduce((sum, stroke) => sum + stroke.points.length, 0);
+  let start = 0;
+  while (total > BOARD_TOTAL_POINTS && start < strokes.length - 1) {
+    total -= strokes[start]!.points.length;
+    start += 1;
+  }
+  return strokes.slice(start);
 }
 
 export function reduce(state: SessionState, record: EventRecord): SessionState {
@@ -72,6 +86,14 @@ function apply(state: SessionState, record: EventRecord): SessionState {
           },
         ].slice(-CHAT_LIMIT),
       };
+    case "board.opened":
+      return { ...state, board: { ...state.board, open: event.open } };
+    case "board.stroked":
+      return { ...state, board: { ...state.board, strokes: withinBudget([...state.board.strokes, event.stroke].slice(-BOARD_STROKES_LIMIT)) } };
+    case "board.erased":
+      return { ...state, board: { ...state.board, strokes: state.board.strokes.filter((stroke) => stroke.id !== event.stroke_id) } };
+    case "board.cleared":
+      return { ...state, board: { ...state.board, strokes: [] } };
     case "agent.changed":
       return { ...state, agent: event.agent };
     case "session.prompt_mode_changed":

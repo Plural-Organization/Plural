@@ -2,17 +2,20 @@ import { useEffect, useRef, useState } from "react";
 import { copyText } from "../lib/clipboard";
 import { fileName, lineCount, type CanvasDoc } from "../lib/canvas";
 import { cx } from "../lib/cx";
+import { DiffView } from "./DiffView";
 import { Markdown } from "./feed/Markdown";
+import { SelectionLayer, type Selector } from "./SelectionLayer";
 import styles from "./Canvas.module.css";
 
 interface CanvasProps {
   doc: CanvasDoc;
   docs: CanvasDoc[];
+  selectors: Selector[];
   onPick: (id: string) => void;
   onClose: () => void;
 }
 
-export function Canvas({ doc, docs, onPick, onClose }: CanvasProps) {
+export function Canvas({ doc, docs, selectors, onPick, onClose }: CanvasProps) {
   const body = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -83,13 +86,18 @@ export function Canvas({ doc, docs, onPick, onClose }: CanvasProps) {
           ✕
         </button>
       </header>
-      <div className={styles.body} ref={body}>
-        {doc.kind === "text" ? (
-          <div className={styles.doc}>
+      <div className={styles.body} ref={body} data-quotable>
+        <SelectionLayer selectors={selectors} version={doc.text} />
+        {doc.kind === "diff" ? (
+          <div className={styles.diff}>
+            <DiffView diff={doc.text} anchor={`canvas:${doc.id}`} />
+          </div>
+        ) : doc.kind === "text" ? (
+          <div className={styles.doc} data-anchor={`canvas:${doc.id}`}>
             <Markdown text={doc.text} streaming={doc.live} />
           </div>
         ) : (
-          <pre className={cx(styles.code, doc.live && styles.writing)}>
+          <pre className={cx(styles.code, doc.live && styles.writing)} data-anchor={`canvas:${doc.id}`}>
             {doc.text.split("\n").map((line, index) => (
               <span key={index} className={styles.line}>
                 {line}

@@ -4,7 +4,7 @@
 
 .stage { position: relative; display: grid; grid-template-rows: minmax(0, 1fr) auto; min-height: 0; min-width: 0; }
 .scroller { overflow-y: auto; min-height: 0; }
-.content { max-width: var(--content); margin: 0 auto; padding: 24px var(--gutter-right) 16px var(--gutter-left); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.content { position: relative; max-width: var(--content); margin: 0 auto; padding: 24px var(--gutter-right) 16px var(--gutter-left); display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .welcome { justify-self: center; font-size: 12px; color: var(--muted); }
 
 .dock { position: relative; background: linear-gradient(transparent, var(--bg) 18px); padding: 10px var(--gutter-right) calc(12px + env(safe-area-inset-bottom, 0px)) var(--gutter-left); display: grid; gap: 8px; }

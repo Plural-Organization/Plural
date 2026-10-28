@@ -35,6 +35,8 @@ export interface SessionView {
 
 export interface Session extends SessionView {
   send: (command: Command) => void;
+  // Presence that may fail quietly: a host from an older release does not know it.
+  sendPresence: (command: Command) => boolean;
   notify: (tone: Tone, text: string) => void;
   clearInvite: () => void;
   close: () => void;
@@ -126,6 +128,21 @@ export class SessionStore {
     this.client.send(command).catch((error: unknown) => this.notify("danger", messageOf(error)));
   };
 
+  private presence = true;
+
+  readonly sendPresence = (command: Command): boolean => {
+    if (this.client === null || !this.presence || this.view.connection !== "online") {
+      return false;
+    }
+    this.client.send(command).catch((error: unknown) => {
+      // Commands are checked before they leave, so "invalid" here means the host does not know the command.
+      if (error instanceof CommandRejected && error.error.code === "invalid") {
+        this.presence = false;
+      }
+    });
+    return true;
+  };
+
   readonly notify = (tone: Tone, text: string): void => this.update({ feed: withNotice(this.view.feed, tone, text) });
 
   readonly clearInvite = (): void => this.update({ invite: null });
@@ -149,11 +166,15 @@ export function useSession(link: JoinLink, name: string, onFatal: (reason: strin
   const [store] = useState(() => new SessionStore(link, name, onFatal));
   const view = useSyncExternalStore(store.subscribe, store.snapshot);
   useEffect(() => store.start(), [store]);
-  return { ...view, send: store.send, notify: store.notify, clearInvite: store.clearInvite, close: store.close };
+  return { ...view, send: store.send, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, close: store.close };
 }
 
 function messageOf(error: unknown): string {
   if (error instanceof CommandRejected) {
+    // An older host does not know a newer command and answers with its validation dump.
+    if (error.error.code === "invalid" && error.error.message.includes("does not match any of the expected tags")) {
+      return "The host runs an older Plural that does not have this yet. Run the host from a newer version.";
+    }
     return error.error.message;
   }
   return error instanceof Error ? error.message : String(error);

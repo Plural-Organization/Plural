@@ -55,9 +55,14 @@ from plural.protocol.codec import ProtocolError, decode_command
 from plural.protocol.commands import (
     AdmissionSet,
     ApprovalRespond,
+    BoardClear,
+    BoardDraw,
+    BoardErase,
+    BoardOpen,
     ChatSend,
     Command,
     ContextCompact,
+    CursorSet,
     FileAttach,
     HistoryGet,
     InviteCreate,
@@ -78,6 +83,7 @@ from plural.protocol.commands import (
     ProposalDecide,
     QueueCancel,
     RunAbort,
+    SelectionSet,
     SessionHello,
     SkillsInstall,
     SkillsRemove,
@@ -89,6 +95,10 @@ from plural.protocol.events import (
     AgentChanged,
     ApprovalRequested,
     AttachmentAdded,
+    BoardCleared,
+    BoardErased,
+    BoardOpened,
+    BoardStroked,
     ContextCompacted,
     ContextCompacting,
     ContextUsage,
@@ -102,10 +112,12 @@ from plural.protocol.events import (
     MessageDelta,
     MessageEnded,
     MessageStarted,
+    ParticipantCursor,
     ParticipantJoined,
     ParticipantLeft,
     ParticipantRevoked,
     ParticipantRoleChanged,
+    ParticipantSelected,
     ParticipantTyping,
     PermissionModeChanged,
     PolicyRuleAdded,
@@ -125,11 +137,14 @@ from plural.protocol.events import (
     ToolStarted,
 )
 from plural.protocol.models import (
+    BOARD_DECIMALS,
     Actor,
     ActorKind,
     AdmissionMode,
     ApprovalDecision,
     AttachmentMeta,
+    BoardShape,
+    BoardStroke,
     ContextView,
     Delivery,
     DequeueReason,
@@ -220,6 +235,8 @@ class SessionActor:
         self._typing_ttl_s = typing_ttl_s
         self._agent_label = agent_label
         self._typing: dict[str, asyncio.TimerHandle] = {}
+        self._selecting: set[str] = set()
+        self._pointing: set[str] = set()
         self._state = SessionState()
         self._streaming: dict[str, str] = {}
         self._timers: dict[str, asyncio.TimerHandle] = {}
@@ -417,6 +434,48 @@ class SessionActor:
                 await self._sync_skills(actor_id=participant.id)
             case TypingSet():
                 await self._set_typing(participant.id, typing=command.typing)
+            case SelectionSet():
+                await self._set_selection(participant.id, command)
+            case CursorSet():
+                await self._set_cursor(participant.id, command)
+            case BoardOpen():
+                # Opening again shows the board to everyone again; closing twice says nothing.
+                if command.open or self._state.board.open:
+                    await self._emit(
+                        BoardOpened(open=command.open, by=participant.id), actor_id=participant.id
+                    )
+            case BoardDraw():
+                if len(command.points) % 2 != 0:
+                    raise Invalid("a stroke needs x and y for every point")
+                if command.kind is BoardShape.TEXT:
+                    if not command.text or len(command.points) != 2:
+                        raise Invalid("a text needs its words and one point")
+                elif command.text is not None:
+                    raise Invalid("only a text carries words")
+                elif command.kind is not BoardShape.PEN and len(command.points) != 4:
+                    raise Invalid("a shape needs its two corners")
+                stroke = BoardStroke(
+                    id=self._ids.new("st_"),
+                    author_id=participant.id,
+                    kind=command.kind,
+                    text=command.text,
+                    color=command.color,
+                    width=command.width,
+                    points=tuple(round(point, BOARD_DECIMALS) for point in command.points),
+                )
+                await self._emit(BoardStroked(stroke=stroke), actor_id=participant.id)
+            case BoardErase():
+                stroke = next(
+                    (s for s in self._state.board.strokes if s.id == command.stroke_id), None
+                )
+                if stroke is None:
+                    raise NotFound("no such stroke on the board")
+                if stroke.author_id != participant.id and participant.role is not Role.HOST:
+                    raise Forbidden("only the host erases someone else's drawing")
+                await self._emit(BoardErased(stroke_id=stroke.id), actor_id=participant.id)
+            case BoardClear():
+                if self._state.board.strokes:
+                    await self._emit(BoardCleared(by=participant.id), actor_id=participant.id)
             case QueueCancel():
                 await self._cancel_queued(participant, command)
             case PolicyAdd():
@@ -638,6 +697,26 @@ class SessionActor:
             await self._emit(AgentChanged(agent=change.label), actor_id=self._host.id)
         await self._sync_context(self._agent.fill())
         change.reply.set_result(None)
+
+    async def _set_selection(self, participant_id: str, command: SelectionSet) -> None:
+        if command.selection is None:
+            if participant_id not in self._selecting:
+                return
+            self._selecting.discard(participant_id)
+        else:
+            self._selecting.add(participant_id)
+        await self._emit(
+            ParticipantSelected(participant_id=participant_id, selection=command.selection)
+        )
+
+    async def _set_cursor(self, participant_id: str, command: CursorSet) -> None:
+        if command.cursor is None:
+            if participant_id not in self._pointing:
+                return
+            self._pointing.discard(participant_id)
+        else:
+            self._pointing.add(participant_id)
+        await self._emit(ParticipantCursor(participant_id=participant_id, cursor=command.cursor))
 
     async def _set_typing(self, participant_id: str, *, typing: bool) -> None:
         timer = self._typing.pop(participant_id, None)
@@ -904,6 +983,8 @@ class SessionActor:
         if participant_id is None or self._publisher.is_online(participant_id):
             return
         await self._set_typing(participant_id, typing=False)
+        await self._set_selection(participant_id, SelectionSet(selection=None))
+        await self._set_cursor(participant_id, CursorSet(cursor=None))
         if participant_id in self._state.participants:
             await self._emit(
                 ParticipantLeft(participant_id=participant_id), actor_id=participant_id

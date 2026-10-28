@@ -3,7 +3,8 @@ import type { FeedItem } from "@plural/client";
 import type { Activity as Current } from "../../lib/activity";
 import { colorFor } from "../../lib/colors";
 import { cx } from "../../lib/cx";
-import { docTitle, isDocument, lineCount, writtenFile } from "../../lib/canvas";
+import { docTitle, isDocument, lineCount, toolDoc } from "../../lib/canvas";
+import { segments } from "../../lib/quote";
 import { Activity } from "./Activity";
 import { DocCard } from "./DocCard";
 import { Markdown } from "./Markdown";
@@ -37,9 +38,10 @@ interface FeedProps {
   activity?: Current | null;
   // Given, long code and documents show as cards that open in the canvas.
   onOpenDoc?: (id: string) => void;
+  onOpenBoard?: () => void;
 }
 
-export function Feed({ items, meId = null, activity = null, onOpenDoc }: FeedProps) {
+export function Feed({ items, meId = null, activity = null, onOpenDoc, onOpenBoard }: FeedProps) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const toggle = (id: string) =>
     setOpened((current) => {
@@ -61,15 +63,32 @@ export function Feed({ items, meId = null, activity = null, onOpenDoc }: FeedPro
                 item={tool}
                 expanded={opened.has(tool.id)}
                 onToggle={() => toggle(tool.id)}
-                onOpen={onOpenDoc && writtenFile(tool) !== null ? () => onOpenDoc(tool.id) : undefined}
+                onOpen={onOpenDoc && toolDoc(tool) !== null ? () => onOpenDoc(tool.id) : undefined}
               />
             ))}
           </div>
         ) : (
-          <Entry key={block.id} item={block} meId={meId} onOpenDoc={onOpenDoc} />
+          <Entry key={block.id} item={block} meId={meId} onOpenDoc={onOpenDoc} onOpenBoard={onOpenBoard} />
         ),
       )}
       <Activity activity={activity} />
+    </div>
+  );
+}
+
+// A message's own text, with the parts it quotes set apart.
+function Text({ text, anchor }: { text: string; anchor: string }) {
+  return (
+    <div className={styles.text} data-anchor={anchor}>
+      {segments(text).map((segment, index) =>
+        segment.quote ? (
+          <blockquote key={index} className={styles.quote}>
+            {segment.text}
+          </blockquote>
+        ) : (
+          <span key={index}>{segment.text}</span>
+        ),
+      )}
     </div>
   );
 }
@@ -78,9 +97,10 @@ interface EntryProps {
   item: Exclude<FeedItem, { kind: "tool" }>;
   meId: string | null;
   onOpenDoc?: ((id: string) => void) | undefined;
+  onOpenBoard?: (() => void) | undefined;
 }
 
-function Entry({ item, meId, onOpenDoc }: EntryProps) {
+function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
   switch (item.kind) {
     case "banner":
       return null;
@@ -90,7 +110,14 @@ function Entry({ item, meId, onOpenDoc }: EntryProps) {
         <article className={cx(styles.row, mine && styles.mine)} style={{ "--who": colorFor(item.participantId) } as CSSProperties}>
           <div className={styles.bubble}>
             {mine ? null : <div className={styles.who}>{item.name}</div>}
-            <div className={styles.text}>{item.text}</div>
+            <Text text={item.text} anchor={item.id} />
+            {item.files && item.files.length > 0 ? (
+              <ul className={styles.files}>
+                {item.files.map((file, index) => (
+                  <li key={index}>📎 {file}</li>
+                ))}
+              </ul>
+            ) : null}
           </div>
           {item.viaProposal || item.role === "viewer" ? (
             <div className={styles.meta}>{item.viaProposal ? "approved by the host" : item.role}</div>
@@ -105,7 +132,7 @@ function Entry({ item, meId, onOpenDoc }: EntryProps) {
         <article className={cx(styles.row, item.mine && styles.mine)} style={{ "--who": colorFor(item.authorId) } as CSSProperties}>
           <div className={cx(styles.bubble, styles.chat, direct && styles.private, item.mentioned && styles.mentioned)}>
             <div className={styles.who}>{head}</div>
-            <div className={styles.text}>{item.text}</div>
+            <Text text={item.text} anchor={item.id} />
           </div>
           <div className={styles.meta}>
             {direct ? "private, the agent does not see it" : "the agent does not see it"}
@@ -128,11 +155,22 @@ function Entry({ item, meId, onOpenDoc }: EntryProps) {
               onOpen={() => onOpenDoc(item.id)}
             />
           ) : (
-            <Markdown text={item.text} streaming={item.streaming} onOpenCode={onOpenDoc && ((index) => onOpenDoc(`${item.id}:${index}`))} />
+            <div data-anchor={item.id}>
+              <Markdown text={item.text} streaming={item.streaming} onOpenCode={onOpenDoc && ((index) => onOpenDoc(`${item.id}:${index}`))} />
+            </div>
           )}
         </article>
       );
     case "notice":
-      return <div className={cx(styles.notice, styles[item.tone])}>{item.text}</div>;
+      return (
+        <div className={cx(styles.notice, styles[item.tone])}>
+          {item.text}
+          {item.action === "board" && onOpenBoard ? (
+            <button type="button" className={styles.action} onClick={onOpenBoard}>
+              open board ›
+            </button>
+          ) : null}
+        </div>
+      );
   }
 }

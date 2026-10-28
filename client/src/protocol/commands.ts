@@ -42,6 +42,11 @@ export type PermissionMode = "default" | "accept_edits" | "plan" | "auto";
 export type PolicyAction = "allow" | "ask" | "deny";
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardShape".
+ */
+export type BoardShape = "pen" | "line" | "arrow" | "rect" | "ellipse" | "text";
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "Delivery".
  */
 export type Delivery = "now" | "steer" | "follow_up";
@@ -78,6 +83,12 @@ export interface CommandsSchema {
     | McpRestart
     | McpImport
     | TypingSet
+    | SelectionSet
+    | CursorSet
+    | BoardOpen
+    | BoardDraw
+    | BoardErase
+    | BoardClear
     | QueueCancel
     | PolicyAdd
     | PolicyRemove
@@ -315,6 +326,88 @@ export interface McpImport {
 export interface TypingSet {
   type?: "presence.typing";
   typing: boolean;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "SelectionSet".
+ */
+export interface SelectionSet {
+  selection: TextSelection | null;
+  type?: "presence.select";
+}
+/**
+ * Text someone has selected, as offsets into the text of one item on screen.
+ *
+ * The anchor names the item (a feed entry or a canvas document); every client lays
+ * out the same items, so the offsets point at the same words for everyone.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "TextSelection".
+ */
+export interface TextSelection {
+  anchor: string;
+  end: number;
+  start: number;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "CursorSet".
+ */
+export interface CursorSet {
+  cursor: BoardCursor | null;
+  type?: "presence.cursor";
+}
+/**
+ * Where someone points on the board; with ink, the pen is down and draws.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardCursor".
+ */
+export interface BoardCursor {
+  color?: string | null;
+  ink?: boolean;
+  width?: number | null;
+  x: number;
+  y: number;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardOpen".
+ */
+export interface BoardOpen {
+  open: boolean;
+  type?: "board.open";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardDraw".
+ */
+export interface BoardDraw {
+  color: string;
+  kind?: "pen" | "line" | "arrow" | "rect" | "ellipse" | "text";
+  /**
+   * @minItems 2
+   * @maxItems 4000
+   */
+  points: [number, number, ...number[]];
+  text?: string | null;
+  type?: "board.draw";
+  width: number;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardErase".
+ */
+export interface BoardErase {
+  stroke_id: string;
+  type?: "board.erase";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardClear".
+ */
+export interface BoardClear {
+  type?: "board.clear";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

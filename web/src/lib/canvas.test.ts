@@ -7,7 +7,7 @@ const reply = (text: string, streaming = false): FeedItem => ({ kind: "assistant
 
 test("a long code block opens in the canvas and a short one stays in the feed", () => {
   const docs = canvasDocs([reply(`Short:\n\`\`\`sh\nls\n\`\`\`\nLong:\n\`\`\`ts\n${code(14)}\n\`\`\``)]);
-  expect(docs).toEqual([{ id: "m1:1", title: "ts", kind: "code", lang: "ts", text: code(14), live: false }]);
+  expect(docs).toEqual([{ id: "m1:1", title: "ts", kind: "code", lang: "ts", text: code(14), live: false, auto: true }]);
 });
 
 test("a code block that is still streaming is live", () => {
@@ -51,4 +51,17 @@ test("a titled essay of a few paragraphs is a document, a long plain answer is n
   const [doc] = canvasDocs([reply(essay)]);
   expect(doc).toMatchObject({ id: "m1", kind: "text", title: "Почему мы говорим так" });
   expect(canvasDocs([reply(`${paragraph}\n\n${paragraph}\n\n${paragraph}\n\n${paragraph}`)])).toEqual([]);
+});
+
+test("a finished edit opens as a diff that waits for a click", () => {
+  const edit: FeedItem = {
+    kind: "tool",
+    id: "t2",
+    call: { id: "c2", name: "edit", subject: "src/app.ts", risk: "write", args: { path: "src/app.ts" } },
+    status: "ok",
+    output: "",
+    diff: "@@ -1 +1 @@\n-a\n+b\n",
+    live: "",
+  };
+  expect(canvasDocs([edit])).toEqual([expect.objectContaining({ id: "t2", kind: "diff", title: "src/app.ts", auto: false })]);
 });

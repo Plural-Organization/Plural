@@ -103,6 +103,11 @@ export type PolicyAction = "allow" | "ask" | "deny";
  * via the `definition` "EntryKind".
  */
 export type EntryKind = "prompt" | "assistant" | "tool" | "compaction";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardShape".
+ */
+export type BoardShape = "pen" | "line" | "arrow" | "rect" | "ellipse" | "text";
 
 export interface EventsSchema {
   envelope: Envelope;
@@ -123,6 +128,12 @@ export interface EventsSchema {
     | JoinRefused
     | PromptDequeued
     | ParticipantTyping
+    | ParticipantSelected
+    | ParticipantCursor
+    | BoardOpened
+    | BoardStroked
+    | BoardErased
+    | BoardCleared
     | ChatPosted
     | ProposalCreated
     | ProposalApproved
@@ -354,6 +365,105 @@ export interface ParticipantTyping {
   participant_id: string;
   type: "participant.typing";
   typing: boolean;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ParticipantSelected".
+ */
+export interface ParticipantSelected {
+  participant_id: string;
+  selection: TextSelection | null;
+  type: "participant.selected";
+}
+/**
+ * Text someone has selected, as offsets into the text of one item on screen.
+ *
+ * The anchor names the item (a feed entry or a canvas document); every client lays
+ * out the same items, so the offsets point at the same words for everyone.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "TextSelection".
+ */
+export interface TextSelection {
+  anchor: string;
+  end: number;
+  start: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ParticipantCursor".
+ */
+export interface ParticipantCursor {
+  cursor: BoardCursor | null;
+  participant_id: string;
+  type: "participant.cursor";
+}
+/**
+ * Where someone points on the board; with ink, the pen is down and draws.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardCursor".
+ */
+export interface BoardCursor {
+  color: string | null;
+  ink: boolean;
+  width: number | null;
+  x: number;
+  y: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardOpened".
+ */
+export interface BoardOpened {
+  by: string;
+  open: boolean;
+  type: "board.opened";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardStroked".
+ */
+export interface BoardStroked {
+  stroke: BoardStroke;
+  type: "board.stroked";
+}
+/**
+ * One mark on the shared board; points are x0, y0, x1, y1, … in board units.
+ *
+ * A pen keeps every point, a shape its two corners, a text the point it starts at.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardStroke".
+ */
+export interface BoardStroke {
+  author_id: string;
+  color: string;
+  id: string;
+  kind: "pen" | "line" | "arrow" | "rect" | "ellipse" | "text";
+  /**
+   * @minItems 2
+   * @maxItems 4000
+   */
+  points: [number, number, ...number[]];
+  text: string | null;
+  width: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardErased".
+ */
+export interface BoardErased {
+  stroke_id: string;
+  type: "board.erased";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardCleared".
+ */
+export interface BoardCleared {
+  by: string;
+  type: "board.cleared";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -694,6 +804,7 @@ export interface SessionState {
   attachments: {
     [k: string]: AttachmentMeta;
   };
+  board: BoardView;
   chat: ChatEntry[];
   context: ContextView | null;
   join_requests: {
@@ -715,6 +826,14 @@ export interface SessionState {
   skills: SkillView[];
   summary: string | null;
   transcript: TranscriptEntry[];
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardView".
+ */
+export interface BoardView {
+  open: boolean;
+  strokes: BoardStroke[];
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -804,6 +923,12 @@ export interface EventRecord {
     | JoinRefused
     | PromptDequeued
     | ParticipantTyping
+    | ParticipantSelected
+    | ParticipantCursor
+    | BoardOpened
+    | BoardStroked
+    | BoardErased
+    | BoardCleared
     | ChatPosted
     | ProposalCreated
     | ProposalApproved

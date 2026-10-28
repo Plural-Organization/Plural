@@ -3,8 +3,13 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from plural.protocol.models import (
+    BOARD_POINTS_LIMIT,
+    BOARD_TEXT_CHARS,
     AdmissionMode,
     ApprovalDecision,
+    BoardCursor,
+    BoardShape,
+    Color,
     Delivery,
     Model,
     PermissionMode,
@@ -13,6 +18,8 @@ from plural.protocol.models import (
     ProposalDecision,
     Role,
     SkillScope,
+    TextSelection,
+    Unit,
 )
 
 MAX_PROMPT_CHARS = 32_000
@@ -171,6 +178,39 @@ class TypingSet(Model):
     typing: bool
 
 
+class SelectionSet(Model):
+    type: Literal["presence.select"] = "presence.select"
+    selection: TextSelection | None
+
+
+class CursorSet(Model):
+    type: Literal["presence.cursor"] = "presence.cursor"
+    cursor: BoardCursor | None
+
+
+class BoardOpen(Model):
+    type: Literal["board.open"] = "board.open"
+    open: bool
+
+
+class BoardDraw(Model):
+    type: Literal["board.draw"] = "board.draw"
+    kind: BoardShape = BoardShape.PEN
+    text: str | None = Field(default=None, min_length=1, max_length=BOARD_TEXT_CHARS)
+    color: Color
+    width: float = Field(ge=0.5, le=40)
+    points: tuple[Unit, ...] = Field(min_length=2, max_length=BOARD_POINTS_LIMIT)
+
+
+class BoardErase(Model):
+    type: Literal["board.erase"] = "board.erase"
+    stroke_id: str
+
+
+class BoardClear(Model):
+    type: Literal["board.clear"] = "board.clear"
+
+
 class QueueCancel(Model):
     type: Literal["queue.cancel"] = "queue.cancel"
     prompt_id: str
@@ -221,6 +261,12 @@ Command = Annotated[
     | McpRestart
     | McpImport
     | TypingSet
+    | SelectionSet
+    | CursorSet
+    | BoardOpen
+    | BoardDraw
+    | BoardErase
+    | BoardClear
     | QueueCancel
     | PolicyAdd
     | PolicyRemove
