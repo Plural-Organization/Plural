@@ -10,6 +10,7 @@ export interface CommandHint {
 export const COMMANDS: CommandHint[] = [
   { name: "help", usage: "/help", description: "show commands and keys" },
   { name: "who", usage: "/who", description: "list participants" },
+  { name: "team", usage: "/team <message>", description: "write to the room, the agent does not see it" },
   { name: "invite", usage: "/invite [participant|viewer]", description: "create an invite link", hostOnly: true },
   { name: "mode", usage: "/mode open|review", description: "who may prompt directly", hostOnly: true },
   { name: "policy", usage: "/policy [allow|ask|deny <tool> <pattern> | rm <id>]", description: "show or edit permission rules", hostOnly: true },

@@ -4,7 +4,10 @@ import { useKeyboard, useRenderer, useSelectionHandler, useTerminalDimensions } 
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   label,
+  mentionable,
+  mentionsMe,
   nextPermissionMode,
+  parseChat,
   parseSlash,
 
   SlashError,
@@ -86,6 +89,8 @@ export function App({
 }: AppProps) {
   const renderer = useRenderer();
   const [settings, setSettings] = useState<Settings>(initialSettings ?? DEFAULT_SETTINGS);
+  const liveSettings = useRef(settings);
+  liveSettings.current = settings;
   setTheme(settings.theme);
   const syntax = useMemo(() => createSyntaxStyle(renderer), [renderer, settings.theme]);
   const [dialog, setDialog] = useState(false);
@@ -145,13 +150,13 @@ export function App({
     setFeed(next);
   };
   const notify = (tone: Tone, text: string): void => commit(withNotice(feedRef.current, tone, text));
-  const showToast = (title: string, detail: string | null = null): void => {
+  const showToast = (title: string, detail: string | null = null, tone: "ok" | "accent" = "ok", icon = "✓"): void => {
     toasts.current.count += 1;
     const id = toasts.current.count;
     if (toasts.current.timer !== null) {
       clearTimeout(toasts.current.timer);
     }
-    setToast({ id, title, detail });
+    setToast({ id, title, detail, tone, icon });
     toasts.current.timer = setTimeout(() => setToast((current) => (current?.id === id ? null : current)), TOAST_MS);
   };
   const copy = (text: string, title: string, detail: string | null = null): void => {
@@ -168,6 +173,14 @@ export function App({
             commit(absorb(feedRef.current, event, client.projection));
           }
           bump();
+          if (event.type === "chat.posted" && mentionsMe(event, client.projection.meId)) {
+            const author = client.projection.state.participants[event.author_id];
+            const who = author ? label(client.projection.state, author) : "someone";
+            if (liveSettings.current.mentionBell) {
+              process.stdout.write("\u0007");
+            }
+            showToast(event.to === null ? `${who} mentioned you` : `${who} wrote to you`, preview(event.text, 60), "accent", "✉");
+          }
           if (event.type === "invite.created") {
             copy(event.link, "Invite link copied", "send it to one person, it works once");
           }
@@ -605,6 +618,16 @@ export function App({
       setEditing(null);
       return;
     }
+    try {
+      const chat = parseChat(text, projection.state, projection.meId);
+      if (chat !== null) {
+        send(chat.command);
+        return;
+      }
+    } catch (error) {
+      warn(text.split(/\s+/)[0] ?? "chat", error instanceof SlashError ? error.message : String(error));
+      return;
+    }
     if (text.startsWith("/")) {
       const name = text.slice(1).split(/\s+/)[0] ?? "";
       const known = COMMANDS.find((command) => command.name === name);
@@ -824,6 +847,7 @@ export function App({
           remember={!asking?.secret}
           tips={!asking}
           role={me?.role}
+          people={mentionable(state, projection.meId)}
           seed={seed}
           label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
           onSubmit={submit}

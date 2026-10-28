@@ -3,6 +3,8 @@ import {
   absorb,
   CommandRejected,
   emptyFeed,
+  label,
+  mentionsMe,
   Projection,
   SessionClient,
   withNotice,
@@ -12,6 +14,7 @@ import {
   type JoinLink,
   type Tone,
 } from "@plural/client";
+import { alertMention } from "../lib/alert";
 import { forgetRoom, rememberRoom } from "../lib/saved";
 
 const CLIENT = { kind: "web", version: "0.2.0" };
@@ -73,6 +76,10 @@ class SessionStore {
           if (event.type === "session.welcome") {
             this.token = event.token;
             rememberRoom(this.link, event.token, this.name);
+          }
+          if (event.type === "chat.posted" && mentionsMe(event, client.projection.meId)) {
+            const author = client.projection.state.participants[event.author_id];
+            alertMention(author ? label(client.projection.state, author) : "someone", event.to !== null);
           }
           if (event.type === "invite.created") {
             this.update({ invite: { link: event.link, role: event.role, expiresAt: event.expires_at } });

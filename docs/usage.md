@@ -33,6 +33,23 @@ An invite is single-use and expires after an hour. The host creates a new one wi
 
 A teammate can also join from a browser: open the web client, paste the invite and type a name. The web client shows the same session, approvals and queue as the terminal. A page served over https can only reach a host through a relay with `wss://`; over plain `ws://` serve the web client over http on the same network.
 
+## Talking to the team
+
+Not everything you type is for the agent. Two forms stay between people, and the agent never receives them:
+
+| You type | Who reads it |
+|---|---|
+| `/team lunch at one` (also `/to-team`, `/chat`) | everyone in the room |
+| `@alia can you review this?` at the start of a line | only Alia, and you see your own copy |
+
+Typing `@` lists the people in the room, `tab` completes the name. A tag inside a team message (`/team @alia look at this`) is read by everyone and also alerts Alia. An `@` that names no one in the room, such as `@src/app.ts`, is still a prompt for the agent.
+
+The person you write to hears the terminal bell and sees a short message at the top right. The browser plays a short sound and marks the tab title when the page is in the background. Turn the bell off in `F2` → Session → *Bell on mentions*.
+
+Participants and the host can write; viewers can read the team chat but cannot write and cannot be written to privately. Messages are kept in the session log, so a person who was away finds them on return, and a late joiner sees the team chat but not what was private.
+
+A private message is private from the other guests, not from the host: it is stored in the host's log, `plural-host export` includes it, and it travels through the relay unencrypted. Do not use it for anything you would not say with the host and the relay operator listening.
+
 ## Prompt modes
 
 | Mode | What happens to a participant's prompt |
@@ -119,6 +136,7 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | Command | What it does |
 |---|---|
 | `/help` | Commands and keys |
+| `/team <message>` | Write to the room, the agent does not see it. `@name <message>` writes to one person |
 | `/who` | Participants |
 | `/invite [participant\|viewer]` | Create an invite link (host) |
 | `/mode open\|review` | Who may prompt directly (host) |
@@ -159,7 +177,7 @@ Open them with `F2`, the `⚙ settings` button or `/settings`. On the first laun
 
 The key is kept in `~/.plural/credentials.json`, readable only by you, when *Remember the key* is on, and it is sent only to your own host through a local pipe, never over the network. Claude OAuth tokens are kept in `~/.plural/anthropic-oauth.json`; the host uses and refreshes them locally. Keys in the environment (`ANTHROPIC_API_KEY` and so on) keep working. Participants do not see this tab: the agent and its credentials belong to the host.
 
-**Session**. *Open*: everyone prompts the agent directly. *Host approves*: participants propose and you approve, edit or reject every prompt. Also the typing indicator and the bell for requests that need the host.
+**Session**. *Open*: everyone prompts the agent directly. *Host approves*: participants propose and you approve, edit or reject every prompt. Also the typing indicator, the bell for requests that need the host and the bell for mentions and private messages.
 
 **Appearance**. Four themes (Tokyo Night, Daylight, Gruvbox, High contrast), the side panel and copy on select, plus shortcuts to copy the last reply and to create an invite link.
 

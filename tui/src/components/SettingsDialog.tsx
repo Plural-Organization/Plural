@@ -180,6 +180,9 @@ export function SettingsDialog(props: DialogProps) {
       case "bell":
         onSettings({ ...settings, bell: !settings.bell });
         break;
+      case "mention-bell":
+        onSettings({ ...settings, mentionBell: !settings.mentionBell });
+        break;
       case "typing":
         onSettings({ ...settings, announceTyping: !settings.announceTyping });
         break;

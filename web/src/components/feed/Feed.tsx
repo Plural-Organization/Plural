@@ -47,6 +47,25 @@ function Entry({ item }: { item: Exclude<FeedItem, { kind: "tool" }> }) {
           <div className={styles.text}>{item.text}</div>
         </article>
       );
+    case "chat": {
+      const direct = item.to !== null;
+      const head = direct ? (item.mine ? `you → ${item.toName ?? "someone"}` : `${item.name} → you`) : item.mine ? "you · to the room" : `${item.name} · to the room`;
+      return (
+        <article
+          className={cx(styles.msg, styles.chat, direct && styles.private, item.mentioned && styles.mentioned)}
+          style={{ "--who": colorFor(item.authorId) } as CSSProperties}
+        >
+          <header>
+            <span className={styles.who}>✉ {head}</span>
+            <span className="muted">
+              {direct ? "private, the agent does not see it" : "the agent does not see it"}
+              {item.mentioned && !direct ? " · mentions you" : ""}
+            </span>
+          </header>
+          <div className={styles.text}>{item.text}</div>
+        </article>
+      );
+    }
     case "assistant":
       return (
         <article className={styles.msg}>

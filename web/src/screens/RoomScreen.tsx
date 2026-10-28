@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { label, status, type JoinLink, type ProposalView } from "@plural/client";
+import { label, mentionable, status, type JoinLink, type ProposalView } from "@plural/client";
 import { Composer } from "../components/Composer";
 import { Feed } from "../components/feed/Feed";
 import { Inbox } from "../components/inbox/Inbox";
@@ -99,6 +99,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
           </div>
           <Composer
             role={me?.role}
+            people={mentionable(state, projection.meId)}
             placeholder={placeholder}
             disabled={me?.role === "viewer" ? "Viewers watch the session and can't prompt" : null}
             editing={editing}

@@ -4,6 +4,8 @@ export interface ToastMessage {
   id: number;
   title: string;
   detail: string | null;
+  tone?: "ok" | "accent";
+  icon?: string;
 }
 
 export const TOAST_MS = 2200;
@@ -22,13 +24,13 @@ export function Toast({ message, right }: { message: ToastMessage; right: number
       zIndex={15}
       border
       borderStyle="rounded"
-      borderColor={theme.ok}
+      borderColor={message.tone === "accent" ? theme.accent : theme.ok}
       backgroundColor={theme.panel}
       paddingX={1}
       flexDirection="column"
     >
       <text fg={theme.text}>
-        <span fg={theme.ok}>✓ </span>
+        <span fg={message.tone === "accent" ? theme.accent : theme.ok}>{message.icon ?? "✓"} </span>
         {message.title}
       </text>
       {message.detail ? <text fg={theme.dim}>{message.detail}</text> : null}

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
-import type { ProposalView, Role } from "@plural/client";
+import { mentionCompletions, mentionNote, type Mentionable, type ProposalView, type Role } from "@plural/client";
 import { suggestions } from "../lib/commands";
 import styles from "./Composer.module.css";
 
@@ -7,6 +7,7 @@ const MAX_HEIGHT = 240;
 
 interface ComposerProps {
   role: Role | undefined;
+  people?: Mentionable[];
   placeholder: string;
   disabled: string | null;
   editing: ProposalView | null;
@@ -16,11 +17,16 @@ interface ComposerProps {
   onActivity: (text: string) => void;
 }
 
-export function Composer({ role, placeholder, disabled, editing, onSubmit, onCancelEdit, onEscape, onActivity }: ComposerProps) {
+export function Composer({ role, people = [], placeholder, disabled, editing, onSubmit, onCancelEdit, onEscape, onActivity }: ComposerProps) {
   const [value, setValue] = useState("");
   const [pick, setPick] = useState(0);
   const area = useRef<HTMLTextAreaElement>(null);
-  const hints = suggestions(value, role);
+  const commandHints = suggestions(value, role);
+  const mentions = commandHints.length === 0 ? mentionCompletions(value, people) : [];
+  const hints = [
+    ...commandHints.map((hint) => ({ key: hint.name, usage: hint.usage, description: hint.description, insert: `/${hint.name}${hint.usage.includes(" ") ? " " : ""}` })),
+    ...mentions.map(({ person, insert }) => ({ key: person.id, usage: `@${person.label}`, description: mentionNote(person), insert })),
+  ];
 
   useEffect(() => {
     if (editing) {
@@ -53,7 +59,7 @@ export function Composer({ role, placeholder, disabled, editing, onSubmit, onCan
       event.preventDefault();
       if (event.key === "Tab") {
         const hint = hints[pick] ?? hints[0]!;
-        setValue(`/${hint.name}${hint.usage.includes(" ") ? " " : ""}`);
+        setValue(hint.insert);
       } else {
         setPick((current) => (current + (event.key === "ArrowDown" ? 1 : hints.length - 1)) % hints.length);
       }
@@ -78,9 +84,9 @@ export function Composer({ role, placeholder, disabled, editing, onSubmit, onCan
   return (
     <div className={styles.composer}>
       {hints.length > 0 ? (
-        <ul className={styles.hints} role="listbox" aria-label="Commands">
+        <ul className={styles.hints} role="listbox" aria-label="Suggestions">
           {hints.map((hint, index) => (
-            <li key={hint.name} role="option" aria-selected={index === pick}>
+            <li key={hint.key} role="option" aria-selected={index === pick}>
               <span className="mono">{hint.usage}</span>
               <span className="muted">{hint.description}</span>
             </li>

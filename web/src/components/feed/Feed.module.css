@@ -4,6 +4,11 @@
 .who { font-weight: 600; }
 .user { border-left: 2px solid var(--who, var(--accent)); padding-left: 12px; }
 .user .who { color: var(--who, var(--accent)); }
+.chat { border-left: 1px dashed var(--who, var(--accent)); padding-left: 12px; }
+.chat .who { color: var(--who, var(--accent)); }
+.private { border-left-style: solid; border-left-color: var(--warn); }
+.private .who { color: var(--warn); }
+.mentioned { background: var(--panel); border-left: 2px solid var(--accent); padding: 8px 12px; }
 .text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .notice { font: 13px var(--font-mono); color: var(--muted); white-space: pre-wrap; overflow-wrap: anywhere; }
 .ok { color: var(--ok); }

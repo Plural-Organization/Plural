@@ -93,6 +93,34 @@ export function UserCard({ item, queued }: { item: Extract<FeedItem, { kind: "us
   );
 }
 
+export function ChatCard({ item }: { item: Extract<FeedItem, { kind: "chat" }> }) {
+  const color = colorFor(item.authorId);
+  const direct = item.to !== null;
+  const head = direct
+    ? item.mine
+      ? `you → ${item.toName ?? "someone"}`
+      : `${item.name} → you`
+    : item.mine
+      ? "you · to the room"
+      : `${item.name} · to the room`;
+  const mark = item.mentioned ? theme.accent : direct ? theme.warn : color;
+  return (
+    <box flexDirection="column" marginBottom={1} border={["left"]} borderStyle="single" borderColor={mark} paddingLeft={1}>
+      <text>
+        <span fg={mark}>✉ </span>
+        <span fg={direct ? theme.warn : color}>
+          <b>{head}</b>
+        </span>
+        <span fg={theme.dim}>
+          {direct ? " · private, the agent does not see it" : " · the agent does not see it"}
+          {item.mentioned && !direct ? " · mentions you" : ""}
+        </span>
+      </text>
+      <text fg={theme.text}>{item.text}</text>
+    </box>
+  );
+}
+
 export function AssistantCard({ item, syntax }: { item: Extract<FeedItem, { kind: "assistant" }>; syntax: SyntaxStyle }) {
   const renderer = useRenderer();
   const renderNode = useMemo(() => codeBlockRenderer(renderer), [renderer]);
@@ -245,6 +273,8 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, onT
       return <Banner item={item} />;
     case "user":
       return <UserCard item={item} queued={queued} />;
+    case "chat":
+      return <ChatCard item={item} />;
     case "assistant":
       return <AssistantCard item={item} syntax={syntax} />;
     case "tool":

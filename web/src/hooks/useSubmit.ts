@@ -1,4 +1,4 @@
-import { label, lastReply, parseSlash, ruleLine, SlashError, type ProposalView } from "@plural/client";
+import { label, lastReply, parseChat, parseSlash, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
 import { commandName, helpText, isHostOnly } from "../lib/commands";
 import type { Session } from "./useSession";
@@ -102,10 +102,25 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
     }
   };
 
+  const chat = (text: string): boolean => {
+    try {
+      const intent = parseChat(text, state, projection.meId);
+      if (intent === null) {
+        return false;
+      }
+      send(intent.command);
+    } catch (error) {
+      notify("warn", error instanceof SlashError ? error.message : String(error));
+    }
+    return true;
+  };
+
   return (text: string) => {
     if (editing) {
       send({ type: "proposal.decide", proposal_id: editing.id, decision: "approve", edited_text: text });
       onEdited();
+    } else if (chat(text)) {
+      return;
     } else if (text.startsWith("/")) {
       slash(text);
     } else {
