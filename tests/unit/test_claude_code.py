@@ -9,6 +9,7 @@ import pytest
 from plural.agent.providers.base import (
     LlmMessage,
     LlmRequest,
+    ProviderActivity,
     ProviderError,
     Stop,
     TextDelta,
@@ -108,3 +109,29 @@ async def test_cancelling_a_run_stops_waiting_for_claude_code(tmp_path: Path) ->
     cancel.set()
     await asyncio.wait_for(task, 2)
     assert time.monotonic() - started < 2
+
+
+async def test_a_long_tool_call_from_claude_code_counts_as_activity(tmp_path: Path) -> None:
+    content = "x = 1\n" * 400
+    cli = fake_cli(
+        tmp_path,
+        {
+            "structured_output": {
+                "text": "Writing it.",
+                "tool_calls": [{"name": "write", "args": {"path": "big.py", "content": content}}],
+            },
+            "usage": {"input_tokens": 1, "output_tokens": 1},
+        },
+    )
+    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(cli))
+    request = LlmRequest(
+        system="s",
+        messages=(LlmMessage(role="user", content="write"),),
+        tools=(ToolSchema(name="write", description="Write", parameters={"type": "object"}),),
+    )
+    events = [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    text = "".join(event.text for event in events if isinstance(event, TextDelta))
+    activity = [event for event in events if isinstance(event, ProviderActivity)]
+    assert text == "Writing it."
+    assert len(activity) > 100
+    assert {event.source for event in activity} == {"input_json_delta"}
