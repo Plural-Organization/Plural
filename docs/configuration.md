@@ -27,6 +27,7 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 | `PLURAL_REJECTION_LIMIT` | `2` | Rejections of one kind of action per run before the agent stops asking the host |
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24 hours |
 | `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |
+| `PLURAL_MAX_IMAGE_BYTES` | `2500000` | Largest image a participant may attach, at most `2900000` so it fits a 4 MB message. The terminal client scales pasted images to 1568 px first. Claude Code, Codex CLI and models without vision do not see images |
 | `PLURAL_TYPING_TTL_S` | `6` | Seconds after which a typing indicator lapses without a refresh |
 | `PLURAL_BROWSER` | `launch` | The browser the agent drives through Playwright MCP. `launch` opens a Chrome window of its own on first use; its profile lives in `~/.plural/browser`, so a login there is kept. A CDP endpoint attaches instead: `chrome` is the host's running Chrome once remote debugging is on in `chrome://inspect`. `off` turns the browser off |
 

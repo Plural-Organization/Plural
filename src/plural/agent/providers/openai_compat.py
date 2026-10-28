@@ -124,6 +124,24 @@ def to_messages(system: str, messages: Iterable[LlmMessage]) -> list[ChatComplet
     converted: list[ChatCompletionMessageParam] = [{"role": "system", "content": system}]
     for message in messages:
         match message.role:
+            case "user" if message.images:
+                converted.append(
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": message.content},
+                            *(
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{image.media_type};base64,{image.data}"
+                                    },
+                                }
+                                for image in message.images
+                            ),
+                        ],
+                    }
+                )
             case "user":
                 converted.append({"role": "user", "content": message.content})
             case "tool":

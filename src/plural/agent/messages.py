@@ -1,7 +1,7 @@
 from collections.abc import Iterable
 from typing import Literal
 
-from plural.agent.providers.base import LlmMessage, NativeContent, ToolCallRequest
+from plural.agent.providers.base import LlmImage, LlmMessage, NativeContent, ToolCallRequest
 from plural.protocol.models import Actor, Model, Origin, Provenance
 
 SUMMARY_HEADER = (
@@ -16,6 +16,7 @@ class UserTurn(Model):
     author: Actor
     provenance: Provenance
     text: str
+    images: tuple[LlmImage, ...] = ()
 
 
 class AssistantTurn(Model):
@@ -54,7 +55,7 @@ def to_llm(messages: Iterable[Message]) -> tuple[LlmMessage, ...]:
 def _convert(message: Message) -> LlmMessage:
     match message:
         case UserTurn():
-            return LlmMessage(role="user", content=attribute(message))
+            return LlmMessage(role="user", content=attribute(message), images=message.images)
         case SummaryTurn():
             return LlmMessage(role="user", content=f"{SUMMARY_HEADER}\n{message.text}")
         case AssistantTurn():

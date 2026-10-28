@@ -39,6 +39,8 @@ class HostSettings(BaseSettings):
     token_ttl_s: int = Field(default=86_400, gt=0, le=86_400)
     invite_ttl_s: int = Field(default=3600, gt=0, le=86_400)
     max_attachment_bytes: int = Field(default=1_048_576, gt=0)
+    # base64 grows an upload by a third, and a WebSocket frame holds at most 4 MB
+    max_image_bytes: int = Field(default=2_500_000, gt=0, le=2_900_000)
     typing_ttl_s: float = Field(default=6, gt=0)
     browser: str = "launch"
 

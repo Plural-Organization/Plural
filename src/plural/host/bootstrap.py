@@ -224,6 +224,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         clock=clock,
         host=host,
         max_attachment_bytes=settings.max_attachment_bytes,
+        max_image_bytes=settings.max_image_bytes,
         prompt_mode=settings.prompt_mode,
         skills=skills,
         mcp=mcp,

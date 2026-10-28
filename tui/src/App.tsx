@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useSelectionHandler, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
@@ -31,7 +32,7 @@ import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
 import type { PresetId } from "./presets";
 import type { Tab } from "./settingsModel";
-import { copyToClipboard } from "./lib/clipboard";
+import { copyToClipboard, IMAGE_LIMIT_BYTES, pasteImage } from "./lib/clipboard";
 import { createSyntaxStyle } from "./syntax";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { setTheme, theme } from "./theme";
@@ -58,6 +59,12 @@ const MIN_WIDTH_FOR_PANEL = 90;
 const TYPING_REFRESH_MS = 3000;
 const TYPING_IDLE_MS = 2500;
 const PLAN_APPROVED = "The host approved the plan. Implement it now.";
+const UPLOAD_WAIT_MS = 10_000;
+
+interface PastedImage {
+  name: string;
+  sha256: string;
+}
 
 export function App({
   client,
@@ -106,6 +113,8 @@ export function App({
   const [intro, setIntro] = useState(splash);
   const [tray, setTrayState] = useState<Tray | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
+  const [images, setImages] = useState<PastedImage[]>([]);
+  const pastes = useRef(0);
   const trayRef = useRef<Tray | null>(null);
   const setTray = (next: Tray | null | ((current: Tray | null) => Tray | null)): void => {
     trayRef.current = typeof next === "function" ? next(trayRef.current) : next;
@@ -454,6 +463,41 @@ export function App({
     typingIdle.current = setTimeout(stopTyping, TYPING_IDLE_MS);
   };
 
+  const pasteFromClipboard = async (): Promise<void> => {
+    const data = await pasteImage();
+    if (data === null) {
+      flash("no image in the clipboard");
+      return;
+    }
+    if (data.length > IMAGE_LIMIT_BYTES) {
+      notify("warn", `the image is ${(data.length / 1e6).toFixed(1)} MB, more than ${IMAGE_LIMIT_BYTES / 1e6} MB`);
+      return;
+    }
+    pastes.current += 1;
+    const image = {
+      name: `image-${pastes.current}.${data[0] === 0xff ? "jpg" : "png"}`,
+      sha256: createHash("sha256").update(data).digest("hex"),
+    };
+    setImages((current) => [...current, image]);
+    send({ type: "file.attach", name: image.name, content_b64: data.toString("base64"), sha256: image.sha256 });
+  };
+
+  // An upload is confirmed by its attachment.added event, which carries the id a prompt refers to.
+  const uploaded = async (pending: PastedImage[]): Promise<string[] | null> => {
+    const deadline = Date.now() + UPLOAD_WAIT_MS;
+    while (Date.now() < deadline) {
+      const added = Object.values(client.projection.state.attachments);
+      const ids = pending.map(
+        (image) => added.find((meta) => meta.sha256 === image.sha256 && meta.owner_id === client.projection.meId)?.id,
+      );
+      if (ids.every((id) => id !== undefined)) {
+        return ids as string[];
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return null;
+  };
+
   const flash = (text: string): void => {
     setHint(text);
     setTimeout(() => setHint((current) => (current === text ? null : current)), 2000);
@@ -528,6 +572,9 @@ export function App({
 
   const submit = (text: string): void => {
     const wizard = trayRef.current;
+    if (text === "" && (images.length === 0 || editing || wizard?.kind === "mcp-add")) {
+      return;
+    }
     if (wizard?.kind === "mcp-add" && wizard.step === "field") {
       advance(wizard, text);
       return;
@@ -587,7 +634,21 @@ export function App({
       }
       return;
     }
-    send({ type: "prompt.submit", text, delivery: "now" });
+    if (images.length === 0) {
+      send({ type: "prompt.submit", text, delivery: "now" });
+      return;
+    }
+    const pending = images;
+    setImages([]);
+    void uploaded(pending).then((ids) => {
+      if (ids === null) {
+        setImages(pending);
+        setSeed({ text, key: Date.now() });
+        notify("danger", "the image did not reach the host; try sending again");
+        return;
+      }
+      send({ type: "prompt.submit", text: text || "(image)", delivery: "now", attachments: ids });
+    });
   };
 
   useKeyboard((key) => {
@@ -749,6 +810,9 @@ export function App({
           seed={seed}
           label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
           onSubmit={submit}
+          images={images.map((image) => image.name)}
+          onPasteImage={() => void pasteFromClipboard()}
+          onDropImage={() => setImages((current) => current.slice(0, -1))}
           onEscape={escape}
           onTab={() => {
             if (items.length > 0) {

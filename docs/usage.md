@@ -140,6 +140,7 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | `ctrl+o` | Expand or collapse tool details |
 | `ctrl+b` | Show or hide the side panel |
 | `ctrl+y` | Copy the last reply |
+| `ctrl+v` | Attach the image on the clipboard to the next prompt; backspace in an empty input removes it |
 | `F2` | Settings |
 | `ctrl+c` | Clear the input, press twice to quit |
 
