@@ -27,3 +27,18 @@ test("someone who is revoked stops typing", () => {
   projection.apply(record);
   expect(projection.typing.size).toBe(0);
 });
+
+test("the agent label follows a change and falls back to the one from the welcome", () => {
+  const projection = new Projection();
+  expect(projection.agentLabel).toBe("");
+  projection.agent = "demo agent (scripted)";
+  expect(projection.agentLabel).toBe("demo agent (scripted)");
+  projection.apply({
+    seq: 1,
+    id: "e1",
+    ts: "2026-10-28T12:00:00Z",
+    actor_id: null,
+    event: { type: "agent.changed", agent: "Ollama · qwen3-coder" },
+  });
+  expect(projection.agentLabel).toBe("Ollama · qwen3-coder");
+});

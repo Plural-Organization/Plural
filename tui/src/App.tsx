@@ -857,7 +857,7 @@ export function App({
           settings={settings}
           mode={state.prompt_mode}
           role={me?.role}
-          agent={state.agent || projection.agent}
+          agent={projection.agentLabel}
           room={room}
           control={isHost ? control : null}
           keys={keys}

@@ -691,6 +691,17 @@ describe("App", () => {
     expect(text).toContain("demo agent (scripted)");
   });
 
+  test("the panel follows a change of the agent instead of keeping the first name", async () => {
+    const fake = session();
+    fake.emit({ type: "agent.changed", agent: "Claude · haiku" });
+    const setup = await mount(fake);
+    await frame(setup, "Claude · haiku");
+
+    fake.emit({ type: "agent.changed", agent: "Ollama · qwen3" });
+    const text = await frame(setup, "Ollama · qwen3");
+    expect(text).not.toContain("Claude");
+  });
+
   const DIFF = "--- a/calc.py\n+++ b/calc.py\n@@ -1,3 +1,3 @@\n def add(a, b):\n-    return a - b\n+    return a + b\n";
 
   function runTool(fake: FakeSession, call: ToolCallView, output: string, ok = true, diff: string | null = null): void {

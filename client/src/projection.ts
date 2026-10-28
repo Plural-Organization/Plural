@@ -12,6 +12,10 @@ export class Projection {
   meId: string | null = null;
   ready = false;
 
+  get agentLabel(): string {
+    return this.state.agent || this.agent;
+  }
+
   get me(): Participant | undefined {
     return this.meId === null ? undefined : this.state.participants[this.meId];
   }

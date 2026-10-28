@@ -132,7 +132,7 @@ export function Sidebar({ projection, room, inbox, running, status, onSettings }
           </text>
         ) : null}
         <ContextMeterView state={state} width={8} />
-        <text fg={theme.dim}>{truncate(projection.agent || "agent", SIDEBAR_WIDTH - 4)}</text>
+        <text fg={theme.dim}>{truncate(projection.agentLabel || "agent", SIDEBAR_WIDTH - 4)}</text>
         <text fg={theme.dim}>
           {"  "}
           {running ? <Spinner color={theme.info} /> : null}
