@@ -62,8 +62,10 @@ Without any of these the host runs a scripted demo agent: any text lists the wor
 A relay lets people connect over the internet without opening a port on the host. It only routes frames: it never decides permissions and never stores content.
 
 ```bash
-plural relay --bind 0.0.0.0 --port 8787
+plural-host relay --bind 0.0.0.0 --port 8787
 plural --relay wss://relay.example.com
 ```
+
+The relay takes its port from `PORT` and its address from `PLURAL_RELAY_BIND` when no option is given. In the client, `F2` → Session → *Over the internet* saves the relay address, see [sharing a session](self-hosting.md).
 
 Running the relay and a host on Railway, Render, any VM or your own machine is described in [running on a server](self-hosting.md).

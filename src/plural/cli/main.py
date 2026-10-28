@@ -5,7 +5,7 @@ import os
 import sys
 from contextlib import suppress
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import structlog
 import typer
@@ -30,15 +30,15 @@ console = Console()
 
 @app.command()
 def host(
-    workspace: Annotated[Path, typer.Option(help="Project directory the agent works in.")] = Path(
-        "."
-    ),
-    bind: Annotated[str, typer.Option(help="Address for direct mode.")] = "127.0.0.1",
-    port: Annotated[int, typer.Option(help="Port for direct mode.")] = 7777,
+    workspace: Annotated[
+        Path | None, typer.Option(help="Project directory the agent works in.")
+    ] = None,
+    bind: Annotated[str | None, typer.Option(help="Address for direct mode.")] = None,
+    port: Annotated[int | None, typer.Option(help="Port for direct mode.")] = None,
     relay: Annotated[str | None, typer.Option(help="Relay URL; direct mode when omitted.")] = None,
     public_url: Annotated[str | None, typer.Option(help="Public ws(s) URL for links.")] = None,
     room: Annotated[str | None, typer.Option(help="Resume an existing room.")] = None,
-    name: Annotated[str, typer.Option(help="Host display name.")] = getpass.getuser(),
+    name: Annotated[str | None, typer.Option(help="Host display name.")] = None,
     prompts: Annotated[
         PromptMode | None,
         typer.Option(help="open: participants prompt directly; review: the host approves them."),
@@ -50,16 +50,20 @@ def host(
         ),
     ] = False,
 ) -> None:
-    settings = HostSettings(
-        workspace=workspace,
-        bind_host=bind,
-        port=port,
-        relay_url=relay,
-        public_url=public_url,
-        room=room,
-        host_name=name,
-        prompt_mode=prompts,
-    )
+    given: dict[str, Any] = {
+        "workspace": workspace,
+        "bind_host": bind,
+        "port": port,
+        "relay_url": relay,
+        "public_url": public_url,
+        "room": room,
+        "host_name": name,
+        "prompt_mode": prompts,
+    }
+    options = {key: value for key, value in given.items() if value is not None}
+    if name is None and "PLURAL_HOST_NAME" not in os.environ:
+        options["host_name"] = getpass.getuser()
+    settings = HostSettings(**options)
     try:
         asyncio.run(_host(settings, machine=machine))
     except ConfigError as error:
@@ -141,8 +145,10 @@ async def _control_until_stdin_closes(plural_host: Host, settings: HostSettings)
 
 @app.command()
 def relay(
-    bind: Annotated[str, typer.Option(help="Bind address.")] = "127.0.0.1",
-    port: Annotated[int, typer.Option(help="Port.")] = 8787,
+    bind: Annotated[str, typer.Option(help="Bind address.", envvar="PLURAL_RELAY_BIND")] = (
+        "127.0.0.1"
+    ),
+    port: Annotated[int, typer.Option(help="Port.", envvar="PORT")] = 8787,
 ) -> None:
     uvicorn.run(create_app(), host=bind, port=port, log_level="info", ws_max_size=4 * 1024 * 1024)
 

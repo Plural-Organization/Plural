@@ -8,15 +8,11 @@
   <array>
     <string>/bin/sh</string>
     <string>-c</string>
-    <string>export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; set -a; . "$HOME/.config/plural/host.env"; exec plural-host host --workspace "$PLURAL_WORKSPACE" --relay "$PLURAL_RELAY_URL" --room "$PLURAL_ROOM"</string>
+    <string>umask 077; export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; mkdir -p "$HOME/Library/Logs"; set -a; . "$HOME/.config/plural/host.env"; exec plural-host host &gt;&gt; "$HOME/Library/Logs/plural-host.log" 2&gt;&amp;1</string>
   </array>
   <key>RunAtLoad</key>
   <true/>
   <key>KeepAlive</key>
   <true/>
-  <key>StandardOutPath</key>
-  <string>/tmp/plural-host.log</string>
-  <key>StandardErrorPath</key>
-  <string>/tmp/plural-host.log</string>
 </dict>
 </plist>

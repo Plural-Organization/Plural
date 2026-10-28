@@ -116,3 +116,65 @@ def test_plain_links_keep_each_link_on_one_line() -> None:
         "guest link (one-time): wss://relay.example.com/r_1?invite=a",
         f"host link: {host_link}",
     ]
+
+
+def host_settings(monkeypatch: pytest.MonkeyPatch, arguments: list[str]) -> HostSettings:
+    seen: list[HostSettings] = []
+
+    async def fake_host(settings: HostSettings, *, machine: bool) -> None:
+        seen.append(settings)
+
+    monkeypatch.setattr(main, "_host", fake_host)
+    assert runner.invoke(app, ["host", *arguments]).exit_code == 0
+    return seen[0]
+
+
+def test_host_reads_its_address_settings_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("PLURAL_RELAY_URL", "wss://relay.example.com")
+    monkeypatch.setenv("PLURAL_PORT", "9100")
+    monkeypatch.setenv("PLURAL_BIND_HOST", "0.0.0.0")
+    monkeypatch.setenv("PLURAL_ROOM", "r_env")
+    monkeypatch.setenv("PLURAL_HOST_NAME", "ci")
+    settings = host_settings(monkeypatch, ["--workspace", str(tmp_path)])
+    assert settings.relay_url == "wss://relay.example.com"
+    assert settings.port == 9100
+    assert settings.bind_host == "0.0.0.0"
+    assert settings.room == "r_env"
+    assert settings.host_name == "ci"
+
+
+def test_a_flag_wins_over_the_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("PLURAL_RELAY_URL", "wss://relay.example.com")
+    monkeypatch.setenv("PLURAL_PORT", "9100")
+    settings = host_settings(
+        monkeypatch,
+        ["--workspace", str(tmp_path), "--relay", "wss://other.example.com", "--port", "9200"],
+    )
+    assert settings.relay_url == "wss://other.example.com"
+    assert settings.port == 9200
+
+
+def test_host_without_settings_keeps_the_local_defaults(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    for name in ("PLURAL_RELAY_URL", "PLURAL_PORT", "PLURAL_BIND_HOST", "PLURAL_HOST_NAME"):
+        monkeypatch.delenv(name, raising=False)
+    settings = host_settings(monkeypatch, ["--workspace", str(tmp_path)])
+    assert settings.relay_url is None
+    assert (settings.bind_host, settings.port) == ("127.0.0.1", 7777)
+    assert settings.host_name != ""
+
+
+def test_relay_listens_on_the_port_the_platform_assigns(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_run(_app: object, **options: object) -> None:
+        seen.update(options)
+
+    monkeypatch.setattr(main.uvicorn, "run", fake_run)
+    monkeypatch.setenv("PORT", "4321")
+    monkeypatch.setenv("PLURAL_RELAY_BIND", "0.0.0.0")
+    assert runner.invoke(app, ["relay"]).exit_code == 0
+    assert (seen["host"], seen["port"]) == ("0.0.0.0", 4321)

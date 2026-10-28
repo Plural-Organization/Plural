@@ -11,6 +11,7 @@ if [ -n "${GIT_URL:-}" ] && [ -z "$(ls -A "$workspace")" ]; then
   git clone ${GIT_BRANCH:+--branch "$GIT_BRANCH"} "$GIT_URL" "$workspace"
   git -C "$workspace" remote set-url origin "$(printf '%s' "$GIT_URL" | sed -E 's#://[^/@]+@#://#')"
 fi
+unset GIT_URL
 
 if [ -z "${PLURAL_ROOM:-}" ]; then
   if [ ! -s "$data/room" ]; then
@@ -19,8 +20,5 @@ if [ -z "${PLURAL_ROOM:-}" ]; then
   PLURAL_ROOM="$(cat "$data/room")"
 fi
 
-exec plural-host host \
-  --workspace "$workspace" \
-  --relay "$PLURAL_RELAY_URL" \
-  --room "$PLURAL_ROOM" \
-  --name "${PLURAL_HOST_NAME:-host}"
+export PLURAL_WORKSPACE="$workspace" PLURAL_ROOM
+exec plural-host host

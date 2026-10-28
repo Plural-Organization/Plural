@@ -5,7 +5,7 @@ Wants=network-online.target
 
 [Service]
 EnvironmentFile=%h/.config/plural/host.env
-ExecStart=/bin/sh -c 'exec plural-host host --workspace "$PLURAL_WORKSPACE" --relay "$PLURAL_RELAY_URL" --room "$PLURAL_ROOM"'
+ExecStart=%h/.local/bin/plural-host host
 Restart=always
 RestartSec=5
 
