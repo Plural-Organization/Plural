@@ -12,7 +12,8 @@ import { freePort, HostUnavailable, runHostCommand, startLocalHost, type HostHan
 import { startProgress } from "./lib/progress";
 import { lanAddress, shareLaunch } from "./share";
 import { Alerts } from "./alerts";
-import { isTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
+import { fixDashes } from "./args";
+import { parseTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
 
 const USAGE = `plural ${pkg.version}
 
@@ -48,7 +49,8 @@ function fail(message: string): never {
 }
 
 async function main(): Promise<void> {
-  const [first, ...rest] = process.argv.slice(2);
+  const argv = fixDashes(process.argv.slice(2));
+  const [first, ...rest] = argv;
   if (first === "--version" || first === "-v") {
     process.stdout.write(`${pkg.version}\n`);
     return;
@@ -87,10 +89,11 @@ async function main(): Promise<void> {
     room = parseLink(target).room;
     name = option(rest, "--name") ?? userInfo().username;
   } else {
-    const args = first === "host" ? rest : process.argv.slice(2);
+    const args = first === "host" ? rest : argv;
     name = option(args, "--name") ?? userInfo().username;
-    const kind = option(args, "--tunnel");
-    if (kind !== undefined && !isTunnelKind(kind)) {
+    const kindName = option(args, "--tunnel");
+    const kind = kindName === undefined ? undefined : parseTunnelKind(kindName);
+    if (kindName !== undefined && kind === null) {
       fail("--tunnel takes cloudflared or ngrok");
     }
     const plain = without(args, "--tunnel");
@@ -100,7 +103,7 @@ async function main(): Promise<void> {
     const named = plain.includes("--name") ? plain : [...plain, "--name", name];
     const port = Number(option(plain, "--port")) || (await freePort());
     let launch = shareLaunch(settings, named, port, lanAddress());
-    if (kind !== undefined && isTunnelKind(kind)) {
+    if (kind !== undefined && kind !== null) {
       progress.step(`opening a ${kind} tunnel…`);
       try {
         tunnel = await startTunnel(kind, port);

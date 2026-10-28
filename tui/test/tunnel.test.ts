@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
-import { findAddress, isTunnelKind, startTunnel, toWebSocket, tunnelArgs, TunnelUnavailable, type Spawner } from "../src/tunnel";
+import { findAddress, isTunnelKind, parseTunnelKind, startTunnel, toWebSocket, tunnelArgs, TunnelUnavailable, type Spawner } from "../src/tunnel";
 
 class FakeChild extends EventEmitter {
   stdout = new EventEmitter();
@@ -66,6 +66,13 @@ describe("addresses", () => {
   test("both tools point at the local port of the host", () => {
     expect(tunnelArgs("cloudflared", 7001)).toEqual(["tunnel", "--no-autoupdate", "--url", "http://127.0.0.1:7001"]);
     expect(tunnelArgs("ngrok", 7001)).toEqual(["http", "127.0.0.1:7001", "--log", "stdout", "--log-format", "json"]);
+  });
+
+  test("the name of the service is accepted for its program", () => {
+    expect(parseTunnelKind("cloudflare")).toBe("cloudflared");
+    expect(parseTunnelKind(" Cloudflared ")).toBe("cloudflared");
+    expect(parseTunnelKind("NGROK")).toBe("ngrok");
+    expect(parseTunnelKind("localtunnel")).toBeNull();
   });
 
   test("only known tunnels are accepted", () => {

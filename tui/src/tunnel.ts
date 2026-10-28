@@ -8,6 +8,16 @@ export function isTunnelKind(value: unknown): value is TunnelKind {
   return typeof value === "string" && (TUNNEL_KINDS as readonly string[]).includes(value);
 }
 
+const ALIASES: Record<string, TunnelKind> = { cloudflare: "cloudflared" };
+
+export function parseTunnelKind(value: string): TunnelKind | null {
+  const name = value.trim().toLowerCase();
+  if (isTunnelKind(name)) {
+    return name;
+  }
+  return ALIASES[name] ?? null;
+}
+
 export class TunnelUnavailable extends Error {}
 
 export interface Tunnel {
