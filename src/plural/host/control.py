@@ -39,6 +39,7 @@ class AgentConfig(BaseModel):
     base_url: str | None = None
     api_key: SecretStr | None = None
     context_window: int | None = Field(default=None, gt=0)
+    fast_model: str | None = Field(default=None, max_length=200)
 
 
 class Request(BaseModel):
@@ -60,6 +61,12 @@ def settings_for(base: HostSettings, config: AgentConfig) -> HostSettings:
             "base_url": config.base_url or None,
             "api_key": config.api_key,
             "context_window": config.context_window or base.context_window,
+            "fast_model": config.fast_model
+            if config.fast_model not in (None, "", "off")
+            else base.fast_model,
+            "fast_provider": None
+            if config.fast_model not in (None, "", "off")
+            else base.fast_provider,
         }
     )
 
@@ -128,7 +135,7 @@ class Control:
             if config.provider_name and config.provider != "fake"
             else settings.agent_label({})
         )
-        helper = build_helper(settings)
+        helper = None if config.fast_model == "off" else build_helper(settings)
         self._host.inbox.put(
             Reconfigure(
                 provider=provider,

@@ -1,4 +1,4 @@
-import type { McpServerView, SkillHit } from "@plural/client";
+import type { AgentView, McpServerView, SkillHit } from "@plural/client";
 import { MCP_CATALOG, type McpField } from "../mcpCatalog";
 import { theme } from "../theme";
 import { Spinner, useElapsed } from "./Spinner";
@@ -14,7 +14,30 @@ export type Tray =
   | { kind: "busy"; title: string; text: string; key: number }
   | { kind: "pick"; title: string; hits: SkillHit[]; selected: number; canInstall: boolean }
   | { kind: "mcp"; selected: number; canManage: boolean }
-  | McpWizard;
+  | { kind: "agents"; selected: number; canManage: boolean }
+  | McpWizard
+  | Form;
+
+export interface FormOption {
+  value: string;
+  title: string;
+  detail: string;
+}
+
+export type FormStep =
+  | { kind: "text"; key: string; label: string; hint: string; optional?: boolean; multiline?: boolean }
+  | { kind: "choice"; key: string; label: string; options: FormOption[] };
+
+// A step-by-step form in the tray: text steps are typed in the composer, choice steps picked with the arrows.
+export type Form = {
+  kind: "form";
+  title: string;
+  steps: FormStep[];
+  index: number;
+  values: Record<string, string>;
+  selected: number;
+  warning: string | null;
+};
 
 export type McpWizard = {
   kind: "mcp-add";
@@ -224,28 +247,108 @@ function Wizard({ wizard, onSelect }: { wizard: McpWizard; onSelect: (index: num
   );
 }
 
+function Agents({ agents, selected, canManage, onSelect }: { agents: readonly AgentView[]; selected: number; canManage: boolean; onSelect: (index: number) => void }) {
+  const width = Math.max(...agents.map((agent) => agent.name.length), 4);
+  return (
+    <box flexDirection="column">
+      {agents.map((agent, index) => {
+        const on = index === selected;
+        const access = agent.read_only ? "read-only" : agent.tools.some((tool) => tool === "bash") ? "runs commands" : "can edit";
+        return (
+          <box key={agent.name} onMouseDown={() => onSelect(index)} backgroundColor={on ? theme.line : undefined}>
+            <text wrapMode="none">
+              <span fg={on ? theme.accent : theme.dim}>{on ? "› " : "  "}</span>
+              <span fg={on ? theme.text : theme.dim}>{agent.name.padEnd(width)}</span>
+              <span fg={agent.role === "fast" ? theme.info : theme.accent}>{`  ${agent.role}`.padEnd(7)}</span>
+              <span fg={agent.read_only ? theme.ok : theme.warn}>{`  ${access}`.padEnd(16)}</span>
+              <span fg={theme.dim}>{agent.scope ?? "built in"}</span>
+            </text>
+          </box>
+        );
+      })}
+      <text fg={theme.dim}>  {agents[Math.min(selected, agents.length - 1)]?.description ?? ""}</text>
+      {canManage ? (
+        <Action on={selected === agents.length} label="+ create an agent…" detail="name it, say what it does and what it may touch" onSelect={() => onSelect(agents.length)} />
+      ) : null}
+    </box>
+  );
+}
+
+function FormView({ form, onSelect }: { form: Form; onSelect: (index: number) => void }) {
+  const step = form.steps[form.index]!;
+  const answered = form.steps.slice(0, form.index);
+  return (
+    <box flexDirection="column">
+      {answered.map((done) => {
+        const value = form.values[done.key] ?? "";
+        const shown = done.kind === "choice" ? (done.options.find((option) => option.value === value)?.title ?? value) : value.split("\n")[0] || "skipped";
+        return (
+          <text key={done.key} wrapMode="none">
+            <span fg={theme.ok}>✓ </span>
+            <span fg={theme.dim}>{done.label}: </span>
+            <span fg={theme.text}>{shown}</span>
+          </text>
+        );
+      })}
+      <text>
+        <span fg={theme.accent}>› </span>
+        <b>{step.label}</b>
+        <span fg={theme.dim}>{`  step ${form.index + 1} of ${form.steps.length}`}</span>
+      </text>
+      {step.kind === "text" ? (
+        <text fg={theme.dim}>  {step.hint} · type it in the box above and press enter{step.multiline ? " · shift+enter for a new line" : ""}</text>
+      ) : (
+        step.options.map((option, index) => {
+          const on = index === form.selected;
+          return (
+            <box key={option.value} onMouseDown={() => onSelect(index)} backgroundColor={on ? theme.line : undefined}>
+              <text wrapMode="none">
+                <span fg={on ? theme.accent : theme.dim}>{on ? "› " : "  "}</span>
+                <span fg={on ? theme.text : theme.dim}>{option.title}</span>
+                <span fg={theme.dim}>{`  ${option.detail}`}</span>
+              </text>
+            </box>
+          );
+        })
+      )}
+      {form.warning ? <text fg={theme.warn}>  {form.warning}</text> : null}
+    </box>
+  );
+}
+
 const TONE = { accent: () => theme.accent, warn: () => theme.warn, danger: () => theme.danger } as const;
 
 interface TrayProps {
   tray: Tray;
   servers: readonly McpServerView[];
+  agents: readonly AgentView[];
   maxRows: number;
   onClose: () => void;
   onSelect: (index: number) => void;
 }
 
-export function TrayView({ tray, servers, maxRows, onClose, onSelect }: TrayProps) {
+export function TrayView({ tray, servers, agents, maxRows, onClose, onSelect }: TrayProps) {
   const color = tray.kind === "text" ? TONE[tray.tone]() : tray.kind === "busy" ? theme.info : theme.accent;
   const title =
     tray.kind === "mcp-add"
       ? tray.step === "pick"
         ? "add an MCP server"
         : `add ${MCP_CATALOG[tray.preset]!.title}`
+      : tray.kind === "agents"
+      ? `agents · ${agents.length}`
       : tray.kind === "mcp"
       ? `mcp · ${servers.filter((server) => server.status === "ready").length}/${servers.length} connected · ${servers.reduce((sum, server) => sum + server.tools, 0)} tools`
       : tray.title;
   const footer =
-    tray.kind === "mcp-add"
+    tray.kind === "form"
+      ? tray.steps[tray.index]?.kind === "text"
+        ? "enter next · esc cancel"
+        : "↑↓ choose · enter select · esc cancel"
+      : tray.kind === "agents"
+      ? tray.canManage
+        ? "↑↓ choose · enter create · /agents rm <name> removes · esc close"
+        : "↑↓ read the descriptions · esc close"
+      : tray.kind === "mcp-add"
       ? tray.step === "field"
         ? "enter next · empty enter takes the default or skips · esc cancel"
         : "↑↓ choose · enter select · esc cancel"
@@ -283,6 +386,10 @@ export function TrayView({ tray, servers, maxRows, onClose, onSelect }: TrayProp
         </>
       ) : tray.kind === "busy" ? (
         <Busy key={tray.key} text={tray.text} />
+      ) : tray.kind === "form" ? (
+        <FormView form={tray} onSelect={onSelect} />
+      ) : tray.kind === "agents" ? (
+        <Agents agents={agents} selected={tray.selected} canManage={tray.canManage} onSelect={onSelect} />
       ) : tray.kind === "mcp-add" ? (
         <Wizard wizard={tray} onSelect={onSelect} />
       ) : tray.kind === "mcp" ? (

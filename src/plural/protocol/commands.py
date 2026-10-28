@@ -139,6 +139,21 @@ class McpImport(Model):
     type: Literal["mcp.import"] = "mcp.import"
 
 
+class AgentsCreate(Model):
+    type: Literal["agents.create"] = "agents.create"
+    name: str = Field(min_length=1, max_length=64)
+    description: str = Field(min_length=1, max_length=300)
+    prompt: str = Field(min_length=1, max_length=8000)
+    tools: tuple[str, ...] = ()
+    model: Literal["fast", "main"] = "fast"
+    scope: SkillScope = SkillScope.PROJECT
+
+
+class AgentsRemove(Model):
+    type: Literal["agents.remove"] = "agents.remove"
+    name: str = Field(min_length=1, max_length=64)
+
+
 class TypingSet(Model):
     type: Literal["presence.typing"] = "presence.typing"
     typing: bool
@@ -189,6 +204,8 @@ Command = Annotated[
     | McpToggle
     | McpRestart
     | McpImport
+    | AgentsCreate
+    | AgentsRemove
     | TypingSet
     | QueueCancel
     | PolicyAdd

@@ -169,6 +169,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         prompt_mode=settings.prompt_mode,
         skills=skills,
         mcp=mcp,
+        agents=agents,
         typing_ttl_s=settings.typing_ttl_s,
         agent_label=settings.agent_label(),
         fast_label=helper.label if helper else "",

@@ -72,6 +72,7 @@ describe("presets", () => {
       base_url: null,
       api_key: "sk-ant-x",
       context_window: null,
+      fast_model: "",
     });
     expect(toConfig({ preset: "gemini", model: "gemini-2.5-flash", baseUrl: "ignored", contextWindow: "9" }, "k")).toEqual({
       provider: "openai",
@@ -80,6 +81,7 @@ describe("presets", () => {
       base_url: "https://generativelanguage.googleapis.com/v1beta/openai/",
       api_key: "k",
       context_window: null,
+      fast_model: "",
     });
     expect(toConfig({ preset: "custom", model: "m", baseUrl: " http://h/v1 ", contextWindow: "2048" }, "")).toEqual({
       provider: "openai",
@@ -88,6 +90,7 @@ describe("presets", () => {
       base_url: "http://h/v1",
       api_key: null,
       context_window: 2048,
+      fast_model: "",
     });
     expect(toConfig(DEFAULT_CHOICE, "")).toMatchObject({ provider: "fake", api_key: null });
     expect(toConfig({ preset: "nvidia", model: "", baseUrl: "", contextWindow: "" }, "nvapi-test")).toMatchObject({

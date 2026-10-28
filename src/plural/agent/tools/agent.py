@@ -145,6 +145,7 @@ class AgentTool:
                 case _:
                     pass
         usage = child.usage
+        parent.spend(model, spec.name, usage, uses=1)
         tokens = usage.prompt_tokens + usage.output_tokens
         footer = f"\n\n[{spec.name} · {model} model · {calls} tool calls · {tokens} tokens]"
         if ending is not None and ending.reason is RunEndReason.ABORTED:

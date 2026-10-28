@@ -72,6 +72,19 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
       if (parsed === null) {
         return;
       }
+      if (parsed.type === "show.agents") {
+        const lines = state.agents.map((agent) => `  ${agent.name}  ${agent.role}${agent.read_only ? "  read-only" : ""}  ${agent.description}`);
+        notify("accent", ["agents", ...lines].join("\n"));
+        return;
+      }
+      if (parsed.type === "show.usage") {
+        const lines = state.usage.map(
+          (line) =>
+            `  ${line.role} · ${line.model}  ${line.agent || "conversation"}  ${line.uses}×  in ${line.usage.input_tokens}  out ${line.usage.output_tokens}`,
+        );
+        notify("accent", lines.length > 0 ? ["usage", ...lines].join("\n") : "nothing spent yet in this session");
+        return;
+      }
       if (parsed.type === "show.mcp") {
         const lines = state.mcp.map(
           (server) =>

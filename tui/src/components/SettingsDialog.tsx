@@ -10,6 +10,7 @@ import type { Settings } from "../settings";
 import {
   friendlyError,
   maskKey,
+  nextFast,
   nextModel,
   rowsFor,
   switchConnection,
@@ -204,6 +205,8 @@ export function SettingsDialog(props: DialogProps) {
       set({ choice: switched.choice, savedChoices: switched.saved, status: null });
     } else if (row.id === "model") {
       set({ choice: { ...choice, model: nextModel(choice, direction) }, status: null });
+    } else if (row.id === "fast") {
+      set({ choice: { ...choice, fastModel: nextFast(choice, direction) }, status: null });
     } else if (row.kind === "toggle") {
       toggleSetting(row.id);
     }

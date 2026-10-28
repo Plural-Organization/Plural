@@ -68,6 +68,8 @@ export interface CommandsSchema {
     | McpToggle
     | McpRestart
     | McpImport
+    | AgentsCreate
+    | AgentsRemove
     | TypingSet
     | QueueCancel
     | PolicyAdd
@@ -262,6 +264,27 @@ export interface McpRestart {
  */
 export interface McpImport {
   type?: "mcp.import";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "AgentsCreate".
+ */
+export interface AgentsCreate {
+  description: string;
+  model?: "fast" | "main";
+  name: string;
+  prompt: string;
+  scope?: "project" | "global";
+  tools?: string[];
+  type?: "agents.create";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "AgentsRemove".
+ */
+export interface AgentsRemove {
+  name: string;
+  type?: "agents.remove";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

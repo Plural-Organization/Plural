@@ -209,6 +209,23 @@ class McpServerView(Model):
     error: str | None = None
 
 
+class AgentView(Model):
+    name: str
+    description: str
+    role: str
+    tools: tuple[str, ...] = ()
+    scope: SkillScope | None = None
+    read_only: bool = True
+
+
+class UsageLine(Model):
+    role: str
+    model: str
+    agent: str = ""
+    uses: int = 0
+    usage: Usage = Usage()
+
+
 class ContextView(Model):
     tokens: int
     window: int
@@ -243,6 +260,8 @@ class SessionState(Model):
     skills: tuple[SkillView, ...] = ()
     context: ContextView | None = None
     mcp: tuple[McpServerView, ...] = ()
+    usage: tuple[UsageLine, ...] = ()
+    agents: tuple[AgentView, ...] = ()
     queue: tuple[QueuedPrompt, ...] = ()
     agent: str = ""
     fast_agent: str = ""

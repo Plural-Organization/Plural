@@ -4,6 +4,8 @@ from typing import Final
 
 from plural.core.errors import Forbidden
 from plural.protocol.commands import (
+    AgentsCreate,
+    AgentsRemove,
     ApprovalRespond,
     Command,
     ContextCompact,
@@ -62,6 +64,8 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         McpToggle: HOST_ONLY,
         McpRestart: HOST_ONLY,
         McpImport: HOST_ONLY,
+        AgentsCreate: HOST_ONLY,
+        AgentsRemove: HOST_ONLY,
         TypingSet: CONTRIBUTORS,
         QueueCancel: CONTRIBUTORS,
     }

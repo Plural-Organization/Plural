@@ -20,6 +20,7 @@ from plural.agent.events import (
     MessageEnd,
     MessageStart,
     RunEnd,
+    Spend,
     ToolEnd,
     ToolOutput,
     ToolStart,
@@ -110,6 +111,7 @@ class AgentLoop:
     ) -> None:
         self._provider = provider
         self._helper = helper
+        self._spending: dict[tuple[str, str], Spend] = {}
         self._tools = tools
         self._gate = gate
         self._context = context
@@ -125,6 +127,20 @@ class AgentLoop:
         self._compaction_failed = False
         self._verify_compaction = False
         self._provider_close_tasks: set[asyncio.Task[None]] = set()
+
+    def spend(self, role: str, who: str, usage: Usage, *, uses: int = 0) -> None:
+        key = (role, who)
+        previous = self._spending.get(key, Spend(role, who, Usage(), 0))
+        self._spending[key] = Spend(role, who, previous.usage + usage, previous.uses + uses)
+
+    def take_spending(self) -> tuple[Spend, ...]:
+        spending = tuple(
+            spend
+            for spend in self._spending.values()
+            if spend.uses or spend.usage.prompt_tokens or spend.usage.output_tokens
+        )
+        self._spending = {}
+        return spending
 
     @property
     def provider(self) -> LLMProvider:
@@ -232,6 +248,7 @@ class AgentLoop:
         provenance = prompt.provenance
         self._conversation.append(prompt)
         self._usage = Usage()
+        self.spend("main", "", Usage(), uses=1)
         self._gate.begin_run()
         self._compaction_failed = False
         self._verify_compaction = False
@@ -269,6 +286,7 @@ class AgentLoop:
                                 turn.native = content
                             case UsageReport(usage=delta):
                                 self._usage = self._usage + delta
+                                self.spend("main", "", delta)
                                 self._context_tokens = delta.prompt_tokens
                                 self._check_compaction_helped()
                                 yield self.fill()
@@ -371,6 +389,9 @@ class AgentLoop:
                 continue
             try:
                 summary = await self._summarize(request, provider, cancel)
+                self.spend(
+                    "fast" if provider is self._helper else "main", "compact", Usage(), uses=1
+                )
                 break
             except CompactionFailed as error:
                 if cancel.is_set() or provider is self._provider:
@@ -387,6 +408,7 @@ class AgentLoop:
     ) -> str:
         text: list[str] = []
         called = False
+        role = "fast" if provider is self._helper else "main"
         try:
             async for event in self._events(request, cancel, provider):
                 match event:
@@ -396,6 +418,7 @@ class AgentLoop:
                         called = True
                     case UsageReport(usage=delta):
                         self._usage = self._usage + delta
+                        self.spend(role, "compact", delta)
                     case _:
                         pass
         except ProviderError as error:

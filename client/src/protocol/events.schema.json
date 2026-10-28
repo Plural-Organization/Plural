@@ -22,6 +22,70 @@
       ],
       "type": "object"
     },
+    "AgentView": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "read_only": {
+          "default": true,
+          "type": "boolean"
+        },
+        "role": {
+          "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SkillScope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tools": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "role",
+        "tools",
+        "scope",
+        "read_only"
+      ],
+      "type": "object"
+    },
+    "AgentsChanged": {
+      "properties": {
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/AgentView"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "agents.changed",
+          "default": "agents.changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "agents"
+      ],
+      "type": "object"
+    },
     "ApprovalDecision": {
       "enum": [
         "once",
@@ -461,6 +525,7 @@
           "discriminator": {
             "mapping": {
               "agent.changed": "#/$defs/AgentChanged",
+              "agents.changed": "#/$defs/AgentsChanged",
               "approval.requested": "#/$defs/ApprovalRequested",
               "approval.resolved": "#/$defs/ApprovalResolved",
               "attachment.added": "#/$defs/AttachmentAdded",
@@ -495,7 +560,8 @@
               "skills.found": "#/$defs/SkillsFound",
               "tool.ended": "#/$defs/ToolEnded",
               "tool.output": "#/$defs/ToolOutput",
-              "tool.started": "#/$defs/ToolStarted"
+              "tool.started": "#/$defs/ToolStarted",
+              "usage.recorded": "#/$defs/UsageRecorded"
             },
             "propertyName": "type"
           },
@@ -571,6 +637,12 @@
             },
             {
               "$ref": "#/$defs/McpChanged"
+            },
+            {
+              "$ref": "#/$defs/UsageRecorded"
+            },
+            {
+              "$ref": "#/$defs/AgentsChanged"
             },
             {
               "$ref": "#/$defs/ToolStarted"
@@ -1394,6 +1466,13 @@
           "default": "",
           "type": "string"
         },
+        "agents": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AgentView"
+          },
+          "type": "array"
+        },
         "approvals": {
           "additionalProperties": {
             "$ref": "#/$defs/ApprovalView"
@@ -1501,6 +1580,13 @@
             "$ref": "#/$defs/TranscriptEntry"
           },
           "type": "array"
+        },
+        "usage": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/UsageLine"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -1515,6 +1601,8 @@
         "skills",
         "context",
         "mcp",
+        "usage",
+        "agents",
         "queue",
         "agent",
         "fast_agent",
@@ -1877,6 +1965,61 @@
         "cache_write_tokens"
       ],
       "type": "object"
+    },
+    "UsageLine": {
+      "properties": {
+        "agent": {
+          "default": "",
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/Usage",
+          "default": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        },
+        "uses": {
+          "default": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "model",
+        "agent",
+        "uses",
+        "usage"
+      ],
+      "type": "object"
+    },
+    "UsageRecorded": {
+      "properties": {
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/UsageLine"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "usage.recorded",
+          "default": "usage.recorded",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "lines"
+      ],
+      "type": "object"
     }
   },
   "properties": {
@@ -1887,6 +2030,7 @@
       "discriminator": {
         "mapping": {
           "agent.changed": "#/$defs/AgentChanged",
+          "agents.changed": "#/$defs/AgentsChanged",
           "approval.requested": "#/$defs/ApprovalRequested",
           "approval.resolved": "#/$defs/ApprovalResolved",
           "attachment.added": "#/$defs/AttachmentAdded",
@@ -1921,7 +2065,8 @@
           "skills.found": "#/$defs/SkillsFound",
           "tool.ended": "#/$defs/ToolEnded",
           "tool.output": "#/$defs/ToolOutput",
-          "tool.started": "#/$defs/ToolStarted"
+          "tool.started": "#/$defs/ToolStarted",
+          "usage.recorded": "#/$defs/UsageRecorded"
         },
         "propertyName": "type"
       },
@@ -1997,6 +2142,12 @@
         },
         {
           "$ref": "#/$defs/McpChanged"
+        },
+        {
+          "$ref": "#/$defs/UsageRecorded"
+        },
+        {
+          "$ref": "#/$defs/AgentsChanged"
         },
         {
           "$ref": "#/$defs/ToolStarted"

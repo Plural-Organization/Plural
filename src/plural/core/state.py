@@ -2,6 +2,7 @@ from typing import Final
 
 from plural.protocol.events import (
     AgentChanged,
+    AgentsChanged,
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
@@ -28,6 +29,7 @@ from plural.protocol.events import (
     SkillsChanged,
     ToolEnded,
     ToolStarted,
+    UsageRecorded,
 )
 from plural.protocol.models import (
     EntryKind,
@@ -35,6 +37,7 @@ from plural.protocol.models import (
     RunView,
     SessionState,
     TranscriptEntry,
+    UsageLine,
 )
 
 TRANSCRIPT_LIMIT: Final = 200
@@ -66,6 +69,10 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             return state.model_copy(update={"prompt_mode": mode})
         case PermissionModeChanged(mode=mode):
             return state.model_copy(update={"permission_mode": mode})
+        case AgentsChanged(agents=agents):
+            return state.model_copy(update={"agents": agents})
+        case UsageRecorded(lines=lines):
+            return state.model_copy(update={"usage": _add_usage(state.usage, lines)})
         case McpChanged(servers=servers):
             return state.model_copy(update={"mcp": servers})
         case ContextUsage(context=context):
@@ -166,3 +173,18 @@ def _append(state: SessionState, entry: TranscriptEntry) -> SessionState:
 
 def _without[V](mapping: dict[str, V], key: str) -> dict[str, V]:
     return {k: v for k, v in mapping.items() if k != key}
+
+
+def _add_usage(total: tuple[UsageLine, ...], lines: tuple[UsageLine, ...]) -> tuple[UsageLine, ...]:
+    merged = {(line.role, line.model, line.agent): line for line in total}
+    for line in lines:
+        key = (line.role, line.model, line.agent)
+        previous = merged.get(key)
+        merged[key] = (
+            line
+            if previous is None
+            else previous.model_copy(
+                update={"uses": previous.uses + line.uses, "usage": previous.usage + line.usage}
+            )
+        )
+    return tuple(merged.values())

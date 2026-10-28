@@ -9,6 +9,7 @@ export type {
 export type {
   ApprovalRequested,
   ApprovalView,
+  AgentView,
   AttachmentMeta,
   ContextView,
   Envelope,
@@ -33,6 +34,7 @@ export type {
   ToolCallView,
   TranscriptEntry,
   Usage,
+  UsageLine,
 } from "./events";
 
 export type Event = EventsSchema["event"];

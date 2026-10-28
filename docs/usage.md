@@ -89,11 +89,11 @@ Keys are ignored for a moment after a card appears, and a card never takes the k
 
 ## Sub-agents
 
-The agent can hand a self-contained task to a sub-agent that works in its own context and returns a short report, so the main conversation stays small. `explore` is built in: a read-only researcher that searches the code or the web and cites `path:line`. It runs on the fast model when the host has one (see `PLURAL_FAST_MODEL`) and on the main model otherwise. Several sub-agents can run in parallel.
+The agent can hand a self-contained task to a sub-agent that works in its own context and returns a short report, so the main conversation stays small. `explore` is built in: a read-only researcher that searches the code or the web and cites `path:line`. It runs on the fast model when the host has one and on the main model otherwise. The host picks the fast model in the settings (F2, Model): `auto` takes a cheaper model you can already reach, `off` keeps everything on the main model, or choose one; `PLURAL_FAST_MODEL` does the same from the environment. Several sub-agents can run in parallel.
 
 A sub-agent shows up as one `Agent` line in the conversation with what it is doing right now; `ctrl+o` opens everything it looked at, and the line ends with the model it used, its tool calls and its tokens.
 
-Add your own as Markdown files in `.agents/agents`, `.claude/agents` or `.plural/agents`, in the project or the home folder. The format is the one Claude Code uses:
+`/agents` lists them and `+ create an agent…` asks for a name, when to use it, its instructions, what it may touch (read only, read and run commands, or read, edit and run), which model and where to save it. Or add your own as Markdown files in `.agents/agents`, `.claude/agents` or `.plural/agents`, in the project or the home folder. The format is the one Claude Code uses:
 
 ```markdown
 ---
@@ -143,6 +143,8 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | `/policy rm <id>` | Remove a rule (host) |
 | `/compact` | Summarize the conversation now, or before the agent's next step when it is busy (host) |
 | `/skills [search\|add\|rm …]` | List, find and install skills, see [Skills](#skills) |
+| `/agents [rm <name>]` | The sub-agents; the host creates one with a short form, see [Sub-agents](#sub-agents) |
+| `/usage` | Tokens spent in this session per model, for the conversation, summaries and each sub-agent |
 | `/abort` | Stop the current run (host) |
 | `/cancel <n>` | Remove a queued prompt, yours or any as the host |
 | `/copy` | Copy the last reply |

@@ -301,6 +301,70 @@ describe("App", () => {
     await frame(setup, "fast · 3 calls · 18K tokens");
   });
 
+  test("/usage breaks the session's tokens down by model and agent", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    const usage = (input: number, output: number) => ({ input_tokens: input, output_tokens: output, cache_read_tokens: 0, cache_write_tokens: 0 });
+    fake.emit({
+      type: "usage.recorded",
+      lines: [
+        { role: "main", model: "claude-opus-5-5", agent: "", uses: 2, usage: usage(120_000, 8_000) },
+        { role: "fast", model: "claude-haiku-5-5", agent: "explore", uses: 3, usage: usage(40_000, 2_000) },
+      ],
+    });
+    await setup.mockInput.typeText("/usage");
+    await setup.mockInput.pressEnter();
+    const tray = await frame(setup, "usage · this session");
+    expect(tray).toContain("main · claude-opus-5-5");
+    expect(tray).toContain("agent explore");
+    expect(tray).toContain("in 120K");
+    expect(tray).toContain("in 160K · out 10K tokens");
+  });
+
+  test("/agents lists the sub-agents and the host creates one step by step", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({
+      type: "agents.changed",
+      agents: [{ name: "explore", description: "Broad read-only research.", role: "fast", tools: ["read", "grep"], scope: null, read_only: true }],
+    });
+    await setup.mockInput.typeText("/agents");
+    await setup.mockInput.pressEnter();
+    const list = await frame(setup, "agents · 1");
+    expect(list).toContain("read-only");
+    expect(list).toContain("built in");
+    await setup.mockInput.pressArrow("down");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "create an agent");
+    await setup.mockInput.typeText("reviewer");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "When to use it");
+    await setup.mockInput.typeText("Reviews a diff for bugs.");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Instructions");
+    await setup.mockInput.typeText("Report each bug with path:line.");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Read and run commands");
+    await setup.mockInput.pressArrow("down");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Model");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Every project");
+    await setup.mockInput.pressEnter();
+    await tick(100);
+    expect(fake.commands).toEqual([
+      {
+        type: "agents.create",
+        name: "reviewer",
+        description: "Reviews a diff for bugs.",
+        prompt: "Report each bug with path:line.",
+        tools: ["read", "grep", "glob", "ls", "bash"],
+        model: "fast",
+        scope: "project",
+      },
+    ]);
+  });
+
   test("typing a prompt and pressing enter sends it", async () => {
     const fake = session();
     const setup = await mount(fake);

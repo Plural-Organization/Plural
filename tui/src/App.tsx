@@ -22,10 +22,10 @@ import { Splash } from "./components/Splash";
 import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
-import { SCOPES, TrayView, type McpWizard, type Row, type Tray } from "./components/Tray";
+import { SCOPES, TrayView, type Form, type McpWizard, type Row, type Tray } from "./components/Tray";
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, ModeLine, Working } from "./components/Working";
-import { helpRows, policyRows, skillRows, whoRows } from "./trays";
+import { helpRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
@@ -301,6 +301,94 @@ export function App({
     send({ type: "skills.install", package: hit.package, scope: global ? "global" : "project" });
   };
 
+  const agentForm = (): Form => ({
+    kind: "form",
+    title: "create an agent",
+    index: 0,
+    values: {},
+    selected: 0,
+    warning: null,
+    steps: [
+      { kind: "text", key: "name", label: "Name", hint: "letters, digits, - and _, for example reviewer" },
+      { kind: "text", key: "description", label: "When to use it", hint: "one line the main agent reads to decide when to call it" },
+      { kind: "text", key: "prompt", label: "Instructions", hint: "what it does and what its report should look like", multiline: true },
+      {
+        kind: "choice",
+        key: "tools",
+        label: "What it may touch",
+        options: [
+          { value: "read, grep, glob, ls, web_search, web_fetch, skill", title: "Read only", detail: "search the code and the web; nothing asks the host" },
+          { value: "read, grep, glob, ls, bash", title: "Read and run commands", detail: "also bash, for tests and builds; commands ask the host" },
+          { value: "read, grep, glob, ls, edit, multi_edit, write, bash", title: "Read, edit and run", detail: "can change files; every change asks the host" },
+        ],
+      },
+      {
+        kind: "choice",
+        key: "model",
+        label: "Model",
+        options: [
+          { value: "fast", title: "Fast", detail: state.fast_agent ? `runs on ${state.fast_agent}` : "the cheaper model, or the main one when there is none" },
+          { value: "main", title: "Main", detail: `runs on ${state.agent || "the main model"}` },
+        ],
+      },
+      {
+        kind: "choice",
+        key: "scope",
+        label: "Save for",
+        options: [
+          { value: "project", title: "This project", detail: ".agents/agents in the workspace · commit it to share it" },
+          { value: "global", title: "Every project", detail: "~/.agents/agents on this machine" },
+        ],
+      },
+    ],
+  });
+
+  const finishForm = (form: Form): void => {
+    const values = form.values;
+    send({
+      type: "agents.create",
+      name: values.name ?? "",
+      description: values.description ?? "",
+      prompt: values.prompt ?? "",
+      tools: (values.tools ?? "").split(",").map((tool) => tool.trim()).filter(Boolean),
+      model: values.model === "main" ? "main" : "fast",
+      scope: values.scope === "global" ? "global" : "project",
+    });
+    setTray({ kind: "agents", selected: 0, canManage: true });
+  };
+
+  const formStep = (form: Form, typed: string | null): void => {
+    const step = form.steps[form.index];
+    if (!step) {
+      return;
+    }
+    let value: string;
+    if (step.kind === "choice") {
+      value = step.options[form.selected]?.value ?? "";
+    } else {
+      value = (typed ?? "").trim();
+      const taken = client.projection.state.agents.map((agent) => agent.name);
+      const warning =
+        !value && !step.optional
+          ? `${step.label.toLowerCase()} is needed`
+          : step.key === "name" && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value)
+            ? "use letters, digits, ., - and _"
+            : step.key === "name" && taken.includes(value)
+              ? `${value} is taken, pick another name`
+              : null;
+      if (warning) {
+        setTray({ ...form, warning });
+        return;
+      }
+    }
+    const next = { ...form, values: { ...form.values, [step.key]: value }, index: form.index + 1, selected: 0, warning: null };
+    if (next.index >= form.steps.length) {
+      finishForm(next);
+    } else {
+      setTray(next);
+    }
+  };
+
   const advance = (wizard: McpWizard, typed: string): void => {
     const field = wizard.fields[wizard.index];
     if (!field) {
@@ -349,6 +437,32 @@ export function App({
 
   const idleKey = (name: string): boolean => {
     const current = trayRef.current;
+    if (current?.kind === "form") {
+      const step = current.steps[current.index];
+      if (step?.kind === "choice" && (name === "up" || name === "down")) {
+        const count = step.options.length;
+        setTray({ ...current, selected: (current.selected + (name === "up" ? -1 : 1) + count) % count });
+        return true;
+      }
+      if (name === "return") {
+        formStep(current, step?.kind === "text" ? "" : null);
+        return true;
+      }
+      return false;
+    }
+    if (current?.kind === "agents") {
+      const agents = client.projection.state.agents;
+      const total = agents.length + (isHost ? 1 : 0);
+      if (name === "up" || name === "down") {
+        setTray({ ...current, selected: (current.selected + (name === "up" ? -1 : 1) + total) % total });
+        return true;
+      }
+      if (name === "return" && isHost && current.selected === agents.length) {
+        setTray(agentForm());
+        return true;
+      }
+      return false;
+    }
     if (current?.kind === "mcp-add") {
       return wizardKey(current, name);
     }
@@ -528,6 +642,10 @@ export function App({
 
   const submit = (text: string): void => {
     const wizard = trayRef.current;
+    if (wizard?.kind === "form") {
+      formStep(wizard, wizard.steps[wizard.index]?.kind === "text" ? text : null);
+      return;
+    }
     if (wizard?.kind === "mcp-add" && wizard.step === "field") {
       advance(wizard, text);
       return;
@@ -558,6 +676,14 @@ export function App({
         }
         if (parsed.type === "show.skills") {
           show(`skills · ${state.skills.length}`, skillRows(projection, width - (showPanel ? SIDEBAR_WIDTH : 0) - 10));
+          return;
+        }
+        if (parsed.type === "show.usage") {
+          show("usage · this session", usageRows(projection));
+          return;
+        }
+        if (parsed.type === "show.agents") {
+          setTray({ kind: "agents", selected: 0, canManage: isHost });
           return;
         }
         if (parsed.type === "show.mcp") {
@@ -665,7 +791,13 @@ export function App({
     copying.current = setTimeout(() => copy(text, `copied ${text.length} characters`), 250);
   });
 
-  const asking = tray?.kind === "mcp-add" && tray.step === "field" ? tray.fields[tray.index] : undefined;
+  const formAsk = tray?.kind === "form" ? tray.steps[tray.index] : undefined;
+  const asking =
+    tray?.kind === "mcp-add" && tray.step === "field"
+      ? tray.fields[tray.index]
+      : formAsk?.kind === "text"
+        ? { label: formAsk.label, hint: formAsk.hint, secret: false }
+        : undefined;
   const placeholder =
     me?.role === "participant" && state.prompt_mode === "review"
       ? "Propose a prompt, the host approves it"
@@ -770,11 +902,12 @@ export function App({
           <TrayView
             tray={tray}
             servers={state.mcp}
+            agents={state.agents}
             maxRows={Math.max(4, Math.floor(height * 0.55))}
             onClose={() => setTray(null)}
             onSelect={(index) => {
               setFocus("composer");
-              setTray((current) => (current?.kind === "pick" || current?.kind === "mcp" || current?.kind === "mcp-add" ? { ...current, selected: index } : current));
+              setTray((current) => (current?.kind === "pick" || current?.kind === "mcp" || current?.kind === "mcp-add" || current?.kind === "agents" || current?.kind === "form" ? { ...current, selected: index } : current));
             }}
           />
         ) : null}

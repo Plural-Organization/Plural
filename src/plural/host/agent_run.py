@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator, Callable, Sequence
 
 import structlog
 
-from plural.agent.events import AgentEvent, ContextFill, RunEnd
+from plural.agent.events import AgentEvent, ContextFill, RunEnd, Spend
 from plural.agent.loop import AgentLoop
 from plural.agent.messages import Message, UserTurn
 from plural.agent.providers.base import LLMProvider
@@ -39,6 +39,9 @@ class AgentRun:
 
     def fill(self) -> ContextFill:
         return self._loop.fill()
+
+    def take_spending(self) -> tuple[Spend, ...]:
+        return self._loop.take_spending()
 
     def _launch(
         self, run_id: str, events: Callable[[asyncio.Event], AsyncIterator[AgentEvent]]

@@ -1,4 +1,4 @@
-import type { EventRecord, SessionState, TranscriptEntry } from "./protocol";
+import type { EventRecord, SessionState, TranscriptEntry, UsageLine } from "./protocol";
 
 export const TRANSCRIPT_LIMIT = 200;
 export const OUTPUT_PREVIEW_CHARS = 2000;
@@ -16,6 +16,8 @@ export function emptyState(): SessionState {
     skills: [],
     context: null,
     mcp: [],
+    usage: [],
+    agents: [],
     queue: [],
     agent: "",
     fast_agent: "",
@@ -49,6 +51,10 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return { ...state, prompt_mode: event.mode };
     case "session.permission_mode_changed":
       return { ...state, permission_mode: event.mode };
+    case "agents.changed":
+      return { ...state, agents: event.agents };
+    case "usage.recorded":
+      return { ...state, usage: addUsage(state.usage, event.lines) };
     case "mcp.changed":
       return { ...state, mcp: event.servers };
     case "context.usage":
@@ -172,4 +178,28 @@ function append(state: SessionState, entry: TranscriptEntry): SessionState {
 function without<V>(map: Record<string, V>, key: string): Record<string, V> {
   const { [key]: _removed, ...rest } = map;
   return rest;
+}
+
+function addUsage(total: UsageLine[], lines: UsageLine[]): UsageLine[] {
+  const merged = new Map(total.map((line) => [`${line.role}\u0000${line.model}\u0000${line.agent}`, line]));
+  for (const line of lines) {
+    const key = `${line.role}\u0000${line.model}\u0000${line.agent}`;
+    const previous = merged.get(key);
+    merged.set(
+      key,
+      previous === undefined
+        ? line
+        : {
+            ...previous,
+            uses: previous.uses + line.uses,
+            usage: {
+              input_tokens: previous.usage.input_tokens + line.usage.input_tokens,
+              output_tokens: previous.usage.output_tokens + line.usage.output_tokens,
+              cache_read_tokens: previous.usage.cache_read_tokens + line.usage.cache_read_tokens,
+              cache_write_tokens: previous.usage.cache_write_tokens + line.usage.cache_write_tokens,
+            },
+          },
+    );
+  }
+  return [...merged.values()];
 }

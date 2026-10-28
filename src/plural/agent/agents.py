@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Final, Literal
 
 from plural.agent.skills import NAME, frontmatter
-from plural.protocol.models import SkillScope
+from plural.protocol.models import AgentView, SkillScope
 
 AGENT_DIRS: Final = ((".agents", "agents"), (".claude", "agents"), (".plural", "agents"))
 DEFAULT_TURNS: Final = 20
@@ -52,6 +52,10 @@ claim as path:line. Say plainly what you could not find or did not check.
 - Keep the report short and concrete; the other agent reads it, not a person."""
 
 
+class AgentError(Exception):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class AgentSpec:
     name: str
@@ -62,9 +66,31 @@ class AgentSpec:
     max_turns: int = DEFAULT_TURNS
     scope: SkillScope | None = None
 
+    path: Path | None = None
+
     @property
     def read_only(self) -> bool:
         return all(tool in READ_ONLY for tool in self.tools)
+
+    def view(self) -> AgentView:
+        return AgentView(
+            name=self.name,
+            description=self.description,
+            role=self.role,
+            tools=self.tools,
+            scope=self.scope,
+            read_only=self.read_only,
+        )
+
+    def markdown(self) -> str:
+        header = (
+            f"name: {self.name}",
+            f"description: {self.description}",
+            f"tools: {', '.join(self.tools)}",
+            f"model: {self.role}",
+            f"max_turns: {self.max_turns}",
+        )
+        return "---\n" + "\n".join(header) + f"\n---\n\n{self.prompt.strip()}\n"
 
 
 EXPLORE: Final = AgentSpec(
@@ -78,7 +104,7 @@ EXPLORE: Final = AgentSpec(
 )
 
 
-def _tools(raw: str | None) -> tuple[str, ...]:
+def agent_tools(raw: str | None) -> tuple[str, ...]:
     if not raw:
         return READ_ONLY
     names = [part.strip().lower().replace(" ", "") for part in re.split(r"[,\[\]]", raw)]
@@ -120,9 +146,10 @@ def read_agent(path: Path, scope: SkillScope) -> AgentSpec | None:
         description=description,
         prompt=body,
         role=_role(fields.get("model")),
-        tools=_tools(fields.get("tools")),
+        tools=agent_tools(fields.get("tools")),
         max_turns=_turns(fields.get("max_turns")),
         scope=scope,
+        path=path,
     )
 
 
@@ -133,6 +160,10 @@ class AgentLibrary:
             *((home.joinpath(*parts), SkillScope.GLOBAL) for parts in AGENT_DIRS),
         )
         self._agents: dict[str, AgentSpec] = {EXPLORE.name: EXPLORE}
+        self._targets = {
+            SkillScope.PROJECT: project.joinpath(*AGENT_DIRS[0]),
+            SkillScope.GLOBAL: home.joinpath(*AGENT_DIRS[0]),
+        }
 
     @property
     def agents(self) -> tuple[AgentSpec, ...]:
@@ -157,6 +188,34 @@ class AgentLibrary:
 
     def describe(self) -> str | None:
         return describe(self.agents)
+
+    def views(self) -> tuple[AgentView, ...]:
+        return tuple(agent.view() for agent in self._agents.values())
+
+    def create(self, spec: AgentSpec, scope: SkillScope) -> AgentSpec:
+        if not NAME.match(spec.name):
+            raise AgentError("a name is letters, digits, ., - and _, up to 64 characters")
+        if spec.name in self._agents:
+            raise AgentError(f"there is already an agent named {spec.name}")
+        if not spec.description.strip() or not spec.prompt.strip():
+            raise AgentError("an agent needs a description and instructions")
+        folder = self._targets[scope]
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / f"{spec.name}.md"
+        path.write_text(spec.markdown(), encoding="utf-8")
+        self.refresh()
+        return self._agents[spec.name]
+
+    def remove(self, name: str) -> None:
+        spec = self._agents.get(name)
+        if spec is None:
+            raise AgentError(f"no agent named {name}")
+        if spec.path is None:
+            raise AgentError(f"{name} is built in")
+        if spec.path.parent not in self._targets.values():
+            raise AgentError(f"{name} lives in {spec.path.parent}; remove it there by hand")
+        spec.path.unlink(missing_ok=True)
+        self.refresh()
 
 
 def describe(agents: Sequence[AgentSpec]) -> str | None:
