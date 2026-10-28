@@ -21,6 +21,7 @@ from plural.agent.providers.base import (
     LlmEvent,
     LlmMessage,
     LlmRequest,
+    ProviderActivity,
     ProviderBusy,
     ProviderError,
     Stop,
@@ -105,6 +106,9 @@ class OpenAIProvider:
                     for choice in chunk.choices:
                         for event in _deltas(choice.delta):
                             yield event
+                        if choice.delta.tool_calls:
+                            # A long tool call, like a file being written, streams no text.
+                            yield ProviderActivity(source="tool_call")
                         _collect(calls, choice.delta.tool_calls or ())
                         if choice.finish_reason is not None:
                             stop = _STOP_REASONS.get(choice.finish_reason, "end_turn")

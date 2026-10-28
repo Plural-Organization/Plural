@@ -27,6 +27,7 @@ from plural.agent.providers.base import (
     LlmRequest,
     NativeContent,
     NativeReady,
+    ProviderActivity,
     ProviderBusy,
     ProviderError,
     Stop,
@@ -114,7 +115,9 @@ class AnthropicProvider:
                         ) if text:
                             yield ThinkingDelta(text=text)
                         case _:
-                            pass
+                            # Tool input, signatures and block boundaries carry no text but show
+                            # the model is still working, for example while it writes a long file.
+                            yield ProviderActivity(source=getattr(event, "type", "event"))
                 message = await stream.get_final_message()
         except anthropic.APIError as error:
             if _overflows(error):

@@ -18,6 +18,7 @@ from plural.agent.providers.base import (
     LlmRequest,
     NativeContent,
     NativeReady,
+    ProviderActivity,
     ProviderBusy,
     ProviderError,
     Stop,
@@ -233,6 +234,32 @@ async def test_stalled_stream_times_out_between_events(tmp_path: Path) -> None:
     assert last.reason is RunEndReason.ERROR
     assert last.error == "model produced no output for 0.05s"
     assert last.usage.output_tokens == 3
+
+
+async def test_a_long_tool_call_keeps_the_run_alive(tmp_path: Path) -> None:
+    class Writing:
+        """Streams a tool call for longer than the idle timeout, the way a long file arrives."""
+
+        async def stream(
+            self, request: LlmRequest, *, cancel: asyncio.Event
+        ) -> AsyncIterator[LlmEvent]:
+            if len(request.messages) > 1:
+                yield TextDelta(text="written")
+                yield Stop()
+                return
+            for _ in range(8):
+                await asyncio.sleep(0.03)
+                yield ProviderActivity(source="tool_call")
+            call = ToolCallRequest(id="w1", name="write", args={"path": "big.py", "content": "x"})
+            yield ToolCallReady(call=call)
+            yield Stop(reason="tool_use")
+
+    limits = LoopLimits(first_token_timeout_s=0.1, idle_timeout_s=0.1)
+    events = await collect(make_loop(tmp_path, Writing(), StubGate(), limits), turn("write it"))
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.STOP
+    assert (tmp_path / "big.py").read_text() == "x"
 
 
 async def abort_after(loop: AgentLoop, delay: float) -> tuple[list[AgentEvent], float]:
