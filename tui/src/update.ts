@@ -41,6 +41,13 @@ export async function latestVersion(fetcher: typeof fetch = fetch): Promise<stri
   return payload.tag_name.replace(/^v/, "");
 }
 
+export function skewNote(client: string, host: string): string | null {
+  if (parseVersion(client) === null || parseVersion(host) === null || compareVersions(host, client) >= 0) {
+    return null;
+  }
+  return `the host (plural-host ${host}) is older than this plural ${client}, so some commands will not work. Run plural update, or: uv tool install --force --refresh plural-agent==${client}`;
+}
+
 export type Installer = (environment: Record<string, string>) => Promise<number>;
 
 export function runInstaller(url: string = INSTALLER_URL): Installer {

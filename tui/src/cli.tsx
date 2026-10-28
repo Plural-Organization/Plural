@@ -19,7 +19,7 @@ import { emptyOptions, parseArgs, UsageError, type SessionOptions } from "./opti
 import { pickSession } from "./picker";
 import { composePrompt, readStdin, runPrint } from "./print";
 import { startupCommands } from "./startup";
-import { runUpdate } from "./update";
+import { runUpdate, skewNote } from "./update";
 import { listSessions, resolveSession, type SessionInfo } from "./sessions";
 import { parseTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
 
@@ -180,6 +180,10 @@ async function printOnce(options: SessionOptions, name: string): Promise<void> {
     fail(problem(error));
   }
   const host = target.host;
+  const skew = host === null ? null : skewNote(pkg.version, host.version);
+  if (skew !== null) {
+    process.stderr.write(`warning: ${skew}\n`);
+  }
   if (host !== null && plan.choice !== null) {
     const applied = await host.control.configure(toConfig(plan.choice, plan.key));
     if (!applied.ok) {
@@ -238,7 +242,8 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
 
   const keys = loadKeys();
   const control = host?.control ?? null;
-  let startupNote: string | null = target.note;
+  const skew = host === null ? null : skewNote(pkg.version, host.version);
+  let startupNote: string | null = skew ?? target.note;
   if (control && plan.choice !== null) {
     if (plan.problem !== null) {
       startupNote = `could not use the model: ${plan.problem}. Open the settings (F2) to fix it.`;

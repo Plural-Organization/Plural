@@ -62,6 +62,14 @@ sha256_check() {
   fi
 }
 
+latest_version() {
+  tag="$(curl -fsSLI -o /dev/null -w '%{url_effective}' --retry 3 --connect-timeout 20 "$RELEASES/latest" 2>/dev/null || true)"
+  case "$tag" in
+    */tag/v[0-9]*) printf '%s\n' "${tag##*/tag/v}" ;;
+    *) return 1 ;;
+  esac
+}
+
 asset_url() {
   if [ "$VERSION" = "latest" ]; then
     echo "$RELEASES/latest/download/$1"
@@ -87,7 +95,7 @@ install_host() {
     fi
   fi
   step "Installing the host (plural-host)"
-  uv tool install --force --python 3.12 "$package"
+  uv tool install --force --refresh --python 3.12 "$package"
 }
 
 checksum_of() {
@@ -144,8 +152,19 @@ on_path() {
   esac
 }
 
+if [ "${PLURAL_INSTALL_SOURCE_ONLY:-}" = 1 ]; then
+  return 0 2>/dev/null || exit 0
+fi
+
 need curl
 need tar
+
+if [ "$VERSION" = "latest" ]; then
+  resolved="$(latest_version || true)"
+  if [ -n "$resolved" ]; then
+    VERSION="$resolved"
+  fi
+fi
 
 install_host
 install_client

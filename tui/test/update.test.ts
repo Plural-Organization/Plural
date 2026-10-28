@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs, UsageError } from "../src/options";
-import { compareVersions, isInstalledBinary, latestVersion, runInstaller, runUpdate, type Installer } from "../src/update";
+import { compareVersions, isInstalledBinary, latestVersion, runInstaller, runUpdate, skewNote, type Installer } from "../src/update";
 
 class Capture {
   text = "";
@@ -126,6 +126,22 @@ describe("the installer is the project's own script", () => {
     const script = join(directory, "install.sh");
     writeFileSync(script, "exit 7\n");
     expect(await runInstaller(`file://${script}`)({})).toBe(7);
+  });
+});
+
+describe("a host older than the client", () => {
+  test("is named with how to fix it", () => {
+    const note = skewNote("0.2.2", "0.2.1");
+    expect(note).toContain("plural-host 0.2.1");
+    expect(note).toContain("plural update");
+    expect(note).toContain("plural-agent==0.2.2");
+  });
+
+  test("an equal or newer host, or a version that cannot be read, says nothing", () => {
+    expect(skewNote("0.2.2", "0.2.2")).toBeNull();
+    expect(skewNote("0.2.2", "0.3.0")).toBeNull();
+    expect(skewNote("0.2.2", "dev")).toBeNull();
+    expect(skewNote("dev", "0.2.1")).toBeNull();
   });
 });
 

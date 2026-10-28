@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { realpathSync } from "node:fs";
 import { hostCommand } from "./host-process";
 import { UsageError, type Resume } from "./options";
+import pkg from "../package.json" with { type: "json" };
 
 export interface SessionInfo {
   room: string;
@@ -28,7 +29,13 @@ export function listSessions(workspace?: string): Promise<SessionInfo[]> {
     );
     child.on("close", (code) => {
       if (code !== 0) {
-        reject(new UsageError(`could not list the sessions (exit ${code}) ${errors.trim()}`));
+        reject(
+          new UsageError(
+            /No such command/.test(errors)
+              ? `the host (plural-host) is older than this plural ${pkg.version} and cannot list sessions. Run plural update, or: uv tool install --force --refresh plural-agent==${pkg.version}`
+              : `could not list the sessions (exit ${code}) ${errors.trim()}`,
+          ),
+        );
         return;
       }
       try {
