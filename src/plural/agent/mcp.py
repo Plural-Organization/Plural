@@ -155,15 +155,21 @@ def importable(home: Path, workspace: Path) -> dict[str, ServerSpec]:
     return found
 
 
-def browser_spec(endpoint: str) -> ServerSpec:
-    """Pinned Playwright MCP attached over CDP to a running browser.
+def browser_spec(browser: str, home: Path) -> ServerSpec:
+    """Pinned Playwright MCP that drives Chrome for the agent.
 
-    `chrome` finds the host's own Chrome once remote debugging is on in chrome://inspect.
+    `launch` opens a Chrome window of its own on first use, with a profile under `home` so
+    logins survive restarts. Any other value is a CDP endpoint to attach to; `chrome` finds
+    the host's running Chrome once remote debugging is on in chrome://inspect.
     """
-    return ServerSpec(
-        command="npx",
-        args=["-y", PLAYWRIGHT_MCP, "--cdp-endpoint", endpoint, "--image-responses", "omit"],
-    )
+    args = ["-y", PLAYWRIGHT_MCP, "--image-responses", "omit"]
+    if browser == "launch":
+        args += ["--browser", "chrome", "--user-data-dir", str(home / "profile")]
+    else:
+        args += ["--cdp-endpoint", browser]
+    # Snapshots and console logs go here instead of into the workspace.
+    args += ["--output-dir", str(home / "output")]
+    return ServerSpec(command="npx", args=args)
 
 
 def tool_name(server: str, tool: str) -> str:

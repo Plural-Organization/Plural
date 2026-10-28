@@ -77,12 +77,19 @@ def test_import_finds_claude_code_and_cursor_servers(tmp_path: Path) -> None:
     assert set(importable(home, workspace)) == {"plane", "db", "web"}
 
 
-def test_the_browser_is_pinned_playwright_mcp_attached_over_cdp() -> None:
-    spec = browser_spec("chrome")
-    assert spec.command == "npx"
-    assert "@playwright/mcp@0.0.83" in spec.args
-    assert spec.args[spec.args.index("--cdp-endpoint") + 1] == "chrome"
-    assert spec.env == {}
+def test_the_browser_launches_its_own_chrome_or_attaches_over_cdp(tmp_path: Path) -> None:
+    launched = browser_spec("launch", tmp_path)
+    assert launched.command == "npx"
+    assert "@playwright/mcp@0.0.83" in launched.args
+    assert launched.args[launched.args.index("--browser") + 1] == "chrome"
+    assert launched.args[launched.args.index("--user-data-dir") + 1] == str(tmp_path / "profile")
+    assert "--cdp-endpoint" not in launched.args
+
+    attached = browser_spec("chrome", tmp_path)
+    assert attached.args[attached.args.index("--cdp-endpoint") + 1] == "chrome"
+    assert "--user-data-dir" not in attached.args
+    assert attached.args[attached.args.index("--output-dir") + 1] == str(tmp_path / "output")
+    assert attached.env == {}
 
 
 async def test_a_builtin_server_starts_and_a_configured_one_replaces_it(tmp_path: Path) -> None:

@@ -28,7 +28,7 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24 hours |
 | `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |
 | `PLURAL_TYPING_TTL_S` | `6` | Seconds after which a typing indicator lapses without a refresh |
-| `PLURAL_BROWSER_ENDPOINT` | `chrome` | CDP endpoint of the browser the agent drives through Playwright MCP. `chrome` attaches to the host's running Chrome once remote debugging is on in `chrome://inspect`; an empty value turns the browser off |
+| `PLURAL_BROWSER` | `launch` | The browser the agent drives through Playwright MCP. `launch` opens a Chrome window of its own on first use; its profile lives in `~/.plural/browser`, so a login there is kept. A CDP endpoint attaches instead: `chrome` is the host's running Chrome once remote debugging is on in `chrome://inspect`. `off` turns the browser off |
 
 ## Models
 

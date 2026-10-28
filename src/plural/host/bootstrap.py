@@ -156,8 +156,8 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         logs=state_dir / "logs",
         on_change=lambda: inbox.put(McpUpdated()),
         builtin=(
-            {BROWSER_SERVER: browser_spec(settings.browser_endpoint)}
-            if settings.browser_endpoint
+            {BROWSER_SERVER: browser_spec(settings.browser, state_dir / "browser")}
+            if settings.browser not in {"", "off"}
             else None
         ),
     )
