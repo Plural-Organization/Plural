@@ -42,6 +42,7 @@ import { copyToClipboard, IMAGE_LIMIT_BYTES, pasteImage } from "./lib/clipboard"
 import { createSyntaxStyle } from "./syntax";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { setTheme, theme } from "./theme";
+import * as sound from "./lib/sound";
 
 export interface AppProps {
   client: Session;
@@ -187,9 +188,15 @@ export function App({
             const author = client.projection.state.participants[event.author_id];
             const who = author ? label(client.projection.state, author) : "someone";
             if (liveSettings.current.mentionBell) {
-              process.stdout.write("\u0007");
+              sound.ring();
             }
             showToast(event.to === null ? `${who} mentioned you` : `${who} wrote to you`, preview(event.text, 60), "accent", "✉");
+          }
+          if (event.type === "participant.joined" && client.projection.me?.role === "host" && event.participant.id !== client.projection.meId) {
+            if (liveSettings.current.joinBell) {
+              sound.ring();
+            }
+            showToast(`${label(client.projection.state, event.participant)} joined`, `as ${event.participant.role}`, "accent", "+");
           }
           if (event.type === "invite.created") {
             if (event.reusable) {
@@ -294,13 +301,14 @@ export function App({
   }, []);
   const pinnedItem = pinned ? feed.items.find((item): item is Extract<typeof item, { kind: "user" }> => item.kind === "user" && item.id === pinned) : undefined;
 
-  const seenInbox = useRef(0);
+  const seenInbox = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
-    if (settings.bell && isHost && items.length > seenInbox.current) {
-      process.stdout.write("\u0007");
+    const ids = new Set(items.map((item) => `${item.kind}:${item.id}`));
+    if (settings.bell && isHost && [...ids].some((id) => !seenInbox.current.has(id))) {
+      sound.ring();
     }
-    seenInbox.current = items.length;
-  }, [items.length]);
+    seenInbox.current = ids;
+  }, [items, settings.bell, isHost]);
 
   useEffect(() => {
     if (approvals === 0) {

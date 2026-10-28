@@ -19,9 +19,12 @@ function room(role: "host" | "participant" = "host"): FakeSession {
   const fake = new FakeSession();
   const me = role === "host" ? HOST : ALIA;
   fake.emit({ type: "session.welcome", room: "r_1", token: "t", participant: me, base_policy: [], agent: "anthropic · claude-opus-5-5" });
-  for (const who of [HOST, ALIA, BEK, CLEO]) {
-    fake.emit({ type: "participant.joined", participant: who });
-  }
+  fake.emit({
+    type: "session.snapshot",
+    state: { ...fake.projection.state, participants: { [HOST.id]: HOST, [ALIA.id]: ALIA, [BEK.id]: BEK, [CLEO.id]: CLEO } },
+    streaming: {},
+    typing: [],
+  });
   return fake;
 }
 

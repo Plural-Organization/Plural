@@ -1,11 +1,39 @@
 let context: AudioContext | null = null;
 let restoreTitle: (() => void) | null = null;
 
+function audio(): AudioContext {
+  if (context === null || context.state === "closed") {
+    context = new AudioContext();
+  }
+  return context;
+}
+
+/** Called synchronously from the join gesture so browsers allow later audio. */
+export function unlockAudio(): void {
+  try {
+    void audio().resume().catch(() => undefined);
+  } catch {
+    return;
+  }
+}
+
 export function beep(): void {
   try {
-    context ??= new AudioContext();
-    const sound = context;
-    void sound.resume();
+    const sound = audio();
+    if (sound.state !== "running") {
+      void sound.resume().then(() => {
+        if (sound.state === "running") play(sound);
+      }).catch(() => undefined);
+      return;
+    }
+    play(sound);
+  } catch {
+    return;
+  }
+}
+
+function play(sound: AudioContext): void {
+  try {
     const oscillator = sound.createOscillator();
     const gain = sound.createGain();
     oscillator.type = "sine";
@@ -45,7 +73,11 @@ export function flagTitle(text: string): void {
   restoreTitle = restore;
 }
 
-export function alertMention(who: string, direct: boolean): void {
+export function alertNotice(text: string): void {
   beep();
-  flagTitle(direct ? `${who} wrote to you` : `${who} mentioned you`);
+  flagTitle(text);
+}
+
+export function alertMention(who: string, direct: boolean): void {
+  alertNotice(direct ? `${who} wrote to you` : `${who} mentioned you`);
 }

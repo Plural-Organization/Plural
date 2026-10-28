@@ -147,6 +147,22 @@ describe("App", () => {
     expect(fake.commands).toEqual([{ type: "prompt.submit", text: "hi", delivery: "now" }]);
   });
 
+  test("switching to OAuth hides the context meter and switching back restores it", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "context.usage", context: { tokens: 96000, window: 128000, compact_at: 0.75 } });
+    await frame(setup, "96K/128K");
+    fake.emit({ type: "agent.changed", agent: "Claude OAuth · claude-haiku-4-5" });
+    await tick(50);
+    await setup.renderOnce();
+    const hidden = setup.captureCharFrame();
+    expect(hidden).not.toContain("96K/128K");
+    expect(hidden).not.toContain("75%");
+    expect(hidden.split("\n").find((line) => line.includes("vlad (host)"))).not.toContain("·  /help");
+    fake.emit({ type: "agent.changed", agent: "Anthropic · claude-opus-5-5" });
+    expect(await frame(setup, "96K/128K")).toContain("75%");
+  });
+
   test("everyone sees the context fill up and a compaction squeeze it", async () => {
     const fake = session();
     const setup = await mount(fake);

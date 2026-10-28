@@ -235,8 +235,9 @@ export function sessionRows(state: ModelState): Row[] {
     ...joiningRows(state, host),
     ...shareRows(state, host),
     toggle("typing", "Show my typing", state.settings.announceTyping, "let others see when you are writing", !viewer),
-    toggle("mention-bell", "Bell on mentions", state.settings.mentionBell, "ring the terminal when someone tags you or writes to you privately", !viewer),
-    toggle("bell", "Bell on requests", state.settings.bell, "ring the terminal when something needs the host", host),
+    toggle("mention-bell", "Bell on mentions", state.settings.mentionBell, "play a sound when someone tags you or writes to you privately", !viewer),
+    toggle("bell", "Bell on requests", state.settings.bell, "play a sound when something needs the host", host),
+    toggle("join-bell", "Bell on joins", state.settings.joinBell, "play a sound when someone joins your room", host),
   ];
 }
 

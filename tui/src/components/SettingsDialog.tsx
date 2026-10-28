@@ -186,6 +186,9 @@ export function SettingsDialog(props: DialogProps) {
       case "mention-bell":
         onSettings({ ...settings, mentionBell: !settings.mentionBell });
         break;
+      case "join-bell":
+        onSettings({ ...settings, joinBell: !settings.joinBell });
+        break;
       case "typing":
         onSettings({ ...settings, announceTyping: !settings.announceTyping });
         break;
