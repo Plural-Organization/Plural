@@ -22,6 +22,9 @@ interface ComposerProps {
   onActivity: (text: string) => void;
   onFocus: () => void;
   onIdleKey?: (key: string) => boolean;
+  images?: string[];
+  onPasteImage?: () => void;
+  onDropImage?: () => void;
   remember?: boolean;
   tips?: boolean;
 }
@@ -33,6 +36,7 @@ const TIPS = [
   "esc stops the agent mid-run",
   "ctrl+o opens every tool call",
   "shift+enter starts a new line",
+  "ctrl+v pastes an image from the clipboard",
 ];
 const TIP_MS = 7000;
 
@@ -87,7 +91,7 @@ export function Composer(props: ComposerProps) {
 
   const submit = (): void => {
     const text = (area.current?.plainText ?? "").trim();
-    if (text === "") {
+    if (text === "" && (props.images ?? []).length === 0) {
       return;
     }
     if (props.remember !== false) {
@@ -133,6 +137,16 @@ export function Composer(props: ComposerProps) {
     if (key.ctrl && key.name === "y") {
       key.preventDefault();
       props.onCopy();
+      return;
+    }
+    if (key.ctrl && key.name === "v" && props.onPasteImage) {
+      key.preventDefault();
+      props.onPasteImage();
+      return;
+    }
+    if (key.name === "backspace" && value === "" && (props.images ?? []).length > 0) {
+      key.preventDefault();
+      props.onDropImage?.();
       return;
     }
     const idle = (area.current?.plainText ?? value) === "" && hints.length === 0 && !key.meta && !key.shift;
@@ -196,6 +210,14 @@ export function Composer(props: ComposerProps) {
         title={label ? ` ${label} ` : undefined}
         titleAlignment="left"
       >
+        {(props.images ?? []).length > 0 ? (
+          <box flexDirection="row" height={1}>
+            <text fg={theme.accent}>
+              {(props.images ?? []).map((name) => `[${name}]`).join(" ")}
+              <span fg={theme.dim}>  backspace removes the last one</span>
+            </text>
+          </box>
+        ) : null}
         <box flexDirection="row">
           <text fg={color}>{focused ? "❯ " : "› "}</text>
           <textarea

@@ -11,6 +11,7 @@ from pydantic import ValidationError
 from plural.agent import events as agent
 from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.messages import Message, UserTurn
+from plural.agent.providers.base import LlmImage
 from plural.agent.skills import Package, SkillError, SkillLibrary, parse_package
 from plural.core import approvals, policies, proposals
 from plural.core.errors import (
@@ -28,7 +29,7 @@ from plural.core.state import reduce
 from plural.host import history
 from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
-from plural.host.attachments import AttachmentVault
+from plural.host.attachments import AttachmentVault, image_type
 from plural.host.gateway import Gateway
 from plural.host.inbox import (
     AgentOutput,
@@ -161,6 +162,7 @@ class SessionActor:
         clock: Clock,
         host: Participant,
         max_attachment_bytes: int,
+        max_image_bytes: int,
         prompt_mode: PromptMode | None = None,
         skills: SkillLibrary | None = None,
         mcp: McpHub | None = None,
@@ -181,6 +183,7 @@ class SessionActor:
         self._clock = clock
         self._host = host
         self._max_attachment_bytes = max_attachment_bytes
+        self._max_image_bytes = max_image_bytes
         self._initial_mode = prompt_mode
         self._skills = skills
         self._mcp = mcp
@@ -639,7 +642,7 @@ class SessionActor:
         )
         await self._emit(accepted, actor_id=author.id)
         await self._set_typing(author.id, typing=False)
-        body = await self._with_attachments(text, attachments)
+        body, images = await self._with_attachments(text, attachments)
         if self._state.permission_mode is PermissionMode.PLAN:
             body = f"{body}\n\n{PLAN_NOTE}"
         turn = UserTurn(
@@ -647,6 +650,7 @@ class SessionActor:
             author=Actor(id=author.id, kind=ActorKind.HUMAN, name=author.name),
             provenance=provenance,
             text=body,
+            images=images,
         )
         if self._state.run is None:
             await self._start_run(turn)
@@ -745,8 +749,9 @@ class SessionActor:
             data = base64.b64decode(command.content_b64, validate=True)
         except binascii.Error as error:
             raise Invalid("content is not valid base64") from error
-        if len(data) > self._max_attachment_bytes:
-            raise Invalid(f"attachment exceeds {self._max_attachment_bytes} bytes")
+        limit = self._max_image_bytes if image_type(data) else self._max_attachment_bytes
+        if len(data) > limit:
+            raise Invalid(f"attachment exceeds {limit} bytes")
         if hashlib.sha256(data).hexdigest() != command.sha256:
             raise Invalid("sha256 mismatch")
         attachment_id = self._ids.new("at_")
@@ -767,20 +772,36 @@ class SessionActor:
             event = record.event
             if isinstance(event, PromptAccepted) and event.attachments:
                 try:
-                    texts[event.prompt_id] = await self._with_attachments(
-                        event.text, event.attachments
+                    texts[event.prompt_id], _ = await self._with_attachments(
+                        event.text, event.attachments, images=False
                     )
                 except (KeyError, OSError):
                     log.warning("actor.attachment_missing", prompt_id=event.prompt_id)
         return history.replay(records, names=names, texts=texts)
 
-    async def _with_attachments(self, text: str, attachment_ids: tuple[str, ...]) -> str:
+    async def _with_attachments(
+        self, text: str, attachment_ids: tuple[str, ...], *, images: bool = True
+    ) -> tuple[str, tuple[LlmImage, ...]]:
+        """The prompt with its text attachments inlined and its images apart.
+
+        A replayed history keeps only a note of each image, so a restart does not resend them.
+        """
         parts = [text]
+        pictures: list[LlmImage] = []
         for attachment_id in attachment_ids:
             meta = self._state.attachments[attachment_id]
-            body = await self._vault.read_text(attachment_id)
-            parts.append(f"[attachment {meta.name}, untrusted]\n{body}")
-        return "\n\n".join(parts)
+            data = await self._vault.read(attachment_id)
+            if (media_type := image_type(data)) is None:
+                body = data.decode(errors="replace")
+                parts.append(f"[attachment {meta.name}, untrusted]\n{body}")
+            elif images:
+                parts.append(f"[image {meta.name}, untrusted, attached]")
+                pictures.append(
+                    LlmImage(media_type=media_type, data=base64.b64encode(data).decode())
+                )
+            else:
+                parts.append(f"[image {meta.name}, no longer available]")
+        return "\n\n".join(parts), tuple(pictures)
 
     def _require_guest(self, participant_id: str) -> None:
         target = self._state.participants.get(participant_id)

@@ -57,7 +57,8 @@ def _schema(request: LlmRequest) -> dict[str, Any]:
 
 def _prompt(request: LlmRequest, messages: tuple[LlmMessage, ...]) -> str:
     serialized_messages = [
-        message.model_dump(mode="json", exclude_none=True) for message in messages
+        message.model_dump(mode="json", exclude_none=True, exclude={"images"})
+        for message in messages
     ]
     tools = [tool.model_dump(mode="json") for tool in request.tools]
     return (
