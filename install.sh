@@ -90,20 +90,51 @@ install_host() {
   uv tool install --force --python 3.12 "$package"
 }
 
+checksum_of() {
+  awk '{print $1; exit}' "$1"
+}
+
+download() {
+  if [ -t 2 ]; then
+    curl -fL --progress-bar --retry 5 --retry-delay 2 --retry-connrefused --connect-timeout 20 -C - "$1" -o "$2"
+  else
+    curl -fsSL --retry 5 --retry-delay 2 --retry-connrefused --connect-timeout 20 -C - "$1" -o "$2"
+  fi
+}
+
 install_client() {
   os="$(detect_os)"
   arch="$(detect_arch)"
   asset="plural-$os-$arch.tar.gz"
+  cache="${XDG_CACHE_HOME:-$HOME/.cache}/plural"
   work="$(mktemp -d)"
   trap 'rm -rf "$work"' EXIT
-  step "Downloading plural for $os-$arch"
-  curl -fsSL "$(asset_url "$asset")" -o "$work/$asset" || fail "could not download $asset from $RELEASES"
-  curl -fsSL "$(asset_url "$asset.sha256")" -o "$work/$asset.sha256" || fail "could not download the checksum for $asset"
-  (cd "$work" && sha256_check "$asset.sha256") || fail "checksum mismatch for $asset"
-  tar -xzf "$work/$asset" -C "$work"
+  curl -fsSL --retry 3 --connect-timeout 20 "$(asset_url "$asset.sha256")" -o "$work/$asset.sha256" || fail "could not download the checksum for $asset from $RELEASES"
+  hash="$(checksum_of "$work/$asset.sha256")"
+  [ -n "$hash" ] || fail "the checksum for $asset is empty"
+  if [ -x "$BIN_DIR/plural" ] && [ "$(cat "$cache/installed-$os-$arch" 2>/dev/null || true)" = "$hash" ]; then
+    step "plural is already up to date"
+    return
+  fi
+  download_dir="$cache/$hash"
+  mkdir -p "$download_dir"
+  cp "$work/$asset.sha256" "$download_dir/$asset.sha256"
+  if [ -f "$download_dir/$asset" ] && (cd "$download_dir" && sha256_check "$asset.sha256"); then
+    step "Using the download from an earlier run"
+  else
+    step "Downloading plural for $os-$arch"
+    download "$(asset_url "$asset")" "$download_dir/$asset" || fail "could not download $asset from $RELEASES, run the installer again to continue where it stopped"
+    (cd "$download_dir" && sha256_check "$asset.sha256") || {
+      rm -f "$download_dir/$asset"
+      fail "checksum mismatch for $asset, run the installer again"
+    }
+  fi
+  tar -xzf "$download_dir/$asset" -C "$work"
   mkdir -p "$BIN_DIR"
   mv -f "$work/plural" "$BIN_DIR/plural"
   chmod +x "$BIN_DIR/plural"
+  printf '%s\n' "$hash" > "$cache/installed-$os-$arch"
+  rm -rf "$download_dir"
 }
 
 on_path() {
