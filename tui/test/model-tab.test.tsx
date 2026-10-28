@@ -31,7 +31,7 @@ function session(role: "host" | "participant" = "host", agent = "demo agent (scr
   const fake = new FakeSession();
   const me = role === "host" ? HOST : ALIA;
   fake.emit({ type: "session.welcome", room: "r_1", token: "t", participant: me, base_policy: [], agent });
-  fake.emit({ type: "agent.changed", agent });
+  fake.emit({ type: "agent.changed", agent, fast: "" });
   fake.emit({ type: "participant.joined", participant: HOST });
   return fake;
 }
@@ -117,7 +117,7 @@ describe("Model tab", () => {
     expect(masked).toContain("1234");
     expect(masked).not.toContain("sk-ant-abcdefghijklmnop1234");
 
-    await down(setup, 4);
+    await down(setup, 5);
     await setup.mockInput.pressEnter();
     await frame(setup, "now using Anthropic · claude-opus-5-5");
     expect(control.configured).toEqual([
@@ -128,6 +128,7 @@ describe("Model tab", () => {
         base_url: null,
         api_key: "sk-ant-abcdefghijklmnop1234",
         context_window: null,
+        fast_model: "",
       },
     ]);
     expect(hooks.settings.at(-1)).toMatchObject({
@@ -147,7 +148,7 @@ describe("Model tab", () => {
     await setup.mockInput.pressArrow("right");
     await frame(setup, "Anthropic");
     await down(setup, 1);
-    await down(setup, 4);
+    await down(setup, 5);
     await setup.mockInput.pressEnter();
     await frame(setup, "Anthropic needs an API key");
     expect(control.configured).toEqual([]);
@@ -162,7 +163,7 @@ describe("Model tab", () => {
     await down(setup, 1);
     await setup.mockInput.pressArrow("right");
     await frame(setup, "Ollama (local)");
-    await down(setup, 4);
+    await down(setup, 5);
     await setup.mockInput.pressEnter();
     await frame(setup, "connected, answered in 0.8s");
     expect(control.tested).toEqual([
@@ -173,6 +174,7 @@ describe("Model tab", () => {
         base_url: "http://127.0.0.1:11434/v1",
         api_key: null,
         context_window: null,
+        fast_model: "",
       },
     ]);
 
@@ -197,7 +199,7 @@ describe("Model tab", () => {
     const custom = await frame(setup, "Endpoint");
     expect(custom).toContain("Context window");
     expect(custom).toContain("API key (optional)");
-    await down(setup, 4);
+    await down(setup, 5);
     await setup.mockInput.pressEnter();
     await setup.mockInput.typeText("4096");
     await setup.mockInput.pressEnter();
@@ -251,7 +253,7 @@ describe("Model tab", () => {
     await setup.mockInput.pressEnter();
     await setup.mockInput.typeText("sk-ant-abcdefghijklmnop1234");
     await setup.mockInput.pressEnter();
-    await down(setup, 4);
+    await down(setup, 5);
     await setup.mockInput.pressEnter();
     await frame(setup, "the agent is busy");
     expect(hooks.settings).toEqual([]);

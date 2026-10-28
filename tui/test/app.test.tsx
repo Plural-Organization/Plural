@@ -152,14 +152,14 @@ describe("App", () => {
     const setup = await mount(fake);
     fake.emit({ type: "context.usage", context: { tokens: 96000, window: 128000, compact_at: 0.75 } });
     await frame(setup, "96K/128K");
-    fake.emit({ type: "agent.changed", agent: "Claude OAuth · claude-haiku-4-5" });
+    fake.emit({ type: "agent.changed", agent: "Claude OAuth · claude-haiku-4-5", fast: "" });
     await tick(50);
     await setup.renderOnce();
     const hidden = setup.captureCharFrame();
     expect(hidden).not.toContain("96K/128K");
     expect(hidden).not.toContain("75%");
     expect(hidden.split("\n").find((line) => line.includes("vlad (host)"))).not.toContain("·  /help");
-    fake.emit({ type: "agent.changed", agent: "Anthropic · claude-opus-5-5" });
+    fake.emit({ type: "agent.changed", agent: "Anthropic · claude-opus-5-5", fast: "" });
     expect(await frame(setup, "96K/128K")).toContain("75%");
   });
 
@@ -294,6 +294,90 @@ describe("App", () => {
     await tick(100);
     expect(fake.commands).toEqual([
       { type: "mcp.add", name: "plane", command: "npx", args: ["-y", "@makeplane/plane-mcp-server"], url: null, env: {}, headers: {}, scope: "project" },
+    ]);
+  });
+
+  test("a sub-agent shows what it is doing, then which model it used and what it cost", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    const call = { id: "d1", name: "agent", risk: "read", subject: "explore: where are tokens checked?", args: {} } as const;
+    fake.emit({ type: "run.started", run_id: "r", prompt_id: "pm0", provenance: GUEST });
+    fake.emit({ type: "tool.started", run_id: "r", call });
+    fake.emit({ type: "tool.output", call_id: "d1", chunk: "explore on the fast model\n· grep verify_token\n" });
+    const live = await frame(setup, "· grep verify_token");
+    expect(live).toContain("Agent explore: where are tokens checked?");
+    fake.emit({
+      type: "tool.ended",
+      run_id: "r",
+      call_id: "d1",
+      ok: true,
+      output: "Tokens are checked in gateway.py:42.\n\n[explore · fast model · 3 tool calls · 18400 tokens]",
+      diff: null,
+    });
+    await frame(setup, "fast · 3 calls · 18K tokens");
+  });
+
+  test("/usage breaks the session's tokens down by model and agent", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    const usage = (input: number, output: number) => ({ input_tokens: input, output_tokens: output, cache_read_tokens: 0, cache_write_tokens: 0 });
+    fake.emit({
+      type: "usage.recorded",
+      lines: [
+        { role: "main", model: "claude-opus-5-5", agent: "", uses: 2, usage: usage(120_000, 8_000) },
+        { role: "fast", model: "claude-haiku-5-5", agent: "explore", uses: 3, usage: usage(40_000, 2_000) },
+      ],
+    });
+    await setup.mockInput.typeText("/usage");
+    await setup.mockInput.pressEnter();
+    const tray = await frame(setup, "usage · this session");
+    expect(tray).toContain("main · claude-opus-5-5");
+    expect(tray).toContain("agent explore");
+    expect(tray).toContain("in 120K");
+    expect(tray).toContain("in 160K · out 10K tokens");
+  });
+
+  test("/agents lists the sub-agents and the host creates one step by step", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({
+      type: "agents.changed",
+      agents: [{ name: "explore", description: "Broad read-only research.", role: "fast", tools: ["read", "grep"], scope: null, read_only: true }],
+    });
+    await setup.mockInput.typeText("/agents");
+    await setup.mockInput.pressEnter();
+    const list = await frame(setup, "agents · 1");
+    expect(list).toContain("read-only");
+    expect(list).toContain("built in");
+    await setup.mockInput.pressArrow("down");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "create an agent");
+    await setup.mockInput.typeText("reviewer");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "When to use it");
+    await setup.mockInput.typeText("Reviews a diff for bugs.");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Instructions");
+    await setup.mockInput.typeText("Report each bug with path:line.");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Read and run commands");
+    await setup.mockInput.pressArrow("down");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Model");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "Every project");
+    await setup.mockInput.pressEnter();
+    await tick(100);
+    expect(fake.commands).toEqual([
+      {
+        type: "agents.create",
+        name: "reviewer",
+        description: "Reviews a diff for bugs.",
+        prompt: "Report each bug with path:line.",
+        tools: ["read", "grep", "glob", "ls", "bash"],
+        model: "fast",
+        scope: "project",
+      },
     ]);
   });
 
@@ -709,11 +793,11 @@ describe("App", () => {
 
   test("the panel follows a change of the agent instead of keeping the first name", async () => {
     const fake = session();
-    fake.emit({ type: "agent.changed", agent: "Claude · haiku" });
+    fake.emit({ type: "agent.changed", agent: "Claude · haiku", fast: "" });
     const setup = await mount(fake);
     await frame(setup, "Claude · haiku");
 
-    fake.emit({ type: "agent.changed", agent: "Ollama · qwen3" });
+    fake.emit({ type: "agent.changed", agent: "Ollama · qwen3", fast: "" });
     const text = await frame(setup, "Ollama · qwen3");
     expect(text).not.toContain("Claude");
   });

@@ -18,6 +18,7 @@ from plural.agent.providers.base import (
     LlmRequest,
     NativeContent,
     NativeReady,
+    ProviderActivity,
     ProviderError,
     Stop,
     TextDelta,
@@ -453,3 +454,11 @@ def test_openai_sends_images_as_data_urls() -> None:
             {"type": "image_url", "image_url": {"url": "data:image/png;base64,aW1n"}},
         ],
     }
+
+
+async def test_a_tool_call_being_written_counts_as_activity() -> None:
+    anthropic_events = await drain(anthropic_provider(Recorder(200, ANTHROPIC_TOOL_TURN)))
+    sources = {e.source for e in anthropic_events if isinstance(e, ProviderActivity)}
+    assert "content_block_delta" in sources
+    openai_events = await drain(openai_provider(Recorder(200, OPENAI_TOOL_TURN)))
+    assert ProviderActivity(source="tool_call") in openai_events

@@ -17,9 +17,10 @@ from rich.panel import Panel
 from rich.table import Table
 
 from plural import __version__
-from plural.host.bootstrap import ConfigError, Host, build_host, build_provider, resolve_api_key
+from plural.host.bootstrap import Host, build_host
 from plural.host.config import HostSettings
 from plural.host.control import MAX_LINE_BYTES, Control, read_lines
+from plural.host.providers import ConfigError, build_provider, resolve_api_key
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import AdmissionMode, PromptMode
 from plural.relay.app import create_app

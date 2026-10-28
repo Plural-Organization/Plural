@@ -10,6 +10,7 @@ import structlog
 from pydantic import ValidationError
 
 from plural.agent import events as agent
+from plural.agent.agents import AgentError, AgentLibrary, AgentSpec, agent_tools
 from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.messages import Message, UserTurn
 from plural.agent.providers.base import LlmImage
@@ -54,6 +55,8 @@ from plural.host.transport.base import Connection
 from plural.protocol.codec import ProtocolError, decode_command
 from plural.protocol.commands import (
     AdmissionSet,
+    AgentsCreate,
+    AgentsRemove,
     ApprovalRespond,
     BoardClear,
     BoardDraw,
@@ -93,6 +96,7 @@ from plural.protocol.commands import (
 from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo
 from plural.protocol.events import (
     AgentChanged,
+    AgentsChanged,
     ApprovalRequested,
     AttachmentAdded,
     BoardCleared,
@@ -135,6 +139,7 @@ from plural.protocol.events import (
     ToolEnded,
     ToolOutput,
     ToolStarted,
+    UsageRecorded,
 )
 from plural.protocol.models import (
     BOARD_DECIMALS,
@@ -158,6 +163,7 @@ from plural.protocol.models import (
     SessionState,
     SkillScope,
     Usage,
+    UsageLine,
 )
 from plural.security.secrets import Redactor, is_denied_path
 
@@ -201,8 +207,10 @@ class SessionActor:
         admission: AdmissionMode | None = None,
         skills: SkillLibrary | None = None,
         mcp: McpHub | None = None,
+        agents: AgentLibrary | None = None,
         typing_ttl_s: float = 6.0,
         agent_label: str = "",
+        fast_label: str = "",
         join_timeout_s: float = 120.0,
         max_pending_joins: int = 5,
         max_participants: int = 20,
@@ -231,9 +239,11 @@ class SessionActor:
         self._initial_admission = admission
         self._skills = skills
         self._mcp = mcp
+        self._agents = agents
         self._jobs: set[asyncio.Task[None]] = set()
         self._typing_ttl_s = typing_ttl_s
         self._agent_label = agent_label
+        self._fast_label = fast_label
         self._typing: dict[str, asyncio.TimerHandle] = {}
         self._selecting: set[str] = set()
         self._pointing: set[str] = set()
@@ -271,8 +281,12 @@ class SessionActor:
                 await self._emit(ParticipantLeft(participant_id=participant.id))
         if self._host.id not in self._state.participants:
             await self._emit(ParticipantJoined(participant=self._host), actor_id=self._host.id)
-        if self._agent_label and self._state.agent != self._agent_label:
-            await self._emit(AgentChanged(agent=self._agent_label), actor_id=self._host.id)
+        if self._agent_label and (
+            self._state.agent != self._agent_label or self._state.fast_agent != self._fast_label
+        ):
+            await self._emit(
+                AgentChanged(agent=self._agent_label, fast=self._fast_label), actor_id=self._host.id
+            )
         if self._initial_mode is not None:
             await self._set_prompt_mode(self._initial_mode, actor_id=self._host.id)
         if self._initial_admission is not None:
@@ -285,6 +299,7 @@ class SessionActor:
             await self._sync_skills()
         await self._sync_context(self._agent.fill())
         await self._sync_mcp()
+        await self._sync_agents()
 
     async def run(self) -> None:
         while True:
@@ -416,6 +431,8 @@ class SessionActor:
                 await self._set_prompt_mode(command.mode, actor_id=participant.id)
             case PermissionModeSet():
                 await self._set_permission_mode(command.mode, actor_id=participant.id)
+            case AgentsCreate() | AgentsRemove():
+                await self._agents_command(command, actor_id=participant.id)
             case McpAdd() | McpRemove() | McpToggle() | McpRestart() | McpImport():
                 await self._mcp_command(command, actor_id=participant.id)
             case SkillsSearch():
@@ -689,12 +706,17 @@ class SessionActor:
                 Conflict("the agent is busy, wait for the current run to end")
             )
             return
-        self._agent.swap_provider(change.provider, context_window=change.context_window)
+        self._agent.swap_provider(
+            change.provider, context_window=change.context_window, helper=change.helper
+        )
         for secret in change.secrets:
             self._redactor.add(secret)
         self._agent_label = change.label
-        if change.label != self._state.agent:
-            await self._emit(AgentChanged(agent=change.label), actor_id=self._host.id)
+        self._fast_label = change.helper_label
+        if change.label != self._state.agent or change.helper_label != self._state.fast_agent:
+            await self._emit(
+                AgentChanged(agent=change.label, fast=change.helper_label), actor_id=self._host.id
+            )
         await self._sync_context(self._agent.fill())
         change.reply.set_result(None)
 
@@ -818,12 +840,54 @@ class SessionActor:
             self._redactor.add(secret)
         await self._sync_mcp(actor_id=actor_id)
 
+    async def _agents_command(self, command: AgentsCreate | AgentsRemove, *, actor_id: str) -> None:
+        if self._agents is None:
+            raise Conflict("sub-agents are not available on this host")
+        try:
+            match command:
+                case AgentsCreate():
+                    spec = AgentSpec(
+                        name=command.name,
+                        description=" ".join(command.description.split()),
+                        prompt=command.prompt,
+                        role=command.model,
+                        tools=agent_tools(", ".join(command.tools)),
+                    )
+                    self._agents.create(spec, command.scope)
+                case AgentsRemove():
+                    self._agents.remove(command.name)
+        except AgentError as error:
+            raise Invalid(str(error)) from None
+        await self._sync_agents(actor_id=actor_id)
+
+    async def _sync_agents(self, *, actor_id: str | None = None) -> None:
+        if self._agents is None:
+            return
+        agents = self._agents.views()
+        if agents != self._state.agents:
+            await self._emit(AgentsChanged(agents=agents), actor_id=actor_id or self._host.id)
+
     async def _sync_mcp(self, *, actor_id: str | None = None) -> None:
         if self._mcp is None:
             return
         servers = self._mcp.views()
         if servers != self._state.mcp:
             await self._emit(McpChanged(servers=servers), actor_id=actor_id or self._host.id)
+
+    async def _record_usage(self) -> None:
+        models = {"main": self._agent_label, "fast": self._fast_label or self._agent_label}
+        lines = tuple(
+            UsageLine(
+                role=spend.role,
+                model=models.get(spend.role, spend.role),
+                agent=spend.who,
+                uses=spend.uses,
+                usage=spend.usage,
+            )
+            for spend in self._agent.take_spending()
+        )
+        if lines:
+            await self._emit(UsageRecorded(lines=lines))
 
     async def _sync_context(self, fill: agent.ContextFill) -> None:
         context = ContextView(tokens=fill.tokens, window=fill.window, compact_at=fill.compact_at)
@@ -956,6 +1020,7 @@ class SessionActor:
             self._registry.resolve(resolved.approval_id, ApprovalDecision.REJECT)
             await self._emit(resolved)
         self._streaming.clear()
+        await self._record_usage()
         await self._emit(RunEnded(run_id=run_id, reason=reason, usage=usage, error=error))
         pending = self._agent.drain_pending()
         if reason is RunEndReason.ABORTED:

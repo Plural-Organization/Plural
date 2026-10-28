@@ -5,7 +5,7 @@ import { codeBlockRenderer } from "../code";
 import type { FeedItem, Tone } from "../feed";
 import { gutterWidth, languageFor, parseDiff } from "../lib/diff";
 import { highlightLines } from "../lib/highlight";
-import { bodyLines, displayName, kindOf, metaOf, oneLine } from "../lib/tools";
+import { bodyLines, displayName, kindOf, lastLine, metaOf, oneLine } from "../lib/tools";
 import { truncate } from "../lib/wrap";
 import { colorFor, theme } from "../theme";
 import { Picture } from "./Splash";
@@ -223,8 +223,10 @@ export function ToolCard({ item, expanded, onToggle, width }: ToolCardProps) {
   const meta = running
     ? `${elapsed}s`
     : metaOf({ name, tool: item.call.name, status: item.status, subject: item.call.subject, output: item.output, diff: item.diff, live: item.live });
+  const peek = running && kindOf(item.call.name) === "agent" ? lastLine(item.live) : "";
   const fixed = name.length + meta.length + 10;
-  const subject = truncate(oneLine(item.call.subject), Math.max(0, width - fixed));
+  const subject = truncate(oneLine(item.call.subject), Math.max(0, width - fixed - (peek ? 24 : 0)));
+  const room = Math.max(0, width - fixed - subject.length - 3);
   return (
     <box flexDirection="column" marginBottom={expanded ? 1 : 0}>
       <box flexDirection="row" onMouseDown={() => onToggle()}>
@@ -235,6 +237,7 @@ export function ToolCard({ item, expanded, onToggle, width }: ToolCardProps) {
           <b>{name}</b>
           <span fg={theme.text}> {subject}</span>
           {meta ? <span fg={failed ? theme.danger : theme.dim}> · {meta}</span> : null}
+          {peek && room > 8 ? <span fg={theme.dim}> · {truncate(peek, room)}</span> : null}
         </text>
       </box>
       {expanded ? (

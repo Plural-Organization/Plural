@@ -23,6 +23,73 @@
       ],
       "type": "object"
     },
+    "AgentsCreate": {
+      "properties": {
+        "description": {
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        },
+        "model": {
+          "default": "fast",
+          "enum": [
+            "fast",
+            "main"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "prompt": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/SkillScope",
+          "default": "project"
+        },
+        "tools": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "agents.create",
+          "default": "agents.create",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "prompt"
+      ],
+      "type": "object"
+    },
+    "AgentsRemove": {
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "agents.remove",
+          "default": "agents.remove",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "ApprovalDecision": {
       "enum": [
         "once",
@@ -992,6 +1059,8 @@
     "command": {
       "discriminator": {
         "mapping": {
+          "agents.create": "#/$defs/AgentsCreate",
+          "agents.remove": "#/$defs/AgentsRemove",
           "approval.respond": "#/$defs/ApprovalRespond",
           "board.clear": "#/$defs/BoardClear",
           "board.draw": "#/$defs/BoardDraw",
@@ -1102,6 +1171,12 @@
         },
         {
           "$ref": "#/$defs/McpImport"
+        },
+        {
+          "$ref": "#/$defs/AgentsCreate"
+        },
+        {
+          "$ref": "#/$defs/AgentsRemove"
         },
         {
           "$ref": "#/$defs/TypingSet"

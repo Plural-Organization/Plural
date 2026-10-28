@@ -27,6 +27,8 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 | `PLURAL_IDLE_TIMEOUT_S` | `60` | Seconds of silence mid-response before the run fails |
 | `PLURAL_CONTEXT_WINDOW` | `128000` | Model context size in tokens. Set it to the real window for local models |
 | `PLURAL_COMPACT_AT` | `0.75` | Fraction of the window at which the conversation is summarized |
+| `PLURAL_FAST_MODEL` | picked from your credentials | The cheaper model for work that does not need the main one, today the conversation summary. By default `claude-haiku-5-5` with Anthropic (API key or OAuth), `gpt-5-mini` with OpenAI, `gemini-2.5-flash` with Gemini, and with Claude Code or Codex whichever of `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` is set. None when the main model is already a small one or nothing cheaper is reachable; then the main model does it. A summary the fast model fails at is retried on the main one |
+| `PLURAL_FAST_PROVIDER` | the main provider | Provider for `PLURAL_FAST_MODEL`, for example `openai` to run it on `OPENAI_API_KEY` while the main model is Claude. It shares `PLURAL_BASE_URL` with the main model |
 | `PLURAL_APPROVAL_TIMEOUT_S` | `120` | Seconds before an approval expires |
 | `PLURAL_REJECTION_LIMIT` | `2` | Rejections of one kind of action per run before the agent stops asking the host |
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24 hours |

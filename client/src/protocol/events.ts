@@ -148,6 +148,8 @@ export interface EventsSchema {
     | ContextCompacted
     | ContextUsage
     | McpChanged
+    | UsageRecorded
+    | AgentsChanged
     | ToolStarted
     | ToolOutput
     | ToolEnded
@@ -294,6 +296,7 @@ export interface SkillHit {
  */
 export interface AgentChanged {
   agent: string;
+  fast: string;
   type: "agent.changed";
 }
 /**
@@ -652,6 +655,51 @@ export interface McpServerView {
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "UsageRecorded".
+ */
+export interface UsageRecorded {
+  lines: UsageLine[];
+  type: "usage.recorded";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "UsageLine".
+ */
+export interface UsageLine {
+  agent: string;
+  model: string;
+  role: string;
+  usage: Usage1;
+  uses: number;
+}
+export interface Usage1 {
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AgentsChanged".
+ */
+export interface AgentsChanged {
+  agents: AgentView[];
+  type: "agents.changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AgentView".
+ */
+export interface AgentView {
+  description: string;
+  name: string;
+  read_only: boolean;
+  role: string;
+  scope: SkillScope | null;
+  tools: string[];
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "ToolStarted".
  */
 export interface ToolStarted {
@@ -798,6 +846,7 @@ export interface SessionSnapshot {
 export interface SessionState {
   admission: "approve" | "open";
   agent: string;
+  agents: AgentView[];
   approvals: {
     [k: string]: ApprovalView;
   };
@@ -807,6 +856,7 @@ export interface SessionState {
   board: BoardView;
   chat: ChatEntry[];
   context: ContextView | null;
+  fast_agent: string;
   join_requests: {
     [k: string]: JoinRequestView;
   };
@@ -826,6 +876,7 @@ export interface SessionState {
   skills: SkillView[];
   summary: string | null;
   transcript: TranscriptEntry[];
+  usage: UsageLine[];
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -943,6 +994,8 @@ export interface EventRecord {
     | ContextCompacted
     | ContextUsage
     | McpChanged
+    | UsageRecorded
+    | AgentsChanged
     | ToolStarted
     | ToolOutput
     | ToolEnded
@@ -963,7 +1016,7 @@ export interface EventRecord {
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "Usage".
  */
-export interface Usage1 {
+export interface Usage2 {
   cache_read_tokens: number;
   cache_write_tokens: number;
   input_tokens: number;

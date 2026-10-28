@@ -13,9 +13,9 @@ from plural.agent.providers.anthropic_oauth import (
     save_credentials,
 )
 from plural.agent.providers.base import ProviderError
-from plural.host.bootstrap import build_provider, provider_secrets
 from plural.host.config import HostSettings
 from plural.host.control import AgentConfig, provider_for
+from plural.host.providers import build_provider, provider_secrets
 from plural.security.secrets import Redactor
 
 

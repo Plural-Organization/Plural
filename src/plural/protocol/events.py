@@ -6,6 +6,7 @@ from pydantic import Field
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.models import (
     AdmissionMode,
+    AgentView,
     ApprovalDecision,
     ApprovalView,
     AttachmentMeta,
@@ -32,6 +33,7 @@ from plural.protocol.models import (
     TextSelection,
     ToolCallView,
     Usage,
+    UsageLine,
 )
 
 
@@ -90,6 +92,7 @@ class SkillsFound(TransientEvent):
 class AgentChanged(EventBase):
     type: Literal["agent.changed"] = "agent.changed"
     agent: str
+    fast: str = ""
 
 
 class AdmissionChanged(EventBase):
@@ -243,6 +246,16 @@ class ContextCompacting(TransientEvent):
     tokens_before: int
 
 
+class AgentsChanged(EventBase):
+    type: Literal["agents.changed"] = "agents.changed"
+    agents: tuple[AgentView, ...]
+
+
+class UsageRecorded(EventBase):
+    type: Literal["usage.recorded"] = "usage.recorded"
+    lines: tuple[UsageLine, ...]
+
+
 class McpChanged(EventBase):
     type: Literal["mcp.changed"] = "mcp.changed"
     servers: tuple[McpServerView, ...]
@@ -376,6 +389,8 @@ Event = Annotated[
     | ContextCompacted
     | ContextUsage
     | McpChanged
+    | UsageRecorded
+    | AgentsChanged
     | ToolStarted
     | ToolOutput
     | ToolEnded

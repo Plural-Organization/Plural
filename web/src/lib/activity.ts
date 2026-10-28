@@ -46,6 +46,7 @@ const VERBS: Record<ToolKind, string> = {
   write: "Writing a file",
   list: "Looking around",
   search: "Searching",
+  agent: "Handing off to a sub-agent",
   other: "",
 };
 

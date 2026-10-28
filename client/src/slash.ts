@@ -11,7 +11,13 @@ const SKILLS_USAGE = "usage: /skills | /skills search <query> | /skills add <own
 const MCP_USAGE =
   "usage: /mcp | /mcp add <name> <command…|url> [--global] | /mcp on|off|restart|rm <name> | /mcp import";
 
-export type Slash = Command | { type: "show.policy" } | { type: "show.skills" } | { type: "show.mcp" };
+export type Slash =
+  | Command
+  | { type: "show.policy" }
+  | { type: "show.skills" }
+  | { type: "show.mcp" }
+  | { type: "show.agents" }
+  | { type: "show.usage" };
 
 export function parseSlash(text: string): Slash | null {
   if (!text.startsWith("/")) {
@@ -34,6 +40,18 @@ export function parseSlash(text: string): Slash | null {
       return skills(argument);
     case "mcp":
       return mcp(argument);
+    case "usage":
+      return { type: "show.usage" };
+    case "agents": {
+      const [verb, name] = argument.split(/\s+/).filter(Boolean);
+      if (verb === undefined) {
+        return { type: "show.agents" };
+      }
+      if (verb === "rm" && name) {
+        return { type: "agents.remove", name };
+      }
+      throw new SlashError("usage: /agents | /agents rm <name>");
+    }
     default:
       throw new SlashError(`unknown command /${name}`);
   }

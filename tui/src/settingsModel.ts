@@ -112,6 +112,22 @@ export function modelRows(state: ModelState): Row[] {
       enabled: true,
     });
   }
+  if (preset.provider !== "fake") {
+    const fast = choice.fastModel ?? "";
+    rows.push({
+      id: "fast",
+      kind: "choice",
+      label: "Fast model",
+      value: fast === "" ? "auto" : fast,
+      hint:
+        fast === ""
+          ? "← → choose · auto picks a cheaper model you can reach for summaries and sub-agents"
+          : fast === "off"
+            ? "← → choose · off keeps summaries and sub-agents on the main model"
+            : "← → choose · summaries and sub-agents run on this model",
+      enabled: true,
+    });
+  }
   if (preset.editableUrl) {
     rows.push({
       id: "url",
@@ -302,6 +318,16 @@ export function nextPresetInConnection(current: AgentChoice["preset"], direction
   const choices = PRESETS.filter((preset) => preset.connection === presetOf(current).connection);
   const index = choices.findIndex((preset) => preset.id === current);
   return choices[(index + direction + choices.length) % choices.length]!.id;
+}
+
+export function fastOptions(choice: AgentChoice): string[] {
+  return ["", "off", ...presetOf(choice.preset).models.filter((model) => model !== (choice.model || presetOf(choice.preset).models[0]))];
+}
+
+export function nextFast(choice: AgentChoice, direction: 1 | -1): string {
+  const options = fastOptions(choice);
+  const index = Math.max(0, options.indexOf(choice.fastModel ?? ""));
+  return options[(index + direction + options.length) % options.length] as string;
 }
 
 export function nextModel(choice: AgentChoice, direction: 1 | -1): string {

@@ -138,6 +138,11 @@ export function Sidebar({ projection, room, inbox, running, status, onSettings }
         ) : null}
         <ContextMeterView state={state} width={8} />
         <text fg={theme.dim}>{truncate(projection.agentLabel || "agent", SIDEBAR_WIDTH - 4)}</text>
+        {state.fast_agent ? (
+          <text fg={theme.dim}>
+            fast <span fg={theme.info}>{truncate(state.fast_agent, SIDEBAR_WIDTH - 9)}</span>
+          </text>
+        ) : null}
         <text fg={theme.dim}>
           {"  "}
           {running ? <Spinner color={theme.info} /> : null}

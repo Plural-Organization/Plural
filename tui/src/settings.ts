@@ -45,6 +45,7 @@ function parseChoice(raw: unknown): AgentChoice {
     model: text("model"),
     baseUrl: text("baseUrl"),
     contextWindow: text("contextWindow"),
+    ...(text("fastModel") ? { fastModel: text("fastModel") } : {}),
   };
 }
 

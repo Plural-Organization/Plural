@@ -9,7 +9,8 @@
         "actor_id": null,
         "event": {
           "type": "agent.changed",
-          "agent": "demo agent (scripted)"
+          "agent": "demo agent (scripted)",
+          "fast": ""
         }
       },
       "state": {
@@ -26,8 +27,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -78,8 +82,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -136,8 +143,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -200,8 +210,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -270,8 +283,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -336,8 +352,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -401,8 +420,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -466,8 +488,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -489,7 +514,8 @@
         "actor_id": null,
         "event": {
           "type": "agent.changed",
-          "agent": "anthropic · claude-opus-5-5"
+          "agent": "anthropic · claude-opus-5-5",
+          "fast": ""
         }
       },
       "state": {
@@ -531,8 +557,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -610,8 +639,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -677,8 +709,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -756,8 +791,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -822,8 +860,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [],
@@ -896,8 +937,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [
@@ -977,8 +1021,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1069,6 +1116,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_q1",
@@ -1078,6 +1127,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1177,6 +1227,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_q1",
@@ -1192,6 +1244,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1292,6 +1345,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_q2",
@@ -1301,6 +1356,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1401,8 +1457,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1498,8 +1557,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1600,8 +1662,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1699,8 +1764,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1798,8 +1866,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1904,8 +1975,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2021,8 +2095,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2184,8 +2261,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2311,8 +2391,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2440,8 +2523,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2572,8 +2658,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2716,8 +2805,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2868,8 +2960,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -3008,8 +3103,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -3162,8 +3260,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -3312,8 +3413,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": {
           "id": "run_1",
@@ -3507,8 +3611,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": {
           "id": "run_1",
@@ -3666,8 +3773,11 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": {
           "id": "run_1",
@@ -3832,6 +3942,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_2",
@@ -3841,6 +3953,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": {
           "id": "run_1",
@@ -4013,6 +4126,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_2",
@@ -4022,6 +4137,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -4186,6 +4302,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_2",
@@ -4195,6 +4313,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -4355,6 +4474,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_2",
@@ -4364,6 +4485,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -4535,6 +4657,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_2",
@@ -4544,6 +4668,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -4723,6 +4848,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_2",
@@ -4732,6 +4859,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -4927,6 +5055,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_2",
@@ -4936,6 +5066,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -5126,6 +5257,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_2",
@@ -5135,6 +5268,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -5320,6 +5454,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_2",
@@ -5329,6 +5465,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -5512,6 +5649,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_2",
@@ -5521,6 +5660,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -5698,6 +5838,8 @@
         "skills": [],
         "context": null,
         "mcp": [],
+        "usage": [],
+        "agents": [],
         "queue": [
           {
             "prompt_id": "pm_2",
@@ -5707,6 +5849,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [

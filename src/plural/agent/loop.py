@@ -20,6 +20,7 @@ from plural.agent.events import (
     MessageEnd,
     MessageStart,
     RunEnd,
+    Spend,
     ToolEnd,
     ToolOutput,
     ToolStart,
@@ -106,8 +107,11 @@ class AgentLoop:
         tool_ctx: ToolCtx,
         ids: IdGenerator,
         limits: LoopLimits | None = None,
+        helper: LLMProvider | None = None,
     ) -> None:
         self._provider = provider
+        self._helper = helper
+        self._spending: dict[tuple[str, str], Spend] = {}
         self._tools = tools
         self._gate = gate
         self._context = context
@@ -124,6 +128,32 @@ class AgentLoop:
         self._verify_compaction = False
         self._provider_close_tasks: set[asyncio.Task[None]] = set()
 
+    def spend(self, role: str, who: str, usage: Usage, *, uses: int = 0) -> None:
+        key = (role, who)
+        previous = self._spending.get(key, Spend(role, who, Usage(), 0))
+        self._spending[key] = Spend(role, who, previous.usage + usage, previous.uses + uses)
+
+    def take_spending(self) -> tuple[Spend, ...]:
+        spending = tuple(
+            spend
+            for spend in self._spending.values()
+            if spend.uses or spend.usage.prompt_tokens or spend.usage.output_tokens
+        )
+        self._spending = {}
+        return spending
+
+    @property
+    def provider(self) -> LLMProvider:
+        return self._provider
+
+    @property
+    def helper(self) -> LLMProvider | None:
+        return self._helper
+
+    @property
+    def limits(self) -> LoopLimits:
+        return self._limits
+
     @property
     def usage(self) -> Usage:
         return self._usage
@@ -138,14 +168,22 @@ class AgentLoop:
     def follow_up(self, turn: UserTurn) -> None:
         self._follow_up.append(turn)
 
-    def swap_provider(self, provider: LLMProvider, *, context_window: int | None = None) -> None:
-        previous = self._provider
+    def swap_provider(
+        self,
+        provider: LLMProvider,
+        *,
+        context_window: int | None = None,
+        helper: LLMProvider | None = None,
+    ) -> None:
+        retired = [self._provider, self._helper]
         self._provider = provider
-        close = getattr(previous, "close", None)
-        if close is not None:
-            task = asyncio.create_task(close())
-            self._provider_close_tasks.add(task)
-            task.add_done_callback(self._provider_close_tasks.discard)
+        self._helper = helper
+        for previous in retired:
+            close = getattr(previous, "close", None)
+            if close is not None and previous not in (provider, helper):
+                task = asyncio.create_task(close())
+                self._provider_close_tasks.add(task)
+                task.add_done_callback(self._provider_close_tasks.discard)
         if context_window is not None:
             self._limits = replace(self._limits, context_window=context_window)
         self._conversation = [
@@ -210,6 +248,7 @@ class AgentLoop:
         provenance = prompt.provenance
         self._conversation.append(prompt)
         self._usage = Usage()
+        self.spend("main", "", Usage(), uses=1)
         self._gate.begin_run()
         self._compaction_failed = False
         self._verify_compaction = False
@@ -247,6 +286,7 @@ class AgentLoop:
                                 turn.native = content
                             case UsageReport(usage=delta):
                                 self._usage = self._usage + delta
+                                self.spend("main", "", delta)
                                 self._context_tokens = delta.prompt_tokens
                                 self._check_compaction_helped()
                                 yield self.fill()
@@ -346,10 +386,34 @@ class AgentLoop:
             messages=(*to_llm(self._conversation), LlmMessage(role="user", content=SUMMARY_PROMPT)),
             tools=self._tools.schemas(),
         )
+        summary = ""
+        for provider in (self._helper, self._provider):
+            if provider is None:
+                continue
+            try:
+                summary = await self._summarize(request, provider, cancel)
+                self.spend(
+                    "fast" if provider is self._helper else "main", "compact", Usage(), uses=1
+                )
+                break
+            except CompactionFailed as error:
+                if cancel.is_set() or provider is self._provider:
+                    raise
+                log.warning("agent.helper_compaction_failed", error=str(error))
+        before = self._context_tokens
+        self._conversation = [SummaryTurn(text=summary), *([prompt] if prompt is not None else [])]
+        self._context_tokens = sum(_estimate_tokens(message) for message in self._conversation)
+        self._verify_compaction = True
+        return Compacted(summary, before)
+
+    async def _summarize(
+        self, request: LlmRequest, provider: LLMProvider, cancel: asyncio.Event
+    ) -> str:
         text: list[str] = []
         called = False
+        role = "fast" if provider is self._helper else "main"
         try:
-            async for event in self._events(request, cancel):
+            async for event in self._events(request, cancel, provider):
                 match event:
                     case TextDelta(text=chunk):
                         text.append(chunk)
@@ -357,6 +421,7 @@ class AgentLoop:
                         called = True
                     case UsageReport(usage=delta):
                         self._usage = self._usage + delta
+                        self.spend(role, "compact", delta)
                     case _:
                         pass
         except ProviderError as error:
@@ -364,17 +429,15 @@ class AgentLoop:
         summary = extract_summary("".join(text))
         if cancel.is_set() or called or not summary:
             raise CompactionFailed("the model did not produce a summary")
-        before = self._context_tokens
-        self._conversation = [SummaryTurn(text=summary), *([prompt] if prompt is not None else [])]
-        self._context_tokens = sum(_estimate_tokens(message) for message in self._conversation)
-        self._verify_compaction = True
-        return Compacted(summary, before)
+        return summary
 
-    async def _events(self, request: LlmRequest, cancel: asyncio.Event) -> AsyncIterator[LlmEvent]:
+    async def _events(
+        self, request: LlmRequest, cancel: asyncio.Event, provider: LLMProvider | None = None
+    ) -> AsyncIterator[LlmEvent]:
         for attempt in itertools.count():
             started = False
             try:
-                async for event in self._attempt(request, cancel):
+                async for event in self._attempt(request, cancel, provider or self._provider):
                     started = True
                     yield event
                 return
@@ -390,8 +453,10 @@ class AgentLoop:
                 except Interrupted:
                     return
 
-    async def _attempt(self, request: LlmRequest, cancel: asyncio.Event) -> AsyncIterator[LlmEvent]:
-        stream = self._provider.stream(request, cancel=cancel).__aiter__()
+    async def _attempt(
+        self, request: LlmRequest, cancel: asyncio.Event, provider: LLMProvider
+    ) -> AsyncIterator[LlmEvent]:
+        stream = provider.stream(request, cancel=cancel).__aiter__()
         limit = self._limits.first_token_timeout_s
         event_count = 0
         last_event_kind: str | None = None
@@ -406,7 +471,7 @@ class AgentLoop:
                 except TimedOut:
                     log.warning(
                         "agent.provider_timeout",
-                        provider=type(self._provider).__name__,
+                        provider=type(provider).__name__,
                         timeout_s=limit,
                         events_received=event_count,
                         last_event_kind=last_event_kind,
@@ -525,7 +590,16 @@ class AgentLoop:
             if verdict.allowed:
                 queue: asyncio.Queue[str] = asyncio.Queue()
                 runner = asyncio.create_task(
-                    self._invoke(prepared, cancel, replace(self._tool_ctx, emit=queue.put_nowait))
+                    self._invoke(
+                        prepared,
+                        cancel,
+                        replace(
+                            self._tool_ctx,
+                            emit=queue.put_nowait,
+                            provenance=provenance,
+                            cancel=cancel,
+                        ),
+                    )
                 )
                 try:
                     while not runner.done() or not queue.empty():

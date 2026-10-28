@@ -38,7 +38,7 @@ test("the agent label follows a change and falls back to the one from the welcom
     id: "e1",
     ts: "2026-10-28T12:00:00Z",
     actor_id: null,
-    event: { type: "agent.changed", agent: "Ollama · qwen3-coder" },
+    event: { type: "agent.changed", agent: "Ollama · qwen3-coder", fast: "" },
   });
   expect(projection.agentLabel).toBe("Ollama · qwen3-coder");
 });

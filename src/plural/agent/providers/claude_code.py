@@ -14,6 +14,7 @@ from pydantic import JsonValue
 from plural.agent.providers.base import (
     LlmEvent,
     LlmRequest,
+    ProviderActivity,
     ProviderError,
     Stop,
     TextDelta,
@@ -279,12 +280,16 @@ class ClaudeCodeProvider:
                     result = event
                     continue
                 if event.get("type") != "stream_event":
+                    yield ProviderActivity(source=str(event.get("type") or "event"))
                     continue
                 inner = event.get("event")
                 if not isinstance(inner, dict):
                     continue
-                delta = cast("dict[str, object]", inner).get("delta")
+                inner_data = cast("dict[str, object]", inner)
+                delta = inner_data.get("delta")
                 if not isinstance(delta, dict):
+                    # Block starts and stops and message deltas: the model is still working.
+                    yield ProviderActivity(source=str(inner_data.get("type") or "event"))
                     continue
                 delta_data = cast("dict[str, object]", delta)
                 match delta_data.get("type"):
@@ -295,13 +300,15 @@ class ClaudeCodeProvider:
                             yield TextDelta(text=text)
                     case "input_json_delta":
                         partial = delta_data.get("partial_json")
-                        if isinstance(partial, str):
-                            text = text_stream.feed(partial)
-                            if text:
-                                streamed_plain_text += text
-                                yield TextDelta(text=text)
-                    case _:
-                        pass
+                        text = text_stream.feed(partial) if isinstance(partial, str) else ""
+                        if text:
+                            streamed_plain_text += text
+                            yield TextDelta(text=text)
+                        else:
+                            # The answer's tool calls, a long file for instance, carry no text.
+                            yield ProviderActivity(source="input_json_delta")
+                    case other:
+                        yield ProviderActivity(source=str(other or "delta"))
             await process.wait()
         finally:
             stopping.cancel()
