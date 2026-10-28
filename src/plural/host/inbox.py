@@ -48,6 +48,8 @@ class Reconfigure:
     context_window: int | None
     secrets: tuple[str, ...]
     reply: "asyncio.Future[None]"
+    helper: LLMProvider | None = None
+    helper_label: str = ""
 
 
 @dataclass(frozen=True, slots=True)

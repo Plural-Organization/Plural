@@ -18,6 +18,7 @@ export function emptyState(): SessionState {
     mcp: [],
     queue: [],
     agent: "",
+    fast_agent: "",
     summary: null,
     run: null,
     transcript: [],
@@ -43,7 +44,7 @@ function apply(state: SessionState, record: EventRecord): SessionState {
     case "participant.revoked":
       return { ...state, participants: without(state.participants, event.participant_id) };
     case "agent.changed":
-      return { ...state, agent: event.agent };
+      return { ...state, agent: event.agent, fast_agent: event.fast };
     case "session.prompt_mode_changed":
       return { ...state, prompt_mode: event.mode };
     case "session.permission_mode_changed":

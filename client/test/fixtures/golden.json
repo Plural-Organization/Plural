@@ -9,7 +9,8 @@
         "actor_id": null,
         "event": {
           "type": "agent.changed",
-          "agent": "demo agent (scripted)"
+          "agent": "demo agent (scripted)",
+          "fast": ""
         }
       },
       "state": {
@@ -26,6 +27,7 @@
         "mcp": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -71,6 +73,7 @@
         "mcp": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -122,6 +125,7 @@
         "mcp": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -179,6 +183,7 @@
         "mcp": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -242,6 +247,7 @@
         "mcp": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -301,6 +307,7 @@
         "mcp": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -359,6 +366,7 @@
         "mcp": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -417,6 +425,7 @@
         "mcp": [],
         "queue": [],
         "agent": "demo agent (scripted)",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -433,7 +442,8 @@
         "actor_id": null,
         "event": {
           "type": "agent.changed",
-          "agent": "anthropic · claude-opus-5-5"
+          "agent": "anthropic · claude-opus-5-5",
+          "fast": ""
         }
       },
       "state": {
@@ -475,6 +485,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -547,6 +558,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -607,6 +619,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -679,6 +692,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -738,6 +752,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": []
@@ -805,6 +820,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": null,
         "transcript": [
@@ -879,6 +895,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -971,6 +988,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1078,6 +1096,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1180,6 +1199,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1275,6 +1295,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1365,6 +1386,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1460,6 +1482,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1552,6 +1575,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1644,6 +1668,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1743,6 +1768,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -1853,6 +1879,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2009,6 +2036,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2129,6 +2157,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2251,6 +2280,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2376,6 +2406,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2513,6 +2544,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2658,6 +2690,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2791,6 +2824,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -2938,6 +2972,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": null,
         "run": {
           "id": "run_1",
@@ -3081,6 +3116,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": {
           "id": "run_1",
@@ -3269,6 +3305,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": {
           "id": "run_1",
@@ -3421,6 +3458,7 @@
         "mcp": [],
         "queue": [],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": {
           "id": "run_1",
@@ -3587,6 +3625,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": {
           "id": "run_1",
@@ -3761,6 +3800,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -3927,6 +3967,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [
@@ -4079,6 +4120,7 @@
           }
         ],
         "agent": "anthropic · claude-opus-5-5",
+        "fast_agent": "",
         "summary": "notes were read",
         "run": null,
         "transcript": [

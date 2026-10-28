@@ -54,8 +54,10 @@ class AgentRun:
     def follow_up(self, turn: UserTurn) -> None:
         self._loop.follow_up(turn)
 
-    def swap_provider(self, provider: LLMProvider, *, context_window: int | None) -> None:
-        self._loop.swap_provider(provider, context_window=context_window)
+    def swap_provider(
+        self, provider: LLMProvider, *, context_window: int | None, helper: LLMProvider | None
+    ) -> None:
+        self._loop.swap_provider(provider, context_window=context_window, helper=helper)
 
     async def close(self) -> None:
         await self._loop.close()

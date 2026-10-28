@@ -5,6 +5,10 @@
         "agent": {
           "type": "string"
         },
+        "fast": {
+          "default": "",
+          "type": "string"
+        },
         "type": {
           "const": "agent.changed",
           "default": "agent.changed",
@@ -13,7 +17,8 @@
       },
       "required": [
         "type",
-        "agent"
+        "agent",
+        "fast"
       ],
       "type": "object"
     },
@@ -1412,6 +1417,10 @@
           ],
           "default": null
         },
+        "fast_agent": {
+          "default": "",
+          "type": "string"
+        },
         "last_seq": {
           "default": 0,
           "type": "integer"
@@ -1508,6 +1517,7 @@
         "mcp",
         "queue",
         "agent",
+        "fast_agent",
         "summary",
         "run",
         "transcript"

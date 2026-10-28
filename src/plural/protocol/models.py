@@ -245,6 +245,7 @@ class SessionState(Model):
     mcp: tuple[McpServerView, ...] = ()
     queue: tuple[QueuedPrompt, ...] = ()
     agent: str = ""
+    fast_agent: str = ""
     summary: str | None = None
     run: RunView | None = None
     transcript: tuple[TranscriptEntry, ...] = ()

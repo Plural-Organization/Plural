@@ -26,6 +26,10 @@ class HostSettings(BaseSettings):
         Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"] | None
     ) = None
     model: str | None = None
+    fast_provider: (
+        Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"] | None
+    ) = None
+    fast_model: str | None = None
     api_key: SecretStr | None = None
     base_url: str | None = None
     effort: Effort | None = None

@@ -31,7 +31,7 @@ function session(role: "host" | "participant" = "host", agent = "demo agent (scr
   const fake = new FakeSession();
   const me = role === "host" ? HOST : ALIA;
   fake.emit({ type: "session.welcome", room: "r_1", token: "t", participant: me, base_policy: [], agent });
-  fake.emit({ type: "agent.changed", agent });
+  fake.emit({ type: "agent.changed", agent, fast: "" });
   fake.emit({ type: "participant.joined", participant: HOST });
   return fake;
 }

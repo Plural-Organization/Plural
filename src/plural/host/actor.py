@@ -166,6 +166,7 @@ class SessionActor:
         mcp: McpHub | None = None,
         typing_ttl_s: float = 6.0,
         agent_label: str = "",
+        fast_label: str = "",
     ) -> None:
         self._inbox = inbox
         self._store = store
@@ -187,6 +188,7 @@ class SessionActor:
         self._jobs: set[asyncio.Task[None]] = set()
         self._typing_ttl_s = typing_ttl_s
         self._agent_label = agent_label
+        self._fast_label = fast_label
         self._typing: dict[str, asyncio.TimerHandle] = {}
         self._state = SessionState()
         self._streaming: dict[str, str] = {}
@@ -220,8 +222,12 @@ class SessionActor:
                 await self._emit(ParticipantLeft(participant_id=participant.id))
         if self._host.id not in self._state.participants:
             await self._emit(ParticipantJoined(participant=self._host), actor_id=self._host.id)
-        if self._agent_label and self._state.agent != self._agent_label:
-            await self._emit(AgentChanged(agent=self._agent_label), actor_id=self._host.id)
+        if self._agent_label and (
+            self._state.agent != self._agent_label or self._state.fast_agent != self._fast_label
+        ):
+            await self._emit(
+                AgentChanged(agent=self._agent_label, fast=self._fast_label), actor_id=self._host.id
+            )
         if self._initial_mode is not None:
             await self._set_prompt_mode(self._initial_mode, actor_id=self._host.id)
         await self._set_permission_mode(PermissionMode.DEFAULT, actor_id=self._host.id)
@@ -468,12 +474,17 @@ class SessionActor:
                 Conflict("the agent is busy, wait for the current run to end")
             )
             return
-        self._agent.swap_provider(change.provider, context_window=change.context_window)
+        self._agent.swap_provider(
+            change.provider, context_window=change.context_window, helper=change.helper
+        )
         for secret in change.secrets:
             self._redactor.add(secret)
         self._agent_label = change.label
-        if change.label != self._state.agent:
-            await self._emit(AgentChanged(agent=change.label), actor_id=self._host.id)
+        self._fast_label = change.helper_label
+        if change.label != self._state.agent or change.helper_label != self._state.fast_agent:
+            await self._emit(
+                AgentChanged(agent=change.label, fast=change.helper_label), actor_id=self._host.id
+            )
         await self._sync_context(self._agent.fill())
         change.reply.set_result(None)
 

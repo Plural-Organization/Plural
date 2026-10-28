@@ -17,15 +17,11 @@ from plural.agent.providers.base import (
 )
 from plural.agent.providers.codex_cli import CodexCliProvider
 from plural.core.errors import DomainError
-from plural.host.bootstrap import (
-    ConfigError,
-    Host,
-    build_provider,
-    provider_secrets,
-    resolve_api_key,
-)
+from plural.host.bootstrap import Host
 from plural.host.config import HostSettings
 from plural.host.inbox import Reconfigure
+from plural.host.providers import ConfigError, build_provider, provider_secrets, resolve_api_key
+from plural.host.routing import build_helper
 
 log = structlog.get_logger(__name__)
 
@@ -132,13 +128,16 @@ class Control:
             if config.provider_name and config.provider != "fake"
             else settings.agent_label({})
         )
+        helper = build_helper(settings)
         self._host.inbox.put(
             Reconfigure(
                 provider=provider,
                 label=label,
                 context_window=settings.context_window,
-                secrets=provider_secrets(settings, key),
+                secrets=(*provider_secrets(settings, key), *(helper.secrets if helper else ())),
                 reply=done,
+                helper=helper.provider if helper else None,
+                helper_label=helper.label if helper else "",
             )
         )
         await done

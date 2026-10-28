@@ -267,6 +267,7 @@ export interface SkillHit {
  */
 export interface AgentChanged {
   agent: string;
+  fast: string;
   type: "agent.changed";
 }
 /**
@@ -614,6 +615,7 @@ export interface SessionState {
     [k: string]: AttachmentMeta;
   };
   context: ContextView | null;
+  fast_agent: string;
   last_seq: number;
   mcp: McpServerView[];
   participants: {

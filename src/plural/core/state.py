@@ -60,8 +60,8 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             return state.model_copy(
                 update={"participants": _without(state.participants, participant_id)}
             )
-        case AgentChanged(agent=agent):
-            return state.model_copy(update={"agent": agent})
+        case AgentChanged(agent=agent, fast=fast):
+            return state.model_copy(update={"agent": agent, "fast_agent": fast})
         case PromptModeChanged(mode=mode):
             return state.model_copy(update={"prompt_mode": mode})
         case PermissionModeChanged(mode=mode):

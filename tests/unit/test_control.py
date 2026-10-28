@@ -8,9 +8,9 @@ from pydantic import SecretStr
 from plural.agent.providers.base import LlmEvent, LlmRequest, ProviderError, TextDelta
 from plural.agent.providers.fake import FakeProvider, reply
 from plural.host import control
-from plural.host.bootstrap import ConfigError
 from plural.host.config import HostSettings
 from plural.host.control import AgentConfig, probe, provider_for, settings_for
+from plural.host.providers import ConfigError
 from plural.security.secrets import Redactor
 
 BASE = HostSettings(provider="fake", context_window=50_000)

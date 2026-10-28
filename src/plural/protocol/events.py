@@ -84,6 +84,7 @@ class SkillsFound(TransientEvent):
 class AgentChanged(EventBase):
     type: Literal["agent.changed"] = "agent.changed"
     agent: str
+    fast: str = ""
 
 
 class PromptDequeued(EventBase):

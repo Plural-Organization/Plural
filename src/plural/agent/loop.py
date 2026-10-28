@@ -106,8 +106,10 @@ class AgentLoop:
         tool_ctx: ToolCtx,
         ids: IdGenerator,
         limits: LoopLimits | None = None,
+        helper: LLMProvider | None = None,
     ) -> None:
         self._provider = provider
+        self._helper = helper
         self._tools = tools
         self._gate = gate
         self._context = context
@@ -138,14 +140,22 @@ class AgentLoop:
     def follow_up(self, turn: UserTurn) -> None:
         self._follow_up.append(turn)
 
-    def swap_provider(self, provider: LLMProvider, *, context_window: int | None = None) -> None:
-        previous = self._provider
+    def swap_provider(
+        self,
+        provider: LLMProvider,
+        *,
+        context_window: int | None = None,
+        helper: LLMProvider | None = None,
+    ) -> None:
+        retired = [self._provider, self._helper]
         self._provider = provider
-        close = getattr(previous, "close", None)
-        if close is not None:
-            task = asyncio.create_task(close())
-            self._provider_close_tasks.add(task)
-            task.add_done_callback(self._provider_close_tasks.discard)
+        self._helper = helper
+        for previous in retired:
+            close = getattr(previous, "close", None)
+            if close is not None and previous not in (provider, helper):
+                task = asyncio.create_task(close())
+                self._provider_close_tasks.add(task)
+                task.add_done_callback(self._provider_close_tasks.discard)
         if context_window is not None:
             self._limits = replace(self._limits, context_window=context_window)
         self._conversation = [
@@ -343,10 +353,30 @@ class AgentLoop:
             messages=(*to_llm(self._conversation), LlmMessage(role="user", content=SUMMARY_PROMPT)),
             tools=self._tools.schemas(),
         )
+        summary = ""
+        for provider in (self._helper, self._provider):
+            if provider is None:
+                continue
+            try:
+                summary = await self._summarize(request, provider, cancel)
+                break
+            except CompactionFailed as error:
+                if cancel.is_set() or provider is self._provider:
+                    raise
+                log.warning("agent.helper_compaction_failed", error=str(error))
+        before = self._context_tokens
+        self._conversation = [SummaryTurn(text=summary), *([prompt] if prompt is not None else [])]
+        self._context_tokens = sum(_estimate_tokens(message) for message in self._conversation)
+        self._verify_compaction = True
+        return Compacted(summary, before)
+
+    async def _summarize(
+        self, request: LlmRequest, provider: LLMProvider, cancel: asyncio.Event
+    ) -> str:
         text: list[str] = []
         called = False
         try:
-            async for event in self._events(request, cancel):
+            async for event in self._events(request, cancel, provider):
                 match event:
                     case TextDelta(text=chunk):
                         text.append(chunk)
@@ -361,17 +391,15 @@ class AgentLoop:
         summary = extract_summary("".join(text))
         if cancel.is_set() or called or not summary:
             raise CompactionFailed("the model did not produce a summary")
-        before = self._context_tokens
-        self._conversation = [SummaryTurn(text=summary), *([prompt] if prompt is not None else [])]
-        self._context_tokens = sum(_estimate_tokens(message) for message in self._conversation)
-        self._verify_compaction = True
-        return Compacted(summary, before)
+        return summary
 
-    async def _events(self, request: LlmRequest, cancel: asyncio.Event) -> AsyncIterator[LlmEvent]:
+    async def _events(
+        self, request: LlmRequest, cancel: asyncio.Event, provider: LLMProvider | None = None
+    ) -> AsyncIterator[LlmEvent]:
         for attempt in itertools.count():
             started = False
             try:
-                async for event in self._attempt(request, cancel):
+                async for event in self._attempt(request, cancel, provider or self._provider):
                     started = True
                     yield event
                 return
@@ -387,8 +415,10 @@ class AgentLoop:
                 except Interrupted:
                     return
 
-    async def _attempt(self, request: LlmRequest, cancel: asyncio.Event) -> AsyncIterator[LlmEvent]:
-        stream = self._provider.stream(request, cancel=cancel).__aiter__()
+    async def _attempt(
+        self, request: LlmRequest, cancel: asyncio.Event, provider: LLMProvider
+    ) -> AsyncIterator[LlmEvent]:
+        stream = provider.stream(request, cancel=cancel).__aiter__()
         limit = self._limits.first_token_timeout_s
         event_count = 0
         last_event_kind: str | None = None
@@ -403,7 +433,7 @@ class AgentLoop:
                 except TimedOut:
                     log.warning(
                         "agent.provider_timeout",
-                        provider=type(self._provider).__name__,
+                        provider=type(provider).__name__,
                         timeout_s=limit,
                         events_received=event_count,
                         last_event_kind=last_event_kind,
