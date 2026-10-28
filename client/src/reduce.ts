@@ -26,6 +26,11 @@ export function emptyState(): SessionState {
   };
 }
 
+// A host from an older release leaves out fields added since, such as chat.
+export function withDefaults(state: SessionState): SessionState {
+  return { ...emptyState(), ...state };
+}
+
 export function reduce(state: SessionState, record: EventRecord): SessionState {
   return { ...apply(state, record), last_seq: record.seq };
 }
