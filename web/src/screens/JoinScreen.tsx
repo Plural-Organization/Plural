@@ -129,7 +129,7 @@ export function JoinScreen({ notice, onJoin }: JoinScreenProps) {
 
         <p className="hint">
           No room yet? Install Plural and run <code>plural</code> in your project.{" "}
-          <a href="https://github.com/Plural-Organization/Plural" target="_blank" rel="noopener noreferrer">
+          <a href="https://agent-plural.vercel.app" target="_blank" rel="noopener noreferrer">
             What is Plural?
           </a>
         </p>
