@@ -36,7 +36,8 @@ export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }
         </text>
         {item.guestLink ? (
           <text fg={theme.dim}>
-            invite a teammate: <span fg={theme.info}>plural join "{item.guestLink}"</span>
+            invite one teammate: <span fg={theme.info}>plural join "{item.guestLink}"</span>
+            <span fg={theme.dim}> · works once, /invite makes another</span>
           </text>
         ) : null}
         <text fg={theme.dim}>/help for commands · esc interrupts · ctrl+o tool details · ctrl+c twice quits</text>

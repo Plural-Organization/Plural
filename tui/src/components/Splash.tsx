@@ -59,11 +59,12 @@ interface SplashProps {
   version: string;
   ready: boolean;
   status: string;
+  failure?: string | null;
   onDone: () => void;
   onQuit: () => void;
 }
 
-export function Splash({ width, height, version, ready, status, onDone, onQuit }: SplashProps) {
+export function Splash({ width, height, version, ready, status, failure = null, onDone, onQuit }: SplashProps) {
   const [elapsed, setElapsed] = useState(0);
   const animating = elapsed < DONE_MS;
 
@@ -85,6 +86,8 @@ export function Splash({ width, height, version, ready, status, onDone, onQuit }
   useKeyboard((key) => {
     key.preventDefault();
     if (key.ctrl && key.name === "c") {
+      onQuit();
+    } else if (failure !== null && (key.name === "return" || key.name === "escape")) {
       onQuit();
     } else if (animating) {
       setElapsed(DONE_MS);
@@ -109,12 +112,20 @@ export function Splash({ width, height, version, ready, status, onDone, onQuit }
         </text>
       </box>
       <box height={1}>
-        {animating ? null : (
+        {animating ? null : failure !== null ? (
+          <text fg={theme.danger}>✗ could not join</text>
+        ) : (
           <text fg={theme.dim}>
             <Spinner color={theme.accent} /> {status}
           </text>
         )}
       </box>
+      {!animating && failure !== null ? (
+        <box flexDirection="column" alignItems="center" marginTop={1} maxWidth={Math.max(20, width - 8)}>
+          <text fg={theme.text}>{failure}</text>
+          <text fg={theme.dim}>enter or ctrl+c to leave</text>
+        </box>
+      ) : null}
     </box>
   );
 }

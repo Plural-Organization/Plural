@@ -32,6 +32,7 @@ import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, ModeLine, Working } from "./components/Working";
 import { helpRows, policyRows, skillRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
+import { explain } from "./failure";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
@@ -126,6 +127,11 @@ export function App({
   const [now, setNow] = useState(Date.now());
   const [planReady, setPlanReady] = useState(false);
   const [intro, setIntro] = useState(splash);
+  const [failure, setFailure] = useState<string | null>(null);
+  const reached = useRef(client.status === "online");
+  if (connection === "online") {
+    reached.current = true;
+  }
   const [tray, setTrayState] = useState<Tray | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
   const [images, setImages] = useState<PastedImage[]>([]);
@@ -213,7 +219,9 @@ export function App({
           }
         }
       } catch (error) {
-        notify("danger", error instanceof Error ? error.message : String(error));
+        const reason = explain(error);
+        setFailure(reason);
+        notify("danger", reason);
       }
     })();
     return () => {
@@ -797,7 +805,16 @@ export function App({
         height={height}
         version={version}
         ready={connection === "online" && me !== undefined}
-        status={connection === "online" ? "joining the session…" : connection === "connecting" ? "connecting to the session…" : "reconnecting…"}
+        status={
+          connection === "online"
+            ? "joining the session…"
+            : connection === "connecting"
+              ? "connecting to the session…"
+              : reached.current
+                ? "connection lost, reconnecting…"
+                : "cannot reach the host yet, still trying…"
+        }
+        failure={failure}
         onDone={() => setIntro(false)}
         onQuit={onQuit}
       />
