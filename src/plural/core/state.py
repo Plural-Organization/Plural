@@ -5,6 +5,7 @@ from plural.protocol.events import (
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
+    ChatPosted,
     ContextCompacted,
     ContextUsage,
     EventRecord,
@@ -30,6 +31,7 @@ from plural.protocol.events import (
     ToolStarted,
 )
 from plural.protocol.models import (
+    ChatEntry,
     EntryKind,
     QueuedPrompt,
     RunView,
@@ -38,6 +40,7 @@ from plural.protocol.models import (
 )
 
 TRANSCRIPT_LIMIT: Final = 200
+CHAT_LIMIT: Final = 200
 OUTPUT_PREVIEW_CHARS: Final = 2000
 
 
@@ -101,6 +104,16 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
                     }
                 )
             return _append(state, entry)
+        case ChatPosted():
+            entry = ChatEntry(
+                id=event.message_id,
+                author_id=event.author_id,
+                text=event.text,
+                ts=record.ts,
+                to=event.to,
+                mentions=event.mentions,
+            )
+            return state.model_copy(update={"chat": (*state.chat, entry)[-CHAT_LIMIT:]})
         case PromptDequeued(prompt_id=prompt_id):
             kept = tuple(entry for entry in state.queue if entry.prompt_id != prompt_id)
             return state.model_copy(update={"queue": kept})

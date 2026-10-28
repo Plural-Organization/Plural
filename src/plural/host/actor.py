@@ -13,7 +13,7 @@ from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.messages import Message, UserTurn
 from plural.agent.providers.base import LlmImage
 from plural.agent.skills import Package, SkillError, SkillLibrary, parse_package
-from plural.core import approvals, policies, proposals
+from plural.core import approvals, chat, policies, proposals
 from plural.core.errors import (
     Conflict,
     DomainError,
@@ -52,6 +52,7 @@ from plural.host.transport.base import Connection
 from plural.protocol.codec import ProtocolError, decode_command
 from plural.protocol.commands import (
     ApprovalRespond,
+    ChatSend,
     Command,
     ContextCompact,
     FileAttach,
@@ -306,6 +307,16 @@ class SessionActor:
                     self._publisher.deliver_record(connection, record)
             case PromptSubmit():
                 await self._submit(participant, command)
+            case ChatSend():
+                await self._emit(
+                    chat.post(
+                        self._state,
+                        message_id=self._ids.new("c_"),
+                        author=participant,
+                        command=command,
+                    ),
+                    actor_id=participant.id,
+                )
             case ProposalDecide():
                 await self._decide(participant, command)
             case ApprovalRespond():
@@ -434,7 +445,9 @@ class SessionActor:
         self._publisher.deliver(connection, welcome)
         if hello.since is None:
             snapshot = SessionSnapshot(
-                state=self._state, streaming=dict(self._streaming), typing=tuple(self._typing)
+                state=chat.state_for(self._state, participant_id),
+                streaming=dict(self._streaming),
+                typing=tuple(self._typing),
             )
             self._publisher.deliver(connection, snapshot)
             return

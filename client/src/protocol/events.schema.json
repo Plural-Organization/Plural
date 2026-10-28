@@ -152,6 +152,95 @@
       ],
       "type": "object"
     },
+    "ChatEntry": {
+      "properties": {
+        "author_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mentions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "text": {
+          "type": "string"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ts": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "author_id",
+        "text",
+        "ts",
+        "to",
+        "mentions"
+      ],
+      "type": "object"
+    },
+    "ChatPosted": {
+      "properties": {
+        "author_id": {
+          "type": "string"
+        },
+        "mentions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "message_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "chat.posted",
+          "default": "chat.posted",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message_id",
+        "author_id",
+        "text",
+        "to",
+        "mentions"
+      ],
+      "type": "object"
+    },
     "ContextCompacted": {
       "properties": {
         "run_id": {
@@ -459,6 +548,7 @@
               "approval.requested": "#/$defs/ApprovalRequested",
               "approval.resolved": "#/$defs/ApprovalResolved",
               "attachment.added": "#/$defs/AttachmentAdded",
+              "chat.posted": "#/$defs/ChatPosted",
               "context.compacted": "#/$defs/ContextCompacted",
               "context.compacting": "#/$defs/ContextCompacting",
               "context.usage": "#/$defs/ContextUsage",
@@ -527,6 +617,9 @@
             },
             {
               "$ref": "#/$defs/ParticipantTyping"
+            },
+            {
+              "$ref": "#/$defs/ChatPosted"
             },
             {
               "$ref": "#/$defs/ProposalCreated"
@@ -1401,6 +1494,13 @@
           },
           "type": "object"
         },
+        "chat": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ChatEntry"
+          },
+          "type": "array"
+        },
         "context": {
           "anyOf": [
             {
@@ -1510,7 +1610,8 @@
         "agent",
         "summary",
         "run",
-        "transcript"
+        "transcript",
+        "chat"
       ],
       "type": "object"
     },
@@ -1880,6 +1981,7 @@
           "approval.requested": "#/$defs/ApprovalRequested",
           "approval.resolved": "#/$defs/ApprovalResolved",
           "attachment.added": "#/$defs/AttachmentAdded",
+          "chat.posted": "#/$defs/ChatPosted",
           "context.compacted": "#/$defs/ContextCompacted",
           "context.compacting": "#/$defs/ContextCompacting",
           "context.usage": "#/$defs/ContextUsage",
@@ -1948,6 +2050,9 @@
         },
         {
           "$ref": "#/$defs/ParticipantTyping"
+        },
+        {
+          "$ref": "#/$defs/ChatPosted"
         },
         {
           "$ref": "#/$defs/ProposalCreated"

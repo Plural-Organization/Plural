@@ -10,6 +10,7 @@ export type {
   ApprovalRequested,
   ApprovalView,
   AttachmentMeta,
+  ChatEntry,
   ContextView,
   Envelope,
   ErrorCode,

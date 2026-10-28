@@ -231,6 +231,15 @@ class TranscriptEntry(Model):
     output: str = ""
 
 
+class ChatEntry(Model):
+    id: str
+    author_id: str
+    text: str
+    ts: datetime
+    to: str | None = None
+    mentions: tuple[str, ...] = ()
+
+
 class SessionState(Model):
     last_seq: int = 0
     prompt_mode: PromptMode = PromptMode.OPEN
@@ -248,3 +257,4 @@ class SessionState(Model):
     summary: str | None = None
     run: RunView | None = None
     transcript: tuple[TranscriptEntry, ...] = ()
+    chat: tuple[ChatEntry, ...] = ()

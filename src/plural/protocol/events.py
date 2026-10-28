@@ -98,6 +98,15 @@ class ParticipantTyping(TransientEvent):
     typing: bool
 
 
+class ChatPosted(EventBase):
+    type: Literal["chat.posted"] = "chat.posted"
+    message_id: str
+    author_id: str
+    text: str
+    to: str | None = None
+    mentions: tuple[str, ...] = ()
+
+
 class ProposalCreated(EventBase):
     type: Literal["proposal.created"] = "proposal.created"
     proposal: ProposalView
@@ -275,6 +284,7 @@ Event = Annotated[
     | AgentChanged
     | PromptDequeued
     | ParticipantTyping
+    | ChatPosted
     | ProposalCreated
     | ProposalApproved
     | ProposalRejected

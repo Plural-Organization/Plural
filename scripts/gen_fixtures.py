@@ -10,6 +10,7 @@ from plural.protocol.events import (
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
+    ChatPosted,
     ContextCompacted,
     Event,
     EventRecord,
@@ -213,6 +214,20 @@ def _steps() -> list[tuple[str, Event]]:
             ),
         ),
         ("record", RunEnded(run_id="run_2", reason=RunEndReason.STOP)),
+        ("record", ChatPosted(message_id="c_1", author_id="p_host", text="standup in five")),
+        (
+            "record",
+            ChatPosted(
+                message_id="c_2",
+                author_id="p_alia",
+                text="@Bek can you look at this",
+                mentions=("p_bek2222",),
+            ),
+        ),
+        (
+            "record",
+            ChatPosted(message_id="c_3", author_id="p_host", text="only for Alia", to="p_alia"),
+        ),
         ("record", ParticipantRevoked(participant_id="p_alia")),
     ]
 

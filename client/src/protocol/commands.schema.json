@@ -29,6 +29,42 @@
       ],
       "type": "object"
     },
+    "ChatSend": {
+      "properties": {
+        "mentions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "text": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "chat.send",
+          "default": "chat.send",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "type": "object"
+    },
     "ClientInfo": {
       "properties": {
         "kind": {
@@ -659,6 +695,7 @@
       "discriminator": {
         "mapping": {
           "approval.respond": "#/$defs/ApprovalRespond",
+          "chat.send": "#/$defs/ChatSend",
           "context.compact": "#/$defs/ContextCompact",
           "file.attach": "#/$defs/FileAttach",
           "history.get": "#/$defs/HistoryGet",
@@ -695,6 +732,9 @@
         },
         {
           "$ref": "#/$defs/PromptSubmit"
+        },
+        {
+          "$ref": "#/$defs/ChatSend"
         },
         {
           "$ref": "#/$defs/ProposalDecide"

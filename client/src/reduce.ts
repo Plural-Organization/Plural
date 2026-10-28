@@ -2,6 +2,7 @@ import type { EventRecord, SessionState, TranscriptEntry } from "./protocol";
 
 export const TRANSCRIPT_LIMIT = 200;
 export const OUTPUT_PREVIEW_CHARS = 2000;
+export const CHAT_LIMIT = 200;
 
 export function emptyState(): SessionState {
   return {
@@ -21,6 +22,7 @@ export function emptyState(): SessionState {
     summary: null,
     run: null,
     transcript: [],
+    chat: [],
   };
 }
 
@@ -42,6 +44,21 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return patchParticipant(state, event.participant_id, { role: event.role });
     case "participant.revoked":
       return { ...state, participants: without(state.participants, event.participant_id) };
+    case "chat.posted":
+      return {
+        ...state,
+        chat: [
+          ...state.chat,
+          {
+            id: event.message_id,
+            author_id: event.author_id,
+            text: event.text,
+            ts: record.ts,
+            to: event.to,
+            mentions: event.mentions,
+          },
+        ].slice(-CHAT_LIMIT),
+      };
     case "agent.changed":
       return { ...state, agent: event.agent };
     case "session.prompt_mode_changed":

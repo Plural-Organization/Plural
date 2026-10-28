@@ -1,3 +1,4 @@
+from plural.core.chat import record_visible_to
 from plural.core.ports import Clock, IdGenerator
 from plural.host.transport.base import Connection
 from plural.protocol.codec import encode_ack, encode_event, encode_record
@@ -32,8 +33,9 @@ class Publisher:
 
     def publish(self, record: EventRecord) -> None:
         envelope = encode_record(record, room=self._room)
-        for connection, _ in self._bound.values():
-            connection.send(envelope)
+        for connection, participant_id in self._bound.values():
+            if record_visible_to(record, participant_id):
+                connection.send(envelope)
 
     def publish_transient(self, event: Event, *, actor_id: str | None = None) -> None:
         envelope = encode_event(
@@ -57,7 +59,10 @@ class Publisher:
         connection.send(envelope)
 
     def deliver_record(self, connection: Connection, record: EventRecord) -> None:
-        connection.send(encode_record(record, room=self._room, to=self.participant_of(connection)))
+        recipient = self.participant_of(connection)
+        if recipient is not None and not record_visible_to(record, recipient):
+            return
+        connection.send(encode_record(record, room=self._room, to=recipient))
 
     def ack(self, connection: Connection, re: str, error: ErrorInfo | None = None) -> None:
         connection.send(

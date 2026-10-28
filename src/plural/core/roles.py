@@ -5,6 +5,7 @@ from typing import Final
 from plural.core.errors import Forbidden
 from plural.protocol.commands import (
     ApprovalRespond,
+    ChatSend,
     Command,
     ContextCompact,
     FileAttach,
@@ -42,6 +43,7 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         SessionHello: EVERYONE,
         HistoryGet: EVERYONE,
         PromptSubmit: CONTRIBUTORS,
+        ChatSend: CONTRIBUTORS,
         FileAttach: CONTRIBUTORS,
         ProposalDecide: HOST_ONLY,
         ApprovalRespond: HOST_ONLY,

@@ -28,7 +28,8 @@
         "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -73,7 +74,8 @@
         "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -124,7 +126,8 @@
         "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -181,7 +184,8 @@
         "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -244,7 +248,8 @@
         "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -303,7 +308,8 @@
         "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -361,7 +367,8 @@
         "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -419,7 +426,8 @@
         "agent": "demo agent (scripted)",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -477,7 +485,8 @@
         "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -549,7 +558,8 @@
         "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -609,7 +619,8 @@
         "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -681,7 +692,8 @@
         "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -740,7 +752,8 @@
         "agent": "anthropic · claude-opus-5-5",
         "summary": null,
         "run": null,
-        "transcript": []
+        "transcript": [],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -817,7 +830,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -899,7 +913,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -1000,7 +1015,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -1116,7 +1132,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -1218,7 +1235,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -1313,7 +1331,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -1403,7 +1422,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 4
@@ -1498,7 +1518,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {
         "m1": ""
@@ -1590,7 +1611,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {
         "m1": "Looking "
@@ -1682,7 +1704,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {
         "m1": "Looking around"
@@ -1790,7 +1813,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -1915,7 +1939,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -2071,7 +2096,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -2191,7 +2217,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -2313,7 +2340,8 @@
             "ok": true,
             "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -2453,7 +2481,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -2590,7 +2619,8 @@
             "ok": false,
             "output": "denied by policy"
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -2735,7 +2765,8 @@
             "ok": false,
             "output": "denied by policy"
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -2868,7 +2899,8 @@
             "ok": false,
             "output": "denied by policy"
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -3015,7 +3047,8 @@
             "ok": false,
             "output": "denied by policy"
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -3167,7 +3200,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -3355,7 +3389,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -3507,7 +3542,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -3682,7 +3718,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -3848,7 +3885,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -4014,7 +4052,8 @@
             "ok": null,
             "output": ""
           }
-        ]
+        ],
+        "chat": []
       },
       "streaming": {},
       "reasoning": 0
@@ -4027,12 +4066,558 @@
         "ts": "2026-10-26T12:00:40Z",
         "actor_id": null,
         "event": {
+          "type": "chat.posted",
+          "message_id": "c_1",
+          "author_id": "p_host",
+          "text": "standup in five",
+          "to": null,
+          "mentions": []
+        }
+      },
+      "state": {
+        "last_seq": 40,
+        "prompt_mode": "review",
+        "permission_mode": "default",
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {
+          "at_1": {
+            "id": "at_1",
+            "name": "notes.md",
+            "size": 12,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "owner_id": "p_alia"
+          }
+        },
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "queue": [
+          {
+            "prompt_id": "pm_2",
+            "author_id": "p_alia",
+            "text": "again",
+            "delivery": "now"
+          }
+        ],
+        "agent": "anthropic · claude-opus-5-5",
+        "summary": "notes were read",
+        "run": null,
+        "transcript": [
+          {
+            "id": "pm_1",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "check the notes",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q1",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "then this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q2",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "and later this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "m1",
+            "kind": "assistant",
+            "author_id": null,
+            "text": "Looking around",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "t1",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t1",
+              "name": "bash",
+              "risk": "exec",
+              "subject": "ls -la",
+              "args": {}
+            },
+            "ok": true,
+            "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
+          },
+          {
+            "id": "t2",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t2",
+              "name": "edit",
+              "risk": "write",
+              "subject": "calc.py",
+              "args": {}
+            },
+            "ok": false,
+            "output": "denied by policy"
+          },
+          {
+            "id": "e_34",
+            "kind": "compaction",
+            "author_id": null,
+            "text": "context compacted (900 tokens summarized)",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_2",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "again",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          }
+        ],
+        "chat": [
+          {
+            "id": "c_1",
+            "author_id": "p_host",
+            "text": "standup in five",
+            "ts": "2026-10-26T12:00:40Z",
+            "to": null,
+            "mentions": []
+          }
+        ]
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 41,
+        "id": "e_41",
+        "ts": "2026-10-26T12:00:41Z",
+        "actor_id": null,
+        "event": {
+          "type": "chat.posted",
+          "message_id": "c_2",
+          "author_id": "p_alia",
+          "text": "@Bek can you look at this",
+          "to": null,
+          "mentions": [
+            "p_bek2222"
+          ]
+        }
+      },
+      "state": {
+        "last_seq": 41,
+        "prompt_mode": "review",
+        "permission_mode": "default",
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {
+          "at_1": {
+            "id": "at_1",
+            "name": "notes.md",
+            "size": 12,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "owner_id": "p_alia"
+          }
+        },
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "queue": [
+          {
+            "prompt_id": "pm_2",
+            "author_id": "p_alia",
+            "text": "again",
+            "delivery": "now"
+          }
+        ],
+        "agent": "anthropic · claude-opus-5-5",
+        "summary": "notes were read",
+        "run": null,
+        "transcript": [
+          {
+            "id": "pm_1",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "check the notes",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q1",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "then this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q2",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "and later this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "m1",
+            "kind": "assistant",
+            "author_id": null,
+            "text": "Looking around",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "t1",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t1",
+              "name": "bash",
+              "risk": "exec",
+              "subject": "ls -la",
+              "args": {}
+            },
+            "ok": true,
+            "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
+          },
+          {
+            "id": "t2",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t2",
+              "name": "edit",
+              "risk": "write",
+              "subject": "calc.py",
+              "args": {}
+            },
+            "ok": false,
+            "output": "denied by policy"
+          },
+          {
+            "id": "e_34",
+            "kind": "compaction",
+            "author_id": null,
+            "text": "context compacted (900 tokens summarized)",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_2",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "again",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          }
+        ],
+        "chat": [
+          {
+            "id": "c_1",
+            "author_id": "p_host",
+            "text": "standup in five",
+            "ts": "2026-10-26T12:00:40Z",
+            "to": null,
+            "mentions": []
+          },
+          {
+            "id": "c_2",
+            "author_id": "p_alia",
+            "text": "@Bek can you look at this",
+            "ts": "2026-10-26T12:00:41Z",
+            "to": null,
+            "mentions": [
+              "p_bek2222"
+            ]
+          }
+        ]
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 42,
+        "id": "e_42",
+        "ts": "2026-10-26T12:00:42Z",
+        "actor_id": null,
+        "event": {
+          "type": "chat.posted",
+          "message_id": "c_3",
+          "author_id": "p_host",
+          "text": "only for Alia",
+          "to": "p_alia",
+          "mentions": []
+        }
+      },
+      "state": {
+        "last_seq": 42,
+        "prompt_mode": "review",
+        "permission_mode": "default",
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {
+          "at_1": {
+            "id": "at_1",
+            "name": "notes.md",
+            "size": 12,
+            "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "owner_id": "p_alia"
+          }
+        },
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "queue": [
+          {
+            "prompt_id": "pm_2",
+            "author_id": "p_alia",
+            "text": "again",
+            "delivery": "now"
+          }
+        ],
+        "agent": "anthropic · claude-opus-5-5",
+        "summary": "notes were read",
+        "run": null,
+        "transcript": [
+          {
+            "id": "pm_1",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "check the notes",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q1",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "then this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_q2",
+            "kind": "prompt",
+            "author_id": "p_bek1111",
+            "text": "and later this",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "m1",
+            "kind": "assistant",
+            "author_id": null,
+            "text": "Looking around",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "t1",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t1",
+              "name": "bash",
+              "risk": "exec",
+              "subject": "ls -la",
+              "args": {}
+            },
+            "ok": true,
+            "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
+          },
+          {
+            "id": "t2",
+            "kind": "tool",
+            "author_id": null,
+            "text": "",
+            "tool": {
+              "id": "t2",
+              "name": "edit",
+              "risk": "write",
+              "subject": "calc.py",
+              "args": {}
+            },
+            "ok": false,
+            "output": "denied by policy"
+          },
+          {
+            "id": "e_34",
+            "kind": "compaction",
+            "author_id": null,
+            "text": "context compacted (900 tokens summarized)",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          },
+          {
+            "id": "pm_2",
+            "kind": "prompt",
+            "author_id": "p_alia",
+            "text": "again",
+            "tool": null,
+            "ok": null,
+            "output": ""
+          }
+        ],
+        "chat": [
+          {
+            "id": "c_1",
+            "author_id": "p_host",
+            "text": "standup in five",
+            "ts": "2026-10-26T12:00:40Z",
+            "to": null,
+            "mentions": []
+          },
+          {
+            "id": "c_2",
+            "author_id": "p_alia",
+            "text": "@Bek can you look at this",
+            "ts": "2026-10-26T12:00:41Z",
+            "to": null,
+            "mentions": [
+              "p_bek2222"
+            ]
+          },
+          {
+            "id": "c_3",
+            "author_id": "p_host",
+            "text": "only for Alia",
+            "ts": "2026-10-26T12:00:42Z",
+            "to": "p_alia",
+            "mentions": []
+          }
+        ]
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 43,
+        "id": "e_43",
+        "ts": "2026-10-26T12:00:43Z",
+        "actor_id": null,
+        "event": {
           "type": "participant.revoked",
           "participant_id": "p_alia"
         }
       },
       "state": {
-        "last_seq": 40,
+        "last_seq": 43,
         "prompt_mode": "review",
         "permission_mode": "default",
         "participants": {
@@ -4165,6 +4750,34 @@
             "tool": null,
             "ok": null,
             "output": ""
+          }
+        ],
+        "chat": [
+          {
+            "id": "c_1",
+            "author_id": "p_host",
+            "text": "standup in five",
+            "ts": "2026-10-26T12:00:40Z",
+            "to": null,
+            "mentions": []
+          },
+          {
+            "id": "c_2",
+            "author_id": "p_alia",
+            "text": "@Bek can you look at this",
+            "ts": "2026-10-26T12:00:41Z",
+            "to": null,
+            "mentions": [
+              "p_bek2222"
+            ]
+          },
+          {
+            "id": "c_3",
+            "author_id": "p_host",
+            "text": "only for Alia",
+            "ts": "2026-10-26T12:00:42Z",
+            "to": "p_alia",
+            "mentions": []
           }
         ]
       },

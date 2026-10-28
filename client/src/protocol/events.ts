@@ -108,6 +108,7 @@ export interface EventsSchema {
     | AgentChanged
     | PromptDequeued
     | ParticipantTyping
+    | ChatPosted
     | ProposalCreated
     | ProposalApproved
     | ProposalRejected
@@ -286,6 +287,18 @@ export interface ParticipantTyping {
   participant_id: string;
   type: "participant.typing";
   typing: boolean;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ChatPosted".
+ */
+export interface ChatPosted {
+  author_id: string;
+  mentions: string[];
+  message_id: string;
+  text: string;
+  to: string | null;
+  type: "chat.posted";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -613,6 +626,7 @@ export interface SessionState {
   attachments: {
     [k: string]: AttachmentMeta;
   };
+  chat: ChatEntry[];
   context: ContextView | null;
   last_seq: number;
   mcp: McpServerView[];
@@ -630,6 +644,18 @@ export interface SessionState {
   skills: SkillView[];
   summary: string | null;
   transcript: TranscriptEntry[];
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ChatEntry".
+ */
+export interface ChatEntry {
+  author_id: string;
+  id: string;
+  mentions: string[];
+  text: string;
+  to: string | null;
+  ts: string;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -701,6 +727,7 @@ export interface EventRecord {
     | AgentChanged
     | PromptDequeued
     | ParticipantTyping
+    | ChatPosted
     | ProposalCreated
     | ProposalApproved
     | ProposalRejected

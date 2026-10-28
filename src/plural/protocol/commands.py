@@ -15,6 +15,8 @@ from plural.protocol.models import (
 )
 
 MAX_PROMPT_CHARS = 32_000
+MAX_CHAT_CHARS = 2_000
+MAX_MENTIONS = 20
 
 
 class ClientInfo(Model):
@@ -42,6 +44,13 @@ class PromptSubmit(Model):
     text: str = Field(min_length=1, max_length=MAX_PROMPT_CHARS)
     attachments: tuple[str, ...] = ()
     delivery: Delivery = Delivery.NOW
+
+
+class ChatSend(Model):
+    type: Literal["chat.send"] = "chat.send"
+    text: str = Field(min_length=1, max_length=MAX_CHAT_CHARS)
+    to: str | None = None
+    mentions: tuple[str, ...] = ()
 
 
 class ProposalDecide(Model):
@@ -172,6 +181,7 @@ Command = Annotated[
     SessionHello
     | HistoryGet
     | PromptSubmit
+    | ChatSend
     | ProposalDecide
     | ApprovalRespond
     | RunAbort

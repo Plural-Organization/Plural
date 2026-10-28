@@ -51,6 +51,7 @@ export interface CommandsSchema {
     | SessionHello
     | HistoryGet
     | PromptSubmit
+    | ChatSend
     | ProposalDecide
     | ApprovalRespond
     | RunAbort
@@ -112,6 +113,16 @@ export interface PromptSubmit {
   delivery?: "now" | "steer" | "follow_up";
   text: string;
   type?: "prompt.submit";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "ChatSend".
+ */
+export interface ChatSend {
+  mentions?: string[];
+  text: string;
+  to?: string | null;
+  type?: "chat.send";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
