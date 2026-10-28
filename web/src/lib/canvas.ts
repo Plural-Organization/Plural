@@ -1,9 +1,23 @@
 import type { FeedItem } from "@plural/client";
 import { blocks } from "../components/feed/Markdown";
 
-// A code block this long, or a reply this long with headings, opens in the canvas instead of the feed.
+// A code block this long opens in the canvas instead of the feed, and so does a reply that reads as a
+// document: a titled piece of a few paragraphs, like an essay, or a long one with sections.
 export const CODE_LINES = 12;
+export const TITLED_CHARS = 700;
 export const DOCUMENT_CHARS = 1200;
+
+const BOLD_LINE = /^\*\*([^*\n]+)\*\*$/;
+
+// The title a reply opens with: a heading, or a line that is bold on its own.
+function leadingTitle(text: string): string | null {
+  const first = blocks(text)[0];
+  if (first?.kind === "heading") {
+    return first.text;
+  }
+  const line = first?.kind === "paragraph" ? first.text.split("\n")[0]!.trim() : "";
+  return BOLD_LINE.exec(line)?.[1]?.trim() ?? null;
+}
 
 export interface CanvasDoc {
   id: string;
@@ -20,7 +34,7 @@ type ToolItem = Extract<FeedItem, { kind: "tool" }>;
 
 export function docTitle(text: string): string {
   const heading = blocks(text).find((block) => block.kind === "heading");
-  return heading?.kind === "heading" ? heading.text : "Document";
+  return leadingTitle(text) ?? (heading?.kind === "heading" ? heading.text : "Document");
 }
 
 // A write the agent made, or is about to make, with the file it fills.
@@ -32,7 +46,11 @@ export function writtenFile(item: ToolItem): { path: string; content: string } |
 }
 
 export function isDocument(text: string): boolean {
-  return text.length >= DOCUMENT_CHARS && blocks(text).filter((block) => block.kind === "heading").length >= 2;
+  const parsed = blocks(text);
+  if (text.length >= TITLED_CHARS && leadingTitle(text) !== null && parsed.filter((block) => block.kind === "paragraph").length >= 3) {
+    return true;
+  }
+  return text.length >= DOCUMENT_CHARS && parsed.filter((block) => block.kind === "heading").length >= 2;
 }
 
 export function lineCount(text: string): number {

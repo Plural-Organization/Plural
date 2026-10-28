@@ -44,3 +44,11 @@ test("a written file opens under its path", () => {
 test("a comment in a code block is not taken for the title", () => {
   expect(docTitle("```sh\n# install\n```\n## Setup\ntext")).toBe("Setup");
 });
+
+test("a titled essay of a few paragraphs is a document, a long plain answer is not", () => {
+  const paragraph = "Такие слова помогают справиться со смущением и снижают важность разговора. ".repeat(3);
+  const essay = `**Почему мы говорим так**\n\n${paragraph}\n\n${paragraph}\n\n${paragraph}\n\n${paragraph}`;
+  const [doc] = canvasDocs([reply(essay)]);
+  expect(doc).toMatchObject({ id: "m1", kind: "text", title: "Почему мы говорим так" });
+  expect(canvasDocs([reply(`${paragraph}\n\n${paragraph}\n\n${paragraph}\n\n${paragraph}`)])).toEqual([]);
+});
