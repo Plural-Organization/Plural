@@ -13,6 +13,7 @@ export type ConnectionStatus = "connecting" | "online" | "offline";
 export interface SessionOptions {
   name: string;
   client: ClientInfo;
+  onWelcome?: (welcome: { room: string; token: string }) => void;
 }
 
 export interface Session {
@@ -134,6 +135,7 @@ export class SessionClient implements Session {
     switch (event.type) {
       case "session.welcome":
         this.token = event.token;
+        this.options.onWelcome?.({ room: event.room, token: event.token });
         this.projection.meId = event.participant.id;
         this.projection.basePolicy = event.base_policy;
         this.projection.agent = event.agent;

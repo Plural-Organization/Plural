@@ -7,17 +7,57 @@ cd your-project
 plural
 ```
 
-`plural` starts a host in the current directory and opens the client. The first lines of the conversation show the room and an invite link. Options:
+`plural` starts a host in the current directory and opens the client. The first lines of the conversation show the room and an invite link. Words that are not options become the first prompt: `plural "fix the failing test"`.
 
 | Option | Meaning |
 |---|---|
+| `-r`, `--resume [id\|title]` | Resume a session, see [Resume a session](#resume-a-session) |
+| `-c`, `--continue` | Continue the latest session of this folder |
+| `-n`, `--title <title>` | Name the session |
+| `-p`, `--print` | Answer once and exit, see [Use it from a script](#use-it-from-a-script) |
 | `--workspace <dir>` | Directory the agent works in, default is the current one |
 | `--prompts open\|review` | Who may prompt directly, see below |
 | `--name <name>` | Your display name |
+| `--model <id>`, `--provider <name>`, `--effort <level>` | Model, provider (`anthropic`, `openai`, `gemini`, `ollama`…) and effort for this run only |
+| `--permission-mode default\|acceptEdits\|plan\|auto` | Start in that permission mode |
+| `--allowedTools <tools>`, `--disallowedTools <tools>` | Allow or deny tools for this run, for example `"Bash(git log *)" Read` |
 | `--port <n>`, `--bind <addr>` | Where the host listens in direct mode |
 | `--relay <url>`, `--public-url <url>` | Connect through a relay and set the address in invite links |
 | `--tunnel cloudflared\|ngrok` | Start a tunnel and put its address in the invite links, see [sharing a session](self-hosting.md) |
-| `--room <id>` | Resume a room, its log and settings are kept |
+
+An option that does not exist is refused, so a typing mistake does not reach the host by accident. A long dash typed by a chat or a keyboard (`—tunnel`) is read as `--tunnel`.
+
+## Resume a session
+
+Every session you host is kept in `~/.plural/sessions` with its folder, its title and the whole conversation.
+
+```bash
+plural -r                 # choose from the sessions of this folder, tab shows every folder
+plural -r refactor        # a title, a piece of a title or the start of an id
+plural -c                 # the latest session of this folder
+plural sessions           # list them
+plural sessions --json    # the same for a script
+plural rm <id>            # delete one
+```
+
+A resumed session works in the folder it was started in, even when you are somewhere else; `--workspace` chooses another one. The conversation continues where it stopped, the people who were in the room come back with their old links while those are valid, and new invites work as usual. The title is the first prompt unless you named it with `--title`.
+
+The chooser also lists the rooms you joined as a guest. Choosing one takes you back in without a new invite, as long as the link you were given is still valid (a token lasts 24 hours) and the host is running.
+
+## Use it from a script
+
+`plural -p` asks once, prints the answer and exits, without the screen. Text piped in goes before the prompt, or is the prompt.
+
+```bash
+plural -p "what does this repo do?"
+git diff | plural -p "review this change"
+plural -p "list the failing tests" --output-format json
+plural -r <id> -p "and fix the first one" --permission-mode acceptEdits
+```
+
+`--output-format` is `text` (the default, only the final answer), `json` (one object with `result`, `session_id`, `num_turns`, `duration_ms`, `usage`, `denied` and `error`) or `stream-json` (one event per line, the object last). The exit code is 0 when the run stopped normally and 1 when it failed. The `session_id` is a session like any other: `-r` continues it.
+
+Nobody is there to approve an action, so one that needs approval is **refused**: it is named on stderr and listed in `denied`, and the agent goes on without it. Allow what a script may do with `--allowedTools "Bash(npm test)"`, or with `--permission-mode acceptEdits` (file edits) or `auto`. Deny rules always win, and the built-in protections cannot be switched off. The model is the one you saved in the settings; `--provider` and `--model` choose another for this run, and the key comes from `~/.plural/credentials.json` or the usual environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`…).
 
 ## Share a session
 

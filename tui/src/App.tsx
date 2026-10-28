@@ -53,6 +53,8 @@ export interface AppProps {
   keys?: Keys;
   onKeys?: (preset: PresetId, key: string, remember: boolean) => void;
   startupNote?: string | null;
+  startup?: Command[];
+  initialPrompt?: string | null;
   alerts?: Alerts;
   splash?: boolean;
   onQuit: () => void;
@@ -83,6 +85,8 @@ export function App({
   keys = {},
   onKeys,
   startupNote = null,
+  startup = [],
+  initialPrompt = null,
   alerts,
   splash = false,
   onQuit,
@@ -312,6 +316,18 @@ export function App({
   }, []);
 
   useEffect(() => alerts?.subscribe((tone, text) => notify(tone, text)), [alerts]);
+
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || connection !== "online" || me === undefined) {
+      return;
+    }
+    started.current = true;
+    startup.forEach((command) => send(command));
+    if (initialPrompt !== null && initialPrompt.trim() !== "") {
+      submit(initialPrompt.trim());
+    }
+  }, [connection, me?.id]);
 
   const send = (command: Command): void => {
     client.send(command).catch((error: unknown) => {

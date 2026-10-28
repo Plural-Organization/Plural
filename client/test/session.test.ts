@@ -115,6 +115,25 @@ describe("TypeScript client against a Python host", () => {
     await Promise.all([owner.pump, alia.pump, bek.pump]);
   }, 60_000);
 
+  test("the welcome hands over the room and the token to remember", async () => {
+    const welcomes: { room: string; token: string }[] = [];
+    const client = new SessionClient(parseLink(host.hostLink), { name: "vlad", client: CLIENT, onWelcome: (welcome) => welcomes.push(welcome) });
+    const pump = (async () => {
+      try {
+        for await (const _event of client.events()) {
+          void _event;
+        }
+      } catch {
+        return;
+      }
+    })();
+    await until(() => welcomes.length > 0);
+    expect(welcomes[0]?.room).toBe(parseLink(host.hostLink).room);
+    expect(welcomes[0]?.token.length).toBeGreaterThan(20);
+    client.close();
+    await pump;
+  }, 30_000);
+
   test("a forged token is refused", async () => {
     const forged = host.hostLink.replace(/token=.*/, "token=forged");
     const client = new SessionClient(parseLink(forged), { name: "mallory", client: CLIENT });
