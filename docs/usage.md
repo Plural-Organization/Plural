@@ -27,6 +27,15 @@ plural
 
 An option that does not exist is refused, so a typing mistake does not reach the host by accident. A long dash typed by a chat or a keyboard (`—tunnel`) is read as `--tunnel`.
 
+## Update
+
+```bash
+plural update           # install the latest release
+plural update --check   # only say whether there is one
+```
+
+`plural update` looks up the latest release on GitHub and runs the same installer as the first install, pinned to that version: it upgrades the host (`plural-host`) and replaces the `plural` program next to the one you ran, with the same progress, resume and checksum check. A download that was cut off continues where it stopped when you run it again. It does nothing when you are up to date. A copy that runs from source or from a package manager cannot replace itself and says so.
+
 ## Resume a session
 
 Every session you host is kept in `~/.plural/sessions` with its folder, its title and the whole conversation.

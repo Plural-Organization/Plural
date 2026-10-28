@@ -19,6 +19,7 @@ import { emptyOptions, parseArgs, UsageError, type SessionOptions } from "./opti
 import { pickSession } from "./picker";
 import { composePrompt, readStdin, runPrint } from "./print";
 import { startupCommands } from "./startup";
+import { runUpdate } from "./update";
 import { listSessions, resolveSession, type SessionInfo } from "./sessions";
 import { parseTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
 
@@ -29,6 +30,7 @@ usage
   plural -r [id|title]        resume a session, pick one when none is named
   plural -c                   continue the latest session of this folder
   plural join <link>          join a session
+  plural update [--check]     install the latest version
   plural sessions [--json]    list your sessions
   plural rm <id>              delete a session
   plural relay|doctor|export  run the host's own commands
@@ -312,6 +314,8 @@ async function main(): Promise<void> {
     probe.destroy();
     process.stdout.write("selftest ok\n");
     process.exit(0);
+  } else if (parsed.kind === "update") {
+    process.exit(await runUpdate({ check: parsed.check }, { current: pkg.version, execPath: process.execPath, out: process.stdout, err: process.stderr }));
   } else if (parsed.kind === "passthrough") {
     const child = runHostCommand(parsed.args);
     child.on("exit", (code) => process.exit(code ?? 0));

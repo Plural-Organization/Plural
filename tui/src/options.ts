@@ -23,6 +23,7 @@ export type Parsed =
   | { kind: "version" }
   | { kind: "help" }
   | { kind: "selftest" }
+  | { kind: "update"; check: boolean }
   | { kind: "passthrough"; args: string[] }
   | { kind: "join"; link: string | null; displayName: string | null }
   | { kind: "session"; options: SessionOptions };
@@ -110,8 +111,21 @@ export function parseArgs(input: string[]): Parsed {
   if (first === "--selftest") return { kind: "selftest" };
   if (first === "--help" || first === "-h") return { kind: "help" };
   if (first !== undefined && PASSTHROUGH.has(first)) return { kind: "passthrough", args: argv };
+  if (first === "update") return update(rest);
   if (first === "join") return join(rest);
   return { kind: "session", options: session(first === "host" ? rest : argv) };
+}
+
+function update(args: string[]): Parsed {
+  let check = false;
+  for (const arg of args) {
+    if (arg === "--check") {
+      check = true;
+    } else {
+      throw new UsageError(`unknown argument ${arg} for plural update. plural update [--check]`);
+    }
+  }
+  return { kind: "update", check };
 }
 
 function join(args: string[]): Parsed {
