@@ -5,7 +5,7 @@ import { codeBlockRenderer } from "../code";
 import type { FeedItem, Tone } from "../feed";
 import { gutterWidth, languageFor, parseDiff } from "../lib/diff";
 import { highlightLines } from "../lib/highlight";
-import { bodyLines, displayName, kindOf, lastLine, metaOf, oneLine } from "../lib/tools";
+import { bodyLines, displayName, kindOf, metaOf, oneLine } from "../lib/tools";
 import { truncate } from "../lib/wrap";
 import { colorFor, theme } from "../theme";
 import { Picture } from "./Splash";
@@ -73,18 +73,18 @@ export type Queued = "steer" | "follow_up" | null;
 export function UserCard({ item, queued }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued }) {
   const color = colorFor(item.participantId);
   return (
-    <box id={pinId(item.id)} flexDirection="column" marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={color} paddingLeft={1}>
+    <box id={pinId(item.id)} flexDirection="column" marginTop={1} marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={color} backgroundColor={theme.panel} paddingX={1} paddingY={1}>
       <text>
         <span fg={color}>
           <b>{item.name}</b>
         </span>
         <span fg={theme.dim}>
           {"  "}
-          {item.role}
+          {item.role} · to agent
           {item.viaProposal ? " · approved by host" : ""}
         </span>
       </text>
-      <text fg={theme.text}>{item.text}</text>
+      <text fg={theme.text} wrapMode="word">{item.text}</text>
       {queued ? (
         <text fg={theme.warn}>
           ⧗ queued · <span fg={theme.dim}>{queued === "steer" ? "the agent reads it after its current step" : "sent when the run ends"}</span>
@@ -117,7 +117,7 @@ export function ChatCard({ item }: { item: Extract<FeedItem, { kind: "chat" }> }
           {item.mentioned && !direct ? " · mentions you" : ""}
         </span>
       </text>
-      <text fg={theme.text}>{item.text}</text>
+      <text fg={theme.text} wrapMode="word">{item.text}</text>
     </box>
   );
 }
@@ -197,7 +197,7 @@ function Body({ item }: { item: Extract<FeedItem, { kind: "tool" }> }) {
     <box flexDirection="column">
       {kind === "bash" ? <text fg={theme.info}>$ {item.call.subject}</text> : null}
       {trimmed.shown !== "" ? (
-        <text fg={failed ? theme.danger : theme.dim} wrapMode="char">
+        <text fg={failed ? theme.danger : theme.text} wrapMode="char">
           {trimmed.shown}
         </text>
       ) : (
@@ -223,10 +223,8 @@ export function ToolCard({ item, expanded, onToggle, width }: ToolCardProps) {
   const meta = running
     ? `${elapsed}s`
     : metaOf({ name, tool: item.call.name, status: item.status, subject: item.call.subject, output: item.output, diff: item.diff, live: item.live });
-  const peek = running && !expanded ? lastLine(item.live) : "";
   const fixed = name.length + meta.length + 10;
-  const subject = truncate(oneLine(item.call.subject), Math.max(8, width - fixed - (peek ? 14 : 0)));
-  const room = Math.max(0, width - fixed - subject.length - 3);
+  const subject = truncate(oneLine(item.call.subject), Math.max(0, width - fixed));
   return (
     <box flexDirection="column" marginBottom={expanded ? 1 : 0}>
       <box flexDirection="row" onMouseDown={() => onToggle()}>
@@ -235,9 +233,8 @@ export function ToolCard({ item, expanded, onToggle, width }: ToolCardProps) {
           {running ? <Spinner color={theme.info} /> : <span fg={failed ? theme.danger : theme.ok}>{failed ? "✗" : "✓"}</span>}
           <span> </span>
           <b>{name}</b>
-          <span fg={theme.dim}> {subject}</span>
+          <span fg={theme.text}> {subject}</span>
           {meta ? <span fg={failed ? theme.danger : theme.dim}> · {meta}</span> : null}
-          {peek && room > 6 ? <span fg={theme.dim}> · {truncate(peek, room)}</span> : null}
         </text>
       </box>
       {expanded ? (

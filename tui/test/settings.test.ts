@@ -17,6 +17,11 @@ describe("settings", () => {
     expect(parseSettings({ theme: "neon", panel: "yes", bell: 1 })).toEqual(DEFAULT_SETTINGS);
   });
 
+  test("request sounds default to on and an explicit mute is preserved", () => {
+    expect(parseSettings({}).bell).toBe(true);
+    expect(parseSettings({ bell: false }).bell).toBe(false);
+  });
+
   test("valid values are kept and saving round-trips", () => {
     const directory = mkdtempSync(join(tmpdir(), "plural-settings-"));
     const path = join(directory, "nested", "tui.json");
@@ -26,6 +31,7 @@ describe("settings", () => {
       panel: false,
       copyOnSelect: false,
       bell: true,
+      joinBell: false,
       announceTyping: false,
       rememberKey: false,
       setupSeen: true,

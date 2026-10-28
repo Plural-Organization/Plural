@@ -147,6 +147,22 @@ describe("App", () => {
     expect(fake.commands).toEqual([{ type: "prompt.submit", text: "hi", delivery: "now" }]);
   });
 
+  test("switching to OAuth hides the context meter and switching back restores it", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "context.usage", context: { tokens: 96000, window: 128000, compact_at: 0.75 } });
+    await frame(setup, "96K/128K");
+    fake.emit({ type: "agent.changed", agent: "Claude OAuth · claude-haiku-4-5" });
+    await tick(50);
+    await setup.renderOnce();
+    const hidden = setup.captureCharFrame();
+    expect(hidden).not.toContain("96K/128K");
+    expect(hidden).not.toContain("75%");
+    expect(hidden.split("\n").find((line) => line.includes("vlad (host)"))).not.toContain("·  /help");
+    fake.emit({ type: "agent.changed", agent: "Anthropic · claude-opus-5-5" });
+    expect(await frame(setup, "96K/128K")).toContain("75%");
+  });
+
   test("everyone sees the context fill up and a compaction squeeze it", async () => {
     const fake = session();
     const setup = await mount(fake);
@@ -749,13 +765,13 @@ describe("App", () => {
     expect(await frame(setup, "exit 1")).toContain("✗ Bash pytest · exit 1");
   });
 
-  test("a running command shows its latest line next to the spinner and the whole tail when open", async () => {
+  test("a running command keeps output inside its expandable details", async () => {
     const fake = session();
     const setup = await mount(fake);
     fake.emit({ type: "tool.started", run_id: "r", call: { id: "t1", name: "bash", risk: "exec", subject: "make all", args: {} } });
     fake.emit({ type: "tool.output", call_id: "t1", chunk: "compiling a\ncompiling b\n" });
-    const text = await frame(setup, "compiling b");
-    expect(text).toContain("make all");
+    const text = await frame(setup, "make all");
+    expect(text).not.toContain("compiling b");
     expect(text).not.toContain("compiling a");
     await setup.mockInput.pressKey("o", { ctrl: true });
     const open = await frame(setup, "compiling a");

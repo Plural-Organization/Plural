@@ -40,7 +40,7 @@ function Entry({ item }: { item: Exclude<FeedItem, { kind: "tool" }> }) {
           <header>
             <span className={styles.who}>{item.name}</span>
             <span className="muted">
-              {item.role}
+              {item.role} · to agent
               {item.viaProposal ? " · approved by the host" : ""}
             </span>
           </header>

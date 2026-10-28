@@ -14,7 +14,7 @@ import {
   type JoinLink,
   type Tone,
 } from "@plural/client";
-import { alertMention } from "../lib/alert";
+import { alertMention, alertNotice } from "../lib/alert";
 import { forgetRoom, rememberRoom } from "../lib/saved";
 
 const CLIENT = { kind: "web", version: "0.2.0" };
@@ -40,7 +40,7 @@ export interface Session extends SessionView {
   close: () => void;
 }
 
-class SessionStore {
+export class SessionStore {
   private view: SessionView = { projection: new Projection(), feed: emptyFeed(), connection: "connecting", invite: null };
   private readonly listeners = new Set<() => void>();
   private client: SessionClient | null = null;
@@ -81,6 +81,13 @@ class SessionStore {
           if (event.type === "chat.posted" && mentionsMe(event, client.projection.meId)) {
             const author = client.projection.state.participants[event.author_id];
             alertMention(author ? label(client.projection.state, author) : "someone", event.to !== null);
+          }
+          if (client.projection.me?.role === "host") {
+            if (event.type === "participant.joined" && event.participant.id !== client.projection.meId) {
+              alertNotice(`${label(client.projection.state, event.participant)} joined`);
+            } else if (event.type === "join.requested" || event.type === "approval.requested" || event.type === "proposal.created") {
+              alertNotice("A request needs your attention");
+            }
           }
           if (event.type === "invite.created") {
             this.update({ invite: { link: event.link, role: event.role, expiresAt: event.expires_at, reusable: event.reusable } });

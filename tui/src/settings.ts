@@ -11,6 +11,7 @@ export interface Settings {
   copyOnSelect: boolean;
   bell: boolean;
   mentionBell: boolean;
+  joinBell: boolean;
   announceTyping: boolean;
   rememberKey: boolean;
   setupSeen: boolean;
@@ -24,8 +25,9 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "tokyo",
   panel: true,
   copyOnSelect: true,
-  bell: false,
+  bell: true,
   mentionBell: true,
+  joinBell: true,
   announceTyping: true,
   rememberKey: true,
   setupSeen: false,
@@ -53,7 +55,7 @@ export function settingsPath(environment: Record<string, string | undefined> = p
 
 export function parseSettings(raw: unknown): Settings {
   const value = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
-  const flag = (key: "panel" | "copyOnSelect" | "bell" | "mentionBell" | "announceTyping" | "rememberKey" | "setupSeen"): boolean =>
+  const flag = (key: "panel" | "copyOnSelect" | "bell" | "mentionBell" | "joinBell" | "announceTyping" | "rememberKey" | "setupSeen"): boolean =>
     typeof value[key] === "boolean" ? (value[key] as boolean) : DEFAULT_SETTINGS[key];
   const agent = parseChoice(value["agent"]);
   const rawChoices = typeof value["agentChoices"] === "object" && value["agentChoices"] !== null
@@ -70,6 +72,7 @@ export function parseSettings(raw: unknown): Settings {
     copyOnSelect: flag("copyOnSelect"),
     bell: flag("bell"),
     mentionBell: flag("mentionBell"),
+    joinBell: flag("joinBell"),
     announceTyping: flag("announceTyping"),
     rememberKey: flag("rememberKey"),
     setupSeen: flag("setupSeen"),
