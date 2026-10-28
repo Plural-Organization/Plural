@@ -13,6 +13,7 @@ export class TunnelUnavailable extends Error {}
 export interface Tunnel {
   url: string;
   stop: () => Promise<void>;
+  onExit: (listener: (reason: string) => void) => void;
 }
 
 export type Spawner = (command: string, args: string[], options: SpawnOptions) => ChildProcess;
@@ -62,8 +63,12 @@ export function startTunnel(
     child.kill("SIGTERM");
   };
   process.once("exit", reap);
+  let stopping = false;
+  let alive = false;
+  let lost: ((reason: string) => void) | null = null;
   const stop = (): Promise<void> =>
     new Promise((resolve) => {
+      stopping = true;
       process.removeListener("exit", reap);
       if (child.exitCode !== null || child.signalCode !== null) {
         resolve();
@@ -102,7 +107,16 @@ export function startTunnel(
       for (const line of lines) {
         const address = findAddress(kind, line);
         if (address !== null) {
-          finish(() => resolve({ url: toWebSocket(address), stop }));
+          finish(() => {
+            alive = true;
+            resolve({
+              url: toWebSocket(address),
+              stop,
+              onExit: (listener) => {
+                lost = listener;
+              },
+            });
+          });
           return;
         }
       }
@@ -112,6 +126,15 @@ export function startTunnel(
     child.on("error", (error: NodeJS.ErrnoException) =>
       fail(error.code === "ENOENT" ? `${kind} was not found: ${INSTALL[kind]}` : String(error)),
     );
-    child.on("exit", (code) => fail(`${kind} exited with code ${code} before it gave an address\n${lastLines(seen)}`));
+    child.on("exit", (code) => {
+      if (alive) {
+        process.removeListener("exit", reap);
+        if (!stopping) {
+          lost?.(`${kind} exited with code ${code}${lastLines(seen) === "" ? "" : `\n${lastLines(seen)}`}`);
+        }
+        return;
+      }
+      fail(`${kind} exited with code ${code} before it gave an address\n${lastLines(seen)}`);
+    });
   });
 }

@@ -45,6 +45,8 @@ A tunnel suits one person showing a session to a few teammates. For a team that 
 
 The same choices exist as options for scripts and servers: `--relay <url>` for the internet, `--bind 0.0.0.0 --public-url ws://<your address>:<port>` for the network. Every option can also be an environment variable (`PLURAL_RELAY_URL`, `PLURAL_BIND_HOST`, `PLURAL_PUBLIC_URL`, `PLURAL_PORT`), and a flag wins over a variable. An address given as a flag also wins over the saved choice in the client.
 
+If the relay restarts or the network drops, nothing needs to be done. The host reconnects on its own within a few seconds and takes its room back. Guests see *connection lost, reconnecting…*, keep their seat and carry on. If a tunnel stops, the host shows a warning in the conversation, because the links through it no longer work.
+
 Use a relay you run yourself or one you trust: it sees who connects and when, and the size of every message. Guests join with an invite that expires after an hour and works once.
 
 # Running Plural on a server
@@ -57,6 +59,16 @@ A room has two parts that can live anywhere:
 People join with an invite from the terminal (`plural join "wss://…"`) or from the web client. A web client served over https can only reach a relay over `wss://`, which is why the relay sits behind TLS.
 
 ## The relay
+
+### Limits and clean-up
+
+A relay that anyone can reach needs limits, so it has them:
+
+- A room is forgotten 15 minutes after its host left and no one is in it. The host can come back within that time and the room is still its own. After it the room id is free.
+- One address can host 3 rooms and bring 30 guests at once, and can open at most 20 connections in a burst and 2 per second after that. A host or a guest over a limit is refused with the close code 4429.
+- The relay holds at most 50 rooms.
+
+Behind a proxy every client looks like the proxy. Tell the relay how many proxies are in front of it with `PLURAL_RELAY_PROXY_HOPS` (the images set it to 1, which is right for Caddy, Railway and Render) and it takes the client address from the `X-Forwarded-For` header. Use 0 when the relay is reached directly. If the relay log shows the same `peer=` for different people, raise the number of hops, or raise the limits with `PLURAL_RELAY_MAX_ROOMS`, `PLURAL_RELAY_ROOMS_PER_PEER` and `PLURAL_RELAY_GUESTS_PER_PEER`.
 
 ### Railway
 

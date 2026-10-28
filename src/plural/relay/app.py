@@ -1,3 +1,6 @@
+import time
+from collections.abc import Callable
+
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -8,8 +11,13 @@ from plural.relay.limits import RelayLimits
 from plural.relay.rooms import Rooms
 
 
-def create_app(limits: RelayLimits | None = None) -> Starlette:
-    rooms = Rooms(limits or RelayLimits())
+def create_app(
+    limits: RelayLimits | None = None,
+    *,
+    proxy_hops: int = 0,
+    clock: Callable[[], float] = time.monotonic,
+) -> Starlette:
+    rooms = Rooms(limits or RelayLimits(), proxy_hops=proxy_hops, clock=clock)
 
     async def healthz(_: Request) -> JSONResponse:
         return JSONResponse({"ok": True})

@@ -1,13 +1,16 @@
 import asyncio
 import secrets
+import time
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
 
+import structlog
 from pydantic import ValidationError
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from plural.protocol.relay import RELAY_MESSAGES, RelayClosed, RelayFrame, RelayOpen
-from plural.relay.limits import RelayLimits, TokenBucket
+from plural.relay.limits import PeerGate, RelayLimits, TokenBucket
 from plural.security.tokens import TokenVerifier
 
 CLOSE_BAD_OPEN = 4400
@@ -17,6 +20,8 @@ CLOSE_ROOM_TAKEN = 4409
 CLOSE_TOO_LARGE = 4413
 CLOSE_RATE_LIMITED = 4429
 CLOSE_SLOW = 4408
+
+log = structlog.get_logger(__name__)
 
 
 class Outbox:
@@ -46,26 +51,77 @@ class Room:
     public_key: str
     host: Outbox | None = None
     guests: dict[str, Outbox] = field(default_factory=dict[str, Outbox])
+    vacated_at: float | None = None
 
     def current_host(self) -> Outbox | None:
         return self.host
 
 
 class Rooms:
-    def __init__(self, limits: RelayLimits) -> None:
+    def __init__(
+        self,
+        limits: RelayLimits,
+        *,
+        clock: Callable[[], float] = time.monotonic,
+        proxy_hops: int = 0,
+    ) -> None:
         self._limits = limits
+        self._clock = clock
+        self._proxy_hops = proxy_hops
+        self._gate = PeerGate(limits, clock)
         self._rooms: dict[str, Room] = {}
 
     @property
     def room_count(self) -> int:
+        self._sweep()
         return len(self._rooms)
 
     @property
     def guest_count(self) -> int:
         return sum(len(room.guests) for room in self._rooms.values())
 
+    def _sweep(self) -> None:
+        now = self._clock()
+        for room_id, room in list(self._rooms.items()):
+            if (
+                room.host is None
+                and not room.guests
+                and room.vacated_at is not None
+                and now - room.vacated_at >= self._limits.room_ttl_s
+            ):
+                del self._rooms[room_id]
+
+    def _peer(self, socket: WebSocket) -> str:
+        forwarded = socket.headers.get("x-forwarded-for")
+        if self._proxy_hops > 0 and forwarded:
+            hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+            if len(hops) >= self._proxy_hops:
+                return hops[-self._proxy_hops]
+        return socket.client.host if socket.client else "unknown"
+
     async def serve_host(self, socket: WebSocket, room_id: str) -> None:
         await socket.accept()
+        peer = self._peer(socket)
+        if not self._gate.admit(peer, host=True):
+            await socket.close(CLOSE_RATE_LIMITED)
+            return
+        try:
+            await self._serve_host(socket, room_id, peer)
+        finally:
+            self._gate.release(peer, host=True)
+
+    async def serve_guest(self, socket: WebSocket, room_id: str) -> None:
+        await socket.accept()
+        peer = self._peer(socket)
+        if not self._gate.admit(peer, host=False):
+            await socket.close(CLOSE_RATE_LIMITED)
+            return
+        try:
+            await self._serve_guest(socket, room_id)
+        finally:
+            self._gate.release(peer, host=False)
+
+    async def _serve_host(self, socket: WebSocket, room_id: str, peer: str) -> None:
         try:
             opening = RelayOpen.model_validate_json(await socket.receive_text())
         except (ValidationError, WebSocketDisconnect):
@@ -75,12 +131,14 @@ class Rooms:
         if opening.room != room_id or not verifier.verify_proof(room_id.encode(), opening.proof):
             await socket.close(CLOSE_BAD_PROOF)
             return
+        self._sweep()
         room = self._rooms.get(room_id)
         if room is None:
             if len(self._rooms) >= self._limits.max_rooms:
                 await socket.close(CLOSE_RATE_LIMITED)
                 return
             room = self._rooms[room_id] = Room(public_key=opening.public_key)
+            log.info("relay.room_opened", room=room_id, peer=peer)
         elif room.public_key != opening.public_key:
             await socket.close(CLOSE_ROOM_TAKEN)
             return
@@ -106,11 +164,12 @@ class Rooms:
             pump.cancel()
             if room.host is outbox:
                 room.host = None
+                room.vacated_at = self._clock()
                 for connection_id in list(room.guests):
                     await self._drop(room, connection_id, CLOSE_NO_HOST)
 
-    async def serve_guest(self, socket: WebSocket, room_id: str) -> None:
-        await socket.accept()
+    async def _serve_guest(self, socket: WebSocket, room_id: str) -> None:
+        self._sweep()
         room = self._rooms.get(room_id)
         if room is None or room.host is None:
             await socket.close(CLOSE_NO_HOST)

@@ -133,4 +133,30 @@ describe("starting a tunnel", () => {
     await new Promise((resolve) => setTimeout(resolve, 10));
     expect(child.signals).toEqual(["SIGTERM"]);
   });
+
+  test("a tunnel that dies later reports it with what the tool said", async () => {
+    const child = new FakeChild();
+    const started = startTunnel("cloudflared", 7001, { spawner: spawning(child).spawner });
+    child.say("stderr", CLOUDFLARED_BANNER);
+    const tunnel = await started;
+    const reasons: string[] = [];
+    tunnel.onExit((reason) => reasons.push(reason));
+    child.say("stderr", "ERR Unable to reach the origin service\n");
+    child.emit("exit", 1);
+    expect(reasons).toHaveLength(1);
+    expect(reasons[0]).toContain("cloudflared exited with code 1");
+    expect(reasons[0]).toContain("Unable to reach the origin service");
+  });
+
+  test("stopping the tunnel ourselves is not reported as a failure", async () => {
+    const child = new FakeChild();
+    const started = startTunnel("ngrok", 7001, { spawner: spawning(child).spawner });
+    child.say("stdout", NGROK_STARTED);
+    const tunnel = await started;
+    const reasons: string[] = [];
+    tunnel.onExit((reason) => reasons.push(reason));
+    await tunnel.stop();
+    expect(reasons).toEqual([]);
+  });
 });
+

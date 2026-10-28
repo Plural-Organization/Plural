@@ -11,6 +11,7 @@ import { loadSettings, saveSettings } from "./settings";
 import { freePort, HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
 import { startProgress } from "./lib/progress";
 import { lanAddress, shareLaunch } from "./share";
+import { Alerts } from "./alerts";
 import { isTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
 
 const USAGE = `plural ${pkg.version}
@@ -70,6 +71,7 @@ async function main(): Promise<void> {
 
   let host: HostHandle | null = null;
   let tunnel: Tunnel | null = null;
+  const alerts = new Alerts();
   let link: string;
   let guestLink: string | null = null;
   let room: string;
@@ -105,6 +107,13 @@ async function main(): Promise<void> {
       } catch (error) {
         fail(error instanceof TunnelUnavailable ? error.message : String(error));
       }
+      const label: string = kind;
+      tunnel.onExit((reason) =>
+        alerts.emit(
+          "danger",
+          `the ${label} tunnel stopped (${reason.split("\n")[0]}). Links through it no longer work and nobody new can join. Quit and start plural again to get a new address.`,
+        ),
+      );
       launch = {
         args: [...named, "--port", String(port), "--public-url", tunnel.url],
         note: `sharing through ${kind}: the invite links work while plural is running`,
@@ -166,6 +175,7 @@ async function main(): Promise<void> {
           saveKeys(stored);
         }}
         startupNote={startupNote}
+        alerts={alerts}
         splash
         onQuit={() => {
           resolve();

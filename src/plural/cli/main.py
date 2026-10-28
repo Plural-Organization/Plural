@@ -21,11 +21,13 @@ from plural.host.control import MAX_LINE_BYTES, Control, read_lines
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import PromptMode, Role
 from plural.relay.app import create_app
+from plural.relay.limits import RelayLimits
 from plural.storage.jsonl_export import export_jsonl
 from plural.storage.sqlite_store import SqliteEventStore
 
 app = typer.Typer(name="plural-host", no_args_is_help=True, add_completion=False)
 console = Console()
+DEFAULT_LIMITS = RelayLimits()
 
 
 @app.command()
@@ -149,8 +151,43 @@ def relay(
         "127.0.0.1"
     ),
     port: Annotated[int, typer.Option(help="Port.", envvar="PORT")] = 8787,
+    proxy_hops: Annotated[
+        int,
+        typer.Option(
+            min=0,
+            help="Proxies in front of the relay, to tell guests apart. 0 when it is exposed.",
+            envvar="PLURAL_RELAY_PROXY_HOPS",
+        ),
+    ] = 0,
+    max_rooms: Annotated[
+        int, typer.Option(min=1, help="Rooms at once.", envvar="PLURAL_RELAY_MAX_ROOMS")
+    ] = DEFAULT_LIMITS.max_rooms,
+    rooms_per_peer: Annotated[
+        int,
+        typer.Option(
+            min=1, help="Rooms one address may host.", envvar="PLURAL_RELAY_ROOMS_PER_PEER"
+        ),
+    ] = DEFAULT_LIMITS.max_rooms_per_peer,
+    guests_per_peer: Annotated[
+        int,
+        typer.Option(
+            min=1, help="Guests one address may bring.", envvar="PLURAL_RELAY_GUESTS_PER_PEER"
+        ),
+    ] = DEFAULT_LIMITS.max_guests_per_peer,
 ) -> None:
-    uvicorn.run(create_app(), host=bind, port=port, log_level="info", ws_max_size=4 * 1024 * 1024)
+    limits = RelayLimits(
+        max_rooms=max_rooms,
+        max_rooms_per_peer=rooms_per_peer,
+        max_guests_per_peer=guests_per_peer,
+    )
+    uvicorn.run(
+        create_app(limits, proxy_hops=proxy_hops),
+        host=bind,
+        port=port,
+        log_level="info",
+        ws_max_size=4 * 1024 * 1024,
+        proxy_headers=False,
+    )
 
 
 @app.command()

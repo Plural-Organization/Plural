@@ -13,6 +13,7 @@ from plural.host.config import HostSettings
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.events import ParticipantLeft
 from plural.protocol.models import PromptMode
+from plural.relay.limits import RelayLimits
 from plural.storage.sqlite_store import SqliteEventStore
 
 runner = CliRunner()
@@ -178,3 +179,23 @@ def test_relay_listens_on_the_port_the_platform_assigns(monkeypatch: pytest.Monk
     monkeypatch.setenv("PLURAL_RELAY_BIND", "0.0.0.0")
     assert runner.invoke(app, ["relay"]).exit_code == 0
     assert (seen["host"], seen["port"]) == ("0.0.0.0", 4321)
+
+
+def test_relay_limits_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[tuple[RelayLimits | None, int]] = []
+
+    def fake_create_app(limits: RelayLimits | None = None, *, proxy_hops: int = 0) -> object:
+        seen.append((limits, proxy_hops))
+        return object()
+
+    def fake_run(_app: object, **_options: object) -> None:
+        return None
+
+    monkeypatch.setattr(main, "create_app", fake_create_app)
+    monkeypatch.setattr(main.uvicorn, "run", fake_run)
+    monkeypatch.setenv("PLURAL_RELAY_MAX_ROOMS", "7")
+    monkeypatch.setenv("PLURAL_RELAY_ROOMS_PER_PEER", "2")
+    monkeypatch.setenv("PLURAL_RELAY_GUESTS_PER_PEER", "9")
+    monkeypatch.setenv("PLURAL_RELAY_PROXY_HOPS", "1")
+    assert runner.invoke(app, ["relay"]).exit_code == 0
+    assert seen == [(RelayLimits(max_rooms=7, max_rooms_per_peer=2, max_guests_per_peer=9), 1)]
