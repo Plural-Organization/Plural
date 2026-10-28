@@ -4,6 +4,7 @@ import json
 import os
 import sys
 from contextlib import suppress
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -11,6 +12,7 @@ import structlog
 import typer
 import uvicorn
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -23,6 +25,7 @@ from plural.protocol.models import PromptMode, Role
 from plural.relay.app import create_app
 from plural.relay.limits import RelayLimits
 from plural.storage.jsonl_export import export_jsonl
+from plural.storage.sessions import delete_session, list_sessions, read_session, session_path
 from plural.storage.sqlite_store import SqliteEventStore
 
 app = typer.Typer(name="plural-host", no_args_is_help=True, add_completion=False)
@@ -40,6 +43,7 @@ def host(
     relay: Annotated[str | None, typer.Option(help="Relay URL; direct mode when omitted.")] = None,
     public_url: Annotated[str | None, typer.Option(help="Public ws(s) URL for links.")] = None,
     room: Annotated[str | None, typer.Option(help="Resume an existing room.")] = None,
+    title: Annotated[str | None, typer.Option(help="Name of this session.")] = None,
     name: Annotated[str | None, typer.Option(help="Host display name.")] = None,
     prompts: Annotated[
         PromptMode | None,
@@ -59,10 +63,13 @@ def host(
         "relay_url": relay,
         "public_url": public_url,
         "room": room,
+        "title": title,
         "host_name": name,
         "prompt_mode": prompts,
     }
     options = {key: value for key, value in given.items() if value is not None}
+    if room is not None and workspace is None and "PLURAL_WORKSPACE" not in os.environ:
+        options["workspace"] = _saved_workspace(room)
     if name is None and "PLURAL_HOST_NAME" not in os.environ:
         options["host_name"] = getpass.getuser()
     settings = HostSettings(**options)
@@ -71,6 +78,31 @@ def host(
     except ConfigError as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(1) from error
+
+
+def _saved_workspace(room: str) -> Path:
+    data_dir = HostSettings().state_dir
+    try:
+        path = session_path(data_dir, room)
+    except ValueError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(2) from error
+    info = read_session(path) if path.exists() else None
+    if info is None:
+        console.print(
+            f"[red]There is no session {room}. List them with plural-host sessions.[/red]"
+        )
+        raise typer.Exit(1)
+    if info.workspace is None:
+        return Path.cwd()
+    folder = Path(info.workspace)
+    if not folder.is_dir():
+        console.print(
+            f"[red]The folder of this session is gone: {folder}. "
+            "Pass --workspace to continue it somewhere else.[/red]"
+        )
+        raise typer.Exit(1)
+    return folder
 
 
 def ready_line(room: str, guest_link: str, host_link: str) -> str:
@@ -188,6 +220,61 @@ def relay(
         ws_max_size=4 * 1024 * 1024,
         proxy_headers=False,
     )
+
+
+def _ago(moment: datetime) -> str:
+    seconds = max(0, int((datetime.now(UTC) - moment).total_seconds()))
+    if seconds < 60:
+        return f"{seconds}s ago"
+    if seconds < 3600:
+        return f"{seconds // 60}m ago"
+    if seconds < 86_400:
+        return f"{seconds // 3600}h ago"
+    return f"{seconds // 86_400}d ago"
+
+
+@app.command()
+def sessions(
+    workspace: Annotated[
+        Path | None, typer.Option(help="Only sessions that worked in this folder.")
+    ] = None,
+    limit: Annotated[int, typer.Option(min=1, help="How many to show.")] = 50,
+    as_json: Annotated[bool, typer.Option("--json", help="One JSON array, for scripts.")] = False,
+) -> None:
+    found = list_sessions(HostSettings().state_dir, workspace=workspace)[:limit]
+    if as_json:
+        print(json.dumps([json.loads(info.model_dump_json()) for info in found]), flush=True)
+        return
+    if not found:
+        console.print("No sessions yet.")
+        return
+    for info in found:
+        console.print(
+            f"[bold]{escape(info.title)}[/bold]  "
+            f"[dim]{info.prompts} prompts · {_ago(info.updated_at)}[/dim]",
+            soft_wrap=True,
+        )
+        console.print(f"  [dim]{info.room}  {escape(info.workspace or '')}[/dim]", soft_wrap=True)
+
+
+@app.command()
+def rm(
+    room: Annotated[str, typer.Argument(help="Session id.")],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask.")] = False,
+) -> None:
+    data_dir = HostSettings().state_dir
+    try:
+        info = read_session(session_path(data_dir, room))
+    except ValueError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(2) from error
+    if info is None:
+        console.print(f"[red]There is no session {room}.[/red]")
+        raise typer.Exit(1)
+    if not yes and not typer.confirm(f"Delete “{info.title}” ({room}) for good?"):
+        raise typer.Exit(1)
+    delete_session(data_dir, room)
+    console.print(f"Deleted {room}.")
 
 
 @app.command()

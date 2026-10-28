@@ -16,6 +16,7 @@ class HostSettings(BaseSettings):
     workspace: Path = Field(default_factory=Path.cwd)
     data_dir: Path = Path("~/.plural")
     room: str | None = None
+    title: str | None = Field(default=None, min_length=1, max_length=80)
     host_name: str = "host"
     prompt_mode: PromptMode | None = None
     bind_host: str = "127.0.0.1"

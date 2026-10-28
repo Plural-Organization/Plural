@@ -2,6 +2,7 @@ import asyncio
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from plural.agent.context import ContextBuilder, Environment
@@ -181,6 +182,17 @@ def build_web_search(
             return None
 
 
+async def remember_session(
+    store: SqliteEventStore, workspace: Path, settings: HostSettings, now: datetime
+) -> None:
+    await store.set_meta("workspace", str(workspace))
+    await store.set_meta("host_name", settings.host_name)
+    if await store.meta("created_at") is None:
+        await store.set_meta("created_at", now.isoformat())
+    if settings.title:
+        await store.set_meta("title", settings.title)
+
+
 async def build_host(settings: HostSettings, *, provider: LLMProvider | None = None) -> Host:
     api_key = resolve_api_key(settings, os.environ)
     ids, clock = UlidGenerator(), SystemClock()
@@ -189,6 +201,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     signer = TokenSigner(await asyncio.to_thread(load_or_create_host_key, state_dir / "host_key"))
     store = await SqliteEventStore.open(state_dir / "sessions" / f"{room}.db")
     workspace = await asyncio.to_thread(Workspace.at, settings.workspace)
+    await remember_session(store, workspace.root, settings, clock.now())
     inbox = Inbox()
     skills = SkillLibrary(project=workspace.root, home=Path.home())
     tools = builtin_tools()

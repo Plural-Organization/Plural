@@ -58,6 +58,19 @@ class SqliteEventStore:
         row = await cursor.fetchone()
         return int(row[0]) if row else 0
 
+    async def meta(self, key: str) -> str | None:
+        cursor = await self._db.execute("SELECT value FROM meta WHERE key = ?", (key,))
+        row = await cursor.fetchone()
+        return str(row[0]) if row else None
+
+    async def set_meta(self, key: str, value: str) -> None:
+        await self._db.execute(
+            "INSERT INTO meta (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+            (key, value),
+        )
+        await self._db.commit()
+
     async def close(self) -> None:
         await self._db.close()
 
