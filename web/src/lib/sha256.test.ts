@@ -8,3 +8,12 @@ test("the fallback hash matches the real one", () => {
     expect(sha256Fallback(data)).toBe(createHash("sha256").update(data).digest("hex"));
   }
 });
+
+test("binary files are told apart from text", async () => {
+  const { looksLikeText } = await import("../hooks/useAttachments");
+  const bytes = (text: string) => new TextEncoder().encode(text);
+  expect(looksLikeText(bytes("def main():\n    print('hi')\n"))).toBe(true);
+  expect(looksLikeText(bytes("%PDF-1.7\n%âãÏÓ\n1 0 obj"))).toBe(false);
+  expect(looksLikeText(new Uint8Array([0x50, 0x4b, 0x03, 0x04, 0x14, 0x00]))).toBe(false);
+  expect(looksLikeText(new Uint8Array(200).fill(1))).toBe(false);
+});

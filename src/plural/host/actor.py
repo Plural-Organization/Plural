@@ -137,6 +137,7 @@ from plural.protocol.events import (
     ToolStarted,
 )
 from plural.protocol.models import (
+    BOARD_DECIMALS,
     Actor,
     ActorKind,
     AdmissionMode,
@@ -460,7 +461,7 @@ class SessionActor:
                     text=command.text,
                     color=command.color,
                     width=command.width,
-                    points=command.points,
+                    points=tuple(round(point, BOARD_DECIMALS) for point in command.points),
                 )
                 await self._emit(BoardStroked(stroke=stroke), actor_id=participant.id)
             case BoardErase():

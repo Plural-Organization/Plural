@@ -120,19 +120,47 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
 
   const files = useAttachments(projection, send, (text) => session.notify("warn", text));
   const submitText = useSubmit({ session, editing, onEdited: () => setEditing(null), onLeave: leave, flash, onDraw: draw });
+  // Prompts leave in the order they were written, even when one waits for its files to upload.
+  const outbox = useRef<Promise<void>>(Promise.resolve());
+  const waiting = useRef(0);
   const submit = (text: string) => {
-    if (files.attachments.length === 0 || editing || text.startsWith("/") || text.startsWith("@")) {
+    const withFiles = files.attachments.length > 0;
+    if (withFiles && (editing !== null || text.startsWith("/") || text.startsWith("@"))) {
+      if (text === "") {
+        flash("write something to go with the files");
+        return;
+      }
+      submitText(text);
+      flash("the files stay for your next prompt");
+      return;
+    }
+    if (withFiles && !files.ready) {
+      flash("the files are still loading");
+      return;
+    }
+    if (!withFiles && waiting.current === 0) {
       submitText(text);
       return;
     }
-    const pending = files.take();
-    void files.ids(pending).then((ids) => {
-      if (ids === null) {
-        files.restore(pending);
-        session.notify("danger", "the files did not reach the host; try sending again");
-        return;
+    const pending = withFiles ? files.take() : [];
+    waiting.current += 1;
+    outbox.current = outbox.current.then(async () => {
+      try {
+        if (pending.length === 0) {
+          submitText(text);
+          return;
+        }
+        const ids = await files.ids(pending);
+        if (ids === null) {
+          files.restore(pending);
+          session.notify("danger", "the files did not reach the host; try sending again");
+          return;
+        }
+        files.release(pending);
+        send({ type: "prompt.submit", text: text || "(see the attached files)", delivery: "now", attachments: ids });
+      } finally {
+        waiting.current -= 1;
       }
-      send({ type: "prompt.submit", text: text || "(see the attached files)", delivery: "now", attachments: ids });
     });
   };
   const focusInput = useCallback(() => document.getElementById("composer")?.focus(), []);

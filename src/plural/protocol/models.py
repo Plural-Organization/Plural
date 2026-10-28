@@ -262,9 +262,15 @@ class TextSelection(Model):
 
 BOARD_STROKES_LIMIT: Final = 2000
 BOARD_POINTS_LIMIT: Final = 4000
+# All strokes together keep this many numbers at most, so a snapshot of the board stays near 1.5 MB,
+# well under the 4 MiB a message may carry; the oldest strokes go first.
+BOARD_TOTAL_POINTS: Final = 200_000
+# Four decimals place a point within a tenth of a pixel on a 1000 px board.
+BOARD_DECIMALS: Final = 4
 
-# A point on the shared board, as a share of its width or height.
-Unit = Annotated[float, Field(ge=0, le=1)]
+# A point on the shared board, measured in board widths on both axes, so a taller screen shows more
+# of the board below instead of stretching it; the board runs four widths down.
+Unit = Annotated[float, Field(ge=0, le=4)]
 Color = Annotated[str, Field(pattern=r"^#[0-9a-fA-F]{6}$")]
 
 

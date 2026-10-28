@@ -119,3 +119,12 @@ async def test_leaving_hides_the_cursor(session: Session) -> None:
     await owner.next(ParticipantCursor)
     await guest.stop()
     assert (await owner.next(ParticipantCursor)).cursor is None
+
+
+async def test_points_are_rounded_to_keep_the_log_small(session: Session) -> None:
+    owner = await session.owner()
+    guest = await session.guest("Alia")
+    await guest.client.send(
+        BoardDraw(color="#ffffff", width=2, points=(0.123456789, 0.5, 0.987654321, 0.25))
+    )
+    assert (await owner.next(BoardStroked)).stroke.points == (0.1235, 0.5, 0.9877, 0.25)

@@ -11,8 +11,8 @@
 .width { width: 24px; height: 24px; border-radius: 6px; border: 1px solid transparent; background: none; display: grid; place-items: center; cursor: pointer; padding: 0; }
 .width span { border-radius: 50%; display: block; }
 .width.picked { border-color: var(--line); background: var(--raise); }
-.room { display: grid; place-items: center; min-height: 0; overflow: hidden; }
-.stage { position: relative; border-radius: 12px; overflow: hidden; background: #16171a radial-gradient(circle, color-mix(in srgb, var(--fg) 9%, transparent) 1px, transparent 1.2px) 0 0 / 22px 22px; box-shadow: 0 0 0 1px var(--line); }
+.room { position: relative; min-height: 0; overflow: hidden; }
+.stage { position: relative; width: 100%; background: #16171a radial-gradient(circle, color-mix(in srgb, var(--fg) 9%, transparent) 1px, transparent 1.2px) 0 0 / 22px 22px; }
 .canvas { position: absolute; inset: 0; touch-action: none; }
 .drawable { cursor: crosshair; }
 .texting { cursor: text; }

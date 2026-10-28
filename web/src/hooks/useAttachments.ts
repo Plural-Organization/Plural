@@ -12,6 +12,7 @@ export interface Attachment {
   key: string;
   name: string;
   size: number;
+  // Empty while the file is still being read and hashed.
   sha256: string;
   preview: string | null;
 }
@@ -24,33 +25,49 @@ function base64(data: Uint8Array): string {
   return btoa(text);
 }
 
-// A file is sent as text only if it reads as text: no NUL bytes near the start.
-function looksLikeText(data: Uint8Array): boolean {
-  return !data.subarray(0, 8192).includes(0);
+// A file goes as text only if it reads as text: no known binary header and almost no control bytes.
+export function looksLikeText(data: Uint8Array): boolean {
+  const head = data.subarray(0, 8192);
+  const starts = (text: string) => text.split("").every((char, index) => head[index] === char.charCodeAt(0));
+  if (starts("%PDF") || starts("PK\u0003\u0004") || starts("\u007fELF") || head.includes(0)) {
+    return false;
+  }
+  const control = head.filter((byte) => byte < 9 || (byte > 13 && byte < 32)).length;
+  return control <= head.length / 100;
 }
 
 export function useAttachments(projection: Projection, send: (command: Command) => void, notify: (text: string) => void) {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const counter = useRef(0);
+  const latest = useRef(attachments);
+  latest.current = attachments;
 
-  useEffect(() => () => attachments.forEach((item) => item.preview && URL.revokeObjectURL(item.preview)), []);
+  useEffect(() => () => latest.current.forEach((item) => item.preview && URL.revokeObjectURL(item.preview)), []);
 
   const add = async (file: Blob, name: string): Promise<void> => {
-    const data = new Uint8Array(await file.arrayBuffer());
     const image = IMAGE_TYPES.includes(file.type);
+    const limit = image ? IMAGE_LIMIT : FILE_LIMIT;
+    if (file.size > limit) {
+      notify(`${name} is ${(file.size / 1e6).toFixed(1)} MB, more than ${(limit / 1e6).toFixed(1)} MB`);
+      return;
+    }
+    counter.current += 1;
+    const key = `a${counter.current}`;
+    // The chip shows at once; sending waits until the file is read and hashed.
+    setAttachments((current) => [...current, { key, name, size: file.size, sha256: "", preview: image ? URL.createObjectURL(file) : null }]);
+    const drop = () =>
+      setAttachments((current) => {
+        current.filter((item) => item.key === key).forEach((item) => item.preview && URL.revokeObjectURL(item.preview));
+        return current.filter((item) => item.key !== key);
+      });
+    const data = new Uint8Array(await file.arrayBuffer());
     if (!image && !looksLikeText(data)) {
+      drop();
       notify(`${name} is not an image or a text file, so the agent could not read it`);
       return;
     }
-    const limit = image ? IMAGE_LIMIT : FILE_LIMIT;
-    if (data.length > limit) {
-      notify(`${name} is ${(data.length / 1e6).toFixed(1)} MB, more than ${(limit / 1e6).toFixed(1)} MB`);
-      return;
-    }
     const hash = await sha256(data);
-    counter.current += 1;
-    const item = { key: `a${counter.current}`, name, size: data.length, sha256: hash, preview: image ? URL.createObjectURL(file) : null };
-    setAttachments((current) => [...current, item]);
+    setAttachments((current) => current.map((item) => (item.key === key ? { ...item, sha256: hash } : item)));
     send({ type: "file.attach", name, content_b64: base64(data), sha256: hash });
   };
 
@@ -80,5 +97,7 @@ export function useAttachments(projection: Projection, send: (command: Command) 
     return pending;
   };
 
-  return { attachments, add, remove, ids, take, restore: setAttachments };
+  const release = (sent: Attachment[]) => sent.forEach((item) => item.preview && URL.revokeObjectURL(item.preview));
+
+  return { attachments, ready: attachments.every((item) => item.sha256 !== ""), add, remove, ids, take, release, restore: setAttachments };
 }

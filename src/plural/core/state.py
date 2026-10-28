@@ -39,6 +39,8 @@ from plural.protocol.events import (
 )
 from plural.protocol.models import (
     BOARD_STROKES_LIMIT,
+    BOARD_TOTAL_POINTS,
+    BoardStroke,
     ChatEntry,
     EntryKind,
     QueuedPrompt,
@@ -50,6 +52,15 @@ from plural.protocol.models import (
 TRANSCRIPT_LIMIT: Final = 200
 CHAT_LIMIT: Final = 200
 OUTPUT_PREVIEW_CHARS: Final = 2000
+
+
+def _within_budget(strokes: tuple[BoardStroke, ...]) -> tuple[BoardStroke, ...]:
+    total = sum(len(stroke.points) for stroke in strokes)
+    start = 0
+    while total > BOARD_TOTAL_POINTS and start < len(strokes) - 1:
+        total -= len(strokes[start].points)
+        start += 1
+    return strokes[start:]
 
 
 def reduce(state: SessionState, record: EventRecord) -> SessionState:
@@ -137,7 +148,7 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
                 update={"board": state.board.model_copy(update={"open": open_})}
             )
         case BoardStroked(stroke=stroke):
-            strokes = (*state.board.strokes, stroke)[-BOARD_STROKES_LIMIT:]
+            strokes = _within_budget((*state.board.strokes, stroke)[-BOARD_STROKES_LIMIT:])
             return state.model_copy(
                 update={"board": state.board.model_copy(update={"strokes": strokes})}
             )

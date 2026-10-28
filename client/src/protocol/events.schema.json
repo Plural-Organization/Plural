@@ -226,12 +226,12 @@
           "default": null
         },
         "x": {
-          "maximum": 1,
+          "maximum": 4,
           "minimum": 0,
           "type": "number"
         },
         "y": {
-          "maximum": 1,
+          "maximum": 4,
           "minimum": 0,
           "type": "number"
         }
@@ -313,7 +313,7 @@
         },
         "points": {
           "items": {
-            "maximum": 1,
+            "maximum": 4,
             "minimum": 0,
             "type": "number"
           },

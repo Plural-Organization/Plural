@@ -154,6 +154,7 @@ export function Composer({ role, people = [], placeholder, disabled, editing, qu
             <li key={item.key} className={styles.file}>
               {item.preview ? <img src={item.preview} alt="" /> : <span className={styles.icon}>📄</span>}
               <span className={styles.fileName}>{item.name}</span>
+              {item.sha256 === "" ? <span className="muted">loading…</span> : null}
               <span className="muted">{item.size < 1e6 ? `${Math.max(1, Math.round(item.size / 1e3))} KB` : `${(item.size / 1e6).toFixed(1)} MB`}</span>
               <button type="button" className="link-button" aria-label={`Remove ${item.name}`} onClick={() => onDetach?.(item.key)}>
                 ✕

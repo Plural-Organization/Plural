@@ -1,7 +1,11 @@
 import type { BoardShape } from "@plural/client";
 
-// The board is 4:5, taller than wide to fill the side panel; every point is a share of its width or height.
-export const BOARD_RATIO = 4 / 5;
+// Points are measured in board widths on both axes: the board fills the panel, and a taller screen
+// shows more of it below instead of stretching it. It runs MAX_DEPTH widths down.
+export const MAX_DEPTH = 4;
+// A picture for the agent is at least this tall, in widths, so a sketch near the top is not a strip.
+const IMAGE_DEPTH = 1.25;
+export const DECIMALS = 1e4;
 // Stroke widths are in thousandths of the board width.
 export const WIDTH_UNIT = 1000;
 export const MAX_POINTS = 4000;
@@ -31,9 +35,9 @@ export function textSize(width: number, boardWidth: number): number {
   return ((14 + width * 4) * boardWidth) / WIDTH_UNIT;
 }
 
-function pen(context: CanvasRenderingContext2D, points: number[], width: number, height: number): void {
-  const x = (index: number) => points[index]! * width;
-  const y = (index: number) => points[index + 1]! * height;
+function pen(context: CanvasRenderingContext2D, points: number[], scale: number): void {
+  const x = (index: number) => points[index]! * scale;
+  const y = (index: number) => points[index + 1]! * scale;
   if (points.length === 2) {
     context.beginPath();
     context.arc(x(0), y(0), context.lineWidth / 2, 0, Math.PI * 2);
@@ -50,29 +54,29 @@ function pen(context: CanvasRenderingContext2D, points: number[], width: number,
 }
 
 // Draws one mark: a pen line through its points with soft curves, a shape between two corners, or a text.
-export function drawLine(context: CanvasRenderingContext2D, line: Line, width: number, height: number): void {
+export function drawLine(context: CanvasRenderingContext2D, line: Line, scale: number): void {
   const points = line.points;
   if (points.length < 2) {
     return;
   }
   context.strokeStyle = line.color;
   context.fillStyle = line.color;
-  context.lineWidth = (line.width * width) / WIDTH_UNIT;
+  context.lineWidth = (line.width * scale) / WIDTH_UNIT;
   context.lineCap = "round";
   context.lineJoin = "round";
   const kind = line.kind ?? "pen";
   if (kind === "text") {
-    const size = textSize(line.width, width);
+    const size = textSize(line.width, scale);
     context.font = `500 ${size}px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif`;
     context.textBaseline = "top";
-    (line.text ?? "").split("\n").forEach((row, index) => context.fillText(row, points[0]! * width, points[1]! * height + index * size * 1.25));
+    (line.text ?? "").split("\n").forEach((row, index) => context.fillText(row, points[0]! * scale, points[1]! * scale + index * size * 1.25));
     return;
   }
   if (kind === "pen" || points.length < 4) {
-    pen(context, points, width, height);
+    pen(context, points, scale);
     return;
   }
-  const [x0, y0, x1, y1] = [points[0]! * width, points[1]! * height, points[2]! * width, points[3]! * height];
+  const [x0, y0, x1, y1] = [points[0]! * scale, points[1]! * scale, points[2]! * scale, points[3]! * scale];
   context.beginPath();
   if (kind === "rect") {
     context.roundRect(Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0), Math.min(8, context.lineWidth * 2));
@@ -110,19 +114,32 @@ export function thin(points: number[]): number[] {
   return current;
 }
 
+// The host rounds points to four decimals, so a line that comes back is the same within half of that.
 export function sameLine(a: Line, b: Line): boolean {
-  return (a.kind ?? "pen") === (b.kind ?? "pen") && (a.text ?? null) === (b.text ?? null) && a.color === b.color && a.width === b.width && a.points.length === b.points.length && a.points.every((value, index) => Math.abs(value - b.points[index]!) < 1e-9);
+  return (
+    (a.kind ?? "pen") === (b.kind ?? "pen") &&
+    (a.text ?? null) === (b.text ?? null) &&
+    a.color === b.color &&
+    a.width === b.width &&
+    a.points.length === b.points.length &&
+    a.points.every((value, index) => Math.abs(value - b.points[index]!) <= 0.6 / DECIMALS)
+  );
+}
+
+export function rounded(points: number[]): number[] {
+  return points.map((value) => Math.round(value * DECIMALS) / DECIMALS);
 }
 
 // The whole board as a PNG, the way the agent receives it.
 export async function boardImage(lines: Line[], width = 1600): Promise<Blob> {
-  const height = Math.round(width / BOARD_RATIO);
+  const deepest = Math.max(0, ...lines.flatMap((line) => line.points.filter((_, index) => index % 2 === 1)));
+  const height = Math.round(width * Math.min(MAX_DEPTH, Math.max(IMAGE_DEPTH, deepest + 0.08)));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d")!;
   context.fillStyle = BACKGROUND;
   context.fillRect(0, 0, width, height);
-  lines.forEach((line) => drawLine(context, line, width, height));
+  lines.forEach((line) => drawLine(context, line, width));
   return new Promise((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("the board could not be saved"))), "image/png"));
 }
