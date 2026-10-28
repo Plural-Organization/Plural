@@ -95,9 +95,6 @@ export function Composer({ role, people = [], placeholder, disabled, editing, on
       ) : null}
       {editing ? <div className={styles.editing}>editing the proposal · enter sends it to the agent, esc cancels</div> : null}
       <div className={styles.row}>
-        <span className={styles.caret} aria-hidden="true">
-          ›
-        </span>
         <textarea
           id="composer"
           ref={area}

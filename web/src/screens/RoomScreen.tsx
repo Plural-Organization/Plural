@@ -13,6 +13,7 @@ import { useStickToBottom } from "../hooks/useStickToBottom";
 import { useSubmit } from "../hooks/useSubmit";
 import { useToast } from "../hooks/useToast";
 import { useTyping } from "../hooks/useTyping";
+import { activity } from "../lib/activity";
 import { copyText } from "../lib/clipboard";
 import styles from "./RoomScreen.module.css";
 
@@ -31,7 +32,6 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   const [editing, setEditing] = useState<ProposalView | null>(null);
   const [panel, setPanel] = useState(false);
   const { toast, flash } = useToast();
-  const scroll = useStickToBottom(feed);
   const typing = useTyping(me !== undefined && me.role !== "viewer", send);
 
   const leave = () => {
@@ -45,6 +45,8 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   useHotkeys({ enabled: invite === null, first: items[0], canAbort, send, onEdit: setEditing, onFocusInput: focusInput });
 
   const writing = feed.items.some((item) => item.kind === "assistant" && item.streaming);
+  const current = activity(projection, feed);
+  const scroll = useStickToBottom(feed, current?.text);
   const runStatus = writing ? "writing…" : status(projection).replace(/^… /, "");
   const typers = [...projection.typing]
     .filter((id) => id !== projection.meId)
@@ -70,14 +72,14 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
         <div className={styles.scroller} ref={scroll.ref} onScroll={scroll.onScroll}>
           <div className={styles.content}>
             <div className={styles.welcome}>
-              room {link.room} · you are {me ? `${me.name}, ${me.role}` : name}
+              You joined room {link.room} as {me ? `${me.name}, ${me.role}` : name}
             </div>
             {!projection.ready ? (
               <div className="muted mono">
                 {projection.waiting ? "waiting for the host to let you in…" : connection === "online" ? "loading the session…" : "connecting to the host…"}
               </div>
             ) : null}
-            <Feed items={feed.items} />
+            <Feed items={feed.items} meId={projection.meId} activity={current} />
           </div>
         </div>
 
@@ -94,8 +96,6 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
               <span>
                 {typers.length <= 2 ? `${typers.join(" and ")} ${typers.length === 1 ? "is" : "are"} typing…` : `${typers.length} people are typing…`}
               </span>
-            ) : state.run ? (
-              <span className={styles.running}>{runStatus || "working"}</span>
             ) : null}
             {toast ? <span className={styles.toast}>{toast}</span> : null}
           </div>
