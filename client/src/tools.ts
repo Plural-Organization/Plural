@@ -1,4 +1,4 @@
-export type ToolKind = "bash" | "read" | "edit" | "write" | "list" | "search" | "other";
+export type ToolKind = "bash" | "read" | "edit" | "write" | "list" | "search" | "agent" | "other";
 
 const KINDS: Record<string, ToolKind> = {
   bash: "bash",
@@ -8,6 +8,7 @@ const KINDS: Record<string, ToolKind> = {
   ls: "list",
   glob: "search",
   grep: "search",
+  agent: "agent",
 };
 
 const NAMES: Record<string, string> = {
@@ -18,6 +19,7 @@ const NAMES: Record<string, string> = {
   ls: "List",
   glob: "Glob",
   grep: "Search",
+  agent: "Agent",
 };
 
 export interface ToolFacts {
@@ -102,6 +104,15 @@ export function metaOf(facts: ToolFacts): string {
       return count(lines.length, "entry", "entries");
     case "search":
       return lines.length === 0 ? "no matches" : count(lines.length, "match", "matches");
+    case "agent": {
+      const footer = /\[[^\]·]+ · (\w+) model · (\d+) tool calls · (\d+) tokens\]\s*$/.exec(facts.output);
+      if (!footer) {
+        return "";
+      }
+      const tokens = Number(footer[3]);
+      const short = tokens >= 1000 ? `${Math.round(tokens / 1000)}K` : String(tokens);
+      return `${footer[1]} · ${count(Number(footer[2]), "call")} · ${short} tokens`;
+    }
     default:
       return lines.length === 0 ? "" : count(lines.length, "line");
   }

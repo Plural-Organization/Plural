@@ -281,6 +281,26 @@ describe("App", () => {
     ]);
   });
 
+  test("a sub-agent shows what it is doing, then which model it used and what it cost", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    const call = { id: "d1", name: "agent", risk: "read", subject: "explore: where are tokens checked?", args: {} } as const;
+    fake.emit({ type: "run.started", run_id: "r", prompt_id: "pm0", provenance: GUEST });
+    fake.emit({ type: "tool.started", run_id: "r", call });
+    fake.emit({ type: "tool.output", call_id: "d1", chunk: "explore on the fast model\n· grep verify_token\n" });
+    const live = await frame(setup, "Agent explore: where are tokens checked?");
+    expect(live).toContain("· grep verify_token");
+    fake.emit({
+      type: "tool.ended",
+      run_id: "r",
+      call_id: "d1",
+      ok: true,
+      output: "Tokens are checked in gateway.py:42.\n\n[explore · fast model · 3 tool calls · 18400 tokens]",
+      diff: null,
+    });
+    await frame(setup, "fast · 3 calls · 18K tokens");
+  });
+
   test("typing a prompt and pressing enter sends it", async () => {
     const fake = session();
     const setup = await mount(fake);

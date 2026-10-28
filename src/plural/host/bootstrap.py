@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+from plural.agent.agents import AgentLibrary
 from plural.agent.context import ContextBuilder, Environment
 from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.mcp import McpHub
@@ -10,6 +11,7 @@ from plural.agent.providers.base import LLMProvider
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.skills import SkillLibrary
+from plural.agent.tools.agent import AgentTool
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.registry import builtin_tools
 from plural.agent.tools.skills import skill_tools
@@ -100,19 +102,25 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         timeout_s=settings.approval_timeout_s,
         rejection_limit=settings.rejection_limit,
     )
+    environment = Environment(
+        workspace=workspace.root,
+        today=clock.now().astimezone().date(),
+        git_branch=await _git_branch(workspace),
+    )
+    agents = AgentLibrary(project=workspace.root, home=Path.home())
+    await asyncio.to_thread(agents.refresh)
+    delegate = AgentTool(library=agents, tools=tools, gate=gate, environment=environment, ids=ids)
+    tools.register(delegate)
     loop = AgentLoop(
         provider=provider or build_provider(settings, api_key),
         helper=helper.provider if helper else None,
         tools=tools,
         gate=gate,
         context=ContextBuilder(
-            environment=Environment(
-                workspace=workspace.root,
-                today=clock.now().astimezone().date(),
-                git_branch=await _git_branch(workspace),
-            ),
+            environment=environment,
             project_notes=await _project_notes(workspace),
             skills=skills,
+            agents=agents,
         ),
         tool_ctx=ToolCtx(workspace=workspace, backend=LocalBackend()),
         ids=ids,
@@ -123,6 +131,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
             compact_at=settings.compact_at,
         ),
     )
+    delegate.attach(lambda: loop)
     room_url = settings.room_url(room)
     invites = InviteBook(clock=clock, link_base=room_url)
     gateway = Gateway(

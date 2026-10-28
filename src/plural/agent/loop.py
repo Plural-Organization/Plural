@@ -127,6 +127,18 @@ class AgentLoop:
         self._provider_close_tasks: set[asyncio.Task[None]] = set()
 
     @property
+    def provider(self) -> LLMProvider:
+        return self._provider
+
+    @property
+    def helper(self) -> LLMProvider | None:
+        return self._helper
+
+    @property
+    def limits(self) -> LoopLimits:
+        return self._limits
+
+    @property
     def usage(self) -> Usage:
         return self._usage
 
@@ -552,7 +564,16 @@ class AgentLoop:
             if verdict.allowed:
                 queue: asyncio.Queue[str] = asyncio.Queue()
                 runner = asyncio.create_task(
-                    self._invoke(prepared, cancel, replace(self._tool_ctx, emit=queue.put_nowait))
+                    self._invoke(
+                        prepared,
+                        cancel,
+                        replace(
+                            self._tool_ctx,
+                            emit=queue.put_nowait,
+                            provenance=provenance,
+                            cancel=cancel,
+                        ),
+                    )
                 )
                 try:
                     while not runner.done() or not queue.empty():
