@@ -5,7 +5,17 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.mcp import McpHub, ServerSpec, importable, read_config, tool_name
+from plural.agent.mcp import (
+    BROWSER_SERVER,
+    McpError,
+    McpHub,
+    ServerSpec,
+    browser_spec,
+    disabled_builtins,
+    importable,
+    read_config,
+    tool_name,
+)
 from plural.agent.tools.base import ToolError
 from plural.protocol.models import McpStatus, SkillScope, ToolRisk
 
@@ -65,6 +75,56 @@ def test_import_finds_claude_code_and_cursor_servers(tmp_path: Path) -> None:
         json.dumps({"mcpServers": {"web": {"url": "https://w/mcp"}}})
     )
     assert set(importable(home, workspace)) == {"plane", "db", "web"}
+
+
+def test_the_browser_is_pinned_playwright_mcp_attached_over_cdp() -> None:
+    spec = browser_spec("chrome")
+    assert spec.command == "npx"
+    assert "@playwright/mcp@0.0.83" in spec.args
+    assert spec.args[spec.args.index("--cdp-endpoint") + 1] == "chrome"
+    assert spec.env == {}
+
+
+async def test_a_builtin_server_starts_and_a_configured_one_replaces_it(tmp_path: Path) -> None:
+    builtin = {BROWSER_SERVER: echo_spec(), "other": echo_spec()}
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / ".mcp.json").write_text(
+        json.dumps({"mcpServers": {"other": {"command": "x", "disabled": True}}})
+    )
+    hub = McpHub(
+        workspace=workspace, home=tmp_path / "home", logs=tmp_path / "logs", builtin=builtin
+    )
+    hub.start()
+    try:
+        assert await settled(hub, BROWSER_SERVER) is McpStatus.READY
+        views = {view.name: view for view in hub.views()}
+        assert views[BROWSER_SERVER].scope is SkillScope.GLOBAL
+        assert views["other"].status is McpStatus.OFF
+        assert f"mcp__{BROWSER_SERVER}__echo" in {tool.name for tool in hub.tools()}
+        assert read_config(workspace / ".mcp.json").keys() == {"other"}
+
+        with pytest.raises(McpError, match="built in"):
+            await hub.remove(BROWSER_SERVER)
+        await hub.toggle(BROWSER_SERVER, enabled=False)
+        settings = tmp_path / "home" / ".plural" / "mcp.json"
+        assert disabled_builtins(settings) == {BROWSER_SERVER}
+        assert read_config(settings) == {}
+    finally:
+        await hub.close()
+
+    restarted = McpHub(
+        workspace=workspace, home=tmp_path / "home", logs=tmp_path / "logs", builtin=builtin
+    )
+    restarted.start()
+    try:
+        views = {view.name: view for view in restarted.views()}
+        assert views[BROWSER_SERVER].status is McpStatus.OFF
+        await restarted.toggle(BROWSER_SERVER, enabled=True)
+        assert disabled_builtins(settings) == frozenset()
+        assert read_config(settings) == {}
+    finally:
+        await restarted.close()
 
 
 def test_long_tool_names_are_shortened_but_stay_unique() -> None:

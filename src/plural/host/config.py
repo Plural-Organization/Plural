@@ -40,6 +40,7 @@ class HostSettings(BaseSettings):
     invite_ttl_s: int = Field(default=3600, gt=0, le=86_400)
     max_attachment_bytes: int = Field(default=1_048_576, gt=0)
     typing_ttl_s: float = Field(default=6, gt=0)
+    browser_endpoint: str = "chrome"
 
     def resolved_provider(
         self, environ: Mapping[str, str] | None = None

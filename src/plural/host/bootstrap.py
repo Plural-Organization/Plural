@@ -6,7 +6,7 @@ from pathlib import Path
 
 from plural.agent.context import ContextBuilder, Environment
 from plural.agent.loop import AgentLoop, LoopLimits
-from plural.agent.mcp import McpHub
+from plural.agent.mcp import BROWSER_SERVER, McpHub, browser_spec
 from plural.agent.providers import anthropic_api
 from plural.agent.providers.anthropic_api import AnthropicProvider
 from plural.agent.providers.anthropic_oauth import AnthropicOAuthProvider, load_credentials
@@ -155,6 +155,11 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         home=Path.home(),
         logs=state_dir / "logs",
         on_change=lambda: inbox.put(McpUpdated()),
+        builtin=(
+            {BROWSER_SERVER: browser_spec(settings.browser_endpoint)}
+            if settings.browser_endpoint
+            else None
+        ),
     )
     tools.add_source(mcp)
     mcp.start()
