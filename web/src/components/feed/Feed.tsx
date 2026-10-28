@@ -3,7 +3,9 @@ import type { FeedItem } from "@plural/client";
 import type { Activity as Current } from "../../lib/activity";
 import { colorFor } from "../../lib/colors";
 import { cx } from "../../lib/cx";
+import { docTitle, isDocument, lineCount, writtenFile } from "../../lib/canvas";
 import { Activity } from "./Activity";
+import { DocCard } from "./DocCard";
 import { Markdown } from "./Markdown";
 import { ToolLine } from "./ToolLine";
 import styles from "./Feed.module.css";
@@ -33,9 +35,11 @@ interface FeedProps {
   items: FeedItem[];
   meId?: string | null;
   activity?: Current | null;
+  // Given, long code and documents show as cards that open in the canvas.
+  onOpenDoc?: (id: string) => void;
 }
 
-export function Feed({ items, meId = null, activity = null }: FeedProps) {
+export function Feed({ items, meId = null, activity = null, onOpenDoc }: FeedProps) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const toggle = (id: string) =>
     setOpened((current) => {
@@ -52,11 +56,17 @@ export function Feed({ items, meId = null, activity = null }: FeedProps) {
         block.kind === "steps" ? (
           <div key={block.id} className={styles.steps}>
             {block.tools.map((tool) => (
-              <ToolLine key={tool.id} item={tool} expanded={opened.has(tool.id)} onToggle={() => toggle(tool.id)} />
+              <ToolLine
+                key={tool.id}
+                item={tool}
+                expanded={opened.has(tool.id)}
+                onToggle={() => toggle(tool.id)}
+                onOpen={onOpenDoc && writtenFile(tool) !== null ? () => onOpenDoc(tool.id) : undefined}
+              />
             ))}
           </div>
         ) : (
-          <Entry key={block.id} item={block} meId={meId} />
+          <Entry key={block.id} item={block} meId={meId} onOpenDoc={onOpenDoc} />
         ),
       )}
       <Activity activity={activity} />
@@ -64,7 +74,13 @@ export function Feed({ items, meId = null, activity = null }: FeedProps) {
   );
 }
 
-function Entry({ item, meId }: { item: Exclude<FeedItem, { kind: "tool" }>; meId: string | null }) {
+interface EntryProps {
+  item: Exclude<FeedItem, { kind: "tool" }>;
+  meId: string | null;
+  onOpenDoc?: ((id: string) => void) | undefined;
+}
+
+function Entry({ item, meId, onOpenDoc }: EntryProps) {
   switch (item.kind) {
     case "banner":
       return null;
@@ -102,7 +118,18 @@ function Entry({ item, meId }: { item: Exclude<FeedItem, { kind: "tool" }>; meId
       return (
         <article className={styles.agent}>
           <div className={styles.agentName}>agent</div>
-          {item.text ? <Markdown text={item.text} streaming={item.streaming} /> : <div className="muted">…</div>}
+          {item.text === "" ? (
+            <div className="muted">…</div>
+          ) : onOpenDoc && isDocument(item.text) ? (
+            <DocCard
+              title={docTitle(item.text)}
+              meta={item.streaming ? "writing…" : `${lineCount(item.text)} lines`}
+              preview={item.text}
+              onOpen={() => onOpenDoc(item.id)}
+            />
+          ) : (
+            <Markdown text={item.text} streaming={item.streaming} onOpenCode={onOpenDoc && ((index) => onOpenDoc(`${item.id}:${index}`))} />
+          )}
         </article>
       );
     case "notice":

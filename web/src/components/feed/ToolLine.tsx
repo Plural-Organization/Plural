@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { bodyLines, displayName, kindOf, metaOf, oneLine, parseDiff, type FeedItem } from "@plural/client";
+import { bodyLines, displayName, kindOf, lastLine, metaOf, oneLine, parseDiff, type FeedItem } from "@plural/client";
 import { useNow } from "../../hooks/useNow";
 import { cx } from "../../lib/cx";
 import styles from "./ToolLine.module.css";
@@ -10,7 +10,14 @@ const DIFF_LINES = 120;
 
 type ToolItem = Extract<FeedItem, { kind: "tool" }>;
 
-export function ToolLine({ item, expanded, onToggle }: { item: ToolItem; expanded: boolean; onToggle: () => void }) {
+interface ToolLineProps {
+  item: ToolItem;
+  expanded: boolean;
+  onToggle: () => void;
+  onOpen?: () => void;
+}
+
+export function ToolLine({ item, expanded, onToggle, onOpen }: ToolLineProps) {
   const running = item.status === "running";
   const [started] = useState(Date.now);
   const now = useNow(running);
@@ -18,15 +25,24 @@ export function ToolLine({ item, expanded, onToggle }: { item: ToolItem; expande
   const meta = running
     ? `${Math.max(0, Math.round((now - started) / 1000))}s`
     : metaOf({ name, tool: item.call.name, status: item.status, subject: item.call.subject, output: item.output, diff: item.diff, live: item.live });
+  const peek = running && !expanded ? lastLine(item.live) : "";
   return (
     <div className={cx(styles.tool, item.status === "failed" && styles.failed)}>
-      <button type="button" className={styles.line} onClick={onToggle} aria-expanded={expanded} title={`${expanded ? "Hide" : "Show"} details: ${item.call.subject}`}>
-        <span className={styles.chevron} aria-hidden="true">{expanded ? "▾" : "▸"}</span>
-        <span className={styles.mark}>{running ? <span className={styles.spin} aria-label="running" /> : item.status === "ok" ? "✓" : "✗"}</span>
-        <span className={styles.name}>{name}</span>
-        <span className={styles.subject}>{oneLine(item.call.subject)}</span>
-        <span className={styles.meta}>{meta}</span>
-      </button>
+      <div className={styles.top}>
+        <button type="button" className={styles.line} onClick={onToggle} aria-expanded={expanded} title={`${expanded ? "Hide" : "Show"} details: ${item.call.subject}`}>
+          <span className={styles.chevron} aria-hidden="true">{expanded ? "▾" : "▸"}</span>
+          <span className={styles.mark}>{running ? <span className={styles.spin} aria-label="running" /> : item.status === "ok" ? "✓" : "✗"}</span>
+          <span className={styles.name}>{name}</span>
+          <span className={styles.subject}>{oneLine(item.call.subject)}</span>
+          {peek ? <span className={styles.peek}>{peek}</span> : null}
+          <span className={styles.meta}>{meta}</span>
+        </button>
+        {onOpen ? (
+          <button type="button" className={styles.open} onClick={onOpen}>
+            open ›
+          </button>
+        ) : null}
+      </div>
       {expanded ? <ToolBody item={item} /> : null}
     </div>
   );
