@@ -1,6 +1,6 @@
 # Sharing a session
 
-A room is only useful if the people you invite can reach your host. There are three ways, and you choose one in the client: `F2` → Session → *Who can join*. The choice is saved and applies the next time you start `plural`.
+A room is only useful if the people you invite can reach your host. There are three ways, and you choose one in the client: `F2` → Session → *Who can join*. The choice is saved and applies the next time you start `plural`. A fourth, a tunnel, is one command.
 
 | Way | Who can join | What you need |
 |---|---|---|
@@ -9,6 +9,39 @@ A room is only useful if the people you invite can reach your host. There are th
 | **Over the internet** | anyone with the link | the address of a relay |
 
 With *Over the internet* the host connects out to the relay and so does every guest. Nobody opens a port, which is what makes it work from a home network. The relay only routes frames, it never decides permissions and never stores content. The invite link carries the relay address, so a guest needs no setup.
+
+## Through a tunnel
+
+A tunnel gives your host a public address without a server of your own. One command starts the tunnel, waits for its address and starts the host with it:
+
+```bash
+plural --tunnel cloudflared
+plural --tunnel ngrok
+```
+
+The first lines of the conversation show an invite whose link carries the tunnel address (`wss://…`), so a guest joins with `plural join` or from the browser. When you quit, the tunnel stops with the host.
+
+| | needs | the address |
+|---|---|---|
+| `cloudflared` | the [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) program, no account | new at every start, so old links stop working |
+| `ngrok` | the [`ngrok`](https://ngrok.com/download) program and a free account, `ngrok config add-authtoken <token>` once | random on a free plan |
+
+Plural does not install these programs. If one is missing, the command says how to get it.
+
+Two things to know. The tunnel provider terminates TLS, so it can read the traffic: trust it like you would a relay. And your host port is reachable from the internet while the tunnel is up. Only a holder of an invite or a token gets in, and an invite works once and expires after an hour, so share links only with the people you mean.
+
+A tunnel suits one person showing a session to a few teammates. For a team that needs a stable link, run a [relay](#the-relay).
+
+## Which way fits
+
+| You want | Run |
+|---|---|
+| to try it alone | `plural` |
+| to show a session to someone on your network | `F2` → Session → Same network, then `plural` |
+| to show a session to someone anywhere, now | `plural --tunnel cloudflared` |
+| a link that stays the same for your team | a [relay](#the-relay) on Railway, Render or your own server, then `plural --relay wss://…` |
+| an agent that keeps running when your laptop is closed | [the host in the cloud](#the-host-in-the-cloud) |
+| a host on a home server or a Mac mini | [self-hosting on your own machine](#self-hosting-on-your-own-machine) |
 
 The same choices exist as options for scripts and servers: `--relay <url>` for the internet, `--bind 0.0.0.0 --public-url ws://<your address>:<port>` for the network. Every option can also be an environment variable (`PLURAL_RELAY_URL`, `PLURAL_BIND_HOST`, `PLURAL_PUBLIC_URL`, `PLURAL_PORT`), and a flag wins over a variable. An address given as a flag also wins over the saved choice in the client.
 

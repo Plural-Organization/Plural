@@ -16,6 +16,7 @@ plural
 | `--name <name>` | Your display name |
 | `--port <n>`, `--bind <addr>` | Where the host listens in direct mode |
 | `--relay <url>`, `--public-url <url>` | Connect through a relay and set the address in invite links |
+| `--tunnel cloudflared\|ngrok` | Start a tunnel and put its address in the invite links, see [sharing a session](self-hosting.md) |
 | `--room <id>` | Resume a room, its log and settings are kept |
 
 ## Share a session

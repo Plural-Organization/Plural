@@ -11,6 +11,7 @@ import { loadSettings, saveSettings } from "./settings";
 import { freePort, HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
 import { startProgress } from "./lib/progress";
 import { lanAddress, shareLaunch } from "./share";
+import { isTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
 
 const USAGE = `plural ${pkg.version}
 
@@ -24,11 +25,17 @@ host options
   --prompts open|review   who may prompt directly
   --name <name>       your display name
   --port <n>  --bind <addr>  --relay <url>  --public-url <url>  --room <id>
+  --tunnel cloudflared|ngrok   share through a tunnel, the link carries its address
 `;
 
 function option(args: string[], name: string): string | undefined {
   const index = args.indexOf(name);
   return index === -1 ? undefined : args[index + 1];
+}
+
+function without(args: string[], name: string): string[] {
+  const index = args.indexOf(name);
+  return index === -1 ? args : [...args.slice(0, index), ...args.slice(index + 2)];
 }
 
 const progress = startProgress();
@@ -62,6 +69,7 @@ async function main(): Promise<void> {
   }
 
   let host: HostHandle | null = null;
+  let tunnel: Tunnel | null = null;
   let link: string;
   let guestLink: string | null = null;
   let room: string;
@@ -79,14 +87,35 @@ async function main(): Promise<void> {
   } else {
     const args = first === "host" ? rest : process.argv.slice(2);
     name = option(args, "--name") ?? userInfo().username;
-    const named = args.includes("--name") ? args : [...args, "--name", name];
-    const port = Number(option(args, "--port")) || (await freePort());
-    const launch = shareLaunch(settings, named, port, lanAddress());
+    const kind = option(args, "--tunnel");
+    if (kind !== undefined && !isTunnelKind(kind)) {
+      fail("--tunnel takes cloudflared or ngrok");
+    }
+    const plain = without(args, "--tunnel");
+    if (kind !== undefined && ["--relay", "--public-url", "--bind"].some((flag) => plain.includes(flag))) {
+      fail("--tunnel cannot be combined with --relay, --public-url or --bind");
+    }
+    const named = plain.includes("--name") ? plain : [...plain, "--name", name];
+    const port = Number(option(plain, "--port")) || (await freePort());
+    let launch = shareLaunch(settings, named, port, lanAddress());
+    if (kind !== undefined && isTunnelKind(kind)) {
+      progress.step(`opening a ${kind} tunnel…`);
+      try {
+        tunnel = await startTunnel(kind, port);
+      } catch (error) {
+        fail(error instanceof TunnelUnavailable ? error.message : String(error));
+      }
+      launch = {
+        args: [...named, "--port", String(port), "--public-url", tunnel.url],
+        note: `sharing through ${kind}: the invite links work while plural is running`,
+      };
+    }
     shareNote = launch.note;
     progress.step("starting the host…");
     try {
       host = await startLocalHost(launch.args);
     } catch (error) {
+      await tunnel?.stop();
       fail(error instanceof HostUnavailable ? error.message : String(error));
     }
     link = host.hostLink;
@@ -149,6 +178,7 @@ async function main(): Promise<void> {
   await quit;
   renderer.destroy();
   await host?.stop();
+  await tunnel?.stop();
   process.exit(0);
 }
 
