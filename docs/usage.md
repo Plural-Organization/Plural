@@ -18,6 +18,10 @@ plural
 | `--relay <url>`, `--public-url <url>` | Connect through a relay and set the address in invite links |
 | `--room <id>` | Resume a room, its log and settings are kept |
 
+## Share a session
+
+By default the invite works only on your computer. To let others in, open `F2` → Session and choose *Same network* or *Over the internet*, then start `plural` again. [Sharing a session](self-hosting.md) explains the three ways and how to run a relay.
+
 ## Join a session
 
 ```bash

@@ -1,3 +1,19 @@
+# Sharing a session
+
+A room is only useful if the people you invite can reach your host. There are three ways, and you choose one in the client: `F2` → Session → *Who can join*. The choice is saved and applies the next time you start `plural`.
+
+| Way | Who can join | What you need |
+|---|---|---|
+| **This machine** (default) | only you | nothing |
+| **Same network** | people on your Wi-Fi, office network or VPN | nothing. The invite link carries your network address, and the host listens on every interface |
+| **Over the internet** | anyone with the link | the address of a relay |
+
+With *Over the internet* the host connects out to the relay and so does every guest. Nobody opens a port, which is what makes it work from a home network. The relay only routes frames, it never decides permissions and never stores content. The invite link carries the relay address, so a guest needs no setup.
+
+The same choices exist as options for scripts and servers: `--relay <url>` for the internet, `--bind 0.0.0.0 --public-url ws://<your address>:<port>` for the network. Every option can also be an environment variable (`PLURAL_RELAY_URL`, `PLURAL_BIND_HOST`, `PLURAL_PUBLIC_URL`, `PLURAL_PORT`), and a flag wins over a variable. An address given as a flag also wins over the saved choice in the client.
+
+Use a relay you run yourself or one you trust: it sees who connects and when, and the size of every message. Guests join with an invite that expires after an hour and works once.
+
 # Running Plural on a server
 
 A room has two parts that can live anywhere:
@@ -11,7 +27,7 @@ People join with an invite from the terminal (`plural join "wss://…"`) or from
 
 ### Railway
 
-Create a service from this repository and set the variable `RAILWAY_DOCKERFILE_PATH=deploy/relay.Dockerfile`, or point the service's config file at [`deploy/railway/relay.json`](../deploy/railway/relay.json). Generate a domain for it. Railway terminates TLS, so the relay is at `wss://<name>.up.railway.app`. The relay listens on the `PORT` Railway gives it and answers `/healthz`.
+Create a service from this repository and set the variable `RAILWAY_DOCKERFILE_PATH=deploy/relay.Dockerfile`, or point the service's config file at [`deploy/railway/relay.json`](../deploy/railway/relay.json). Generate a domain for it. Railway terminates TLS, so the relay is at `wss://<name>.up.railway.app`. The relay listens on the `PORT` Railway gives it and answers `/healthz`. Set `PLURAL_RELAY_BIND` to change the address it binds, the images set it to `0.0.0.0`.
 
 ### Your own server
 
@@ -47,7 +63,7 @@ When it starts, the host prints the room, a one-time guest link and the host lin
 - **Render:** the `plural-host` worker in [`render.yaml`](../render.yaml).
 - **Any VM:** [`deploy/cloud-init.yaml`](../deploy/cloud-init.yaml) installs Docker, builds the image and runs it. Fill in the three values at the top.
 
-The image has git, ssh, curl and ripgrep. A project that needs another toolchain, such as Node or Go, builds its own image `FROM` this one.
+The image runs as an unprivileged user and has git, ssh, curl and ripgrep. A project that needs another toolchain, such as Node or Go, builds its own image `FROM` this one.
 
 ## Self-hosting on your own machine
 
@@ -65,6 +81,6 @@ chmod 600 ~/.config/plural/host.env
 ```
 
 - **Linux:** copy [`deploy/systemd/plural-host.service`](../deploy/systemd/plural-host.service) to `~/.config/systemd/user/`, then `systemctl --user enable --now plural-host`. The links are in `journalctl --user -u plural-host`.
-- **macOS:** copy [`deploy/launchd/dev.plural.host.plist`](../deploy/launchd/dev.plural.host.plist) to `~/Library/LaunchAgents/`, then `launchctl load ~/Library/LaunchAgents/dev.plural.host.plist`. The links are in `/tmp/plural-host.log`.
+- **macOS:** copy [`deploy/launchd/dev.plural.host.plist`](../deploy/launchd/dev.plural.host.plist) to `~/Library/LaunchAgents/`, then `launchctl load ~/Library/LaunchAgents/dev.plural.host.plist`. The links are in `~/Library/Logs/plural-host.log`, readable only by you.
 
 The room id stays the same across restarts, so the log and the session continue where they were.

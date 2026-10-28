@@ -8,8 +8,9 @@ import { App } from "./App";
 import { loadKeys, saveKeys } from "./credentials";
 import { toConfig } from "./presets";
 import { loadSettings, saveSettings } from "./settings";
-import { HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
+import { freePort, HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
 import { startProgress } from "./lib/progress";
+import { lanAddress, shareLaunch } from "./share";
 
 const USAGE = `plural ${pkg.version}
 
@@ -65,6 +66,8 @@ async function main(): Promise<void> {
   let guestLink: string | null = null;
   let room: string;
   let name: string;
+  let shareNote: string | null = null;
+  const settings = loadSettings();
   if (first === "join") {
     const target = rest[0];
     if (!target) {
@@ -76,9 +79,13 @@ async function main(): Promise<void> {
   } else {
     const args = first === "host" ? rest : process.argv.slice(2);
     name = option(args, "--name") ?? userInfo().username;
+    const named = args.includes("--name") ? args : [...args, "--name", name];
+    const port = Number(option(args, "--port")) || (await freePort());
+    const launch = shareLaunch(settings, named, port, lanAddress());
+    shareNote = launch.note;
     progress.step("starting the host…");
     try {
-      host = await startLocalHost(args.includes("--name") ? args : [...args, "--name", name]);
+      host = await startLocalHost(launch.args);
     } catch (error) {
       fail(error instanceof HostUnavailable ? error.message : String(error));
     }
@@ -95,10 +102,9 @@ async function main(): Promise<void> {
     fail(error instanceof Error ? error.message : String(error));
   }
 
-  const settings = loadSettings();
   const keys = loadKeys();
   const control = host?.control ?? null;
-  let startupNote: string | null = null;
+  let startupNote: string | null = shareNote;
   if (control && settings.agent.preset !== "demo") {
     progress.step(`loading the saved model (${settings.agent.preset})…`);
     const applied = await control.configure(toConfig(settings.agent, keys[settings.agent.preset] ?? ""));
