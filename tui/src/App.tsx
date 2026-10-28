@@ -21,6 +21,7 @@ import { Inbox, inboxItems, type InboxItem } from "./components/Inbox";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Splash } from "./components/Splash";
 import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
+import { preview, Toast, TOAST_MS, type ToastMessage } from "./components/Toast";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
 import { SCOPES, TrayView, type McpWizard, type Row, type Tray } from "./components/Tray";
@@ -111,6 +112,8 @@ export function App({
   const [seed, setSeed] = useState<{ text: string; key: number } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const toasts = useRef({ count: 0, timer: null as ReturnType<typeof setTimeout> | null });
   const [now, setNow] = useState(Date.now());
   const [planReady, setPlanReady] = useState(false);
   const [intro, setIntro] = useState(splash);
@@ -142,8 +145,17 @@ export function App({
     setFeed(next);
   };
   const notify = (tone: Tone, text: string): void => commit(withNotice(feedRef.current, tone, text));
-  const copy = (text: string, done: string): void => {
-    void copyToClipboard(text, (value) => renderer.copyToClipboardOSC52(value)).then(() => flash(done));
+  const showToast = (title: string, detail: string | null = null): void => {
+    toasts.current.count += 1;
+    const id = toasts.current.count;
+    if (toasts.current.timer !== null) {
+      clearTimeout(toasts.current.timer);
+    }
+    setToast({ id, title, detail });
+    toasts.current.timer = setTimeout(() => setToast((current) => (current?.id === id ? null : current)), TOAST_MS);
+  };
+  const copy = (text: string, title: string, detail: string | null = null): void => {
+    void copyToClipboard(text, (value) => renderer.copyToClipboardOSC52(value)).then(() => showToast(title, detail));
   };
 
   useEffect(() => {
@@ -157,7 +169,7 @@ export function App({
           }
           bump();
           if (event.type === "invite.created") {
-            copy(event.link, "invite link copied to the clipboard");
+            copy(event.link, "Invite link copied", "send it to one person, it works once");
           }
           if (event.type === "skills.found") {
             const host = client.projection.me?.role === "host";
@@ -526,7 +538,7 @@ export function App({
       flash("nothing to copy yet");
       return;
     }
-    copy(text, "copied the last reply");
+    copy(text, "Last reply copied", `${text.length} characters`);
   };
 
   const escape = (): void => {
@@ -728,7 +740,7 @@ export function App({
     if (copying.current) {
       clearTimeout(copying.current);
     }
-    copying.current = setTimeout(() => copy(text, `copied ${text.length} characters`), 250);
+    copying.current = setTimeout(() => copy(text, "Copied", `${text.length} characters · “${preview(text)}”`), 250);
   });
 
   const asking = tray?.kind === "mcp-add" && tray.step === "field" ? tray.fields[tray.index] : undefined;
@@ -850,6 +862,7 @@ export function App({
         <ModeLine mode={mode} canCycle={isHost} />
         <StatusBar me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
       </box>
+      {toast ? <Toast message={toast} right={(showPanel ? SIDEBAR_WIDTH : 0) + 2} /> : null}
       {dialog ? (
         <SettingsDialog
           width={width}
