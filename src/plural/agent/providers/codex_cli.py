@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from pydantic import JsonValue
 
+from plural import __version__
 from plural.agent.providers.base import (
     LlmEvent,
     LlmMessage,
@@ -312,7 +313,7 @@ class CodexCliProvider:
         await self._rpc(
             "initialize",
             {
-                "clientInfo": {"name": "plural", "title": "Plural", "version": "0.2.0"},
+                "clientInfo": {"name": "plural", "title": "Plural", "version": __version__},
                 "capabilities": {},
             },
             cancel=cancel,
