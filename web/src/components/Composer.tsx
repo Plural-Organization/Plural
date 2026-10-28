@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { mentionCompletions, mentionNote, type Mentionable, type ProposalView, type Role } from "@plural/client";
 import { suggestions } from "../lib/commands";
+import { withQuote } from "../lib/quote";
 import styles from "./Composer.module.css";
 
 const MAX_HEIGHT = 240;
@@ -11,13 +12,15 @@ interface ComposerProps {
   placeholder: string;
   disabled: string | null;
   editing: ProposalView | null;
+  // A new key adds its text to the draft as a quote.
+  quote?: { text: string; key: number } | null;
   onSubmit: (text: string) => void;
   onCancelEdit: () => void;
   onEscape: () => void;
   onActivity: (text: string) => void;
 }
 
-export function Composer({ role, people = [], placeholder, disabled, editing, onSubmit, onCancelEdit, onEscape, onActivity }: ComposerProps) {
+export function Composer({ role, people = [], placeholder, disabled, editing, quote = null, onSubmit, onCancelEdit, onEscape, onActivity }: ComposerProps) {
   const [value, setValue] = useState("");
   const [pick, setPick] = useState(0);
   const area = useRef<HTMLTextAreaElement>(null);
@@ -34,6 +37,23 @@ export function Composer({ role, people = [], placeholder, disabled, editing, on
       area.current?.focus();
     }
   }, [editing?.id]);
+
+  useEffect(() => {
+    if (quote === null || disabled !== null) {
+      return;
+    }
+    setValue((draft) => withQuote(draft, quote.text));
+    // After the mouse is released, so the click that quoted does not take the focus back.
+    const timer = setTimeout(() => {
+      const element = area.current;
+      if (element) {
+        element.focus();
+        element.setSelectionRange(element.value.length, element.value.length);
+        element.scrollTop = element.scrollHeight;
+      }
+    }, 120);
+    return () => clearTimeout(timer);
+  }, [quote?.key]);
 
   useEffect(() => {
     const element = area.current;

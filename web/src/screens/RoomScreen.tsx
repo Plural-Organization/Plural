@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { label, mentionable, status, type JoinLink, type ProposalView } from "@plural/client";
 import { Canvas } from "../components/Canvas";
 import { Composer } from "../components/Composer";
+import { QuoteButton } from "../components/QuoteButton";
 import { Feed } from "../components/feed/Feed";
 import { Inbox } from "../components/inbox/Inbox";
 import { inboxItems } from "../components/inbox/items";
@@ -37,6 +38,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   const { toast, flash } = useToast();
   const docs = useMemo(() => canvasDocs(feed.items), [feed.items]);
   const [canvasId, setCanvasId] = useState<string | null>(null);
+  const [quote, setQuote] = useState<{ text: string; key: number } | null>(null);
   const seen = useRef<Set<string> | null>(null);
   const doc = docs.find((item) => item.id === canvasId) ?? null;
 
@@ -96,7 +98,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
 
       <main className={styles.stage}>
         <div className={styles.scroller} ref={scroll.ref} onScroll={scroll.onScroll}>
-          <div className={styles.content}>
+          <div className={styles.content} data-quotable>
             <div className={styles.welcome}>
               You joined room {link.room} as {me ? `${me.name}, ${me.role}` : name}
             </div>
@@ -131,6 +133,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
             placeholder={placeholder}
             disabled={me?.role === "viewer" ? "Viewers watch the session and can't prompt" : null}
             editing={editing}
+            quote={quote}
             onSubmit={(text) => {
               typing.stop();
               scroll.pin();
@@ -156,6 +159,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
         />
       )}
 
+      <QuoteButton enabled={me !== undefined && me.role !== "viewer"} onQuote={(text) => setQuote((current) => ({ text, key: (current?.key ?? 0) + 1 }))} />
       {invite ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}
     </div>
   );

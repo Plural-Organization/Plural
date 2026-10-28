@@ -7,7 +7,8 @@
 .mine .bubble { background: var(--mine); border-color: color-mix(in srgb, var(--accent) 22%, transparent); border-bottom-right-radius: 5px; }
 .row:not(.mine) .bubble { border-bottom-left-radius: 5px; }
 .who { font-size: 12px; font-weight: 600; color: var(--who, var(--accent)); margin-bottom: 2px; }
-.text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.text { white-space: pre-wrap; overflow-wrap: anywhere; display: grid; gap: 6px; }
+.quote { margin: 2px 0; padding: 2px 0 2px 10px; border-left: 2px solid var(--muted); color: var(--muted); font-size: 14px; }
 .meta { font-size: 11px; color: var(--muted); padding: 0 6px; }
 
 .chat { background: transparent; border-style: dashed; border-color: color-mix(in srgb, var(--who, var(--accent)) 45%, transparent); }

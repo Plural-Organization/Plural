@@ -83,7 +83,7 @@ export function Canvas({ doc, docs, onPick, onClose }: CanvasProps) {
           ✕
         </button>
       </header>
-      <div className={styles.body} ref={body}>
+      <div className={styles.body} ref={body} data-quotable>
         {doc.kind === "text" ? (
           <div className={styles.doc}>
             <Markdown text={doc.text} streaming={doc.live} />

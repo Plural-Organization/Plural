@@ -4,6 +4,7 @@ import type { Activity as Current } from "../../lib/activity";
 import { colorFor } from "../../lib/colors";
 import { cx } from "../../lib/cx";
 import { docTitle, isDocument, lineCount, writtenFile } from "../../lib/canvas";
+import { segments } from "../../lib/quote";
 import { Activity } from "./Activity";
 import { DocCard } from "./DocCard";
 import { Markdown } from "./Markdown";
@@ -74,6 +75,23 @@ export function Feed({ items, meId = null, activity = null, onOpenDoc }: FeedPro
   );
 }
 
+// A message's own text, with the parts it quotes set apart.
+function Text({ text }: { text: string }) {
+  return (
+    <div className={styles.text}>
+      {segments(text).map((segment, index) =>
+        segment.quote ? (
+          <blockquote key={index} className={styles.quote}>
+            {segment.text}
+          </blockquote>
+        ) : (
+          <span key={index}>{segment.text}</span>
+        ),
+      )}
+    </div>
+  );
+}
+
 interface EntryProps {
   item: Exclude<FeedItem, { kind: "tool" }>;
   meId: string | null;
@@ -90,7 +108,7 @@ function Entry({ item, meId, onOpenDoc }: EntryProps) {
         <article className={cx(styles.row, mine && styles.mine)} style={{ "--who": colorFor(item.participantId) } as CSSProperties}>
           <div className={styles.bubble}>
             {mine ? null : <div className={styles.who}>{item.name}</div>}
-            <div className={styles.text}>{item.text}</div>
+            <Text text={item.text} />
           </div>
           {item.viaProposal || item.role === "viewer" ? (
             <div className={styles.meta}>{item.viaProposal ? "approved by the host" : item.role}</div>
@@ -105,7 +123,7 @@ function Entry({ item, meId, onOpenDoc }: EntryProps) {
         <article className={cx(styles.row, item.mine && styles.mine)} style={{ "--who": colorFor(item.authorId) } as CSSProperties}>
           <div className={cx(styles.bubble, styles.chat, direct && styles.private, item.mentioned && styles.mentioned)}>
             <div className={styles.who}>{head}</div>
-            <div className={styles.text}>{item.text}</div>
+            <Text text={item.text} />
           </div>
           <div className={styles.meta}>
             {direct ? "private, the agent does not see it" : "the agent does not see it"}
