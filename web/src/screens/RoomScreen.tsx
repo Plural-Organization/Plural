@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { label, mentionable, status, type JoinLink, type ProposalView } from "@plural/client";
+import { Canvas } from "../components/Canvas";
 import { Composer } from "../components/Composer";
 import { Feed } from "../components/feed/Feed";
 import { Inbox } from "../components/inbox/Inbox";
@@ -13,7 +14,10 @@ import { useStickToBottom } from "../hooks/useStickToBottom";
 import { useSubmit } from "../hooks/useSubmit";
 import { useToast } from "../hooks/useToast";
 import { useTyping } from "../hooks/useTyping";
+import { activity } from "../lib/activity";
+import { canvasDocs } from "../lib/canvas";
 import { copyText } from "../lib/clipboard";
+import { cx } from "../lib/cx";
 import styles from "./RoomScreen.module.css";
 
 interface RoomScreenProps {
@@ -31,7 +35,26 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   const [editing, setEditing] = useState<ProposalView | null>(null);
   const [panel, setPanel] = useState(false);
   const { toast, flash } = useToast();
-  const scroll = useStickToBottom(feed);
+  const docs = useMemo(() => canvasDocs(feed.items), [feed.items]);
+  const [canvasId, setCanvasId] = useState<string | null>(null);
+  const seen = useRef<Set<string> | null>(null);
+  const doc = docs.find((item) => item.id === canvasId) ?? null;
+
+  // A document that appears during the session opens for everyone; the ones already in the history wait for a click.
+  useEffect(() => {
+    if (!projection.ready) {
+      return;
+    }
+    if (seen.current === null) {
+      seen.current = new Set(docs.map((item) => item.id));
+      return;
+    }
+    const fresh = docs.filter((item) => !seen.current!.has(item.id));
+    fresh.forEach((item) => seen.current!.add(item.id));
+    if (fresh.length > 0) {
+      setCanvasId(fresh.at(-1)!.id);
+    }
+  }, [docs, projection.ready]);
   const typing = useTyping(me !== undefined && me.role !== "viewer", send);
 
   const leave = () => {
@@ -45,6 +68,8 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   useHotkeys({ enabled: invite === null, first: items[0], canAbort, send, onEdit: setEditing, onFocusInput: focusInput });
 
   const writing = feed.items.some((item) => item.kind === "assistant" && item.streaming);
+  const current = activity(projection, feed);
+  const scroll = useStickToBottom(feed, current?.text);
   const runStatus = writing ? "writing…" : status(projection).replace(/^… /, "");
   const typers = [...projection.typing]
     .filter((id) => id !== projection.meId)
@@ -55,14 +80,17 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
     me?.role === "participant" && state.prompt_mode === "review" ? "Propose a prompt, the host approves it" : "Message the agent, / for commands";
 
   return (
-    <div className={styles.room}>
+    <div className={cx(styles.room, doc && styles.withCanvas)}>
       <TopBar
         room={link.room}
         projection={projection}
         connection={connection}
-        panelOpen={panel}
+        panelOpen={panel && doc === null}
         onCopyRoom={() => void copyText(link.room).then((ok) => ok && flash("room id copied"))}
-        onTogglePanel={() => setPanel((open) => !open)}
+        onTogglePanel={() => {
+          setCanvasId(null);
+          setPanel((open) => !open || doc !== null);
+        }}
         onLeave={leave}
       />
 
@@ -70,14 +98,14 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
         <div className={styles.scroller} ref={scroll.ref} onScroll={scroll.onScroll}>
           <div className={styles.content}>
             <div className={styles.welcome}>
-              room {link.room} · you are {me ? `${me.name}, ${me.role}` : name}
+              You joined room {link.room} as {me ? `${me.name}, ${me.role}` : name}
             </div>
             {!projection.ready ? (
               <div className="muted mono">
                 {projection.waiting ? "waiting for the host to let you in…" : connection === "online" ? "loading the session…" : "connecting to the host…"}
               </div>
             ) : null}
-            <Feed items={feed.items} />
+            <Feed items={feed.items} meId={projection.meId} activity={current} onOpenDoc={setCanvasId} />
           </div>
         </div>
 
@@ -94,8 +122,6 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
               <span>
                 {typers.length <= 2 ? `${typers.join(" and ")} ${typers.length === 1 ? "is" : "are"} typing…` : `${typers.length} people are typing…`}
               </span>
-            ) : state.run ? (
-              <span className={styles.running}>{runStatus || "working"}</span>
             ) : null}
             {toast ? <span className={styles.toast}>{toast}</span> : null}
           </div>
@@ -117,14 +143,18 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
         </div>
       </main>
 
-      <Sidebar
-        projection={projection}
-        status={runStatus}
-        waiting={items.length}
-        open={panel}
-        send={send}
-        onInvite={(role) => send({ type: "invite.create", role, ttl_s: 3600, reusable: role === "participant" })}
-      />
+      {doc ? (
+        <Canvas doc={doc} docs={docs} onPick={setCanvasId} onClose={() => setCanvasId(null)} />
+      ) : (
+        <Sidebar
+          projection={projection}
+          status={runStatus}
+          waiting={items.length}
+          open={panel}
+          send={send}
+          onInvite={(role) => send({ type: "invite.create", role, ttl_s: 3600, reusable: role === "participant" })}
+        />
+      )}
 
       {invite ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}
     </div>

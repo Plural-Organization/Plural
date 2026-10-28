@@ -20,15 +20,15 @@ const render = (item: FeedItem) => renderToStaticMarkup(<Feed items={[item]} />)
 
 test("a message for the room says who wrote it and that the agent does not see it", () => {
   const html = render(chat({}));
-  expect(html).toContain("Alia · to the room");
+  expect(html).toContain("Alia to the team");
   expect(html).toContain("standup in five");
   expect(html).toContain("the agent does not see it");
   expect(html).not.toContain("private");
 });
 
 test("a private message names both sides", () => {
-  expect(render(chat({ to: "p_me", toName: "vlad" }))).toContain("Alia → you");
-  expect(render(chat({ to: "p_alia", toName: "Alia", mine: true, authorId: "p_me", name: "vlad" }))).toContain("you → Alia");
+  expect(render(chat({ to: "p_me", toName: "vlad" }))).toContain("Alia to you");
+  expect(render(chat({ to: "p_alia", toName: "Alia", mine: true, authorId: "p_me", name: "vlad" }))).toContain("to Alia");
   expect(render(chat({ to: "p_me", toName: "vlad" }))).toContain("private, the agent does not see it");
 });
 

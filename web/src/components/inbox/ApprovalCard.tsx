@@ -37,7 +37,7 @@ export function ApprovalCard({ approval, state, now, send }: ApprovalCardProps) 
     <div className={styles.card}>
       <div className={styles.head}>
         <span>
-          approval · <b>{call.name}</b>
+          The agent asks to use <b>{call.name}</b>
         </span>
         <span className="muted mono">{timeLeft(approval.timeout_at, now)}</span>
       </div>
