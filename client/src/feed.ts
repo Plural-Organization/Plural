@@ -1,3 +1,4 @@
+import { withDefaults } from "./reduce";
 import { mentionsMe } from "./chat";
 import { label, shortTokens } from "./presenter";
 import type { Projection } from "./projection";
@@ -82,7 +83,7 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
           )
         : feed;
     case "session.snapshot":
-      return loadHistory(feed, event.state, event.streaming, projection.meId);
+      return loadHistory(feed, withDefaults(event.state), event.streaming, projection.meId);
     case "chat.posted":
       return {
         ...feed,

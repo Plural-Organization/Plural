@@ -1,3 +1,4 @@
+import { withDefaults } from "./reduce";
 import { decodeEvent, decodeRecord, ProtocolError } from "./decode";
 import type { JoinLink } from "./link";
 import { Projection } from "./projection";
@@ -141,7 +142,7 @@ export class SessionClient implements Session {
         this.projection.agent = event.agent;
         break;
       case "session.snapshot":
-        this.projection.load(event.state, event.streaming, event.typing);
+        this.projection.load(withDefaults(event.state), event.streaming, event.typing);
         break;
       default:
         this.projection.observe(event);
