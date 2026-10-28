@@ -765,13 +765,13 @@ describe("App", () => {
     expect(await frame(setup, "exit 1")).toContain("✗ Bash pytest · exit 1");
   });
 
-  test("a running command shows its latest line next to the spinner and the whole tail when open", async () => {
+  test("a running command keeps output inside its expandable details", async () => {
     const fake = session();
     const setup = await mount(fake);
     fake.emit({ type: "tool.started", run_id: "r", call: { id: "t1", name: "bash", risk: "exec", subject: "make all", args: {} } });
     fake.emit({ type: "tool.output", call_id: "t1", chunk: "compiling a\ncompiling b\n" });
-    const text = await frame(setup, "compiling b");
-    expect(text).toContain("make all");
+    const text = await frame(setup, "make all");
+    expect(text).not.toContain("compiling b");
     expect(text).not.toContain("compiling a");
     await setup.mockInput.pressKey("o", { ctrl: true });
     const open = await frame(setup, "compiling a");
