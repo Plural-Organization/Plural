@@ -6,6 +6,10 @@ from plural.protocol.events import (
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
+    BoardCleared,
+    BoardErased,
+    BoardOpened,
+    BoardStroked,
     ChatPosted,
     ContextCompacted,
     ContextUsage,
@@ -34,6 +38,7 @@ from plural.protocol.events import (
     ToolStarted,
 )
 from plural.protocol.models import (
+    BOARD_STROKES_LIMIT,
     ChatEntry,
     EntryKind,
     QueuedPrompt,
@@ -127,6 +132,24 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
                 mentions=event.mentions,
             )
             return state.model_copy(update={"chat": (*state.chat, entry)[-CHAT_LIMIT:]})
+        case BoardOpened(open=open_):
+            return state.model_copy(
+                update={"board": state.board.model_copy(update={"open": open_})}
+            )
+        case BoardStroked(stroke=stroke):
+            strokes = (*state.board.strokes, stroke)[-BOARD_STROKES_LIMIT:]
+            return state.model_copy(
+                update={"board": state.board.model_copy(update={"strokes": strokes})}
+            )
+        case BoardErased(stroke_id=stroke_id):
+            strokes = tuple(stroke for stroke in state.board.strokes if stroke.id != stroke_id)
+            return state.model_copy(
+                update={"board": state.board.model_copy(update={"strokes": strokes})}
+            )
+        case BoardCleared():
+            return state.model_copy(
+                update={"board": state.board.model_copy(update={"strokes": ()})}
+            )
         case PromptDequeued(prompt_id=prompt_id):
             kept = tuple(entry for entry in state.queue if entry.prompt_id != prompt_id)
             return state.model_copy(update={"queue": kept})

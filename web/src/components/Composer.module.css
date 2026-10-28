@@ -1,5 +1,14 @@
 .composer { position: relative; display: grid; gap: 6px; }
 .row { display: flex; gap: 10px; align-items: flex-end; border: 1px solid var(--line); background: var(--panel); border-radius: 22px; padding: 6px 6px 6px 18px; transition: border-color 0.15s; }
+.row:has(.attach) { padding-left: 6px; }
+.dragging { border-color: var(--accent); border-style: dashed; }
+.attach { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 0; background: none; color: var(--muted); cursor: pointer; display: grid; place-items: center; }
+.attach:hover:not(:disabled) { color: var(--fg); background: var(--raise); }
+.files { list-style: none; margin: 0; padding: 0 6px; display: flex; flex-wrap: wrap; gap: 6px; }
+.file { display: flex; align-items: center; gap: 8px; max-width: 280px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 4px 8px 4px 4px; font-size: 12px; }
+.file img { width: 36px; height: 36px; object-fit: cover; border-radius: 6px; }
+.icon { width: 36px; height: 36px; display: grid; place-items: center; background: var(--raise); border-radius: 6px; }
+.fileName { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .row:focus-within { border-color: var(--muted); }
 .row :global(.button) { padding: 8px 18px; }
 .row textarea { flex: 1; min-width: 0; resize: none; background: none; border: 0; color: var(--fg); font: 15px/1.5 var(--font-text); padding: 5px 0; outline: none; max-height: 240px; }

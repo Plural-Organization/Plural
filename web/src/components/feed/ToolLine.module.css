@@ -17,13 +17,8 @@
 .failed .body pre { color: var(--danger); }
 .command { color: var(--accent); margin-bottom: 4px; }
 .more { color: var(--dim); margin-top: 4px; }
-.row { display: grid; grid-template-columns: 4ch 2ch minmax(0, 1fr); white-space: pre; }
-.add { background: var(--add-bg); }
-.add .sign { color: var(--ok); }
-.del { background: var(--del-bg); }
-.del .sign { color: var(--danger); }
-.ctx { color: var(--muted); }
-.gap { color: var(--dim); grid-template-columns: 1fr; padding-left: 4ch; }
-.no { color: var(--dim); text-align: right; padding-right: 8px; }
 @keyframes spin { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+.diff { margin: 6px 0 4px 1.6em; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 0; overflow: hidden; }
+.diff .more { background: none; border: 0; cursor: pointer; font: 12px var(--font-text); color: var(--accent); padding: 4px 0 2px 6.5ch; }

@@ -176,6 +176,217 @@
       ],
       "type": "object"
     },
+    "BoardCleared": {
+      "properties": {
+        "by": {
+          "type": "string"
+        },
+        "type": {
+          "const": "board.cleared",
+          "default": "board.cleared",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "by"
+      ],
+      "type": "object"
+    },
+    "BoardCursor": {
+      "description": "Where someone points on the board; with ink, the pen is down and draws.",
+      "properties": {
+        "color": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ink": {
+          "default": false,
+          "type": "boolean"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "maximum": 40,
+              "minimum": 0.5,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "x": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "y": {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "ink",
+        "color",
+        "width"
+      ],
+      "type": "object"
+    },
+    "BoardErased": {
+      "properties": {
+        "stroke_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "board.erased",
+          "default": "board.erased",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "stroke_id"
+      ],
+      "type": "object"
+    },
+    "BoardOpened": {
+      "properties": {
+        "by": {
+          "type": "string"
+        },
+        "open": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "board.opened",
+          "default": "board.opened",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "open",
+        "by"
+      ],
+      "type": "object"
+    },
+    "BoardShape": {
+      "enum": [
+        "pen",
+        "line",
+        "arrow",
+        "rect",
+        "ellipse",
+        "text"
+      ],
+      "type": "string"
+    },
+    "BoardStroke": {
+      "description": "One mark on the shared board; points are x0, y0, x1, y1, \u2026 in board units.\n\nA pen keeps every point, a shape its two corners, a text the point it starts at.",
+      "properties": {
+        "author_id": {
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/BoardShape",
+          "default": "pen"
+        },
+        "points": {
+          "items": {
+            "maximum": 1,
+            "minimum": 0,
+            "type": "number"
+          },
+          "maxItems": 4000,
+          "minItems": 2,
+          "type": "array"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "width": {
+          "maximum": 40,
+          "minimum": 0.5,
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "author_id",
+        "kind",
+        "color",
+        "width",
+        "points",
+        "text"
+      ],
+      "type": "object"
+    },
+    "BoardStroked": {
+      "properties": {
+        "stroke": {
+          "$ref": "#/$defs/BoardStroke"
+        },
+        "type": {
+          "const": "board.stroked",
+          "default": "board.stroked",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "stroke"
+      ],
+      "type": "object"
+    },
+    "BoardView": {
+      "properties": {
+        "open": {
+          "default": false,
+          "type": "boolean"
+        },
+        "strokes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BoardStroke"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "open",
+        "strokes"
+      ],
+      "type": "object"
+    },
     "ChatEntry": {
       "properties": {
         "author_id": {
@@ -572,6 +783,10 @@
               "approval.requested": "#/$defs/ApprovalRequested",
               "approval.resolved": "#/$defs/ApprovalResolved",
               "attachment.added": "#/$defs/AttachmentAdded",
+              "board.cleared": "#/$defs/BoardCleared",
+              "board.erased": "#/$defs/BoardErased",
+              "board.opened": "#/$defs/BoardOpened",
+              "board.stroked": "#/$defs/BoardStroked",
               "chat.posted": "#/$defs/ChatPosted",
               "context.compacted": "#/$defs/ContextCompacted",
               "context.compacting": "#/$defs/ContextCompacting",
@@ -585,10 +800,12 @@
               "message.delta": "#/$defs/MessageDelta",
               "message.ended": "#/$defs/MessageEnded",
               "message.started": "#/$defs/MessageStarted",
+              "participant.cursor": "#/$defs/ParticipantCursor",
               "participant.joined": "#/$defs/ParticipantJoined",
               "participant.left": "#/$defs/ParticipantLeft",
               "participant.revoked": "#/$defs/ParticipantRevoked",
               "participant.role_changed": "#/$defs/ParticipantRoleChanged",
+              "participant.selected": "#/$defs/ParticipantSelected",
               "participant.typing": "#/$defs/ParticipantTyping",
               "policy.rule_added": "#/$defs/PolicyRuleAdded",
               "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
@@ -661,6 +878,24 @@
             },
             {
               "$ref": "#/$defs/ParticipantTyping"
+            },
+            {
+              "$ref": "#/$defs/ParticipantSelected"
+            },
+            {
+              "$ref": "#/$defs/ParticipantCursor"
+            },
+            {
+              "$ref": "#/$defs/BoardOpened"
+            },
+            {
+              "$ref": "#/$defs/BoardStroked"
+            },
+            {
+              "$ref": "#/$defs/BoardErased"
+            },
+            {
+              "$ref": "#/$defs/BoardCleared"
             },
             {
               "$ref": "#/$defs/ChatPosted"
@@ -1111,6 +1346,34 @@
       ],
       "type": "object"
     },
+    "ParticipantCursor": {
+      "properties": {
+        "cursor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoardCursor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "participant.cursor",
+          "default": "participant.cursor",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "participant_id",
+        "cursor"
+      ],
+      "type": "object"
+    },
     "ParticipantJoined": {
       "properties": {
         "participant": {
@@ -1180,6 +1443,34 @@
         "type",
         "participant_id",
         "role"
+      ],
+      "type": "object"
+    },
+    "ParticipantSelected": {
+      "properties": {
+        "participant_id": {
+          "type": "string"
+        },
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "participant.selected",
+          "default": "participant.selected",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "participant_id",
+        "selection"
       ],
       "type": "object"
     },
@@ -1675,6 +1966,9 @@
           },
           "type": "object"
         },
+        "board": {
+          "$ref": "#/$defs/BoardView"
+        },
         "chat": {
           "default": [],
           "items": {
@@ -1800,7 +2094,8 @@
         "summary",
         "run",
         "transcript",
-        "chat"
+        "chat",
+        "board"
       ],
       "type": "object"
     },
@@ -1945,6 +2240,32 @@
         "type",
         "query",
         "hits"
+      ],
+      "type": "object"
+    },
+    "TextSelection": {
+      "description": "Text someone has selected, as offsets into the text of one item on screen.\n\nThe anchor names the item (a feed entry or a canvas document); every client lays\nout the same items, so the offsets point at the same words for everyone.",
+      "properties": {
+        "anchor": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "end": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "anchor",
+        "start",
+        "end"
       ],
       "type": "object"
     },
@@ -2170,6 +2491,10 @@
           "approval.requested": "#/$defs/ApprovalRequested",
           "approval.resolved": "#/$defs/ApprovalResolved",
           "attachment.added": "#/$defs/AttachmentAdded",
+          "board.cleared": "#/$defs/BoardCleared",
+          "board.erased": "#/$defs/BoardErased",
+          "board.opened": "#/$defs/BoardOpened",
+          "board.stroked": "#/$defs/BoardStroked",
           "chat.posted": "#/$defs/ChatPosted",
           "context.compacted": "#/$defs/ContextCompacted",
           "context.compacting": "#/$defs/ContextCompacting",
@@ -2183,10 +2508,12 @@
           "message.delta": "#/$defs/MessageDelta",
           "message.ended": "#/$defs/MessageEnded",
           "message.started": "#/$defs/MessageStarted",
+          "participant.cursor": "#/$defs/ParticipantCursor",
           "participant.joined": "#/$defs/ParticipantJoined",
           "participant.left": "#/$defs/ParticipantLeft",
           "participant.revoked": "#/$defs/ParticipantRevoked",
           "participant.role_changed": "#/$defs/ParticipantRoleChanged",
+          "participant.selected": "#/$defs/ParticipantSelected",
           "participant.typing": "#/$defs/ParticipantTyping",
           "policy.rule_added": "#/$defs/PolicyRuleAdded",
           "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
@@ -2259,6 +2586,24 @@
         },
         {
           "$ref": "#/$defs/ParticipantTyping"
+        },
+        {
+          "$ref": "#/$defs/ParticipantSelected"
+        },
+        {
+          "$ref": "#/$defs/ParticipantCursor"
+        },
+        {
+          "$ref": "#/$defs/BoardOpened"
+        },
+        {
+          "$ref": "#/$defs/BoardStroked"
+        },
+        {
+          "$ref": "#/$defs/BoardErased"
+        },
+        {
+          "$ref": "#/$defs/BoardCleared"
         },
         {
           "$ref": "#/$defs/ChatPosted"

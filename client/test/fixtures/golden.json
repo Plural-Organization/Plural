@@ -31,7 +31,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -79,7 +83,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -133,7 +141,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -193,7 +205,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -259,7 +275,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -321,7 +341,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -382,7 +406,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -443,7 +471,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -504,7 +536,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -579,7 +615,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -642,7 +682,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -717,7 +761,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -779,7 +827,11 @@
         "summary": null,
         "run": null,
         "transcript": [],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -859,7 +911,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -944,7 +1000,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -1048,7 +1108,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -1167,7 +1231,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -1272,7 +1340,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -1370,7 +1442,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -1463,7 +1539,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 4
@@ -1561,7 +1641,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {
         "m1": ""
@@ -1656,7 +1740,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {
         "m1": "Looking "
@@ -1751,7 +1839,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {
         "m1": "Looking around"
@@ -1862,7 +1954,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -1990,7 +2086,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -2149,7 +2249,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -2272,7 +2376,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -2397,7 +2505,11 @@
             "output": "line 0\nline 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\nline 9\nline 10\nline 11\nline 12\nline 13\nline 14\nline 15\nline 16\nline 17\nline 18\nline 19\nline 20\nline 21\nline 22\nline 23\nline 24\nline 25\nline 26\nline 27\nline 28\nline 29"
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -2540,7 +2652,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -2680,7 +2796,11 @@
             "output": "denied by policy"
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -2828,7 +2948,11 @@
             "output": "denied by policy"
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -2964,7 +3088,11 @@
             "output": "denied by policy"
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -3114,7 +3242,11 @@
             "output": "denied by policy"
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -3269,7 +3401,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -3460,7 +3596,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -3615,7 +3755,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -3793,7 +3937,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -3962,7 +4110,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -4131,7 +4283,11 @@
             "output": ""
           }
         ],
-        "chat": []
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -4305,7 +4461,11 @@
             "to": null,
             "mentions": []
           }
-        ]
+        ],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -4491,7 +4651,11 @@
               "p_bek2222"
             ]
           }
-        ]
+        ],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -4683,7 +4847,11 @@
             "to": "p_alia",
             "mentions": []
           }
-        ]
+        ],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -4883,7 +5051,11 @@
             "to": "p_alia",
             "mentions": []
           }
-        ]
+        ],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -5078,7 +5250,11 @@
             "to": "p_alia",
             "mentions": []
           }
-        ]
+        ],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -5268,7 +5444,11 @@
             "to": "p_alia",
             "mentions": []
           }
-        ]
+        ],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -5456,7 +5636,11 @@
             "to": "p_alia",
             "mentions": []
           }
-        ]
+        ],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0
@@ -5638,7 +5822,11 @@
             "to": "p_alia",
             "mentions": []
           }
-        ]
+        ],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
       },
       "streaming": {},
       "reasoning": 0

@@ -9,6 +9,8 @@ from plural.protocol.models import (
     ApprovalDecision,
     ApprovalView,
     AttachmentMeta,
+    BoardCursor,
+    BoardStroke,
     ContextView,
     Delivery,
     DequeueReason,
@@ -27,6 +29,7 @@ from plural.protocol.models import (
     SessionState,
     SkillHit,
     SkillView,
+    TextSelection,
     ToolCallView,
     Usage,
 )
@@ -126,6 +129,39 @@ class ParticipantTyping(TransientEvent):
     type: Literal["participant.typing"] = "participant.typing"
     participant_id: str
     typing: bool
+
+
+class ParticipantSelected(TransientEvent):
+    type: Literal["participant.selected"] = "participant.selected"
+    participant_id: str
+    selection: TextSelection | None
+
+
+class ParticipantCursor(TransientEvent):
+    type: Literal["participant.cursor"] = "participant.cursor"
+    participant_id: str
+    cursor: BoardCursor | None
+
+
+class BoardOpened(EventBase):
+    type: Literal["board.opened"] = "board.opened"
+    open: bool
+    by: str
+
+
+class BoardStroked(EventBase):
+    type: Literal["board.stroked"] = "board.stroked"
+    stroke: BoardStroke
+
+
+class BoardErased(EventBase):
+    type: Literal["board.erased"] = "board.erased"
+    stroke_id: str
+
+
+class BoardCleared(EventBase):
+    type: Literal["board.cleared"] = "board.cleared"
+    by: str
 
 
 class ChatPosted(EventBase):
@@ -320,6 +356,12 @@ Event = Annotated[
     | JoinRefused
     | PromptDequeued
     | ParticipantTyping
+    | ParticipantSelected
+    | ParticipantCursor
+    | BoardOpened
+    | BoardStroked
+    | BoardErased
+    | BoardCleared
     | ChatPosted
     | ProposalCreated
     | ProposalApproved

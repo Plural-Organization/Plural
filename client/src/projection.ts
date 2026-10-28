@@ -1,4 +1,4 @@
-import type { Event, EventRecord, Participant, PolicyRuleView, SessionState } from "./protocol";
+import type { BoardCursor, Event, EventRecord, Participant, PolicyRuleView, SessionState, TextSelection } from "./protocol";
 import { emptyState, reduce } from "./reduce";
 
 export class Projection {
@@ -6,6 +6,8 @@ export class Projection {
   streaming: Record<string, string> = {};
   reasoning = 0;
   typing = new Set<string>();
+  selections = new Map<string, TextSelection>();
+  cursors = new Map<string, BoardCursor>();
   compacting: { tokens: number; since: number } | null = null;
   basePolicy: PolicyRuleView[] = [];
   agent = "";
@@ -25,6 +27,8 @@ export class Projection {
     this.state = state;
     this.streaming = { ...streaming };
     this.typing = new Set(typing);
+    this.selections = new Map();
+    this.cursors = new Map();
     this.reasoning = 0;
     this.compacting = null;
     this.ready = true;
@@ -54,6 +58,12 @@ export class Projection {
         break;
       case "participant.revoked":
         this.typing.delete(event.participant_id);
+        this.selections.delete(event.participant_id);
+        this.cursors.delete(event.participant_id);
+        break;
+      case "participant.left":
+        this.selections.delete(event.participant_id);
+        this.cursors.delete(event.participant_id);
         break;
       default:
         break;
@@ -71,6 +81,22 @@ export class Projection {
         this.typing.add(event.participant_id);
       } else {
         this.typing.delete(event.participant_id);
+      }
+      return;
+    }
+    if (event.type === "participant.selected") {
+      if (event.selection === null) {
+        this.selections.delete(event.participant_id);
+      } else {
+        this.selections.set(event.participant_id, event.selection);
+      }
+      return;
+    }
+    if (event.type === "participant.cursor") {
+      if (event.cursor === null) {
+        this.cursors.delete(event.participant_id);
+      } else {
+        this.cursors.set(event.participant_id, event.cursor);
       }
       return;
     }

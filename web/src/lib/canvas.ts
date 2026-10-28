@@ -22,11 +22,13 @@ function leadingTitle(text: string): string | null {
 export interface CanvasDoc {
   id: string;
   title: string;
-  kind: "code" | "text";
+  kind: "code" | "text" | "diff";
   lang: string;
   text: string;
   live: boolean;
-  // Set for a file the agent wrote; the download keeps its name.
+  // Opens by itself for everyone when it appears; a diff waits for a click, the feed already shows it.
+  auto: boolean;
+  // Set for a file the agent wrote or edited; the download keeps its name.
   path?: string;
 }
 
@@ -35,6 +37,20 @@ type ToolItem = Extract<FeedItem, { kind: "tool" }>;
 export function docTitle(text: string): string {
   const heading = blocks(text).find((block) => block.kind === "heading");
   return leadingTitle(text) ?? (heading?.kind === "heading" ? heading.text : "Document");
+}
+
+// What a tool call puts in the canvas: the diff of a finished edit, or the file a write fills.
+export function toolDoc(item: ToolItem): CanvasDoc | null {
+  const path = typeof item.call.args.path === "string" ? item.call.args.path : item.call.subject;
+  if (item.status === "ok" && item.diff !== null) {
+    return { id: item.id, title: path, kind: "diff", lang: "diff", text: item.diff, live: false, auto: false, path };
+  }
+  const file = writtenFile(item);
+  if (file === null) {
+    return null;
+  }
+  const lang = langOf(file.path);
+  return { id: item.id, title: file.path, kind: lang === "md" ? "text" : "code", lang, text: file.content, live: false, auto: false, path: file.path };
 }
 
 // A write the agent made, or is about to make, with the file it fills.
@@ -69,7 +85,8 @@ export function langOf(path: string): string {
 
 export function fileName(doc: CanvasDoc): string {
   if (doc.path !== undefined) {
-    return doc.path.split("/").pop() || "file.txt";
+    const name = doc.path.split("/").pop() || "file.txt";
+    return doc.kind === "diff" ? `${name}.diff` : name;
   }
   if (doc.kind === "text") {
     return `${doc.title.replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-|-$/g, "").toLowerCase() || "document"}.md`;
@@ -84,7 +101,7 @@ export function canvasDocs(items: FeedItem[]): CanvasDoc[] {
     if (item.kind === "assistant" && item.text !== "") {
       const parsed = blocks(item.text);
       if (isDocument(item.text)) {
-        docs.push({ id: item.id, title: docTitle(item.text), kind: "text", lang: "md", text: item.text, live: item.streaming });
+        docs.push({ id: item.id, title: docTitle(item.text), kind: "text", lang: "md", text: item.text, live: item.streaming, auto: true });
         continue;
       }
       let index = 0;
@@ -100,15 +117,15 @@ export function canvasDocs(items: FeedItem[]): CanvasDoc[] {
             lang: block.lang,
             text: block.text,
             live: item.streaming && position === parsed.length - 1,
+            auto: true,
           });
         }
         index += 1;
       });
     } else if (item.kind === "tool") {
-      const file = writtenFile(item);
-      if (file !== null) {
-        const lang = langOf(file.path);
-        docs.push({ id: item.id, title: file.path, kind: lang === "md" ? "text" : "code", lang, text: file.content, live: false, path: file.path });
+      const doc = toolDoc(item);
+      if (doc !== null) {
+        docs.push(doc);
       }
     }
   }

@@ -1,0 +1,13 @@
+.diff { font: 12.5px/1.6 var(--font-mono); min-width: 0; overflow-x: auto; }
+.row { display: grid; grid-template-columns: 4.5ch 2ch minmax(0, 1fr); white-space: pre; min-width: max-content; }
+/* Numbers and signs come from CSS so a selection and its offsets cover only the code. */
+.no::before { content: attr(data-no); color: var(--dim); display: block; text-align: right; padding-right: 10px; user-select: none; }
+.sign::before { content: attr(data-sign); user-select: none; }
+.text { padding-right: 16px; }
+.add { background: var(--add-bg); }
+.add .sign { color: var(--ok); }
+.del { background: var(--del-bg); }
+.del .sign { color: var(--danger); }
+.del .text { color: color-mix(in srgb, var(--fg) 75%, var(--danger)); }
+.ctx .text { color: var(--muted); }
+.gap { grid-template-columns: 1fr; color: var(--dim); padding-left: 6.5ch; }
