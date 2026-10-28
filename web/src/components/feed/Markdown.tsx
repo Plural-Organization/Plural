@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
+import { CODE_LINES, lineCount } from "../../lib/canvas";
 import { cx } from "../../lib/cx";
+import { DocCard } from "./DocCard";
 import styles from "./Markdown.module.css";
 
-type Block =
+export type Block =
   | { kind: "code"; lang: string; text: string }
   | { kind: "heading"; level: number; text: string }
   | { kind: "list"; ordered: boolean; items: string[] }
@@ -14,7 +16,7 @@ const HEADING = /^(#{1,4})\s+(.*)$/;
 const BULLET = /^\s*[-*]\s+(.*)$/;
 const NUMBERED = /^\s*\d+[.)]\s+(.*)$/;
 
-function blocks(source: string): Block[] {
+export function blocks(source: string): Block[] {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
   const out: Block[] = [];
   let index = 0;
@@ -119,17 +121,32 @@ function inline(text: string): ReactNode[] {
   return nodes;
 }
 
-export function Markdown({ text, streaming = false }: { text: string; streaming?: boolean }) {
+interface MarkdownProps {
+  text: string;
+  streaming?: boolean;
+  // Given, long code blocks become a card that opens the block in the canvas.
+  onOpenCode?: (index: number) => void;
+}
+
+export function Markdown({ text, streaming = false, onOpenCode }: MarkdownProps) {
+  let code = -1;
   return (
     <div className={cx(styles.md, streaming && styles.streaming)}>
       {blocks(text).map((block, index) => {
         switch (block.kind) {
-          case "code":
+          case "code": {
+            code += 1;
+            const lines = lineCount(block.text);
+            if (onOpenCode && lines >= CODE_LINES) {
+              const at = code;
+              return <DocCard key={index} title={block.lang || "code"} meta={`${lines} lines`} preview={block.text} onOpen={() => onOpenCode(at)} />;
+            }
             return (
               <pre key={index} className={styles.code} data-lang={block.lang || undefined}>
                 <code>{block.text}</code>
               </pre>
             );
+          }
           case "heading": {
             const Tag = (["h3", "h3", "h4", "h5"] as const)[block.level - 1] ?? "h5";
             return <Tag key={index}>{inline(block.text)}</Tag>;

@@ -308,7 +308,10 @@ class AgentLoop:
                     continue
                 except ProviderError as error:
                     yield MessageEnd(turn.message_id, "".join(turn.text), "".join(turn.thinking))
-                    yield RunEnd(RunEndReason.ERROR, self._usage, str(error))
+                    reason = str(error)
+                    if "image" in reason.lower() and self._drop_images():
+                        reason = f"{reason} (the images were removed so the session can go on)"
+                    yield RunEnd(RunEndReason.ERROR, self._usage, reason)
                     return
                 recovering = False
                 assistant = turn.assistant()
@@ -623,7 +626,7 @@ class AgentLoop:
             return await interruptible(prepared.execute(ctx), cancel, self._limits.tool_timeout_s)
         except TimedOut:
             return ToolResult("Tool timed out", is_error=True)
-        except (ToolError, SandboxError, OSError, UnicodeDecodeError) as error:
+        except (ToolError, SandboxError, OSError, UnicodeError) as error:
             return ToolResult(f"{type(error).__name__}: {error}", is_error=True)
 
     def _skip(self, call: ToolCallRequest, reason: str) -> tuple[ToolStart, ToolEnd]:
@@ -636,6 +639,16 @@ class AgentLoop:
                 call_id=call.id, name=call.name, content=result.content, is_error=result.is_error
             )
         )
+
+    def _drop_images(self) -> bool:
+        """Forget every image, so one the model cannot read does not fail each later request."""
+        dropped = False
+        for index, message in enumerate(self._conversation):
+            if isinstance(message, UserTurn) and message.images:
+                note = f"{message.text}\n\n[{len(message.images)} image(s) removed: unreadable]"
+                self._conversation[index] = message.model_copy(update={"images": (), "text": note})
+                dropped = True
+        return dropped
 
     def _settle(self) -> None:
         for index in range(len(self._conversation) - 1, -1, -1):
@@ -661,6 +674,9 @@ class AgentLoop:
 
 _ABORTED = "Not executed: run aborted"
 
+# What a 1568 px image costs on Anthropic, the largest the terminal client sends.
+IMAGE_TOKENS = 1600
+
 _UNFINISHED: dict[StopReason, str] = {
     "max_tokens": "Not executed: the response hit the output limit before the call was complete",
     "refusal": "Not executed: the model declined the request",
@@ -669,7 +685,9 @@ _UNFINISHED: dict[StopReason, str] = {
 
 def _estimate_tokens(message: Message) -> int:
     match message:
-        case ToolResultTurn(content=text) | UserTurn(text=text) | SummaryTurn(text=text):
+        case UserTurn(text=text, images=images):
+            return len(text) // 4 + IMAGE_TOKENS * len(images)
+        case ToolResultTurn(content=text) | SummaryTurn(text=text):
             return len(text) // 4
         case AssistantTurn(text=text, tool_calls=calls):
             return (len(text) + sum(len(_signature(call)) for call in calls)) // 4

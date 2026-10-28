@@ -48,7 +48,9 @@ cd your-project
 plural
 ```
 
-the first line in the conversation is an invite. send it to a teammate:
+come back to a session later with `plural -r` (or `plural -c` for the latest one of this folder), and ask once from a script with `plural -p "…"`. see [usage](docs/usage.md).
+
+the first line in the conversation is the room link. send it to a teammate, now or later: it does not expire, and you let each person in:
 
 ```bash
 plural join "ws://…"
@@ -70,7 +72,7 @@ Claude OAuth defaults to Haiku 4.5. Newer Claude models may reject third-party O
 
 ## docs
 
-[usage](docs/usage.md) · [configuration](docs/configuration.md) · [relay deployment](deploy/) · [wire protocol](docs/protocol.md) · [threat model](docs/threat-model.md) · [design decisions](docs/adr/) · [development](docs/development.md)
+[usage](docs/usage.md) · [configuration](docs/configuration.md) · [running on a server](docs/self-hosting.md) · [wire protocol](docs/protocol.md) · [threat model](docs/threat-model.md) · [design decisions](docs/adr/) · [development](docs/development.md)
 
 ## acknowledgements
 

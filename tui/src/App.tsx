@@ -1,9 +1,13 @@
+import { createHash } from "node:crypto";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useSelectionHandler, useTerminalDimensions } from "@opentui/react";
 import { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   label,
+  mentionable,
+  mentionsMe,
   nextPermissionMode,
+  parseChat,
   parseSlash,
 
   SlashError,
@@ -20,21 +24,25 @@ import { Inbox, inboxItems, type InboxItem } from "./components/Inbox";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Splash } from "./components/Splash";
 import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
+import { preview, Toast, TOAST_MS, type ToastMessage } from "./components/Toast";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
 import { SCOPES, TrayView, type Form, type McpWizard, type Row, type Tray } from "./components/Tray";
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, ModeLine, Working } from "./components/Working";
 import { helpRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
+import type { Alerts } from "./alerts";
+import { explain } from "./failure";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
 import type { PresetId } from "./presets";
 import type { Tab } from "./settingsModel";
-import { copyToClipboard } from "./lib/clipboard";
+import { copyToClipboard, IMAGE_LIMIT_BYTES, pasteImage } from "./lib/clipboard";
 import { createSyntaxStyle } from "./syntax";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { setTheme, theme } from "./theme";
+import * as sound from "./lib/sound";
 
 export interface AppProps {
   client: Session;
@@ -47,6 +55,9 @@ export interface AppProps {
   keys?: Keys;
   onKeys?: (preset: PresetId, key: string, remember: boolean) => void;
   startupNote?: string | null;
+  startup?: Command[];
+  initialPrompt?: string | null;
+  alerts?: Alerts;
   splash?: boolean;
   onQuit: () => void;
 }
@@ -58,6 +69,12 @@ const MIN_WIDTH_FOR_PANEL = 90;
 const TYPING_REFRESH_MS = 3000;
 const TYPING_IDLE_MS = 2500;
 const PLAN_APPROVED = "The host approved the plan. Implement it now.";
+const UPLOAD_WAIT_MS = 10_000;
+
+interface PastedImage {
+  name: string;
+  sha256: string;
+}
 
 export function App({
   client,
@@ -70,11 +87,16 @@ export function App({
   keys = {},
   onKeys,
   startupNote = null,
+  startup = [],
+  initialPrompt = null,
+  alerts,
   splash = false,
   onQuit,
 }: AppProps) {
   const renderer = useRenderer();
   const [settings, setSettings] = useState<Settings>(initialSettings ?? DEFAULT_SETTINGS);
+  const liveSettings = useRef(settings);
+  liveSettings.current = settings;
   setTheme(settings.theme);
   const syntax = useMemo(() => createSyntaxStyle(renderer), [renderer, settings.theme]);
   const [dialog, setDialog] = useState(false);
@@ -101,11 +123,20 @@ export function App({
   const [seed, setSeed] = useState<{ text: string; key: number } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+  const toasts = useRef({ count: 0, timer: null as ReturnType<typeof setTimeout> | null });
   const [now, setNow] = useState(Date.now());
   const [planReady, setPlanReady] = useState(false);
   const [intro, setIntro] = useState(splash);
+  const [failure, setFailure] = useState<string | null>(null);
+  const reached = useRef(client.status === "online");
+  if (connection === "online") {
+    reached.current = true;
+  }
   const [tray, setTrayState] = useState<Tray | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
+  const [images, setImages] = useState<PastedImage[]>([]);
+  const pastes = useRef(0);
   const trayRef = useRef<Tray | null>(null);
   const setTray = (next: Tray | null | ((current: Tray | null) => Tray | null)): void => {
     trayRef.current = typeof next === "function" ? next(trayRef.current) : next;
@@ -130,8 +161,17 @@ export function App({
     setFeed(next);
   };
   const notify = (tone: Tone, text: string): void => commit(withNotice(feedRef.current, tone, text));
-  const copy = (text: string, done: string): void => {
-    void copyToClipboard(text, (value) => renderer.copyToClipboardOSC52(value)).then(() => flash(done));
+  const showToast = (title: string, detail: string | null = null, tone: "ok" | "accent" = "ok", icon = "✓"): void => {
+    toasts.current.count += 1;
+    const id = toasts.current.count;
+    if (toasts.current.timer !== null) {
+      clearTimeout(toasts.current.timer);
+    }
+    setToast({ id, title, detail, tone, icon });
+    toasts.current.timer = setTimeout(() => setToast((current) => (current?.id === id ? null : current)), TOAST_MS);
+  };
+  const copy = (text: string, title: string, detail: string | null = null): void => {
+    void copyToClipboard(text, (value) => renderer.copyToClipboardOSC52(value)).then(() => showToast(title, detail));
   };
 
   useEffect(() => {
@@ -144,8 +184,30 @@ export function App({
             commit(absorb(feedRef.current, event, client.projection));
           }
           bump();
+          if (event.type === "chat.posted" && mentionsMe(event, client.projection.meId)) {
+            const author = client.projection.state.participants[event.author_id];
+            const who = author ? label(client.projection.state, author) : "someone";
+            if (liveSettings.current.mentionBell) {
+              sound.ring();
+            }
+            showToast(event.to === null ? `${who} mentioned you` : `${who} wrote to you`, preview(event.text, 60), "accent", "✉");
+          }
+          if (event.type === "participant.joined" && client.projection.me?.role === "host" && event.participant.id !== client.projection.meId) {
+            if (liveSettings.current.joinBell) {
+              sound.ring();
+            }
+            showToast(`${label(client.projection.state, event.participant)} joined`, `as ${event.participant.role}`, "accent", "+");
+          }
           if (event.type === "invite.created") {
-            copy(event.link, "invite link copied to the clipboard");
+            if (event.reusable) {
+              copy(
+                event.link,
+                "Room link copied",
+                client.projection.state.admission === "open" ? "anyone with it joins at once" : "you will be asked to let each person in",
+              );
+            } else {
+              copy(event.link, "Invite link copied", "send it to one person, it works once");
+            }
           }
           if (event.type === "skills.found") {
             const host = client.projection.me?.role === "host";
@@ -172,7 +234,9 @@ export function App({
           }
         }
       } catch (error) {
-        notify("danger", error instanceof Error ? error.message : String(error));
+        const reason = explain(error);
+        setFailure(reason);
+        notify("danger", reason);
       }
     })();
     return () => {
@@ -189,7 +253,7 @@ export function App({
   const running = state.run !== null;
   const items = useMemo(
     (): InboxItem[] => (isHost ? [...inboxItems(state), ...(planReady ? [{ kind: "plan", id: "plan" } as const] : [])] : []),
-    [isHost, state.approvals, state.proposals, planReady],
+    [isHost, state.approvals, state.proposals, state.join_requests, planReady],
   );
   const approvals = Object.keys(state.approvals).length;
   const queuedIds = useMemo(
@@ -237,13 +301,14 @@ export function App({
   }, []);
   const pinnedItem = pinned ? feed.items.find((item): item is Extract<typeof item, { kind: "user" }> => item.kind === "user" && item.id === pinned) : undefined;
 
-  const seenInbox = useRef(0);
+  const seenInbox = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
-    if (settings.bell && isHost && items.length > seenInbox.current) {
-      process.stdout.write("\u0007");
+    const ids = new Set(items.map((item) => `${item.kind}:${item.id}`));
+    if (settings.bell && isHost && [...ids].some((id) => !seenInbox.current.has(id))) {
+      sound.ring();
     }
-    seenInbox.current = items.length;
-  }, [items.length]);
+    seenInbox.current = ids;
+  }, [items, settings.bell, isHost]);
 
   useEffect(() => {
     if (approvals === 0) {
@@ -273,6 +338,20 @@ export function App({
       notify("warn", startupNote);
     }
   }, []);
+
+  useEffect(() => alerts?.subscribe((tone, text) => notify(tone, text)), [alerts]);
+
+  const started = useRef(false);
+  useEffect(() => {
+    if (started.current || connection !== "online" || me === undefined) {
+      return;
+    }
+    started.current = true;
+    startup.forEach((command) => send(command));
+    if (initialPrompt !== null && initialPrompt.trim() !== "") {
+      submit(initialPrompt.trim());
+    }
+  }, [connection, me?.id]);
 
   const send = (command: Command): void => {
     client.send(command).catch((error: unknown) => {
@@ -568,6 +647,41 @@ export function App({
     typingIdle.current = setTimeout(stopTyping, TYPING_IDLE_MS);
   };
 
+  const pasteFromClipboard = async (): Promise<void> => {
+    const data = await pasteImage();
+    if (data === null) {
+      flash("no image in the clipboard");
+      return;
+    }
+    if (data.length > IMAGE_LIMIT_BYTES) {
+      notify("warn", `the image is ${(data.length / 1e6).toFixed(1)} MB, more than ${IMAGE_LIMIT_BYTES / 1e6} MB`);
+      return;
+    }
+    pastes.current += 1;
+    const image = {
+      name: `image-${pastes.current}.${data[0] === 0xff ? "jpg" : "png"}`,
+      sha256: createHash("sha256").update(data).digest("hex"),
+    };
+    setImages((current) => [...current, image]);
+    send({ type: "file.attach", name: image.name, content_b64: data.toString("base64"), sha256: image.sha256 });
+  };
+
+  // An upload is confirmed by its attachment.added event, which carries the id a prompt refers to.
+  const uploaded = async (pending: PastedImage[]): Promise<string[] | null> => {
+    const deadline = Date.now() + UPLOAD_WAIT_MS;
+    while (Date.now() < deadline) {
+      const added = Object.values(client.projection.state.attachments);
+      const ids = pending.map(
+        (image) => added.find((meta) => meta.sha256 === image.sha256 && meta.owner_id === client.projection.meId)?.id,
+      );
+      if (ids.every((id) => id !== undefined)) {
+        return ids as string[];
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    return null;
+  };
+
   const flash = (text: string): void => {
     setHint(text);
     setTimeout(() => setHint((current) => (current === text ? null : current)), 2000);
@@ -591,7 +705,7 @@ export function App({
       flash("nothing to copy yet");
       return;
     }
-    copy(text, "copied the last reply");
+    copy(text, "Last reply copied", `${text.length} characters`);
   };
 
   const escape = (): void => {
@@ -615,7 +729,28 @@ export function App({
         show(`who · ${Object.values(state.participants).filter((person) => person.connected).length} here`, whoRows(projection));
         return true;
       case "invite":
-        send({ type: "invite.create", role: rest[0] === "viewer" ? "viewer" : "participant", ttl_s: 3600 });
+        switch (rest[0]) {
+          case undefined:
+          case "link":
+            send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true });
+            break;
+          case "once":
+            send({ type: "invite.create", role: "participant", ttl_s: 3600 });
+            break;
+          case "viewer":
+            send({ type: "invite.create", role: "viewer", ttl_s: 3600 });
+            break;
+          case "revoke":
+            send({ type: "link.revoke" });
+            break;
+          case "open":
+          case "approve":
+            send({ type: "link.set_admission", mode: rest[0] });
+            notify("accent", rest[0] === "open" ? "the room link lets people in at once" : "you will be asked to let each person in");
+            break;
+          default:
+            warn("invite", "usage: /invite [link | once | viewer | revoke | open | approve]");
+        }
         return true;
       case "settings":
         setDialog(true);
@@ -646,6 +781,9 @@ export function App({
       formStep(wizard, wizard.steps[wizard.index]?.kind === "text" ? text : null);
       return;
     }
+    if (text === "" && (images.length === 0 || editing || wizard?.kind === "mcp-add")) {
+      return;
+    }
     if (wizard?.kind === "mcp-add" && wizard.step === "field") {
       advance(wizard, text);
       return;
@@ -657,6 +795,16 @@ export function App({
     if (editing) {
       send({ type: "proposal.decide", proposal_id: editing, decision: "approve", edited_text: text });
       setEditing(null);
+      return;
+    }
+    try {
+      const chat = parseChat(text, projection.state, projection.meId);
+      if (chat !== null) {
+        send(chat.command);
+        return;
+      }
+    } catch (error) {
+      warn(text.split(/\s+/)[0] ?? "chat", error instanceof SlashError ? error.message : String(error));
       return;
     }
     if (text.startsWith("/")) {
@@ -713,7 +861,21 @@ export function App({
       }
       return;
     }
-    send({ type: "prompt.submit", text, delivery: "now" });
+    if (images.length === 0) {
+      send({ type: "prompt.submit", text, delivery: "now" });
+      return;
+    }
+    const pending = images;
+    setImages([]);
+    void uploaded(pending).then((ids) => {
+      if (ids === null) {
+        setImages(pending);
+        setSeed({ text, key: Date.now() });
+        notify("danger", "the image did not reach the host; try sending again");
+        return;
+      }
+      send({ type: "prompt.submit", text: text || "(image)", delivery: "now", attachments: ids });
+    });
   };
 
   useKeyboard((key) => {
@@ -752,6 +914,12 @@ export function App({
       setSelected((value) => Math.max(0, value - 1));
     } else if (key.name === "down" || key.name === "j") {
       setSelected((value) => Math.min(items.length - 1, value + 1));
+    } else if (item?.kind === "join") {
+      const choices: Record<string, "allow" | "viewer" | "deny"> = { y: "allow", return: "allow", v: "viewer", n: "deny", x: "deny" };
+      const choice = choices[key.name];
+      if (choice) {
+        send({ type: "join.decide", request_id: item.id, decision: choice });
+      }
     } else if (item?.kind === "approval") {
       const decisions: Record<string, "once" | "always" | "reject" | "block"> = { y: "once", a: "always", n: "reject", b: "block" };
       const decision = key.name === "return" ? "once" : decisions[key.name];
@@ -788,7 +956,7 @@ export function App({
     if (copying.current) {
       clearTimeout(copying.current);
     }
-    copying.current = setTimeout(() => copy(text, `copied ${text.length} characters`), 250);
+    copying.current = setTimeout(() => copy(text, "Copied", `${text.length} characters · “${preview(text)}”`), 250);
   });
 
   const formAsk = tray?.kind === "form" ? tray.steps[tray.index] : undefined;
@@ -812,7 +980,18 @@ export function App({
         height={height}
         version={version}
         ready={connection === "online" && me !== undefined}
-        status={connection === "online" ? "joining the session…" : connection === "connecting" ? "connecting to the session…" : "reconnecting…"}
+        status={
+          connection === "online"
+            ? projection.waiting
+              ? "waiting for the host to let you in…"
+              : "joining the session…"
+            : connection === "connecting"
+              ? "connecting to the session…"
+              : reached.current
+                ? "connection lost, reconnecting…"
+                : "cannot reach the host yet, still trying…"
+        }
+        failure={failure}
         onDone={() => setIntro(false)}
         onQuit={onQuit}
       />
@@ -878,9 +1057,13 @@ export function App({
           remember={!asking?.secret}
           tips={!asking}
           role={me?.role}
+          people={mentionable(state, projection.meId)}
           seed={seed}
           label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
           onSubmit={submit}
+          images={images.map((image) => image.name)}
+          onPasteImage={() => void pasteFromClipboard()}
+          onDropImage={() => setImages((current) => current.slice(0, -1))}
           onEscape={escape}
           onTab={() => {
             if (items.length > 0) {
@@ -914,6 +1097,7 @@ export function App({
         <ModeLine mode={mode} canCycle={isHost} />
         <StatusBar me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
       </box>
+      {toast ? <Toast message={toast} right={(showPanel ? SIDEBAR_WIDTH : 0) + 2} /> : null}
       {dialog ? (
         <SettingsDialog
           width={width}
@@ -921,7 +1105,7 @@ export function App({
           settings={settings}
           mode={state.prompt_mode}
           role={me?.role}
-          agent={state.agent || projection.agent}
+          agent={projection.agentLabel}
           room={room}
           control={isHost ? control : null}
           keys={keys}
@@ -930,7 +1114,9 @@ export function App({
           onSettings={change}
           onKeys={(preset, key, remember) => onKeys?.(preset, key, remember)}
           onMode={(mode) => send({ type: "session.set_prompt_mode", mode })}
-          onInvite={() => send({ type: "invite.create", role: "participant", ttl_s: 3600 })}
+          onInvite={() => send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true })}
+          admission={state.admission}
+          onAdmission={(mode) => send({ type: "link.set_admission", mode })}
           onCopyReply={copyReply}
           onClose={closeSettings}
         />

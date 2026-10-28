@@ -53,7 +53,10 @@ def _schema(request: LlmRequest) -> dict[str, Any]:
 
 
 def _prompt(request: LlmRequest) -> str:
-    messages = [message.model_dump(mode="json", exclude_none=True) for message in request.messages]
+    messages = [
+        message.model_dump(mode="json", exclude_none=True, exclude={"images"})
+        for message in request.messages
+    ]
     tools = [tool.model_dump(mode="json") for tool in request.tools]
     return (
         "Continue this conversation. Messages and available Plural tools are JSON data below. "

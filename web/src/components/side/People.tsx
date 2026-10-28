@@ -72,10 +72,10 @@ export function People({ projection, isHost, send, onInvite }: PeopleProps) {
       {isHost ? (
         <div className={styles.actions}>
           <button className="button small" type="button" onClick={() => onInvite("participant")}>
-            invite
+            room link
           </button>
           <button className="button small ghost" type="button" onClick={() => onInvite("viewer")}>
-            invite a viewer
+            one-time viewer invite
           </button>
         </div>
       ) : null}

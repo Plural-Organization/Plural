@@ -57,8 +57,8 @@ async def test_expired_oauth_token_is_refreshed_and_saved(
     provider = AnthropicOAuthProvider(
         credentials_path=path, model="claude-sonnet-5-5", max_tokens=100, effort=None
     )
-    first = provider._token()  # pyright: ignore[reportPrivateUsage]
-    second = provider._token()  # pyright: ignore[reportPrivateUsage]
+    first = provider.token()  # pyright: ignore[reportPrivateUsage]
+    second = provider.token()  # pyright: ignore[reportPrivateUsage]
     assert await asyncio.gather(first, second) == ["new", "new"]
     assert calls == ["refresh-old"]
     assert json.loads(path.read_text())["refresh"] == "refresh-new"

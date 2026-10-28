@@ -37,6 +37,11 @@ class ApprovalExpired:
 
 
 @dataclass(frozen=True, slots=True)
+class JoinExpired:
+    request_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class TypingExpired:
     participant_id: str
 
@@ -77,6 +82,7 @@ InboxMessage = (
     | ApprovalNeeded
     | ApprovalExpired
     | TypingExpired
+    | JoinExpired
     | Reconfigure
     | SkillsUpdated
     | McpUpdated

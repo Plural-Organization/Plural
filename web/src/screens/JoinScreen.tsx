@@ -35,8 +35,8 @@ export function JoinScreen({ notice, onJoin }: JoinScreenProps) {
       setError(problem instanceof Error ? `The link ${problem.message}.` : String(problem));
       return;
     }
-    if (link.invite === null && link.token === null) {
-      setError("The link has no invite. Copy the whole line the host shared, including ?invite=…");
+    if (link.invite === null && link.token === null && link.join === null) {
+      setError("The link has no invite or room code. Copy the whole line the host shared, including ?join=… or ?invite=…");
       return;
     }
     rememberName(trimmed);
@@ -50,8 +50,8 @@ export function JoinScreen({ notice, onJoin }: JoinScreenProps) {
         <Logo size={220} dance className={styles.logo} label="Plural logo. Hover a person to make them dance." />
         <h1>join the room.</h1>
         <p className={styles.intro}>
-          Paste the invite the host shared. The host starts a room with <code>plural</code> in their project, and the first line in
-          their session is the invite.
+          Paste the link the host shared. The host starts a room with <code>plural</code> in their project, and the first line in
+          their session is the room link. The host lets you in when you join.
         </p>
       </section>
 
@@ -59,7 +59,7 @@ export function JoinScreen({ notice, onJoin }: JoinScreenProps) {
         {notice ? <div className="banner danger">{notice}</div> : null}
         <form className={styles.form} onSubmit={submit}>
           <label className="label" htmlFor="join-link">
-            invite link
+            room link
           </label>
           <input
             id="join-link"
@@ -68,7 +68,7 @@ export function JoinScreen({ notice, onJoin }: JoinScreenProps) {
               setRaw(event.target.value);
               setError(null);
             }}
-            placeholder="ws://host:7777/r_…?invite=…"
+            placeholder="wss://host/r_…?join=…"
             spellCheck={false}
             autoComplete="off"
           />
@@ -129,7 +129,7 @@ export function JoinScreen({ notice, onJoin }: JoinScreenProps) {
 
         <p className="hint">
           No room yet? Install Plural and run <code>plural</code> in your project.{" "}
-          <a href="https://github.com/Plural-Organization/Plural" target="_blank" rel="noopener noreferrer">
+          <a href="https://agent-plural.vercel.app" target="_blank" rel="noopener noreferrer">
             What is Plural?
           </a>
         </p>

@@ -3,7 +3,13 @@ from typing import Annotated, Literal
 from pydantic import Field
 
 from plural.protocol.models import (
+    BOARD_POINTS_LIMIT,
+    BOARD_TEXT_CHARS,
+    AdmissionMode,
     ApprovalDecision,
+    BoardCursor,
+    BoardShape,
+    Color,
     Delivery,
     Model,
     PermissionMode,
@@ -12,9 +18,13 @@ from plural.protocol.models import (
     ProposalDecision,
     Role,
     SkillScope,
+    TextSelection,
+    Unit,
 )
 
 MAX_PROMPT_CHARS = 32_000
+MAX_CHAT_CHARS = 2_000
+MAX_MENTIONS = 20
 
 
 class ClientInfo(Model):
@@ -27,6 +37,7 @@ class SessionHello(Model):
     client: ClientInfo
     name: str | None = Field(default=None, min_length=1, max_length=40)
     invite: str | None = None
+    join: str | None = None
     token: str | None = None
     since: int | None = Field(default=None, ge=0)
 
@@ -42,6 +53,13 @@ class PromptSubmit(Model):
     text: str = Field(min_length=1, max_length=MAX_PROMPT_CHARS)
     attachments: tuple[str, ...] = ()
     delivery: Delivery = Delivery.NOW
+
+
+class ChatSend(Model):
+    type: Literal["chat.send"] = "chat.send"
+    text: str = Field(min_length=1, max_length=MAX_CHAT_CHARS)
+    to: str | None = None
+    mentions: tuple[str, ...] = ()
 
 
 class ProposalDecide(Model):
@@ -65,6 +83,22 @@ class InviteCreate(Model):
     type: Literal["invite.create"] = "invite.create"
     role: Role = Role.PARTICIPANT
     ttl_s: int = Field(default=3600, ge=60, le=86_400)
+    reusable: bool = False
+
+
+class JoinDecide(Model):
+    type: Literal["join.decide"] = "join.decide"
+    request_id: str
+    decision: Literal["allow", "viewer", "deny"]
+
+
+class LinkRevoke(Model):
+    type: Literal["link.revoke"] = "link.revoke"
+
+
+class AdmissionSet(Model):
+    type: Literal["link.set_admission"] = "link.set_admission"
+    mode: AdmissionMode
 
 
 class ParticipantSetRole(Model):
@@ -159,6 +193,39 @@ class TypingSet(Model):
     typing: bool
 
 
+class SelectionSet(Model):
+    type: Literal["presence.select"] = "presence.select"
+    selection: TextSelection | None
+
+
+class CursorSet(Model):
+    type: Literal["presence.cursor"] = "presence.cursor"
+    cursor: BoardCursor | None
+
+
+class BoardOpen(Model):
+    type: Literal["board.open"] = "board.open"
+    open: bool
+
+
+class BoardDraw(Model):
+    type: Literal["board.draw"] = "board.draw"
+    kind: BoardShape = BoardShape.PEN
+    text: str | None = Field(default=None, min_length=1, max_length=BOARD_TEXT_CHARS)
+    color: Color
+    width: float = Field(ge=0.5, le=40)
+    points: tuple[Unit, ...] = Field(min_length=2, max_length=BOARD_POINTS_LIMIT)
+
+
+class BoardErase(Model):
+    type: Literal["board.erase"] = "board.erase"
+    stroke_id: str
+
+
+class BoardClear(Model):
+    type: Literal["board.clear"] = "board.clear"
+
+
 class QueueCancel(Model):
     type: Literal["queue.cancel"] = "queue.cancel"
     prompt_id: str
@@ -187,10 +254,14 @@ Command = Annotated[
     SessionHello
     | HistoryGet
     | PromptSubmit
+    | ChatSend
     | ProposalDecide
     | ApprovalRespond
     | RunAbort
     | InviteCreate
+    | JoinDecide
+    | LinkRevoke
+    | AdmissionSet
     | ParticipantSetRole
     | ParticipantRevoke
     | ContextCompact
@@ -207,6 +278,12 @@ Command = Annotated[
     | AgentsCreate
     | AgentsRemove
     | TypingSet
+    | SelectionSet
+    | CursorSet
+    | BoardOpen
+    | BoardDraw
+    | BoardErase
+    | BoardClear
     | QueueCancel
     | PolicyAdd
     | PolicyRemove

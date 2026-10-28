@@ -1,6 +1,4 @@
 import asyncio
-import base64
-import html
 import http.client
 import ipaddress
 import socket
@@ -9,7 +7,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Final
-from urllib.parse import parse_qs, quote_plus, unquote, urljoin, urlsplit
+from urllib.parse import quote, urljoin, urlsplit, urlunsplit
 
 from pydantic import Field
 
@@ -19,8 +17,6 @@ from plural.protocol.models import ToolRisk
 MAX_DOWNLOAD_BYTES: Final = 1_000_000
 MAX_REDIRECTS: Final = 5
 USER_AGENT: Final = "Plural-Agent/0.1 (+https://github.com/Plural-Organization/Plural)"
-SEARCH_URL: Final = "https://html.duckduckgo.com/html/?q={}"
-BING_SEARCH_URL: Final = "https://www.bing.com/search?q={}"
 ALLOWED_CONTENT_TYPES: Final = (
     "text/",
     "application/json",
@@ -123,8 +119,34 @@ def _read_once(
         connection.close()
 
 
+def ascii_url(url: str) -> str:
+    """The URL as it goes on the wire: punycode host, percent-encoded path and query."""
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    try:
+        wire_host = host.encode("idna").decode("ascii")
+    except UnicodeError as error:
+        raise ToolError(f"{host} is not a valid host name") from error
+    netloc = f"[{wire_host}]" if ":" in wire_host else wire_host
+    if parts.port is not None:
+        netloc = f"{netloc}:{parts.port}"
+    if parts.username is not None:
+        user = quote(parts.username, safe="")
+        password = f":{quote(parts.password, safe='')}" if parts.password is not None else ""
+        netloc = f"{user}{password}@{netloc}"
+    return urlunsplit(
+        (
+            parts.scheme,
+            netloc,
+            quote(parts.path, safe="/%:@!$&'()*+,;=-._~"),
+            quote(parts.query, safe="/?%:@!$&'()*+,;=-._~"),
+            "",
+        )
+    )
+
+
 async def fetch_url(url: str, *, timeout_s: float = 15) -> WebResponse:
-    current = url
+    current = ascii_url(url)
     for _ in range(MAX_REDIRECTS + 1):
         addresses = await asyncio.to_thread(validate_public_url, current)
         status, headers, body = await asyncio.to_thread(_read_once, current, timeout_s, addresses)
@@ -132,7 +154,7 @@ async def fetch_url(url: str, *, timeout_s: float = 15) -> WebResponse:
             location = headers.get("Location") or headers.get("location")
             if not location:
                 raise ToolError("redirect response has no Location header")
-            current = urljoin(current, location)
+            current = ascii_url(urljoin(current, location))
             continue
         content_type = (headers.get("Content-Type") or headers.get("content-type") or "").lower()
         media_type = content_type.split(";", 1)[0].strip()
@@ -214,114 +236,3 @@ class WebFetchTool(TypedTool[WebFetchArgs]):
         if len(text) > args.max_chars:
             text = f"{text[: args.max_chars]}\n[truncated at {args.max_chars} characters]"
         return ToolResult(f"Source: {response.url}\n\n{text}")
-
-
-@dataclass(frozen=True, slots=True)
-class SearchResult:
-    title: str
-    url: str
-    snippet: str = ""
-
-
-class _SearchParser(HTMLParser):
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.results: list[SearchResult] = []
-        self._title: list[str] | None = None
-        self._snippet: list[str] | None = None
-        self._url = ""
-        self._bing_result = False
-        self._bing_h2 = False
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        values = dict(attrs)
-        classes = set((values.get("class") or "").split())
-        if tag == "li" and "b_algo" in classes:
-            self._bing_result = True
-            self._url = ""
-        elif tag == "h2" and self._bing_result:
-            self._bing_h2 = True
-        elif tag == "a" and ("result__a" in classes or self._bing_h2):
-            self._title = []
-            self._url = _result_url(values.get("href") or "")
-        elif ("result__snippet" in classes and self.results) or (tag == "p" and self._bing_result):
-            self._snippet = []
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag == "a" and self._title is not None:
-            title = " ".join("".join(self._title).split())
-            if title and self._url:
-                self.results.append(SearchResult(title=title, url=self._url))
-            self._title = None
-        elif tag == "h2":
-            self._bing_h2 = False
-        elif tag in {"a", "div", "p"} and self._snippet is not None:
-            snippet = " ".join("".join(self._snippet).split())
-            if snippet and self.results:
-                previous = self.results[-1]
-                self.results[-1] = SearchResult(previous.title, previous.url, snippet)
-            self._snippet = None
-        if tag == "li" and self._bing_result:
-            self._bing_result = False
-
-    def handle_data(self, data: str) -> None:
-        if self._title is not None:
-            self._title.append(data)
-        elif self._snippet is not None:
-            self._snippet.append(data)
-
-
-def _result_url(raw: str) -> str:
-    parsed = urlsplit(html.unescape(raw))
-    redirected = parse_qs(parsed.query).get("uddg")
-    if redirected:
-        return unquote(redirected[0])
-    if parsed.hostname and parsed.hostname.endswith("bing.com"):
-        encoded = parse_qs(parsed.query).get("u", [""])[0]
-        if encoded.startswith("a1"):
-            try:
-                payload = encoded[2:] + "=" * (-len(encoded[2:]) % 4)
-                return base64.urlsafe_b64decode(payload).decode()
-            except (ValueError, UnicodeDecodeError):
-                pass
-    return html.unescape(raw)
-
-
-def parse_search_results(raw: str) -> list[SearchResult]:
-    parser = _SearchParser()
-    parser.feed(raw)
-    return parser.results
-
-
-class WebSearchArgs(ToolArgs):
-    query: str = Field(min_length=1, max_length=500, description="Search query.")
-    max_results: int = Field(default=5, ge=1, le=10)
-
-
-class WebSearchTool(TypedTool[WebSearchArgs]):
-    spec = ToolSpec(
-        name="web_search",
-        description="Search the public web and return titles, URLs, and snippets.",
-        risk=ToolRisk.READ,
-        args_model=WebSearchArgs,
-    )
-
-    def subject(self, args: WebSearchArgs) -> str:
-        return args.query
-
-    async def run(self, args: WebSearchArgs, ctx: ToolCtx) -> ToolResult:
-        query = quote_plus(args.query)
-        response = await fetch_url(SEARCH_URL.format(query))
-        results = parse_search_results(_decode(response))[: args.max_results]
-        if not results:
-            response = await fetch_url(BING_SEARCH_URL.format(query))
-            results = parse_search_results(_decode(response))[: args.max_results]
-        if not results:
-            raise ToolError("search returned no results")
-        rendered = [
-            f"{index}. {result.title}\n{result.url}" for index, result in enumerate(results, 1)
-        ]
-        for index, result in enumerate(results):
-            if result.snippet:
-                rendered[index] += f"\n{result.snippet}"
-        return ToolResult("\n\n".join(rendered))

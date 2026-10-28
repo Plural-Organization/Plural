@@ -1,0 +1,15 @@
+#cloud-config
+# Runs a Plural host on any VM that accepts cloud-init. Fill in the three values below.
+write_files:
+  - path: /etc/plural/host.env
+    permissions: "0600"
+    content: |
+      PLURAL_RELAY_URL=wss://relay.example.com
+      ANTHROPIC_API_KEY=sk-ant-...
+      GIT_URL=https://github.com/you/your-project.git
+packages: [docker.io, git]
+runcmd:
+  - systemctl enable --now docker
+  - git clone --depth 1 https://github.com/Plural-Organization/Plural /opt/plural
+  - docker build -f /opt/plural/deploy/host.Dockerfile -t plural-host /opt/plural
+  - docker run -d --name plural-host --restart unless-stopped --env-file /etc/plural/host.env -v plural-data:/data plural-host

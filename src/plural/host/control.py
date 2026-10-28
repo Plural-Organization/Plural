@@ -17,7 +17,7 @@ from plural.agent.providers.base import (
 )
 from plural.agent.providers.codex_cli import CodexCliProvider
 from plural.core.errors import DomainError
-from plural.host.bootstrap import Host
+from plural.host.bootstrap import Host, build_web_search
 from plural.host.config import HostSettings
 from plural.host.inbox import Reconfigure
 from plural.host.providers import ConfigError, build_provider, provider_secrets, resolve_api_key
@@ -129,6 +129,7 @@ class Control:
         provider, settings, key = provider_for(self._base, config)
         if isinstance(provider, CodexCliProvider):
             await provider.check_available()
+        searcher = build_web_search(settings, key, provider)
         done: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         label = (
             f"{config.provider_name} · {settings.model or 'default'}"
@@ -148,6 +149,8 @@ class Control:
             )
         )
         await done
+        if self._host.web_search is not None:
+            self._host.web_search.use(searcher)
         return label
 
     def _parse(self, line: str) -> Request | None:

@@ -14,6 +14,7 @@ from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.messages import AssistantTurn, ToolResultTurn, attribute
 from plural.agent.providers.base import (
     LlmEvent,
+    LlmImage,
     LlmRequest,
     NativeContent,
     NativeReady,
@@ -380,3 +381,20 @@ async def test_a_reply_that_already_started_is_not_retried(tmp_path: Path) -> No
     assert isinstance(last, RunEnd)
     assert last.reason is RunEndReason.ERROR
     assert provider.requests == 1
+
+
+async def test_an_image_the_model_rejects_is_dropped_so_the_next_run_works(tmp_path: Path) -> None:
+    provider = ScriptedProvider(
+        [ProviderError("anthropic 400: Could not process image"), [TextDelta(text="ok")]]
+    )
+    loop = make_loop(tmp_path, provider, StubGate())
+    image = LlmImage(media_type="image/png", data="aW1n")
+    first = await collect(loop, turn("look").model_copy(update={"images": (image,)}))
+
+    end = first[-1]
+    assert isinstance(end, RunEnd)
+    assert end.reason is RunEndReason.ERROR
+    assert "images were removed" in (end.error or "")
+    await collect(loop, turn("and now?"))
+    assert all(not message.images for message in provider.requests[1].messages)
+    assert "image(s) removed" in provider.requests[1].messages[0].content

@@ -17,6 +17,11 @@ describe("settings", () => {
     expect(parseSettings({ theme: "neon", panel: "yes", bell: 1 })).toEqual(DEFAULT_SETTINGS);
   });
 
+  test("request sounds default to on and an explicit mute is preserved", () => {
+    expect(parseSettings({}).bell).toBe(true);
+    expect(parseSettings({ bell: false }).bell).toBe(false);
+  });
+
   test("valid values are kept and saving round-trips", () => {
     const directory = mkdtempSync(join(tmpdir(), "plural-settings-"));
     const path = join(directory, "nested", "tui.json");
@@ -26,9 +31,12 @@ describe("settings", () => {
       panel: false,
       copyOnSelect: false,
       bell: true,
+      joinBell: false,
       announceTyping: false,
       rememberKey: false,
       setupSeen: true,
+      share: "relay" as const,
+      relayUrl: "wss://relay.example.com",
       agent: { preset: "gemini" as const, model: "gemini-2.5-flash", baseUrl: "", contextWindow: "" },
       agentChoices: {
         gemini: { preset: "gemini" as const, model: "gemini-2.5-flash", baseUrl: "", contextWindow: "" },
@@ -47,6 +55,15 @@ describe("settings", () => {
       unknown: { preset: "unknown", model: "x" },
     } }).agentChoices).toEqual({
       anthropic_oauth: { preset: "anthropic_oauth", model: "claude-haiku-4-5-20251001", baseUrl: "", contextWindow: "" },
+    });
+  });
+
+  test("the sharing choice falls back to this machine when it is not valid", () => {
+    expect(parseSettings({}).share).toBe("local");
+    expect(parseSettings({ share: "everywhere", relayUrl: 7 })).toMatchObject({ share: "local", relayUrl: "" });
+    expect(parseSettings({ share: "network", relayUrl: "wss://r.example.com" })).toMatchObject({
+      share: "network",
+      relayUrl: "wss://r.example.com",
     });
   });
 

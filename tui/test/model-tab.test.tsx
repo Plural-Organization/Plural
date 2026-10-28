@@ -294,3 +294,60 @@ describe("Model tab", () => {
     expect(guest.setup.captureCharFrame()).not.toContain("Welcome");
   });
 });
+
+describe("Sharing", () => {
+  const sharing = (settings: Partial<Settings> = {}): Settings => ({ ...DEFAULT_SETTINGS, setupSeen: true, ...settings });
+
+  test("the host sees three ways to share and chooses one", async () => {
+    const { setup, hooks } = await mount(session(), new FakeControl(), sharing());
+    await setup.mockInput.pressKey("F2");
+    await frame(setup, "Model");
+    await setup.mockInput.pressTab();
+    const text = await frame(setup, "Who can join");
+    expect(text).toContain("This machine");
+    expect(text).toContain("Same network");
+    expect(text).toContain("Over the internet");
+    expect(text).not.toContain("Relay address");
+
+    await down(setup, 8);
+    await setup.mockInput.pressEnter();
+    expect(hooks.settings.at(-1)).toMatchObject({ share: "relay" });
+  });
+
+  test("the relay address is asked for only when sharing over the internet", async () => {
+    const { setup, hooks } = await mount(session(), new FakeControl(), sharing({ share: "relay" }));
+    await setup.mockInput.pressKey("F2");
+    await frame(setup, "Model");
+    await setup.mockInput.pressTab();
+    const text = await frame(setup, "Relay address");
+    expect(text).toContain("not set");
+
+    await down(setup, 9);
+    await setup.mockInput.pressEnter();
+    await setup.mockInput.typeText("relay.example.com");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "not a web address");
+    expect(hooks.settings).toEqual([]);
+
+    await setup.mockInput.pressEscape();
+    await tick(100);
+    await setup.mockInput.pressEnter();
+    await setup.mockInput.typeText("wss://relay.example.com");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "applies the next time you start plural");
+    expect(hooks.settings.at(-1)).toMatchObject({ share: "relay", relayUrl: "wss://relay.example.com" });
+  });
+
+  test("a participant cannot change how the room is shared", async () => {
+    const { setup, hooks } = await mount(session("participant"), null, sharing());
+    await setup.mockInput.pressKey("F2");
+    await frame(setup, "Model");
+    await setup.mockInput.pressTab();
+    await down(setup, 6);
+    await frame(setup, "only the host chooses how the room is shared");
+    await down(setup, 2);
+    await setup.mockInput.pressEnter();
+    expect(hooks.settings).toEqual([]);
+  });
+});
+

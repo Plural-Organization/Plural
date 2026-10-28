@@ -23,7 +23,7 @@ export function runHostCommand(args: string[]): ChildProcess {
   return spawn(command as string, [...prefix, ...args], { stdio: "inherit" });
 }
 
-function freePort(): Promise<number> {
+export function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const probe = createServer();
     probe.once("error", reject);

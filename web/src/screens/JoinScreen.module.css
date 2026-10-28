@@ -6,11 +6,11 @@
 .panel { display: grid; gap: 22px; }
 .form { display: grid; gap: 8px; }
 .form label { margin-top: 6px; }
-.form input { font: 14px var(--font-mono); color: var(--fg); background: var(--panel); border: 1px solid var(--line); padding: 11px 12px; width: 100%; }
+.form input { font: 14px var(--font-mono); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 11px 14px; width: 100%; }
 .form input:focus { border-color: var(--muted); outline: none; }
 .form button { margin-top: 10px; justify-content: center; padding: 11px; }
 .recent { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
 .recent li { display: flex; gap: 8px; align-items: center; }
-.saved { flex: 1; min-width: 0; display: grid; text-align: left; gap: 2px; background: var(--panel); border: 1px solid var(--line); color: var(--fg); padding: 9px 12px; cursor: pointer; font: 13px var(--font-text); }
+.saved { flex: 1; min-width: 0; display: grid; text-align: left; gap: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; color: var(--fg); padding: 9px 12px; cursor: pointer; font: 13px var(--font-text); }
 .saved:hover { border-color: var(--muted); }
 .saved :global(.mono) { font-size: 12px; overflow: hidden; text-overflow: ellipsis; }

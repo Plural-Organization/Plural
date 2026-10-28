@@ -1,14 +1,22 @@
 from typing import Final
 
 from plural.protocol.events import (
+    AdmissionChanged,
     AgentChanged,
     AgentsChanged,
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
+    BoardCleared,
+    BoardErased,
+    BoardOpened,
+    BoardStroked,
+    ChatPosted,
     ContextCompacted,
     ContextUsage,
     EventRecord,
+    JoinRequested,
+    JoinResolved,
     McpChanged,
     MessageEnded,
     ParticipantJoined,
@@ -32,6 +40,10 @@ from plural.protocol.events import (
     UsageRecorded,
 )
 from plural.protocol.models import (
+    BOARD_STROKES_LIMIT,
+    BOARD_TOTAL_POINTS,
+    BoardStroke,
+    ChatEntry,
     EntryKind,
     QueuedPrompt,
     RunView,
@@ -41,7 +53,17 @@ from plural.protocol.models import (
 )
 
 TRANSCRIPT_LIMIT: Final = 200
+CHAT_LIMIT: Final = 200
 OUTPUT_PREVIEW_CHARS: Final = 2000
+
+
+def _within_budget(strokes: tuple[BoardStroke, ...]) -> tuple[BoardStroke, ...]:
+    total = sum(len(stroke.points) for stroke in strokes)
+    start = 0
+    while total > BOARD_TOTAL_POINTS and start < len(strokes) - 1:
+        total -= len(strokes[start].points)
+        start += 1
+    return strokes[start:]
 
 
 def reduce(state: SessionState, record: EventRecord) -> SessionState:
@@ -62,6 +84,16 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
         case ParticipantRevoked(participant_id=participant_id):
             return state.model_copy(
                 update={"participants": _without(state.participants, participant_id)}
+            )
+        case AdmissionChanged(mode=mode):
+            return state.model_copy(update={"admission": mode})
+        case JoinRequested(request=request):
+            return state.model_copy(
+                update={"join_requests": {**state.join_requests, request.id: request}}
+            )
+        case JoinResolved(request_id=request_id):
+            return state.model_copy(
+                update={"join_requests": _without(state.join_requests, request_id)}
             )
         case AgentChanged(agent=agent, fast=fast):
             return state.model_copy(update={"agent": agent, "fast_agent": fast})
@@ -108,6 +140,34 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
                     }
                 )
             return _append(state, entry)
+        case ChatPosted():
+            entry = ChatEntry(
+                id=event.message_id,
+                author_id=event.author_id,
+                text=event.text,
+                ts=record.ts,
+                to=event.to,
+                mentions=event.mentions,
+            )
+            return state.model_copy(update={"chat": (*state.chat, entry)[-CHAT_LIMIT:]})
+        case BoardOpened(open=open_):
+            return state.model_copy(
+                update={"board": state.board.model_copy(update={"open": open_})}
+            )
+        case BoardStroked(stroke=stroke):
+            strokes = _within_budget((*state.board.strokes, stroke)[-BOARD_STROKES_LIMIT:])
+            return state.model_copy(
+                update={"board": state.board.model_copy(update={"strokes": strokes})}
+            )
+        case BoardErased(stroke_id=stroke_id):
+            strokes = tuple(stroke for stroke in state.board.strokes if stroke.id != stroke_id)
+            return state.model_copy(
+                update={"board": state.board.model_copy(update={"strokes": strokes})}
+            )
+        case BoardCleared():
+            return state.model_copy(
+                update={"board": state.board.model_copy(update={"strokes": ()})}
+            )
         case PromptDequeued(prompt_id=prompt_id):
             kept = tuple(entry for entry in state.queue if entry.prompt_id != prompt_id)
             return state.model_copy(update={"queue": kept})

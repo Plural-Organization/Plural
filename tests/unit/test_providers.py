@@ -13,6 +13,7 @@ from plural.agent.providers.anthropic_api import to_messages as anthropic_messag
 from plural.agent.providers.base import (
     ContextOverflow,
     LlmEvent,
+    LlmImage,
     LlmMessage,
     LlmRequest,
     NativeContent,
@@ -420,5 +421,35 @@ def test_openai_messages_round_trip_tool_calls() -> None:
                 "type": "function",
                 "function": {"name": "read", "arguments": '{"path": "a.txt"}'},
             }
+        ],
+    }
+
+
+IMAGE = LlmImage(media_type="image/png", data="aW1n")
+
+
+def test_anthropic_sends_images_before_the_prompt_text() -> None:
+    messages = anthropic_messages((LlmMessage(role="user", content="look", images=(IMAGE,)),))
+    assert messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": "image/png", "data": "aW1n"},
+                },
+                {"type": "text", "text": "look"},
+            ],
+        }
+    ]
+
+
+def test_openai_sends_images_as_data_urls() -> None:
+    messages = openai_messages("sys", (LlmMessage(role="user", content="look", images=(IMAGE,)),))
+    assert messages[1] == {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "look"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,aW1n"}},
         ],
     }

@@ -1,3 +1,4 @@
+export * from "./chat";
 export * from "./decode";
 export * from "./diff";
 export * from "./feed";

@@ -17,6 +17,11 @@ export type ProposalDecision = "approve" | "reject";
 export type ApprovalDecision = "once" | "always" | "reject" | "block";
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "AdmissionMode".
+ */
+export type AdmissionMode = "approve" | "open";
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "Role".
  */
 export type Role = "host" | "participant" | "viewer";
@@ -37,6 +42,11 @@ export type PermissionMode = "default" | "accept_edits" | "plan" | "auto";
 export type PolicyAction = "allow" | "ask" | "deny";
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardShape".
+ */
+export type BoardShape = "pen" | "line" | "arrow" | "rect" | "ellipse" | "text";
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "Delivery".
  */
 export type Delivery = "now" | "steer" | "follow_up";
@@ -51,10 +61,14 @@ export interface CommandsSchema {
     | SessionHello
     | HistoryGet
     | PromptSubmit
+    | ChatSend
     | ProposalDecide
     | ApprovalRespond
     | RunAbort
     | InviteCreate
+    | JoinDecide
+    | LinkRevoke
+    | AdmissionSet
     | ParticipantSetRole
     | ParticipantRevoke
     | ContextCompact
@@ -71,6 +85,12 @@ export interface CommandsSchema {
     | AgentsCreate
     | AgentsRemove
     | TypingSet
+    | SelectionSet
+    | CursorSet
+    | BoardOpen
+    | BoardDraw
+    | BoardErase
+    | BoardClear
     | QueueCancel
     | PolicyAdd
     | PolicyRemove
@@ -83,6 +103,7 @@ export interface CommandsSchema {
 export interface SessionHello {
   client: ClientInfo;
   invite?: string | null;
+  join?: string | null;
   name?: string | null;
   since?: number | null;
   token?: string | null;
@@ -117,6 +138,16 @@ export interface PromptSubmit {
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "ChatSend".
+ */
+export interface ChatSend {
+  mentions?: string[];
+  text: string;
+  to?: string | null;
+  type?: "chat.send";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "ProposalDecide".
  */
 export interface ProposalDecide {
@@ -146,9 +177,34 @@ export interface RunAbort {
  * via the `definition` "InviteCreate".
  */
 export interface InviteCreate {
+  reusable?: boolean;
   role?: "host" | "participant" | "viewer";
   ttl_s?: number;
   type?: "invite.create";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "JoinDecide".
+ */
+export interface JoinDecide {
+  decision: "allow" | "viewer" | "deny";
+  request_id: string;
+  type?: "join.decide";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "LinkRevoke".
+ */
+export interface LinkRevoke {
+  type?: "link.revoke";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "AdmissionSet".
+ */
+export interface AdmissionSet {
+  mode: AdmissionMode;
+  type?: "link.set_admission";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
@@ -293,6 +349,88 @@ export interface AgentsRemove {
 export interface TypingSet {
   type?: "presence.typing";
   typing: boolean;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "SelectionSet".
+ */
+export interface SelectionSet {
+  selection: TextSelection | null;
+  type?: "presence.select";
+}
+/**
+ * Text someone has selected, as offsets into the text of one item on screen.
+ *
+ * The anchor names the item (a feed entry or a canvas document); every client lays
+ * out the same items, so the offsets point at the same words for everyone.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "TextSelection".
+ */
+export interface TextSelection {
+  anchor: string;
+  end: number;
+  start: number;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "CursorSet".
+ */
+export interface CursorSet {
+  cursor: BoardCursor | null;
+  type?: "presence.cursor";
+}
+/**
+ * Where someone points on the board; with ink, the pen is down and draws.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardCursor".
+ */
+export interface BoardCursor {
+  color?: string | null;
+  ink?: boolean;
+  width?: number | null;
+  x: number;
+  y: number;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardOpen".
+ */
+export interface BoardOpen {
+  open: boolean;
+  type?: "board.open";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardDraw".
+ */
+export interface BoardDraw {
+  color: string;
+  kind?: "pen" | "line" | "arrow" | "rect" | "ellipse" | "text";
+  /**
+   * @minItems 2
+   * @maxItems 4000
+   */
+  points: [number, number, ...number[]];
+  text?: string | null;
+  type?: "board.draw";
+  width: number;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardErase".
+ */
+export interface BoardErase {
+  stroke_id: string;
+  type?: "board.erase";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardClear".
+ */
+export interface BoardClear {
+  type?: "board.clear";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

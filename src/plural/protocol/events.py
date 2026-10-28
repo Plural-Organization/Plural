@@ -5,13 +5,18 @@ from pydantic import Field
 
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.models import (
+    AdmissionMode,
     AgentView,
     ApprovalDecision,
     ApprovalView,
     AttachmentMeta,
+    BoardCursor,
+    BoardStroke,
     ContextView,
     Delivery,
     DequeueReason,
+    JoinDecision,
+    JoinRequestView,
     McpServerView,
     Model,
     Participant,
@@ -25,6 +30,7 @@ from plural.protocol.models import (
     SessionState,
     SkillHit,
     SkillView,
+    TextSelection,
     ToolCallView,
     Usage,
     UsageLine,
@@ -89,6 +95,33 @@ class AgentChanged(EventBase):
     fast: str = ""
 
 
+class AdmissionChanged(EventBase):
+    type: Literal["link.admission_changed"] = "link.admission_changed"
+    mode: AdmissionMode
+
+
+class JoinRequested(EventBase):
+    type: Literal["join.requested"] = "join.requested"
+    request: JoinRequestView
+
+
+class JoinResolved(EventBase):
+    type: Literal["join.resolved"] = "join.resolved"
+    request_id: str
+    decision: JoinDecision
+    decided_by: str | None = None
+
+
+class JoinPending(TransientEvent):
+    type: Literal["session.pending"] = "session.pending"
+    waiting: int = 1
+
+
+class JoinRefused(TransientEvent):
+    type: Literal["session.refused"] = "session.refused"
+    reason: str
+
+
 class PromptDequeued(EventBase):
     type: Literal["prompt.dequeued"] = "prompt.dequeued"
     prompt_id: str
@@ -99,6 +132,48 @@ class ParticipantTyping(TransientEvent):
     type: Literal["participant.typing"] = "participant.typing"
     participant_id: str
     typing: bool
+
+
+class ParticipantSelected(TransientEvent):
+    type: Literal["participant.selected"] = "participant.selected"
+    participant_id: str
+    selection: TextSelection | None
+
+
+class ParticipantCursor(TransientEvent):
+    type: Literal["participant.cursor"] = "participant.cursor"
+    participant_id: str
+    cursor: BoardCursor | None
+
+
+class BoardOpened(EventBase):
+    type: Literal["board.opened"] = "board.opened"
+    open: bool
+    by: str
+
+
+class BoardStroked(EventBase):
+    type: Literal["board.stroked"] = "board.stroked"
+    stroke: BoardStroke
+
+
+class BoardErased(EventBase):
+    type: Literal["board.erased"] = "board.erased"
+    stroke_id: str
+
+
+class BoardCleared(EventBase):
+    type: Literal["board.cleared"] = "board.cleared"
+    by: str
+
+
+class ChatPosted(EventBase):
+    type: Literal["chat.posted"] = "chat.posted"
+    message_id: str
+    author_id: str
+    text: str
+    to: str | None = None
+    mentions: tuple[str, ...] = ()
 
 
 class ProposalCreated(EventBase):
@@ -266,8 +341,9 @@ class InviteCreated(TransientEvent):
     type: Literal["invite.created"] = "invite.created"
     code: str
     role: Role
-    expires_at: datetime
+    expires_at: datetime | None = None
     link: str
+    reusable: bool = False
 
 
 class ErrorRaised(TransientEvent):
@@ -286,8 +362,20 @@ Event = Annotated[
     | SkillsChanged
     | SkillsFound
     | AgentChanged
+    | AdmissionChanged
+    | JoinRequested
+    | JoinResolved
+    | JoinPending
+    | JoinRefused
     | PromptDequeued
     | ParticipantTyping
+    | ParticipantSelected
+    | ParticipantCursor
+    | BoardOpened
+    | BoardStroked
+    | BoardErased
+    | BoardCleared
+    | ChatPosted
     | ProposalCreated
     | ProposalApproved
     | ProposalRejected

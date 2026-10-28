@@ -61,14 +61,48 @@ class Watcher:
 
     async def stop(self) -> None:
         self._task.cancel()
-        with suppress(asyncio.CancelledError):
+        with suppress(asyncio.CancelledError, CommandRejected):
             await self._task
+
+
+class RelayServer:
+    def __init__(self, port: int | None = None) -> None:
+        self.port = port or free_port()
+        self._server: uvicorn.Server | None = None
+        self._task: asyncio.Task[None] | None = None
+
+    @property
+    def url(self) -> str:
+        return f"ws://127.0.0.1:{self.port}"
+
+    @property
+    def running(self) -> bool:
+        return self._server is not None
+
+    async def start(self) -> None:
+        server = uvicorn.Server(
+            uvicorn.Config(create_app(), host="127.0.0.1", port=self.port, log_level="warning")
+        )
+        self._task = asyncio.create_task(server.serve())
+        self._server = server
+        async with asyncio.timeout(10):
+            while not server.started:
+                await asyncio.sleep(0.01)
+
+    async def stop(self) -> None:
+        if self._server is None or self._task is None:
+            return
+        self._server.should_exit = True
+        await self._task
+        self._server = None
+        self._task = None
 
 
 @dataclass(slots=True)
 class Session:
     host: Host
     watchers: list[Watcher]
+    relay: RelayServer | None = None
 
     async def watch(self, link: str, name: str) -> Watcher:
         watcher = Watcher(SessionClient(JoinLink.parse(link), name=name, client=CLIENT))
@@ -94,19 +128,12 @@ async def running_session(
     workspace = tmp_path / "ws"
     workspace.mkdir(exist_ok=True)
     (workspace / "notes.txt").write_text("alpha\nbeta\n")
-    relay: uvicorn.Server | None = None
-    relay_task: asyncio.Task[None] | None = None
+    relay: RelayServer | None = None
     relay_url: str | None = None
     if relayed:
-        relay_port = free_port()
-        relay = uvicorn.Server(
-            uvicorn.Config(create_app(), host="127.0.0.1", port=relay_port, log_level="warning")
-        )
-        relay_task = asyncio.create_task(relay.serve())
-        async with asyncio.timeout(10):
-            while not relay.started:
-                await asyncio.sleep(0.01)
-        relay_url = f"ws://127.0.0.1:{relay_port}"
+        relay = RelayServer()
+        await relay.start()
+        relay_url = relay.url
     options: dict[str, Any] = {"provider": "fake", **(overrides or {})}
     settings = HostSettings(
         workspace=workspace,
@@ -119,7 +146,7 @@ async def running_session(
     )
     host = await build_host(settings, provider=provider)
     serving = asyncio.create_task(host.serve())
-    session = Session(host=host, watchers=[])
+    session = Session(host=host, watchers=[], relay=relay)
     try:
         yield session
     finally:
@@ -129,6 +156,5 @@ async def running_session(
         with suppress(asyncio.CancelledError):
             await serving
         await host.close()
-        if relay is not None and relay_task is not None:
-            relay.should_exit = True
-            await relay_task
+        if relay is not None:
+            await relay.stop()

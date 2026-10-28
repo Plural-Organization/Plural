@@ -6,13 +6,17 @@ from typing import Any
 
 from plural.client.projection import Projection
 from plural.protocol.events import (
+    AdmissionChanged,
     AgentChanged,
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
+    ChatPosted,
     ContextCompacted,
     Event,
     EventRecord,
+    JoinRequested,
+    JoinResolved,
     MessageDelta,
     MessageEnded,
     MessageStarted,
@@ -34,11 +38,14 @@ from plural.protocol.events import (
     ToolStarted,
 )
 from plural.protocol.models import (
+    AdmissionMode,
     ApprovalDecision,
     ApprovalView,
     AttachmentMeta,
     Delivery,
     DequeueReason,
+    JoinDecision,
+    JoinRequestView,
     Origin,
     Participant,
     PolicyAction,
@@ -213,6 +220,34 @@ def _steps() -> list[tuple[str, Event]]:
             ),
         ),
         ("record", RunEnded(run_id="run_2", reason=RunEndReason.STOP)),
+        ("record", ChatPosted(message_id="c_1", author_id="p_host", text="standup in five")),
+        (
+            "record",
+            ChatPosted(
+                message_id="c_2",
+                author_id="p_alia",
+                text="@Bek can you look at this",
+                mentions=("p_bek2222",),
+            ),
+        ),
+        (
+            "record",
+            ChatPosted(message_id="c_3", author_id="p_host", text="only for Alia", to="p_alia"),
+        ),
+        (
+            "record",
+            JoinRequested(
+                request=JoinRequestView(
+                    id="j_1", name="Dana", client="tui 0.2.2", requested_at=START
+                )
+            ),
+        ),
+        ("record", AdmissionChanged(mode=AdmissionMode.OPEN)),
+        (
+            "record",
+            JoinResolved(request_id="j_1", decision=JoinDecision.ALLOW, decided_by="p_host"),
+        ),
+        ("record", AdmissionChanged(mode=AdmissionMode.APPROVE)),
         ("record", ParticipantRevoked(participant_id="p_alia")),
     ]
 

@@ -1,0 +1,12 @@
+.activity { display: flex; align-items: center; gap: 10px; min-width: 0; font-size: 14px; color: var(--muted); padding: 2px 0; }
+.pulse { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); flex: none; animation: pulse 1.4s ease-in-out infinite; }
+.text { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dots::after { content: ""; animation: dots 1.2s steps(4) infinite; }
+.detail { font: 12px var(--font-mono); color: var(--dim); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 1px 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.approval { color: var(--warn); }
+.approval .pulse { background: var(--warn); }
+.tool .pulse { background: var(--ok); }
+.compacting .pulse { background: var(--dim); }
+@keyframes pulse { 0%, 100% { opacity: 0.35; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1); } }
+@keyframes dots { 0% { content: ""; } 25% { content: "."; } 50% { content: ".."; } 75% { content: "..."; } }
+@media (prefers-reduced-motion: reduce) { .pulse, .dots::after { animation: none; } }

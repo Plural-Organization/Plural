@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { JoinLink } from "@plural/client";
 import { JoinScreen } from "./screens/JoinScreen";
 import { RoomScreen } from "./screens/RoomScreen";
+import { unlockAudio } from "./lib/alert";
 
 interface Joined {
   link: JoinLink;
@@ -18,6 +19,7 @@ export function App() {
       <JoinScreen
         notice={notice}
         onJoin={(link, name) => {
+          unlockAudio();
           setNotice(null);
           setJoined({ link, name, key: Date.now() });
         }}

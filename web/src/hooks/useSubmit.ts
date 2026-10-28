@@ -1,4 +1,4 @@
-import { label, lastReply, parseSlash, ruleLine, SlashError, type ProposalView } from "@plural/client";
+import { label, lastReply, parseChat, parseSlash, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
 import { commandName, helpText, isHostOnly } from "../lib/commands";
 import type { Session } from "./useSession";
@@ -9,9 +9,10 @@ interface Submit {
   onEdited: () => void;
   onLeave: () => void;
   flash: (text: string) => void;
+  onDraw: () => void;
 }
 
-export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit) {
+export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }: Submit) {
   const { projection, feed, send, notify } = session;
   const state = projection.state;
   const isHost = projection.me?.role === "host";
@@ -31,7 +32,28 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
         );
         return true;
       case "invite":
-        send({ type: "invite.create", role: rest[0] === "viewer" ? "viewer" : "participant", ttl_s: 3600 });
+        switch (rest[0]) {
+          case undefined:
+          case "link":
+            send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true });
+            break;
+          case "once":
+            send({ type: "invite.create", role: "participant", ttl_s: 3600 });
+            break;
+          case "viewer":
+            send({ type: "invite.create", role: "viewer", ttl_s: 3600 });
+            break;
+          case "revoke":
+            send({ type: "link.revoke" });
+            break;
+          case "open":
+          case "approve":
+            send({ type: "link.set_admission", mode: rest[0] });
+            notify("accent", rest[0] === "open" ? "the room link lets people in at once" : "you will be asked to let each person in");
+            break;
+          default:
+            notify("warn", "usage: /invite [link | once | viewer | revoke | open | approve]");
+        }
         return true;
       case "copy": {
         const reply = lastReply(feed);
@@ -53,6 +75,9 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
       }
       case "leave":
         onLeave();
+        return true;
+      case "draw":
+        onDraw();
         return true;
       default:
         return false;
@@ -115,10 +140,25 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
     }
   };
 
+  const chat = (text: string): boolean => {
+    try {
+      const intent = parseChat(text, state, projection.meId);
+      if (intent === null) {
+        return false;
+      }
+      send(intent.command);
+    } catch (error) {
+      notify("warn", error instanceof SlashError ? error.message : String(error));
+    }
+    return true;
+  };
+
   return (text: string) => {
     if (editing) {
       send({ type: "proposal.decide", proposal_id: editing.id, decision: "approve", edited_text: text });
       onEdited();
+    } else if (chat(text)) {
+      return;
     } else if (text.startsWith("/")) {
       slash(text);
     } else {

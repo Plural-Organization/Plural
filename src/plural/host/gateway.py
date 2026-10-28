@@ -3,10 +3,10 @@ from datetime import timedelta
 
 from plural.core.errors import Unauthorized
 from plural.core.ports import Clock, IdGenerator
-from plural.host.invites import InviteBook
+from plural.host.invites import InviteBook, RoomLink
 from plural.protocol.capability import CapabilityClaims
 from plural.protocol.commands import SessionHello
-from plural.protocol.models import Participant, SessionState
+from plural.protocol.models import AdmissionMode, Participant, Role, SessionState
 from plural.security.tokens import InvalidToken, TokenSigner
 
 
@@ -16,6 +16,12 @@ class Admission:
     token: str
 
 
+@dataclass(frozen=True, slots=True)
+class NeedsApproval:
+    name: str
+    client: str
+
+
 class Gateway:
     def __init__(
         self,
@@ -23,6 +29,7 @@ class Gateway:
         room: str,
         signer: TokenSigner,
         invites: InviteBook,
+        link: RoomLink,
         ids: IdGenerator,
         clock: Clock,
         token_ttl_s: int,
@@ -30,6 +37,7 @@ class Gateway:
         self._room = room
         self._signer = signer
         self._invites = invites
+        self._link = link
         self._ids = ids
         self._clock = clock
         self._ttl = timedelta(seconds=token_ttl_s)
@@ -46,7 +54,11 @@ class Gateway:
         )
         return self._signer.sign(claims)
 
-    def admit(self, hello: SessionHello, state: SessionState) -> Admission:
+    def admit_approved(self, name: str, role: Role) -> Admission:
+        participant = Participant(id=self._ids.new("p_"), name=name, role=role)
+        return Admission(participant, self.issue(participant))
+
+    def admit(self, hello: SessionHello, state: SessionState) -> Admission | NeedsApproval:
         if hello.token is not None:
             return Admission(self.identify(hello.token, state), hello.token)
         if hello.invite is not None:
@@ -55,7 +67,16 @@ class Gateway:
                 id=self._ids.new("p_"), name=hello.name or "guest", role=invite.role
             )
             return Admission(participant, self.issue(participant))
-        raise Unauthorized("invite or token required")
+        if hello.join is not None:
+            if not self._link.matches(hello.join):
+                raise Unauthorized(
+                    "this room link is no longer valid, ask the host for the new one"
+                )
+            name = hello.name or "guest"
+            if state.admission is AdmissionMode.OPEN:
+                return self.admit_approved(name, Role.PARTICIPANT)
+            return NeedsApproval(name=name, client=f"{hello.client.kind} {hello.client.version}")
+        raise Unauthorized("an invite, the room link or a token is required")
 
     def identify(self, token: str, state: SessionState) -> Participant:
         try:
