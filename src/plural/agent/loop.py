@@ -552,7 +552,7 @@ class AgentLoop:
             return await interruptible(prepared.execute(ctx), cancel, self._limits.tool_timeout_s)
         except TimedOut:
             return ToolResult("Tool timed out", is_error=True)
-        except (ToolError, SandboxError, OSError, UnicodeDecodeError) as error:
+        except (ToolError, SandboxError, OSError, UnicodeError) as error:
             return ToolResult(f"{type(error).__name__}: {error}", is_error=True)
 
     def _skip(self, call: ToolCallRequest, reason: str) -> tuple[ToolStart, ToolEnd]:

@@ -43,6 +43,16 @@ class HostSettings(BaseSettings):
     max_image_bytes: int = Field(default=2_500_000, gt=0, le=2_900_000)
     typing_ttl_s: float = Field(default=6, gt=0)
     browser: str = "launch"
+    web_search: bool = True
+    web_search_model: str | None = None
+    web_search_context_size: Literal["low", "medium", "high"] = "medium"
+    web_search_max_uses: int | None = Field(default=5, gt=0)
+    web_search_allowed_domains: list[str] = Field(default_factory=list[str])
+    web_search_blocked_domains: list[str] = Field(default_factory=list[str])
+    web_search_city: str | None = None
+    web_search_region: str | None = None
+    web_search_country: str | None = None
+    web_search_timezone: str | None = None
 
     def resolved_provider(
         self, environ: Mapping[str, str] | None = None

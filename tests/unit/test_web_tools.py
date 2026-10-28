@@ -8,12 +8,10 @@ from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools import web
 from plural.agent.tools.base import ToolCtx, ToolError
 from plural.agent.tools.web import (
-    SearchResult,
     WebFetchTool,
     WebResponse,
-    WebSearchTool,
+    ascii_url,
     extract_text,
-    parse_search_results,
     validate_public_url,
 )
 
@@ -76,26 +74,6 @@ def test_extract_text_removes_active_html() -> None:
     assert extract_text(raw, "text/html") == "Hello\nUseful text"
 
 
-def test_duckduckgo_results_are_parsed() -> None:
-    raw = """
-    <a class="result__a" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fa">Title</a>
-    <a class="result__snippet">A useful snippet.</a>
-    """
-    assert parse_search_results(raw) == [
-        SearchResult(title="Title", url="https://example.com/a", snippet="A useful snippet.")
-    ]
-
-
-def test_bing_results_and_redirects_are_parsed() -> None:
-    raw = """
-    <li class="b_algo"><h2><a href="https://www.bing.com/ck/a?u=a1aHR0cHM6Ly9leGFtcGxlLmNvbS8">
-    A <strong>result</strong></a></h2><div class="b_caption"><p>Useful snippet.</p></div></li>
-    """
-    assert parse_search_results(raw) == [
-        SearchResult(title="A result", url="https://example.com/", snippet="Useful snippet.")
-    ]
-
-
 async def test_web_fetch_returns_source_and_truncated_text(
     ctx: ToolCtx, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -111,20 +89,17 @@ async def test_web_fetch_returns_source_and_truncated_text(
     assert "[truncated at 1000 characters]" in result.content
 
 
-async def test_web_search_limits_and_formats_results(
-    ctx: ToolCtx, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    body = b"""
-    <a class="result__a" href="https://one.example">One</a><a class="result__snippet">First</a>
-    <a class="result__a" href="https://two.example">Two</a><a class="result__snippet">Second</a>
-    """
+def test_a_url_with_cyrillic_goes_on_the_wire_percent_encoded() -> None:
+    assert ascii_url("https://example.com/search?q=Привет+мир") == (
+        "https://example.com/search?q=%D0%9F%D1%80%D0%B8%D0%B2%D0%B5%D1%82+%D0%BC%D0%B8%D1%80"
+    )
+    assert ascii_url("https://пример.рф/путь?a=1&b=%20") == (
+        "https://xn--e1afmkfd.xn--p1ai/%D0%BF%D1%83%D1%82%D1%8C?a=1&b=%20"
+    )
+    assert ascii_url("https://example.com/a b#frag") == "https://example.com/a%20b"
 
-    async def fake_fetch(url: str, *, timeout_s: float = 15) -> WebResponse:
-        assert "plural+agent" in url
-        return WebResponse(url=url, content_type="text/html; charset=utf-8", body=body)
-
-    monkeypatch.setattr(web, "fetch_url", fake_fetch)
-    prepared = WebSearchTool().prepare({"query": "plural agent", "max_results": 1})
-    result = await prepared.execute(ctx)
-    assert result.content == "1. One\nhttps://one.example\nFirst"
-    assert "Two" not in result.content
+    assert ascii_url("https://Пример.рф:8443/") == "https://xn--e1afmkfd.xn--p1ai:8443/"
+    assert ascii_url("https://пользователь@пример.рф/") == (
+        "https://%D0%BF%D0%BE%D0%BB%D1%8C%D0%B7%D0%BE%D0%B2%D0%B0%D1%82%D0%B5%D0%BB%D1%8C"
+        "@xn--e1afmkfd.xn--p1ai/"
+    )

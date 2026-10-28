@@ -29,6 +29,12 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 | `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |
 | `PLURAL_MAX_IMAGE_BYTES` | `2500000` | Largest image a participant may attach, at most `2900000` so it fits a 4 MB message. The terminal client scales pasted images to 1568 px first. Claude Code, Codex CLI and models without vision do not see images |
 | `PLURAL_TYPING_TTL_S` | `6` | Seconds after which a typing indicator lapses without a refresh |
+| `PLURAL_WEB_SEARCH` | `true` | Give the agent `web_search`: Pydantic AI's `WebSearchTool`, run by the session provider's own search engine. Works with an Anthropic or OpenAI API key and with Claude OAuth; there is no search with Claude Code, Codex CLI or a custom `PLURAL_BASE_URL`. Each search waits for approval like other tools |
+| `PLURAL_WEB_SEARCH_MODEL` | session model | Model that runs the search, written as `provider:model` like Pydantic AI, for example `anthropic:claude-haiku-4-5` to search cheaply. It applies only while the session uses that provider (`anthropic` covers Claude OAuth too) |
+| `PLURAL_WEB_SEARCH_CONTEXT_SIZE` | `medium` | `low`, `medium` or `high`: how much page text the search reads (OpenAI) |
+| `PLURAL_WEB_SEARCH_MAX_USES` | `5` | Searches per `web_search` call (Anthropic) |
+| `PLURAL_WEB_SEARCH_ALLOWED_DOMAINS` / `PLURAL_WEB_SEARCH_BLOCKED_DOMAINS` | none | JSON lists such as `["docs.python.org"]`; only one of the two at a time on Anthropic |
+| `PLURAL_WEB_SEARCH_CITY` / `_REGION` / `_COUNTRY` / `_TIMEZONE` | none | Location the results are localized for, for example `Almaty`, `KZ`, `Asia/Almaty` |
 | `PLURAL_BROWSER` | `launch` | The browser the agent drives through Playwright MCP. `launch` opens a Chrome window of its own on first use; its profile lives in `~/.plural/browser`, so a login there is kept. A CDP endpoint attaches instead: `chrome` is the host's running Chrome once remote debugging is on in `chrome://inspect`. `off` turns the browser off |
 
 ## Models

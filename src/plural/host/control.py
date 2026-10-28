@@ -21,6 +21,7 @@ from plural.host.bootstrap import (
     ConfigError,
     Host,
     build_provider,
+    build_web_search,
     provider_secrets,
     resolve_api_key,
 )
@@ -126,6 +127,7 @@ class Control:
         provider, settings, key = provider_for(self._base, config)
         if isinstance(provider, CodexCliProvider):
             await provider.check_available()
+        searcher = build_web_search(settings, key, provider)
         done: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         label = (
             f"{config.provider_name} · {settings.model or 'default'}"
@@ -142,6 +144,8 @@ class Control:
             )
         )
         await done
+        if self._host.web_search is not None:
+            self._host.web_search.use(searcher)
         return label
 
     def _parse(self, line: str) -> Request | None:
