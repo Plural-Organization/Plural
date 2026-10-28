@@ -4,44 +4,55 @@ import json
 import os
 import sys
 from contextlib import suppress
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import structlog
 import typer
 import uvicorn
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
 from plural import __version__
-from plural.host.bootstrap import ConfigError, Host, build_host, build_provider, resolve_api_key
+from plural.host.bootstrap import Host, build_host
 from plural.host.config import HostSettings
 from plural.host.control import MAX_LINE_BYTES, Control, read_lines
+from plural.host.providers import ConfigError, build_provider, resolve_api_key
 from plural.protocol.envelope import PROTOCOL_VERSION
-from plural.protocol.models import PromptMode, Role
+from plural.protocol.models import AdmissionMode, PromptMode
 from plural.relay.app import create_app
+from plural.relay.limits import RelayLimits
 from plural.storage.jsonl_export import export_jsonl
+from plural.storage.sessions import delete_session, list_sessions, read_session, session_path
 from plural.storage.sqlite_store import SqliteEventStore
 
 app = typer.Typer(name="plural-host", no_args_is_help=True, add_completion=False)
 console = Console()
+DEFAULT_LIMITS = RelayLimits()
 
 
 @app.command()
 def host(
-    workspace: Annotated[Path, typer.Option(help="Project directory the agent works in.")] = Path(
-        "."
-    ),
-    bind: Annotated[str, typer.Option(help="Address for direct mode.")] = "127.0.0.1",
-    port: Annotated[int, typer.Option(help="Port for direct mode.")] = 7777,
+    workspace: Annotated[
+        Path | None, typer.Option(help="Project directory the agent works in.")
+    ] = None,
+    bind: Annotated[str | None, typer.Option(help="Address for direct mode.")] = None,
+    port: Annotated[int | None, typer.Option(help="Port for direct mode.")] = None,
     relay: Annotated[str | None, typer.Option(help="Relay URL; direct mode when omitted.")] = None,
     public_url: Annotated[str | None, typer.Option(help="Public ws(s) URL for links.")] = None,
     room: Annotated[str | None, typer.Option(help="Resume an existing room.")] = None,
-    name: Annotated[str, typer.Option(help="Host display name.")] = getpass.getuser(),
+    title: Annotated[str | None, typer.Option(help="Name of this session.")] = None,
+    name: Annotated[str | None, typer.Option(help="Host display name.")] = None,
     prompts: Annotated[
         PromptMode | None,
         typer.Option(help="open: participants prompt directly; review: the host approves them."),
+    ] = None,
+    admission: Annotated[
+        AdmissionMode | None,
+        typer.Option(help="approve: the host lets in whoever uses the room link; open: anyone."),
     ] = None,
     machine: Annotated[
         bool,
@@ -50,21 +61,54 @@ def host(
         ),
     ] = False,
 ) -> None:
-    settings = HostSettings(
-        workspace=workspace,
-        bind_host=bind,
-        port=port,
-        relay_url=relay,
-        public_url=public_url,
-        room=room,
-        host_name=name,
-        prompt_mode=prompts,
-    )
+    given: dict[str, Any] = {
+        "workspace": workspace,
+        "bind_host": bind,
+        "port": port,
+        "relay_url": relay,
+        "public_url": public_url,
+        "room": room,
+        "title": title,
+        "host_name": name,
+        "prompt_mode": prompts,
+        "admission": admission,
+    }
+    options = {key: value for key, value in given.items() if value is not None}
+    if room is not None and workspace is None and "PLURAL_WORKSPACE" not in os.environ:
+        options["workspace"] = _saved_workspace(room)
+    if name is None and "PLURAL_HOST_NAME" not in os.environ:
+        options["host_name"] = getpass.getuser()
+    settings = HostSettings(**options)
     try:
         asyncio.run(_host(settings, machine=machine))
     except ConfigError as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(1) from error
+
+
+def _saved_workspace(room: str) -> Path:
+    data_dir = HostSettings().state_dir
+    try:
+        path = session_path(data_dir, room)
+    except ValueError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(2) from error
+    info = read_session(path) if path.exists() else None
+    if info is None:
+        console.print(
+            f"[red]There is no session {room}. List them with plural-host sessions.[/red]"
+        )
+        raise typer.Exit(1)
+    if info.workspace is None:
+        return Path.cwd()
+    folder = Path(info.workspace)
+    if not folder.is_dir():
+        console.print(
+            f"[red]The folder of this session is gone: {folder}. "
+            "Pass --workspace to continue it somewhere else.[/red]"
+        )
+        raise typer.Exit(1)
+    return folder
 
 
 def ready_line(room: str, guest_link: str, host_link: str) -> str:
@@ -80,20 +124,32 @@ def ready_line(room: str, guest_link: str, host_link: str) -> str:
     )
 
 
+def plain_links(room: str, guest_link: str, host_link: str) -> str:
+    return "\n".join(
+        (
+            f"room {room}",
+            f"room link (the host lets people in): {guest_link}",
+            f"host link: {host_link}",
+        )
+    )
+
+
 async def _host(settings: HostSettings, *, machine: bool) -> None:
     _configure_logging(settings.state_dir / "logs" / "host.log" if machine else None)
     plural_host = await build_host(settings)
-    invite = plural_host.invites.create(Role.PARTICIPANT, settings.invite_ttl_s)
+    room_link = plural_host.room_link.link
     if machine:
-        print(ready_line(plural_host.room, invite.link, plural_host.host_link), flush=True)
-    else:
+        print(ready_line(plural_host.room, room_link, plural_host.host_link), flush=True)
+    elif console.is_terminal:
         console.print(
             Panel(
-                f"[bold]Guest link[/bold] (one-time)\n{invite.link}\n\n"
+                f"[bold]Room link[/bold] (the host lets people in)\n{room_link}\n\n"
                 f"[bold]Host link[/bold]\n{plural_host.host_link}",
                 title=f"room {plural_host.room}",
             )
         )
+    else:
+        print(plain_links(plural_host.room, room_link, plural_host.host_link), flush=True)
     try:
         if machine:
             await _serve_until_stdin_closes(plural_host, settings)
@@ -129,10 +185,102 @@ async def _control_until_stdin_closes(plural_host: Host, settings: HostSettings)
 
 @app.command()
 def relay(
-    bind: Annotated[str, typer.Option(help="Bind address.")] = "127.0.0.1",
-    port: Annotated[int, typer.Option(help="Port.")] = 8787,
+    bind: Annotated[str, typer.Option(help="Bind address.", envvar="PLURAL_RELAY_BIND")] = (
+        "127.0.0.1"
+    ),
+    port: Annotated[int, typer.Option(help="Port.", envvar="PORT")] = 8787,
+    proxy_hops: Annotated[
+        int,
+        typer.Option(
+            min=0,
+            help="Proxies in front of the relay, to tell guests apart. 0 when it is exposed.",
+            envvar="PLURAL_RELAY_PROXY_HOPS",
+        ),
+    ] = 0,
+    max_rooms: Annotated[
+        int, typer.Option(min=1, help="Rooms at once.", envvar="PLURAL_RELAY_MAX_ROOMS")
+    ] = DEFAULT_LIMITS.max_rooms,
+    rooms_per_peer: Annotated[
+        int,
+        typer.Option(
+            min=1, help="Rooms one address may host.", envvar="PLURAL_RELAY_ROOMS_PER_PEER"
+        ),
+    ] = DEFAULT_LIMITS.max_rooms_per_peer,
+    guests_per_peer: Annotated[
+        int,
+        typer.Option(
+            min=1, help="Guests one address may bring.", envvar="PLURAL_RELAY_GUESTS_PER_PEER"
+        ),
+    ] = DEFAULT_LIMITS.max_guests_per_peer,
 ) -> None:
-    uvicorn.run(create_app(), host=bind, port=port, log_level="info", ws_max_size=4 * 1024 * 1024)
+    limits = RelayLimits(
+        max_rooms=max_rooms,
+        max_rooms_per_peer=rooms_per_peer,
+        max_guests_per_peer=guests_per_peer,
+    )
+    uvicorn.run(
+        create_app(limits, proxy_hops=proxy_hops),
+        host=bind,
+        port=port,
+        log_level="info",
+        ws_max_size=4 * 1024 * 1024,
+        proxy_headers=False,
+    )
+
+
+def _ago(moment: datetime) -> str:
+    seconds = max(0, int((datetime.now(UTC) - moment).total_seconds()))
+    if seconds < 60:
+        return f"{seconds}s ago"
+    if seconds < 3600:
+        return f"{seconds // 60}m ago"
+    if seconds < 86_400:
+        return f"{seconds // 3600}h ago"
+    return f"{seconds // 86_400}d ago"
+
+
+@app.command()
+def sessions(
+    workspace: Annotated[
+        Path | None, typer.Option(help="Only sessions that worked in this folder.")
+    ] = None,
+    limit: Annotated[int, typer.Option(min=1, help="How many to show.")] = 50,
+    as_json: Annotated[bool, typer.Option("--json", help="One JSON array, for scripts.")] = False,
+) -> None:
+    found = list_sessions(HostSettings().state_dir, workspace=workspace)[:limit]
+    if as_json:
+        print(json.dumps([json.loads(info.model_dump_json()) for info in found]), flush=True)
+        return
+    if not found:
+        console.print("No sessions yet.")
+        return
+    for info in found:
+        console.print(
+            f"[bold]{escape(info.title)}[/bold]  "
+            f"[dim]{info.prompts} prompts · {_ago(info.updated_at)}[/dim]",
+            soft_wrap=True,
+        )
+        console.print(f"  [dim]{info.room}  {escape(info.workspace or '')}[/dim]", soft_wrap=True)
+
+
+@app.command()
+def rm(
+    room: Annotated[str, typer.Argument(help="Session id.")],
+    yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask.")] = False,
+) -> None:
+    data_dir = HostSettings().state_dir
+    try:
+        info = read_session(session_path(data_dir, room))
+    except ValueError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(2) from error
+    if info is None:
+        console.print(f"[red]There is no session {room}.[/red]")
+        raise typer.Exit(1)
+    if not yes and not typer.confirm(f"Delete “{info.title}” ({room}) for good?"):
+        raise typer.Exit(1)
+    delete_session(data_dir, room)
+    console.print(f"Deleted {room}.")
 
 
 @app.command()

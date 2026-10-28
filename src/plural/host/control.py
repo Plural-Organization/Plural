@@ -17,15 +17,11 @@ from plural.agent.providers.base import (
 )
 from plural.agent.providers.codex_cli import CodexCliProvider
 from plural.core.errors import DomainError
-from plural.host.bootstrap import (
-    ConfigError,
-    Host,
-    build_provider,
-    provider_secrets,
-    resolve_api_key,
-)
+from plural.host.bootstrap import Host, build_web_search
 from plural.host.config import HostSettings
 from plural.host.inbox import Reconfigure
+from plural.host.providers import ConfigError, build_provider, provider_secrets, resolve_api_key
+from plural.host.routing import build_helper
 
 log = structlog.get_logger(__name__)
 
@@ -43,6 +39,7 @@ class AgentConfig(BaseModel):
     base_url: str | None = None
     api_key: SecretStr | None = None
     context_window: int | None = Field(default=None, gt=0)
+    fast_model: str | None = Field(default=None, max_length=200)
 
 
 class Request(BaseModel):
@@ -64,6 +61,12 @@ def settings_for(base: HostSettings, config: AgentConfig) -> HostSettings:
             "base_url": config.base_url or None,
             "api_key": config.api_key,
             "context_window": config.context_window or base.context_window,
+            "fast_model": config.fast_model
+            if config.fast_model not in (None, "", "off")
+            else base.fast_model,
+            "fast_provider": None
+            if config.fast_model not in (None, "", "off")
+            else base.fast_provider,
         }
     )
 
@@ -126,22 +129,28 @@ class Control:
         provider, settings, key = provider_for(self._base, config)
         if isinstance(provider, CodexCliProvider):
             await provider.check_available()
+        searcher = build_web_search(settings, key, provider)
         done: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         label = (
             f"{config.provider_name} · {settings.model or 'default'}"
             if config.provider_name and config.provider != "fake"
             else settings.agent_label({})
         )
+        helper = None if config.fast_model == "off" else build_helper(settings)
         self._host.inbox.put(
             Reconfigure(
                 provider=provider,
                 label=label,
                 context_window=settings.context_window,
-                secrets=provider_secrets(settings, key),
+                secrets=(*provider_secrets(settings, key), *(helper.secrets if helper else ())),
                 reply=done,
+                helper=helper.provider if helper else None,
+                helper_label=helper.label if helper else "",
             )
         )
         await done
+        if self._host.web_search is not None:
+            self._host.web_search.use(searcher)
         return label
 
     def _parse(self, line: str) -> Request | None:

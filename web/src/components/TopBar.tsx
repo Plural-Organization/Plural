@@ -41,7 +41,7 @@ export function TopBar({ room, projection, connection, panelOpen, onCopyRoom, on
           context {meter.percent}%
         </span>
       ) : null}
-      <span className={cx("mono", styles.agent)}>{state.agent || projection.agent}</span>
+      <span className={cx("mono", styles.agent)}>{projection.agentLabel}</span>
       <span className={cx(styles.connection, styles[connection])} title={connection}>
         <span className={styles.dot} />
         {connectionText(connection, online)}

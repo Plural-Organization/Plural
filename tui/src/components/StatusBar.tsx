@@ -35,7 +35,7 @@ export function StatusBar({ me, state, connection, inbox, focused, hint }: Statu
       <box flexDirection="row">
         <ContextMeterView state={state} />
         <text fg={theme.dim}>
-          {state.context ? "  ·  " : ""}
+          {contextMeter(state) !== null ? "  ·  " : ""}
           {right}
         </text>
       </box>

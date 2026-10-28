@@ -7,16 +7,70 @@ cd your-project
 plural
 ```
 
-`plural` starts a host in the current directory and opens the client. The first lines of the conversation show the room and an invite link. Options:
+`plural` starts a host in the current directory and opens the client. The first lines of the conversation show the room link. Words that are not options become the first prompt: `plural "fix the failing test"`.
 
 | Option | Meaning |
 |---|---|
+| `-r`, `--resume [id\|title]` | Resume a session, see [Resume a session](#resume-a-session) |
+| `-c`, `--continue` | Continue the latest session of this folder |
+| `-n`, `--title <title>` | Name the session |
+| `-p`, `--print` | Answer once and exit, see [Use it from a script](#use-it-from-a-script) |
 | `--workspace <dir>` | Directory the agent works in, default is the current one |
 | `--prompts open\|review` | Who may prompt directly, see below |
 | `--name <name>` | Your display name |
+| `--model <id>`, `--provider <name>`, `--effort <level>` | Model, provider (`anthropic`, `openai`, `gemini`, `ollama`…) and effort for this run only |
+| `--permission-mode default\|acceptEdits\|plan\|auto` | Start in that permission mode |
+| `--allowedTools <tools>`, `--disallowedTools <tools>` | Allow or deny tools for this run, for example `"Bash(git log *)" Read` |
 | `--port <n>`, `--bind <addr>` | Where the host listens in direct mode |
 | `--relay <url>`, `--public-url <url>` | Connect through a relay and set the address in invite links |
-| `--room <id>` | Resume a room, its log and settings are kept |
+| `--tunnel cloudflared\|ngrok` | Start a tunnel and put its address in the invite links, see [sharing a session](self-hosting.md) |
+
+An option that does not exist is refused, so a typing mistake does not reach the host by accident. A long dash typed by a chat or a keyboard (`—tunnel`) is read as `--tunnel`.
+
+## Update
+
+```bash
+plural update           # install the latest release
+plural update --check   # only say whether there is one
+```
+
+`plural update` looks up the latest release on GitHub and runs the same installer as the first install, pinned to that version: it upgrades the host (`plural-host`) and replaces the `plural` program next to the one you ran, with the same progress, resume and checksum check. A download that was cut off continues where it stopped when you run it again. It does nothing when you are up to date. A copy that runs from source or from a package manager cannot replace itself and says so.
+
+## Resume a session
+
+Every session you host is kept in `~/.plural/sessions` with its folder, its title and the whole conversation.
+
+```bash
+plural -r                 # choose from the sessions of this folder, tab shows every folder
+plural -r refactor        # a title, a piece of a title or the start of an id
+plural -c                 # the latest session of this folder
+plural sessions           # list them
+plural sessions --json    # the same for a script
+plural rm <id>            # delete one
+```
+
+A resumed session works in the folder it was started in, even when you are somewhere else; `--workspace` chooses another one. The conversation continues where it stopped, the people who were in the room come back with their old links while those are valid, and new invites work as usual. The title is the first prompt unless you named it with `--title`.
+
+The chooser also lists the rooms you joined as a guest. Choosing one takes you back in without a new invite, as long as the link you were given is still valid (a token lasts 24 hours) and the host is running.
+
+## Use it from a script
+
+`plural -p` asks once, prints the answer and exits, without the screen. Text piped in goes before the prompt, or is the prompt.
+
+```bash
+plural -p "what does this repo do?"
+git diff | plural -p "review this change"
+plural -p "list the failing tests" --output-format json
+plural -r <id> -p "and fix the first one" --permission-mode acceptEdits
+```
+
+`--output-format` is `text` (the default, only the final answer), `json` (one object with `result`, `session_id`, `num_turns`, `duration_ms`, `usage`, `denied` and `error`) or `stream-json` (one event per line, the object last). The exit code is 0 when the run stopped normally and 1 when it failed. The `session_id` is a session like any other: `-r` continues it.
+
+Nobody is there to approve an action, so one that needs approval is **refused**: it is named on stderr and listed in `denied`, and the agent goes on without it. Allow what a script may do with `--allowedTools "Bash(npm test)"`, or with `--permission-mode acceptEdits` (file edits) or `auto`. Deny rules always win, and the built-in protections cannot be switched off. The model is the one you saved in the settings; `--provider` and `--model` choose another for this run, and the key comes from `~/.plural/credentials.json` or the usual environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`…).
+
+## Share a session
+
+By default the invite works only on your computer. To let others in, open `F2` → Session and choose *Same network* or *Over the internet*, then start `plural` again. [Sharing a session](self-hosting.md) explains the three ways and how to run a relay.
 
 ## Join a session
 
@@ -24,9 +78,50 @@ plural
 plural join "ws://host:7777/r_…?invite=…" --name alia
 ```
 
-An invite is single-use and expires after an hour. The host creates a new one with `/invite` or from the settings. The link is copied to the clipboard.
+## Let people in
 
-A teammate can also join from a browser: open the web client, paste the invite and type a name. The web client shows the same session, approvals and queue as the terminal. A page served over https can only reach a host through a relay with `wss://`; over plain `ws://` serve the web client over http on the same network.
+The link at the top of the conversation is the **room link**. It is permanent: it never expires, it works for any number of people and it stays the same when you resume the session (while the address of your host stays the same). You can send it at any time.
+
+Anyone who opens it waits on a screen that says the host has to let them in. You get a card in the list of things that wait for you, with their name and the program they use, and a bell if you have it on:
+
+| Key | Answer |
+|---|---|
+| `y` or `enter` | let them in as a participant |
+| `v` | let them in as a viewer |
+| `n` | refuse |
+
+Until you answer they see nothing of the room. A request that nobody answers lapses after two minutes, at most five people can wait at once, and a room holds twenty people. After you let someone in they come back on their own for 24 hours without asking again.
+
+| Command | Does |
+|---|---|
+| `/invite` | copy the room link |
+| `/invite once`, `/invite viewer` | one-time invites for one person, who go in without your answer: a participant or a viewer, valid for an hour |
+| `/invite revoke` | end the room link: those waiting are refused, the old link stops working and the new one is copied. People who are already in stay |
+| `/invite open` | anyone with the link goes in at once, for a team you trust. The link is then as good as a password, keep it private |
+| `/invite approve` | back to letting each person in (the default) |
+
+The same choice is in `F2` → Session → *People who use the room link*. A host started by a script can use `--admission open` (or `PLURAL_ADMISSION=open`).
+
+Someone who joined by a one-time invite or who is already in, with a saved token, is never asked.
+
+A teammate can also join from a browser: open the web client, paste the link and type a name. The web client shows the same session, approvals and queue as the terminal. A page served over https can only reach a host through a relay with `wss://`; over plain `ws://` serve the web client over http on the same network.
+
+## Talking to the team
+
+Not everything you type is for the agent. Two forms stay between people, and the agent never receives them:
+
+| You type | Who reads it |
+|---|---|
+| `/team lunch at one` (also `/to-team`, `/chat`) | everyone in the room |
+| `@alia can you review this?` at the start of a line | only Alia, and you see your own copy |
+
+Typing `@` lists the people in the room, `tab` completes the name. A tag inside a team message (`/team @alia look at this`) is read by everyone and also alerts Alia. An `@` that names no one in the room, such as `@src/app.ts`, is still a prompt for the agent.
+
+The person you write to hears the terminal bell and sees a short message at the top right. The browser plays a short sound and marks the tab title when the page is in the background. Turn the bell off in `F2` → Session → *Bell on mentions*.
+
+Participants and the host can write; viewers can read the team chat but cannot write and cannot be written to privately. Messages are kept in the session log, so a person who was away finds them on return, and a late joiner sees the team chat but not what was private.
+
+A private message is private from the other guests, not from the host: it is stored in the host's log, `plural-host export` includes it, and it travels through the relay unencrypted. Do not use it for anything you would not say with the host and the relay operator listening.
 
 ## Prompt modes
 
@@ -87,6 +182,27 @@ When something waits for you, an approval card appears above the prompt.
 
 Keys are ignored for a moment after a card appears, and a card never takes the keys of a prompt you are typing.
 
+## Sub-agents
+
+The agent can hand a self-contained task to a sub-agent that works in its own context and returns a short report, so the main conversation stays small. `explore` is built in: a read-only researcher that searches the code or the web and cites `path:line`. It runs on the fast model when the host has one and on the main model otherwise. The host picks the fast model in the settings (F2, Model): `auto` takes a cheaper model you can already reach, `off` keeps everything on the main model, or choose one; `PLURAL_FAST_MODEL` does the same from the environment. Several sub-agents can run in parallel.
+
+A sub-agent shows up as one `Agent` line in the conversation with what it is doing right now; `ctrl+o` opens everything it looked at, and the line ends with the model it used, its tool calls and its tokens.
+
+`/agents` lists them and `+ create an agent…` asks for a name, when to use it, its instructions, what it may touch (read only, read and run commands, or read, edit and run), which model and where to save it. Or add your own as Markdown files in `.agents/agents`, `.claude/agents` or `.plural/agents`, in the project or the home folder. The format is the one Claude Code uses:
+
+```markdown
+---
+name: reviewer
+description: Reviews a diff for bugs and missing tests.
+tools: Read, Grep, Glob, Bash
+model: haiku        # haiku/fast runs on the fast model, anything else on the main one
+max_turns: 20
+---
+You review the diff you are given. Report each problem with path:line.
+```
+
+Every tool call a sub-agent makes goes through the same permissions as the main agent: deny rules, the permission mode and the host's approval for edits and commands. A sub-agent cannot start another one.
+
 ## MCP servers
 
 The host can connect MCP servers and the agent gets their tools, whatever model it runs on. Servers live in `.mcp.json` in the project or `~/.plural/mcp.json` for every session, in the same `mcpServers` format Claude Code and Cursor use, so a config can be copied over as is.
@@ -114,14 +230,17 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | Command | What it does |
 |---|---|
 | `/help` | Commands and keys |
+| `/team <message>` | Write to the room, the agent does not see it. `@name <message>` writes to one person |
 | `/who` | Participants |
-| `/invite [participant\|viewer]` | Create an invite link (host) |
+| `/invite [link\|once\|viewer\|revoke\|open\|approve]` | Copy the room link, make a one-time invite, or change who may join (host) |
 | `/mode open\|review` | Who may prompt directly (host) |
 | `/policy` | Show the permission rules (host) |
 | `/policy allow\|ask\|deny <tool> <pattern>` | Add a rule (host) |
 | `/policy rm <id>` | Remove a rule (host) |
 | `/compact` | Summarize the conversation now, or before the agent's next step when it is busy (host) |
 | `/skills [search\|add\|rm …]` | List, find and install skills, see [Skills](#skills) |
+| `/agents [rm <name>]` | The sub-agents; the host creates one with a short form, see [Sub-agents](#sub-agents) |
+| `/usage` | Tokens spent in this session per model, for the conversation, summaries and each sub-agent |
 | `/abort` | Stop the current run (host) |
 | `/cancel <n>` | Remove a queued prompt, yours or any as the host |
 | `/copy` | Copy the last reply |
@@ -140,6 +259,7 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | `ctrl+o` | Expand or collapse tool details |
 | `ctrl+b` | Show or hide the side panel |
 | `ctrl+y` | Copy the last reply |
+| `ctrl+v` | Attach the image on the clipboard to the next prompt; backspace in an empty input removes it |
 | `F2` | Settings |
 | `ctrl+c` | Clear the input, press twice to quit |
 
@@ -153,9 +273,9 @@ Open them with `F2`, the `⚙ settings` button or `/settings`. On the first laun
 
 The key is kept in `~/.plural/credentials.json`, readable only by you, when *Remember the key* is on, and it is sent only to your own host through a local pipe, never over the network. Claude OAuth tokens are kept in `~/.plural/anthropic-oauth.json`; the host uses and refreshes them locally. Keys in the environment (`ANTHROPIC_API_KEY` and so on) keep working. Participants do not see this tab: the agent and its credentials belong to the host.
 
-**Session**. *Open*: everyone prompts the agent directly. *Host approves*: participants propose and you approve, edit or reject every prompt. Also the typing indicator and the bell for requests that need the host.
+**Session**. *Open*: everyone prompts the agent directly. *Host approves*: participants propose and you approve, edit or reject every prompt. Also the typing indicator, the bell for requests that need the host and the bell for mentions and private messages.
 
-**Appearance**. Four themes (Tokyo Night, Daylight, Gruvbox, High contrast), the side panel and copy on select, plus shortcuts to copy the last reply and to create an invite link.
+**Appearance**. Four themes (Tokyo Night, Daylight, Gruvbox, High contrast), the side panel and copy on select, plus shortcuts to copy the last reply and the room link.
 
 Preferences are kept in `tui.json` in the data directory.
 

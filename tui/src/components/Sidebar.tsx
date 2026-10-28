@@ -77,7 +77,12 @@ export function Sidebar({ projection, room, inbox, running, status, onSettings }
       {inbox.length > 0 ? (
         <Section title="needs you" count={inbox.length}>
           {inbox.slice(0, 4).map((item) =>
-            item.kind === "approval" ? (
+            item.kind === "join" ? (
+              <box key={item.id} flexDirection="column">
+                <text fg={theme.warn}>+ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
+                <text fg={theme.dim}>  wants to join</text>
+              </box>
+            ) : item.kind === "approval" ? (
               <box key={item.id} flexDirection="column">
                 <text fg={theme.warn}>! {truncate(`${item.approval.call.name} ${item.approval.call.subject}`, SIDEBAR_WIDTH - 8)}</text>
                 <text fg={theme.dim}>  from {nameOf(projection, item.approval.provenance.initiator_id)}</text>
@@ -132,7 +137,12 @@ export function Sidebar({ projection, room, inbox, running, status, onSettings }
           </text>
         ) : null}
         <ContextMeterView state={state} width={8} />
-        <text fg={theme.dim}>{truncate(projection.agent || "agent", SIDEBAR_WIDTH - 4)}</text>
+        <text fg={theme.dim}>{truncate(projection.agentLabel || "agent", SIDEBAR_WIDTH - 4)}</text>
+        {state.fast_agent ? (
+          <text fg={theme.dim}>
+            fast <span fg={theme.info}>{truncate(state.fast_agent, SIDEBAR_WIDTH - 9)}</span>
+          </text>
+        ) : null}
         <text fg={theme.dim}>
           {"  "}
           {running ? <Spinner color={theme.info} /> : null}

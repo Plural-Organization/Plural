@@ -1,0 +1,13 @@
+[Unit]
+Description=Plural host
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+EnvironmentFile=%h/.config/plural/host.env
+ExecStart=%h/.local/bin/plural-host host
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

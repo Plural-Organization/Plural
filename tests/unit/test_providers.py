@@ -13,10 +13,12 @@ from plural.agent.providers.anthropic_api import to_messages as anthropic_messag
 from plural.agent.providers.base import (
     ContextOverflow,
     LlmEvent,
+    LlmImage,
     LlmMessage,
     LlmRequest,
     NativeContent,
     NativeReady,
+    ProviderActivity,
     ProviderError,
     Stop,
     TextDelta,
@@ -422,3 +424,41 @@ def test_openai_messages_round_trip_tool_calls() -> None:
             }
         ],
     }
+
+
+IMAGE = LlmImage(media_type="image/png", data="aW1n")
+
+
+def test_anthropic_sends_images_before_the_prompt_text() -> None:
+    messages = anthropic_messages((LlmMessage(role="user", content="look", images=(IMAGE,)),))
+    assert messages == [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": "image/png", "data": "aW1n"},
+                },
+                {"type": "text", "text": "look"},
+            ],
+        }
+    ]
+
+
+def test_openai_sends_images_as_data_urls() -> None:
+    messages = openai_messages("sys", (LlmMessage(role="user", content="look", images=(IMAGE,)),))
+    assert messages[1] == {
+        "role": "user",
+        "content": [
+            {"type": "text", "text": "look"},
+            {"type": "image_url", "image_url": {"url": "data:image/png;base64,aW1n"}},
+        ],
+    }
+
+
+async def test_a_tool_call_being_written_counts_as_activity() -> None:
+    anthropic_events = await drain(anthropic_provider(Recorder(200, ANTHROPIC_TOOL_TURN)))
+    sources = {e.source for e in anthropic_events if isinstance(e, ProviderActivity)}
+    assert "content_block_delta" in sources
+    openai_events = await drain(openai_provider(Recorder(200, OPENAI_TOOL_TURN)))
+    assert ProviderActivity(source="tool_call") in openai_events

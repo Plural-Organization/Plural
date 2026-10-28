@@ -36,7 +36,8 @@ export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }
         </text>
         {item.guestLink ? (
           <text fg={theme.dim}>
-            invite a teammate: <span fg={theme.info}>plural join "{item.guestLink}"</span>
+            room link: <span fg={theme.info}>plural join "{item.guestLink}"</span>
+            <span fg={theme.dim}> · you let people in, /invite revoke ends the link</span>
           </text>
         ) : null}
         <text fg={theme.dim}>/help for commands · esc interrupts · ctrl+o tool details · ctrl+c twice quits</text>
@@ -72,23 +73,51 @@ export type Queued = "steer" | "follow_up" | null;
 export function UserCard({ item, queued }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued }) {
   const color = colorFor(item.participantId);
   return (
-    <box id={pinId(item.id)} flexDirection="column" marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={color} paddingLeft={1}>
+    <box id={pinId(item.id)} flexDirection="column" marginTop={1} marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={color} backgroundColor={theme.panel} paddingX={1} paddingY={1}>
       <text>
         <span fg={color}>
           <b>{item.name}</b>
         </span>
         <span fg={theme.dim}>
           {"  "}
-          {item.role}
+          {item.role} · to agent
           {item.viaProposal ? " · approved by host" : ""}
         </span>
       </text>
-      <text fg={theme.text}>{item.text}</text>
+      <text fg={theme.text} wrapMode="word">{item.text}</text>
       {queued ? (
         <text fg={theme.warn}>
           ⧗ queued · <span fg={theme.dim}>{queued === "steer" ? "the agent reads it after its current step" : "sent when the run ends"}</span>
         </text>
       ) : null}
+    </box>
+  );
+}
+
+export function ChatCard({ item }: { item: Extract<FeedItem, { kind: "chat" }> }) {
+  const color = colorFor(item.authorId);
+  const direct = item.to !== null;
+  const head = direct
+    ? item.mine
+      ? `you → ${item.toName ?? "someone"}`
+      : `${item.name} → you`
+    : item.mine
+      ? "you · to the room"
+      : `${item.name} · to the room`;
+  const mark = item.mentioned ? theme.accent : direct ? theme.warn : color;
+  return (
+    <box flexDirection="column" marginBottom={1} border={["left"]} borderStyle="single" borderColor={mark} paddingLeft={1}>
+      <text>
+        <span fg={mark}>✉ </span>
+        <span fg={direct ? theme.warn : color}>
+          <b>{head}</b>
+        </span>
+        <span fg={theme.dim}>
+          {direct ? " · private, the agent does not see it" : " · the agent does not see it"}
+          {item.mentioned && !direct ? " · mentions you" : ""}
+        </span>
+      </text>
+      <text fg={theme.text} wrapMode="word">{item.text}</text>
     </box>
   );
 }
@@ -168,7 +197,7 @@ function Body({ item }: { item: Extract<FeedItem, { kind: "tool" }> }) {
     <box flexDirection="column">
       {kind === "bash" ? <text fg={theme.info}>$ {item.call.subject}</text> : null}
       {trimmed.shown !== "" ? (
-        <text fg={failed ? theme.danger : theme.dim} wrapMode="char">
+        <text fg={failed ? theme.danger : theme.text} wrapMode="char">
           {trimmed.shown}
         </text>
       ) : (
@@ -194,9 +223,9 @@ export function ToolCard({ item, expanded, onToggle, width }: ToolCardProps) {
   const meta = running
     ? `${elapsed}s`
     : metaOf({ name, tool: item.call.name, status: item.status, subject: item.call.subject, output: item.output, diff: item.diff, live: item.live });
-  const peek = running && !expanded ? lastLine(item.live) : "";
+  const peek = running && kindOf(item.call.name) === "agent" ? lastLine(item.live) : "";
   const fixed = name.length + meta.length + 10;
-  const subject = truncate(oneLine(item.call.subject), Math.max(8, width - fixed - (peek ? 14 : 0)));
+  const subject = truncate(oneLine(item.call.subject), Math.max(0, width - fixed - (peek ? 24 : 0)));
   const room = Math.max(0, width - fixed - subject.length - 3);
   return (
     <box flexDirection="column" marginBottom={expanded ? 1 : 0}>
@@ -206,9 +235,9 @@ export function ToolCard({ item, expanded, onToggle, width }: ToolCardProps) {
           {running ? <Spinner color={theme.info} /> : <span fg={failed ? theme.danger : theme.ok}>{failed ? "✗" : "✓"}</span>}
           <span> </span>
           <b>{name}</b>
-          <span fg={theme.dim}> {subject}</span>
+          <span fg={theme.text}> {subject}</span>
           {meta ? <span fg={failed ? theme.danger : theme.dim}> · {meta}</span> : null}
-          {peek && room > 6 ? <span fg={theme.dim}> · {truncate(peek, room)}</span> : null}
+          {peek && room > 8 ? <span fg={theme.dim}> · {truncate(peek, room)}</span> : null}
         </text>
       </box>
       {expanded ? (
@@ -245,6 +274,8 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, onT
       return <Banner item={item} />;
     case "user":
       return <UserCard item={item} queued={queued} />;
+    case "chat":
+      return <ChatCard item={item} />;
     case "assistant":
       return <AssistantCard item={item} syntax={syntax} />;
     case "tool":

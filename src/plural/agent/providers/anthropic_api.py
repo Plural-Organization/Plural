@@ -6,6 +6,7 @@ import anthropic
 from anthropic import AsyncAnthropic, omit
 from anthropic.types.beta import (
     BetaContentBlockParam,
+    BetaImageBlockParam,
     BetaMessage,
     BetaMessageParam,
     BetaRawContentBlockDeltaEvent,
@@ -21,10 +22,12 @@ from plural.agent.providers.base import (
     ContextOverflow,
     Effort,
     LlmEvent,
+    LlmImage,
     LlmMessage,
     LlmRequest,
     NativeContent,
     NativeReady,
+    ProviderActivity,
     ProviderBusy,
     ProviderError,
     Stop,
@@ -112,7 +115,9 @@ class AnthropicProvider:
                         ) if text:
                             yield ThinkingDelta(text=text)
                         case _:
-                            pass
+                            # Tool input, signatures and block boundaries carry no text but show
+                            # the model is still working, for example while it writes a long file.
+                            yield ProviderActivity(source=getattr(event, "type", "event"))
                 message = await stream.get_final_message()
         except anthropic.APIError as error:
             if _overflows(error):
@@ -156,7 +161,7 @@ def _message(
 def _blocks(message: LlmMessage) -> list[BetaContentBlockParam]:
     match message.role:
         case "user":
-            return [{"type": "text", "text": message.content}]
+            return [*map(_image, message.images), {"type": "text", "text": message.content}]
         case "tool":
             return [
                 {
@@ -174,6 +179,13 @@ def _blocks(message: LlmMessage) -> list[BetaContentBlockParam]:
                 blocks.append({"type": "text", "text": message.content})
             blocks.extend(_tool_use(call) for call in message.tool_calls)
             return blocks
+
+
+def _image(image: LlmImage) -> BetaImageBlockParam:
+    return {
+        "type": "image",
+        "source": {"type": "base64", "media_type": image.media_type, "data": image.data},
+    }
 
 
 def _tool_use(call: ToolCallRequest) -> BetaToolUseBlockParam:

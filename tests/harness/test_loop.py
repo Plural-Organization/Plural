@@ -14,9 +14,11 @@ from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.messages import AssistantTurn, ToolResultTurn, attribute
 from plural.agent.providers.base import (
     LlmEvent,
+    LlmImage,
     LlmRequest,
     NativeContent,
     NativeReady,
+    ProviderActivity,
     ProviderBusy,
     ProviderError,
     Stop,
@@ -234,6 +236,32 @@ async def test_stalled_stream_times_out_between_events(tmp_path: Path) -> None:
     assert last.usage.output_tokens == 3
 
 
+async def test_a_long_tool_call_keeps_the_run_alive(tmp_path: Path) -> None:
+    class Writing:
+        """Streams a tool call for longer than the idle timeout, the way a long file arrives."""
+
+        async def stream(
+            self, request: LlmRequest, *, cancel: asyncio.Event
+        ) -> AsyncIterator[LlmEvent]:
+            if len(request.messages) > 1:
+                yield TextDelta(text="written")
+                yield Stop()
+                return
+            for _ in range(8):
+                await asyncio.sleep(0.03)
+                yield ProviderActivity(source="tool_call")
+            call = ToolCallRequest(id="w1", name="write", args={"path": "big.py", "content": "x"})
+            yield ToolCallReady(call=call)
+            yield Stop(reason="tool_use")
+
+    limits = LoopLimits(first_token_timeout_s=0.1, idle_timeout_s=0.1)
+    events = await collect(make_loop(tmp_path, Writing(), StubGate(), limits), turn("write it"))
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.STOP
+    assert (tmp_path / "big.py").read_text() == "x"
+
+
 async def abort_after(loop: AgentLoop, delay: float) -> tuple[list[AgentEvent], float]:
     cancel = asyncio.Event()
     started = asyncio.get_running_loop().time()
@@ -380,3 +408,20 @@ async def test_a_reply_that_already_started_is_not_retried(tmp_path: Path) -> No
     assert isinstance(last, RunEnd)
     assert last.reason is RunEndReason.ERROR
     assert provider.requests == 1
+
+
+async def test_an_image_the_model_rejects_is_dropped_so_the_next_run_works(tmp_path: Path) -> None:
+    provider = ScriptedProvider(
+        [ProviderError("anthropic 400: Could not process image"), [TextDelta(text="ok")]]
+    )
+    loop = make_loop(tmp_path, provider, StubGate())
+    image = LlmImage(media_type="image/png", data="aW1n")
+    first = await collect(loop, turn("look").model_copy(update={"images": (image,)}))
+
+    end = first[-1]
+    assert isinstance(end, RunEnd)
+    assert end.reason is RunEndReason.ERROR
+    assert "images were removed" in (end.error or "")
+    await collect(loop, turn("and now?"))
+    assert all(not message.images for message in provider.requests[1].messages)
+    assert "image(s) removed" in provider.requests[1].messages[0].content

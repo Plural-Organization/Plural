@@ -1,7 +1,7 @@
 import type { KeyBinding, TextareaRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
-import type { Role } from "@plural/client";
+import type { Mentionable, Role } from "@plural/client";
 import { suggestions as suggest, visibleSuggestionWindow, type CommandHint } from "../commands";
 import { theme } from "../theme";
 
@@ -10,6 +10,7 @@ interface ComposerProps {
   disabled: string | null;
   placeholder: string;
   role: Role | undefined;
+  people?: Mentionable[];
   seed: { text: string; key: number } | null;
   label: string | null;
   onSubmit: (text: string) => void;
@@ -22,6 +23,9 @@ interface ComposerProps {
   onActivity: (text: string) => void;
   onFocus: () => void;
   onIdleKey?: (key: string) => boolean;
+  images?: string[];
+  onPasteImage?: () => void;
+  onDropImage?: () => void;
   remember?: boolean;
   tips?: boolean;
 }
@@ -33,6 +37,9 @@ const TIPS = [
   "esc stops the agent mid-run",
   "ctrl+o opens every tool call",
   "shift+enter starts a new line",
+  "ctrl+v pastes an image from the clipboard",
+  "@name writes to one person, the agent does not see it",
+  "/team writes to everyone in the room, the agent does not see it",
 ];
 const TIP_MS = 7000;
 
@@ -56,9 +63,10 @@ export function Composer(props: ComposerProps) {
   const position = useRef(-1);
   const draft = useRef("");
 
-  const hints = dismissed ? [] : suggest(value, role);
+  const hints = dismissed ? [] : suggest(value, role, props.people ?? []);
   const selected: CommandHint | undefined = hints[Math.min(choice, Math.max(0, hints.length - 1))];
   const hintWindow = visibleSuggestionWindow(hints, choice);
+  const completion = selected ? (selected.insert ?? `/${selected.name} `) : "";
 
   const put = (text: string): void => {
     area.current?.setText(text);
@@ -87,7 +95,7 @@ export function Composer(props: ComposerProps) {
 
   const submit = (): void => {
     const text = (area.current?.plainText ?? "").trim();
-    if (text === "") {
+    if (text === "" && (props.images ?? []).length === 0) {
       return;
     }
     if (props.remember !== false) {
@@ -135,6 +143,16 @@ export function Composer(props: ComposerProps) {
       props.onCopy();
       return;
     }
+    if (key.ctrl && key.name === "v" && props.onPasteImage) {
+      key.preventDefault();
+      props.onPasteImage();
+      return;
+    }
+    if (key.name === "backspace" && value === "" && (props.images ?? []).length > 0) {
+      key.preventDefault();
+      props.onDropImage?.();
+      return;
+    }
     const idle = (area.current?.plainText ?? value) === "" && hints.length === 0 && !key.meta && !key.shift;
     const action = key.ctrl ? (["g", "r"].includes(key.name) ? `ctrl+${key.name}` : null) : ["up", "down", "return"].includes(key.name) ? key.name : null;
     if (idle && action && props.onIdleKey?.(action)) {
@@ -158,15 +176,15 @@ export function Composer(props: ComposerProps) {
     if (key.name === "tab") {
       key.preventDefault();
       if (selected) {
-        put(`/${selected.name} `);
+        put(completion);
       } else {
         props.onTab();
       }
       return;
     }
-    if (key.name === "return" && !key.shift && selected && value !== `/${selected.name}` && value !== `/${selected.name} `) {
+    if (key.name === "return" && !key.shift && selected && value !== completion.trimEnd() && value !== completion) {
       key.preventDefault();
-      put(`/${selected.name} `);
+      put(completion);
       return;
     }
     if (key.name === "up" || key.name === "down") {
@@ -196,6 +214,14 @@ export function Composer(props: ComposerProps) {
         title={label ? ` ${label} ` : undefined}
         titleAlignment="left"
       >
+        {(props.images ?? []).length > 0 ? (
+          <box flexDirection="row" height={1}>
+            <text fg={theme.accent}>
+              {(props.images ?? []).map((name) => `[${name}]`).join(" ")}
+              <span fg={theme.dim}>  backspace removes the last one</span>
+            </text>
+          </box>
+        ) : null}
         <box flexDirection="row">
           <text fg={color}>{focused ? "❯ " : "› "}</text>
           <textarea

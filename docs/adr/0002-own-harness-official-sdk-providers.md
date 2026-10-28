@@ -14,3 +14,6 @@ The `PolicyGate` must sit inside the agent loop, and the event log is the only s
 
 ## Consequences
 Two new runtime dependencies with permissive licenses. Adapters are small and tested against recorded streams with a mock transport. Prompt caching works because the system prompt, tool list and history prefix stay byte-stable.
+
+## Addendum: web search
+`web_search` runs Pydantic AI's `WebSearchTool` in a short Pydantic AI agent run, so the provider's own search engine does the searching. It lives in `plural.agent.providers.web_search` like the other vendor code; the loop, approvals and history stay ours, and the tool is gated like any other.

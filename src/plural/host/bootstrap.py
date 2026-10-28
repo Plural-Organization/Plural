@@ -1,25 +1,30 @@
 import asyncio
 import os
-from collections.abc import Mapping
+import secrets
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
+from plural.agent.agents import AgentLibrary
 from plural.agent.context import ContextBuilder, Environment
 from plural.agent.loop import AgentLoop, LoopLimits
-from plural.agent.mcp import McpHub
+from plural.agent.mcp import BROWSER_SERVER, McpHub, browser_spec
 from plural.agent.providers import anthropic_api
-from plural.agent.providers.anthropic_api import AnthropicProvider
-from plural.agent.providers.anthropic_oauth import AnthropicOAuthProvider, load_credentials
+from plural.agent.providers.anthropic_oauth import AnthropicOAuthProvider
 from plural.agent.providers.base import LLMProvider
-from plural.agent.providers.claude_code import ClaudeCodeProvider
-from plural.agent.providers.codex_cli import CodexCliProvider
-from plural.agent.providers.fake import DemoProvider
-from plural.agent.providers.openai_compat import OpenAIProvider
+from plural.agent.providers.web_search import (
+    anthropic_oauth_search,
+    anthropic_search,
+    openai_search,
+    web_search_tool,
+)
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.skills import SkillLibrary
+from plural.agent.tools.agent import AgentTool
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.registry import builtin_tools
+from plural.agent.tools.search import Searcher, WebSearchSlot
 from plural.agent.tools.skills import skill_tools
 from plural.core.policy.engine import Policy
 from plural.host.actor import SessionActor
@@ -29,26 +34,24 @@ from plural.host.attachments import AttachmentVault
 from plural.host.config import HostSettings
 from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
-from plural.host.invites import InviteBook
+from plural.host.invites import InviteBook, RoomLink
 from plural.host.policy_gate import HostPolicyGate
+from plural.host.providers import (
+    build_provider,
+    provider_secrets,
+    resolve_api_key,
+)
 from plural.host.publisher import Publisher
+from plural.host.routing import build_helper
 from plural.host.system import SystemClock, UlidGenerator
 from plural.host.transport.base import HostTransport
 from plural.host.transport.direct import DirectTransport
 from plural.host.transport.relay_link import RelayLink
-from plural.protocol.models import Participant, Role
+from plural.protocol.models import HOST_PARTICIPANT_ID, Participant, Role
 from plural.security.keys import load_or_create_host_key
 from plural.security.secrets import Redactor
 from plural.security.tokens import TokenSigner
 from plural.storage.sqlite_store import SqliteEventStore
-
-HOST_PARTICIPANT_ID = "p_host"
-KEY_VARIABLES = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
-LOCAL_SERVER_KEY = "not-needed"
-
-
-class ConfigError(Exception):
-    pass
 
 
 @dataclass(slots=True)
@@ -60,9 +63,11 @@ class Host:
     store: SqliteEventStore
     agent_run: AgentRun
     invites: InviteBook
+    room_link: RoomLink
     host_token: str
     host_link: str
     mcp: McpHub | None = None
+    web_search: WebSearchSlot | None = None
 
     async def serve(self) -> None:
         async with asyncio.TaskGroup() as group:
@@ -76,78 +81,70 @@ class Host:
         await self.store.close()
 
 
-def resolve_api_key(settings: HostSettings, environ: Mapping[str, str]) -> str | None:
-    if settings.api_key is not None:
-        return settings.api_key.get_secret_value()
-    variable = KEY_VARIABLES.get(settings.resolved_provider(environ))
-    return environ.get(variable) if variable else None
+def build_web_search(
+    settings: HostSettings, api_key: str | None, provider: LLMProvider
+) -> Searcher | None:
+    """Search through the session provider's own search engine, when it has one."""
+    if not settings.web_search or settings.base_url is not None:
+        return None
+    place = {
+        "city": settings.web_search_city,
+        "region": settings.web_search_region,
+        "country": settings.web_search_country,
+        "timezone": settings.web_search_timezone,
+    }
+    tool = web_search_tool(
+        context_size=settings.web_search_context_size,
+        max_uses=settings.web_search_max_uses,
+        allowed_domains=settings.web_search_allowed_domains,
+        blocked_domains=settings.web_search_blocked_domains,
+        location={key: value for key, value in place.items() if value},
+    )
+    provider_name = settings.resolved_provider()
+    family = "anthropic" if provider_name in {"anthropic", "anthropic_oauth"} else provider_name
+    chosen, _, named = (settings.web_search_model or "").rpartition(":")
+    model = named if chosen == family else settings.model
+    match provider_name:
+        case "anthropic" if api_key:
+            return anthropic_search(model or anthropic_api.DEFAULT_MODEL, api_key, tool)
+        case "anthropic_oauth" if isinstance(provider, AnthropicOAuthProvider):
+            return anthropic_oauth_search(
+                model or anthropic_api.DEFAULT_OAUTH_MODEL, provider.token, tool
+            )
+        case "openai" if api_key and model:
+            return openai_search(model, api_key, tool)
+        case _:
+            return None
 
 
-def provider_secrets(settings: HostSettings, api_key: str | None) -> tuple[str, ...]:
-    if settings.resolved_provider() == "anthropic_oauth":
-        credentials = load_credentials(settings.state_dir / "anthropic-oauth.json")
-        return (credentials.access, credentials.refresh)
-    return (api_key,) if api_key else ()
-
-
-def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
-    match settings.resolved_provider():
-        case "fake":
-            return DemoProvider()
-        case "anthropic":
-            if not api_key:
-                raise ConfigError(
-                    "set PLURAL_API_KEY or ANTHROPIC_API_KEY for the anthropic provider"
-                )
-            return AnthropicProvider(
-                api_key=api_key,
-                model=settings.model or anthropic_api.DEFAULT_MODEL,
-                max_tokens=settings.max_output_tokens or anthropic_api.DEFAULT_MAX_TOKENS,
-                effort=settings.effort,
-                base_url=settings.base_url,
-            )
-        case "anthropic_oauth":
-            return AnthropicOAuthProvider(
-                credentials_path=settings.state_dir / "anthropic-oauth.json",
-                model=settings.model or anthropic_api.DEFAULT_OAUTH_MODEL,
-                max_tokens=settings.max_output_tokens or anthropic_api.DEFAULT_MAX_TOKENS,
-                effort=settings.effort,
-            )
-        case "claude_code":
-            return ClaudeCodeProvider(
-                workspace=settings.workspace,
-                model=settings.model or "claude-sonnet-5-5",
-            )
-        case "codex_cli":
-            return CodexCliProvider(
-                workspace=settings.workspace,
-                model=settings.model or CodexCliProvider.DEFAULT_MODEL,
-            )
-        case "openai":
-            if not settings.model:
-                raise ConfigError("set PLURAL_MODEL for the openai provider")
-            if not api_key and settings.base_url is None:
-                raise ConfigError("set PLURAL_API_KEY or OPENAI_API_KEY for the openai provider")
-            return OpenAIProvider(
-                api_key=api_key or LOCAL_SERVER_KEY,
-                model=settings.model,
-                base_url=settings.base_url,
-                max_tokens=settings.max_output_tokens,
-                effort=settings.effort,
-            )
+async def remember_session(
+    store: SqliteEventStore, workspace: Path, settings: HostSettings, now: datetime
+) -> None:
+    await store.set_meta("workspace", str(workspace))
+    await store.set_meta("host_name", settings.host_name)
+    if await store.meta("created_at") is None:
+        await store.set_meta("created_at", now.isoformat())
+    if settings.title:
+        await store.set_meta("title", settings.title)
 
 
 async def build_host(settings: HostSettings, *, provider: LLMProvider | None = None) -> Host:
     api_key = resolve_api_key(settings, os.environ)
     ids, clock = UlidGenerator(), SystemClock()
+    helper = build_helper(settings) if provider is None else None
     room = settings.room or ids.new("r_")
     state_dir = settings.state_dir
     signer = TokenSigner(await asyncio.to_thread(load_or_create_host_key, state_dir / "host_key"))
     store = await SqliteEventStore.open(state_dir / "sessions" / f"{room}.db")
     workspace = await asyncio.to_thread(Workspace.at, settings.workspace)
+    await remember_session(store, workspace.root, settings, clock.now())
     inbox = Inbox()
     skills = SkillLibrary(project=workspace.root, home=Path.home())
     tools = builtin_tools()
+    agent = provider or build_provider(settings, api_key)
+    web_search = WebSearchSlot()
+    web_search.use(build_web_search(settings, api_key, agent))
+    tools.add_source(web_search)
     for tool in skill_tools(skills, lambda: inbox.put(SkillsUpdated())):
         tools.register(tool)
     mcp = McpHub(
@@ -155,6 +152,11 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         home=Path.home(),
         logs=state_dir / "logs",
         on_change=lambda: inbox.put(McpUpdated()),
+        builtin=(
+            {BROWSER_SERVER: browser_spec(settings.browser, state_dir / "browser")}
+            if settings.browser not in {"", "off"}
+            else None
+        ),
     )
     tools.add_source(mcp)
     mcp.start()
@@ -168,18 +170,25 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         timeout_s=settings.approval_timeout_s,
         rejection_limit=settings.rejection_limit,
     )
+    environment = Environment(
+        workspace=workspace.root,
+        today=clock.now().astimezone().date(),
+        git_branch=await _git_branch(workspace),
+    )
+    agents = AgentLibrary(project=workspace.root, home=Path.home())
+    await asyncio.to_thread(agents.refresh)
+    delegate = AgentTool(library=agents, tools=tools, gate=gate, environment=environment, ids=ids)
+    tools.register(delegate)
     loop = AgentLoop(
-        provider=provider or build_provider(settings, api_key),
+        provider=agent,
+        helper=helper.provider if helper else None,
         tools=tools,
         gate=gate,
         context=ContextBuilder(
-            environment=Environment(
-                workspace=workspace.root,
-                today=clock.now().astimezone().date(),
-                git_branch=await _git_branch(workspace),
-            ),
+            environment=environment,
             project_notes=await _project_notes(workspace),
             skills=skills,
+            agents=agents,
         ),
         tool_ctx=ToolCtx(workspace=workspace, backend=LocalBackend()),
         ids=ids,
@@ -190,12 +199,19 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
             compact_at=settings.compact_at,
         ),
     )
+    delegate.attach(lambda: loop)
     room_url = settings.room_url(room)
     invites = InviteBook(clock=clock, link_base=room_url)
+    link_code = await store.meta("room_link")
+    if link_code is None:
+        link_code = secrets.token_urlsafe(18)
+        await store.set_meta("room_link", link_code)
+    room_link = RoomLink(code=link_code, link_base=room_url)
     gateway = Gateway(
         room=room,
         signer=signer,
         invites=invites,
+        link=room_link,
         ids=ids,
         clock=clock,
         token_ttl_s=settings.token_ttl_s,
@@ -208,22 +224,35 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         publisher=Publisher(room=room, ids=ids, clock=clock),
         gateway=gateway,
         invites=invites,
+        link=room_link,
         agent_run=agent_run,
         approval_registry=registry,
         gate=gate,
         vault=AttachmentVault(state_dir / "attachments" / room),
         redactor=Redactor.from_environment(
-            os.environ, extra=(*provider_secrets(settings, api_key), *mcp.secrets())
+            os.environ,
+            extra=(
+                *provider_secrets(settings, api_key),
+                *(helper.secrets if helper else ()),
+                *mcp.secrets(),
+            ),
         ),
         ids=ids,
         clock=clock,
         host=host,
         max_attachment_bytes=settings.max_attachment_bytes,
+        max_image_bytes=settings.max_image_bytes,
         prompt_mode=settings.prompt_mode,
+        admission=settings.admission,
         skills=skills,
         mcp=mcp,
+        agents=agents,
         typing_ttl_s=settings.typing_ttl_s,
         agent_label=settings.agent_label(),
+        fast_label=helper.label if helper else "",
+        join_timeout_s=settings.join_timeout_s,
+        max_pending_joins=settings.max_pending_joins,
+        max_participants=settings.max_participants,
     )
     await actor.start()
     transport: HostTransport = (
@@ -240,9 +269,11 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         store=store,
         agent_run=agent_run,
         invites=invites,
+        room_link=room_link,
         host_token=host_token,
         host_link=f"{room_url}?token={host_token}",
         mcp=mcp,
+        web_search=web_search,
     )
 
 

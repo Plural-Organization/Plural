@@ -2,6 +2,7 @@ import type { Role } from "@plural/client";
 import type { Keys } from "./credentials";
 import { PRESETS, presetOf, type AgentChoice, type PresetId } from "./presets";
 import type { Settings } from "./settings";
+import { relayProblem, type ShareMode } from "./share";
 import { THEMES, THEME_NAMES } from "./theme";
 
 export type Tab = "model" | "session" | "appearance";
@@ -31,6 +32,7 @@ export interface ModelState {
   choice: AgentChoice;
   keys: Keys;
   mode: "open" | "review";
+  admission?: "approve" | "open";
   role: Role | undefined;
   canConfigure: boolean;
   oauthLoggedIn?: boolean;
@@ -110,6 +112,22 @@ export function modelRows(state: ModelState): Row[] {
       enabled: true,
     });
   }
+  if (preset.provider !== "fake") {
+    const fast = choice.fastModel ?? "";
+    rows.push({
+      id: "fast",
+      kind: "choice",
+      label: "Fast model",
+      value: fast === "" ? "auto" : fast,
+      hint:
+        fast === ""
+          ? "← → choose · auto picks a cheaper model you can reach for summaries and sub-agents"
+          : fast === "off"
+            ? "← → choose · off keeps summaries and sub-agents on the main model"
+            : "← → choose · summaries and sub-agents run on this model",
+      enabled: true,
+    });
+  }
   if (preset.editableUrl) {
     rows.push({
       id: "url",
@@ -142,6 +160,70 @@ export function modelRows(state: ModelState): Row[] {
   return rows;
 }
 
+const SHARING: { mode: ShareMode; label: string; description: string }[] = [
+  { mode: "local", label: "This machine", description: "only you. Invite links work on this computer, good for trying things out" },
+  { mode: "network", label: "Same network", description: "teammates on your Wi-Fi, office network or VPN join with a link that carries your network address" },
+  { mode: "relay", label: "Over the internet", description: "through a relay server, so nobody needs an open port. Needs the address of a relay" },
+];
+
+function joiningRows(state: ModelState, host: boolean): Row[] {
+  const admission = state.admission ?? "approve";
+  const hint = host ? "applies to the next person who uses the room link" : "only the host chooses who may join";
+  return [
+    { id: "joining-title", kind: "note", label: "People who use the room link", value: "", hint: "/invite copies it, it never expires", enabled: false },
+    {
+      id: "join-approve",
+      kind: "radio",
+      label: "I let each person in",
+      value: "",
+      description: "they wait until you answer, and you choose whether they take part or only watch",
+      hint,
+      selected: admission === "approve",
+      enabled: host,
+    },
+    {
+      id: "join-open",
+      kind: "radio",
+      label: "Anyone with the link joins at once",
+      value: "",
+      description: "for a team you trust: the link is as good as a password, so keep it private",
+      hint,
+      selected: admission === "open",
+      enabled: host,
+    },
+  ];
+}
+
+function shareRows(state: ModelState, host: boolean): Row[] {
+  const rows: Row[] = [
+    { id: "share-title", kind: "note", label: "Who can join", value: "", hint: "how the invite link reaches your teammates", enabled: false },
+    ...SHARING.map(
+    (entry): Row => ({
+      id: `share-${entry.mode}`,
+      kind: "radio",
+      label: entry.label,
+      value: "",
+      description: entry.description,
+      hint: host ? "takes effect the next time you start plural" : "only the host chooses how the room is shared",
+      selected: state.settings.share === entry.mode,
+      enabled: host,
+    }),
+    ),
+  ];
+  if (state.settings.share === "relay") {
+    const problem = state.settings.relayUrl === "" ? null : relayProblem(state.settings.relayUrl);
+    rows.push({
+      id: "relay",
+      kind: "text",
+      label: "Relay address",
+      value: state.settings.relayUrl || "not set",
+      hint: problem ?? "for example wss://relay.example.com, see docs/self-hosting.md",
+      enabled: host,
+    });
+  }
+  return rows;
+}
+
 export function sessionRows(state: ModelState): Row[] {
   const host = state.role === "host";
   const viewer = state.role === "viewer";
@@ -166,8 +248,12 @@ export function sessionRows(state: ModelState): Row[] {
       selected: state.mode === "review",
       enabled: host,
     },
+    ...joiningRows(state, host),
+    ...shareRows(state, host),
     toggle("typing", "Show my typing", state.settings.announceTyping, "let others see when you are writing", !viewer),
-    toggle("bell", "Bell on requests", state.settings.bell, "ring the terminal when something needs the host", host),
+    toggle("mention-bell", "Bell on mentions", state.settings.mentionBell, "play a sound when someone tags you or writes to you privately", !viewer),
+    toggle("bell", "Bell on requests", state.settings.bell, "play a sound when something needs the host", host),
+    toggle("join-bell", "Bell on joins", state.settings.joinBell, "play a sound when someone joins your room", host),
   ];
 }
 
@@ -190,7 +276,7 @@ export function appearanceRows(state: ModelState): Row[] {
     toggle("panel", "Side panel", state.settings.panel, "participants, queue and approvals (ctrl+b)"),
     toggle("copy", "Copy on select", state.settings.copyOnSelect, "selecting text puts it on the clipboard"),
     { id: "reply", kind: "action", label: "Copy the last reply", value: "", hint: "put the agent's last answer on the clipboard", enabled: true },
-    { id: "invite", kind: "action", label: "Create an invite link", value: "", hint: "a one-time link for a participant, copied for you", enabled: state.role === "host" },
+    { id: "invite", kind: "action", label: "Copy the room link", value: "", hint: "the permanent link, you let people in", enabled: state.role === "host" },
   ];
 }
 
@@ -232,6 +318,16 @@ export function nextPresetInConnection(current: AgentChoice["preset"], direction
   const choices = PRESETS.filter((preset) => preset.connection === presetOf(current).connection);
   const index = choices.findIndex((preset) => preset.id === current);
   return choices[(index + direction + choices.length) % choices.length]!.id;
+}
+
+export function fastOptions(choice: AgentChoice): string[] {
+  return ["", "off", ...presetOf(choice.preset).models.filter((model) => model !== (choice.model || presetOf(choice.preset).models[0]))];
+}
+
+export function nextFast(choice: AgentChoice, direction: 1 | -1): string {
+  const options = fastOptions(choice);
+  const index = Math.max(0, options.indexOf(choice.fastModel ?? ""));
+  return options[(index + direction + options.length) % options.length] as string;
 }
 
 export function nextModel(choice: AgentChoice, direction: 1 | -1): string {

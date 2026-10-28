@@ -67,9 +67,11 @@ export function Logo({ size, dance = false, className, label = "Plural" }: LogoP
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     element.width = Math.round(size * dpr);
     element.height = Math.round(size * dpr);
-    const n = Math.max(1, Math.floor(element.width / (Math.max(W, H) + margin * 2)));
-    const ox = Math.round((element.width - n * W) / 2);
-    const oy = Math.round((element.height - n * H) / 2);
+    // Whole pixels per cell keep the art crisp; below one pixel a cell shrinks so the logo still fits.
+    const fit = element.width / (Math.max(W, H) + margin * 2);
+    const n = fit >= 1 ? Math.floor(fit) : fit;
+    const ox = (element.width - n * W) / 2;
+    const oy = (element.height - n * H) / 2;
     const ink = getComputedStyle(element).color;
     let frame = 0;
 

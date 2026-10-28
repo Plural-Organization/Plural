@@ -1,7 +1,10 @@
-import type { EventRecord, SessionState, TranscriptEntry } from "./protocol";
+import type { EventRecord, SessionState, TranscriptEntry, UsageLine } from "./protocol";
 
 export const TRANSCRIPT_LIMIT = 200;
 export const OUTPUT_PREVIEW_CHARS = 2000;
+export const CHAT_LIMIT = 200;
+export const BOARD_STROKES_LIMIT = 2000;
+export const BOARD_TOTAL_POINTS = 200_000;
 
 export function emptyState(): SessionState {
   return {
@@ -16,12 +19,35 @@ export function emptyState(): SessionState {
     skills: [],
     context: null,
     mcp: [],
+    usage: [],
+    agents: [],
     queue: [],
     agent: "",
+    fast_agent: "",
     summary: null,
     run: null,
     transcript: [],
+    chat: [],
+    admission: "approve",
+    join_requests: {},
+    board: { open: false, strokes: [] },
   };
+}
+
+// A host from an older release leaves out fields added since, such as chat.
+export function withDefaults(state: SessionState): SessionState {
+  return { ...emptyState(), ...state };
+}
+
+// Mirrors the host: all strokes together keep at most BOARD_TOTAL_POINTS numbers, the oldest go first.
+function withinBudget<T extends { points: unknown[] }>(strokes: T[]): T[] {
+  let total = strokes.reduce((sum, stroke) => sum + stroke.points.length, 0);
+  let start = 0;
+  while (total > BOARD_TOTAL_POINTS && start < strokes.length - 1) {
+    total -= strokes[start]!.points.length;
+    start += 1;
+  }
+  return strokes.slice(start);
 }
 
 export function reduce(state: SessionState, record: EventRecord): SessionState {
@@ -42,12 +68,45 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return patchParticipant(state, event.participant_id, { role: event.role });
     case "participant.revoked":
       return { ...state, participants: without(state.participants, event.participant_id) };
+    case "link.admission_changed":
+      return { ...state, admission: event.mode };
+    case "join.requested":
+      return { ...state, join_requests: { ...state.join_requests, [event.request.id]: event.request } };
+    case "join.resolved":
+      return { ...state, join_requests: without(state.join_requests, event.request_id) };
+    case "chat.posted":
+      return {
+        ...state,
+        chat: [
+          ...state.chat,
+          {
+            id: event.message_id,
+            author_id: event.author_id,
+            text: event.text,
+            ts: record.ts,
+            to: event.to,
+            mentions: event.mentions,
+          },
+        ].slice(-CHAT_LIMIT),
+      };
+    case "board.opened":
+      return { ...state, board: { ...state.board, open: event.open } };
+    case "board.stroked":
+      return { ...state, board: { ...state.board, strokes: withinBudget([...state.board.strokes, event.stroke].slice(-BOARD_STROKES_LIMIT)) } };
+    case "board.erased":
+      return { ...state, board: { ...state.board, strokes: state.board.strokes.filter((stroke) => stroke.id !== event.stroke_id) } };
+    case "board.cleared":
+      return { ...state, board: { ...state.board, strokes: [] } };
     case "agent.changed":
-      return { ...state, agent: event.agent };
+      return { ...state, agent: event.agent, fast_agent: event.fast };
     case "session.prompt_mode_changed":
       return { ...state, prompt_mode: event.mode };
     case "session.permission_mode_changed":
       return { ...state, permission_mode: event.mode };
+    case "agents.changed":
+      return { ...state, agents: event.agents };
+    case "usage.recorded":
+      return { ...state, usage: addUsage(state.usage, event.lines) };
     case "mcp.changed":
       return { ...state, mcp: event.servers };
     case "context.usage":
@@ -171,4 +230,28 @@ function append(state: SessionState, entry: TranscriptEntry): SessionState {
 function without<V>(map: Record<string, V>, key: string): Record<string, V> {
   const { [key]: _removed, ...rest } = map;
   return rest;
+}
+
+function addUsage(total: UsageLine[], lines: UsageLine[]): UsageLine[] {
+  const merged = new Map(total.map((line) => [`${line.role}\u0000${line.model}\u0000${line.agent}`, line]));
+  for (const line of lines) {
+    const key = `${line.role}\u0000${line.model}\u0000${line.agent}`;
+    const previous = merged.get(key);
+    merged.set(
+      key,
+      previous === undefined
+        ? line
+        : {
+            ...previous,
+            uses: previous.uses + line.uses,
+            usage: {
+              input_tokens: previous.usage.input_tokens + line.usage.input_tokens,
+              output_tokens: previous.usage.output_tokens + line.usage.output_tokens,
+              cache_read_tokens: previous.usage.cache_read_tokens + line.usage.cache_read_tokens,
+              cache_write_tokens: previous.usage.cache_write_tokens + line.usage.cache_write_tokens,
+            },
+          },
+    );
+  }
+  return [...merged.values()];
 }

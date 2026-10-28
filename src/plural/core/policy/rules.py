@@ -45,6 +45,7 @@ DEFAULT_RULES: Final = RuleSet.from_mapping(
         "web_search": {"*": "ask"},
         "web_fetch": {"*": "ask"},
         "skill": {"*": "allow"},
+        "agent": {"*": "allow"},
         "skill_search": {"*": "allow"},
         "skill_install": {"*": "ask"},
         "write": {"*": "ask"},

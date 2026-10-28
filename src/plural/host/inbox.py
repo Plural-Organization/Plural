@@ -37,6 +37,11 @@ class ApprovalExpired:
 
 
 @dataclass(frozen=True, slots=True)
+class JoinExpired:
+    request_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class TypingExpired:
     participant_id: str
 
@@ -48,6 +53,8 @@ class Reconfigure:
     context_window: int | None
     secrets: tuple[str, ...]
     reply: "asyncio.Future[None]"
+    helper: LLMProvider | None = None
+    helper_label: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,6 +82,7 @@ InboxMessage = (
     | ApprovalNeeded
     | ApprovalExpired
     | TypingExpired
+    | JoinExpired
     | Reconfigure
     | SkillsUpdated
     | McpUpdated

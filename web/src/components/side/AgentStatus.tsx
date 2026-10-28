@@ -13,7 +13,7 @@ export function AgentStatus({ projection, status, isHost, send }: AgentStatusPro
   const running = projection.state.run !== null;
   return (
     <Section title="agent">
-      <p className="mono">{projection.state.agent || projection.agent || "starting…"}</p>
+      <p className="mono">{projection.agentLabel || "starting…"}</p>
       <p className={running ? styles.running : "muted"}>{running ? status || "working" : "idle"}</p>
       {isHost && running ? (
         <button className="button small danger" type="button" onClick={() => send({ type: "run.abort" })}>

@@ -53,7 +53,9 @@ export interface ContextMeter {
 
 export function contextMeter(state: SessionState): ContextMeter | null {
   const context = state.context;
-  if (context === null || context.window <= 0) {
+  // These are the host's canonical labels for the OAuth connection presets.
+  const oauth = /^(Claude OAuth|Claude Code|Codex CLI)(?: ·|$)/.test(state.agent);
+  if (oauth || context === null || context.window <= 0) {
     return null;
   }
   const share = context.tokens / context.window;

@@ -3,6 +3,7 @@ export interface JoinLink {
   room: string;
   invite: string | null;
   token: string | null;
+  join: string | null;
 }
 
 export function parseLink(raw: string): JoinLink {
@@ -24,5 +25,6 @@ export function parseLink(raw: string): JoinLink {
     room,
     invite: parsed.searchParams.get("invite"),
     token: parsed.searchParams.get("token"),
+    join: parsed.searchParams.get("join"),
   };
 }

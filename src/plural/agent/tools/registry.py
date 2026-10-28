@@ -9,7 +9,7 @@ from plural.agent.tools.glob import GlobTool
 from plural.agent.tools.grep import GrepTool
 from plural.agent.tools.ls import LsTool
 from plural.agent.tools.read import ReadTool
-from plural.agent.tools.web import WebFetchTool, WebSearchTool
+from plural.agent.tools.web import WebFetchTool
 from plural.agent.tools.write import WriteTool
 
 
@@ -25,6 +25,22 @@ class ToolRegistry:
     def __init__(self) -> None:
         self._tools: dict[str, Tool] = {}
         self._sources: list[ToolSource] = []
+        self._allowed: frozenset[str] | None = None
+
+    def subset(self, names: Iterable[str]) -> "ToolRegistry":
+        """A view with only these tools, which still follows tools registered or connected later."""
+        view = ToolRegistry()
+        view._tools = self._tools
+        view._sources = self._sources
+        view._allowed = frozenset(names)
+        return view
+
+    def _visible(self, name: str) -> bool:
+        return (
+            self._allowed is None
+            or name in self._allowed
+            or ("mcp" in self._allowed and name.startswith("mcp__"))
+        )
 
     def add_source(self, source: ToolSource) -> None:
         self._sources.append(source)
@@ -44,12 +60,13 @@ class ToolRegistry:
 
     def get(self, name: str) -> Tool:
         tool = self._tools.get(name) or self._dynamic().get(name)
-        if tool is None:
+        if tool is None or not self._visible(name):
             raise UnknownTool(f"unknown tool {name}")
         return tool
 
     def schemas(self) -> tuple[ToolSchema, ...]:
-        return tuple(tool.schema() for tool in (*self._tools.values(), *self._dynamic().values()))
+        tools = (*self._tools.values(), *self._dynamic().values())
+        return tuple(tool.schema() for tool in tools if self._visible(tool.name))
 
     def prepare(self, call: ToolCallRequest) -> PreparedCall:
         return self.get(call.name).prepare(call.args)
@@ -66,7 +83,6 @@ def builtin_tools() -> ToolRegistry:
         GrepTool(),
         GlobTool(),
         LsTool(),
-        WebSearchTool(),
         WebFetchTool(),
     ):
         registry.register(tool)

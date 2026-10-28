@@ -1,13 +1,15 @@
-import { label, type ApprovalView, type ProposalView, type SessionState } from "@plural/client";
+import { label, type ApprovalView, type JoinRequestView, type ProposalView, type SessionState } from "@plural/client";
 import { colorFor, theme } from "../theme";
 
 export type InboxItem =
+  | { kind: "join"; id: string; request: JoinRequestView }
   | { kind: "approval"; id: string; approval: ApprovalView }
   | { kind: "proposal"; id: string; proposal: ProposalView }
   | { kind: "plan"; id: string };
 
 export function inboxItems(state: SessionState): InboxItem[] {
   return [
+    ...Object.values(state.join_requests).map((request): InboxItem => ({ kind: "join", id: request.id, request })),
     ...Object.values(state.approvals).map((approval): InboxItem => ({ kind: "approval", id: approval.id, approval })),
     ...Object.values(state.proposals).map((proposal): InboxItem => ({ kind: "proposal", id: proposal.id, proposal })),
   ];
@@ -60,14 +62,16 @@ export function Inbox({ items, state, selected, focused, now }: InboxProps) {
     >
       <text>
         <span fg={theme.warn}>
-          <b>{item.kind === "approval" ? "approval needed" : item.kind === "plan" ? "plan ready" : "proposal"}</b>
+          <b>{item.kind === "join" ? "wants to join" : item.kind === "approval" ? "approval needed" : item.kind === "plan" ? "plan ready" : "proposal"}</b>
         </span>
         <span fg={theme.dim}>
           {"  "}
           {index + 1}/{items.length}
         </span>
       </text>
-      {item.kind === "approval" ? (
+      {item.kind === "join" ? (
+        <JoinBody request={item.request} now={now} focused={focused} />
+      ) : item.kind === "approval" ? (
         <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} />
       ) : item.kind === "plan" ? (
         <PlanBody focused={focused} />
@@ -75,6 +79,28 @@ export function Inbox({ items, state, selected, focused, now }: InboxProps) {
         <ProposalBody proposal={item.proposal} state={state} focused={focused} />
       )}
     </box>
+  );
+}
+
+function JoinBody({ request, now, focused }: { request: JoinRequestView; now: number; focused: boolean }) {
+  const seconds = Math.max(0, Math.round((now - Date.parse(request.requested_at)) / 1000));
+  return (
+    <>
+      <text>
+        <span fg={colorFor(request.id)}>
+          <b>{request.name}</b>
+        </span>
+        <span fg={theme.dim}>
+          {" "}
+          · {request.client} · waiting {seconds}s · came in with the room link
+        </span>
+      </text>
+      {focused ? (
+        <Keys items={[["y", "let in"], ["v", "as a viewer"], ["n", "refuse"]]} />
+      ) : (
+        <text fg={theme.dim}>tab to answer</text>
+      )}
+    </>
   );
 }
 

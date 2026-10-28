@@ -60,7 +60,7 @@ class Environment:
 
 
 class SkillCatalog(Protocol):
-    def describe(self) -> str: ...
+    def describe(self) -> str | None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +69,7 @@ class ContextBuilder:
     environment: Environment | None = None
     project_notes: str | None = None
     skills: SkillCatalog | None = None
+    agents: SkillCatalog | None = None
 
     def system(self) -> str:
         parts = [self.system_prompt]
@@ -76,6 +77,7 @@ class ContextBuilder:
             parts.append(self.environment.describe())
         if self.project_notes:
             parts.append(f"# Project notes (AGENTS.md)\n{self.project_notes}")
-        if self.skills is not None:
-            parts.append(self.skills.describe())
+        for catalog in (self.skills, self.agents):
+            if catalog is not None and (text := catalog.describe()):
+                parts.append(text)
         return "\n\n".join(parts)

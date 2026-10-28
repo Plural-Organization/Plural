@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>dev.plural.host</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/sh</string>
+    <string>-c</string>
+    <string>umask 077; export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"; mkdir -p "$HOME/Library/Logs"; set -a; . "$HOME/.config/plural/host.env"; exec plural-host host &gt;&gt; "$HOME/Library/Logs/plural-host.log" 2&gt;&amp;1</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+</dict>
+</plist>

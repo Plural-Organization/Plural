@@ -9,7 +9,14 @@ export type {
 export type {
   ApprovalRequested,
   ApprovalView,
+  AgentView,
   AttachmentMeta,
+  BoardCursor,
+  BoardShape,
+  BoardStroke,
+  BoardView,
+  ChatEntry,
+  JoinRequestView,
   ContextView,
   Envelope,
   ErrorCode,
@@ -30,9 +37,11 @@ export type {
   SkillHit,
   SkillScope,
   SkillView,
+  TextSelection,
   ToolCallView,
   TranscriptEntry,
   Usage,
+  UsageLine,
 } from "./events";
 
 export type Event = EventsSchema["event"];

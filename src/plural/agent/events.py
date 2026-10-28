@@ -64,6 +64,16 @@ class Delivered:
 
 
 @dataclass(frozen=True, slots=True)
+class Spend:
+    """Tokens one model spent in a run, for the main conversation, a summary or a sub-agent."""
+
+    role: str
+    who: str
+    usage: Usage
+    uses: int = 1
+
+
+@dataclass(frozen=True, slots=True)
 class RunEnd:
     reason: RunEndReason
     usage: Usage

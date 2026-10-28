@@ -1,3 +1,5 @@
+import { withDefaults } from "./reduce";
+import { mentionsMe } from "./chat";
 import { label, shortTokens } from "./presenter";
 import type { Projection } from "./projection";
 import type { Event, Participant, Role, SessionState, ToolCallView, TranscriptEntry } from "./protocol";
@@ -10,10 +12,21 @@ export type ToolStatus = "running" | "ok" | "failed";
 
 export type FeedItem =
   | { kind: "banner"; id: string; room: string; version: string; guestLink: string | null }
-  | { kind: "user"; id: string; participantId: string; name: string; role: Role; viaProposal: boolean; text: string }
+  | { kind: "user"; id: string; participantId: string; name: string; role: Role; viaProposal: boolean; text: string; files?: string[] }
+  | {
+      kind: "chat";
+      id: string;
+      authorId: string;
+      name: string;
+      text: string;
+      to: string | null;
+      toName: string | null;
+      mine: boolean;
+      mentioned: boolean;
+    }
   | { kind: "assistant"; id: string; text: string; streaming: boolean }
   | { kind: "tool"; id: string; call: ToolCallView; status: ToolStatus; output: string; diff: string | null; live: string }
-  | { kind: "notice"; id: string; tone: Tone; text: string };
+  | { kind: "notice"; id: string; tone: Tone; text: string; action?: "board" };
 
 export interface Feed {
   items: FeedItem[];
@@ -70,7 +83,25 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
           )
         : feed;
     case "session.snapshot":
-      return loadHistory(feed, event.state, event.streaming);
+      return loadHistory(feed, withDefaults(event.state), event.streaming, projection.meId);
+    case "board.opened": {
+      const counter = feed.counter + 1;
+      const who = event.by === projection.meId ? "you" : nameOf(event.by);
+      const text = event.open ? `${who} opened the board` : `${who} closed the board`;
+      return { ...feed, counter, items: [...feed.items, { kind: "notice", id: `n${counter}`, tone: "dim", text, ...(event.open ? { action: "board" as const } : {}) }] };
+    }
+    case "chat.posted":
+      return {
+        ...feed,
+        items: [
+          ...feed.items,
+          chatItem(
+            { id: event.message_id, author_id: event.author_id, text: event.text, to: event.to, mentions: event.mentions },
+            state,
+            projection.meId,
+          ),
+        ],
+      };
     case "participant.joined":
       return event.participant.id === projection.meId
         ? feed
@@ -117,6 +148,7 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
             role: author?.role ?? event.provenance.initiator_role,
             viaProposal: event.provenance.origin === "proposal",
             text: event.text,
+            files: event.attachments.map((id) => state.attachments[id]?.name ?? "a file"),
           },
         ],
       };
@@ -248,7 +280,34 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
   }
 }
 
-function loadHistory(feed: Feed, state: SessionState, streaming: Record<string, string>): Feed {
+function chatItem(
+  entry: { id: string; author_id: string; text: string; to: string | null; mentions: string[] },
+  state: SessionState,
+  meId: string | null,
+): FeedItem {
+  const nameOf = (participantId: string): string => {
+    const participant = state.participants[participantId];
+    return participant ? label(state, participant) : participantId;
+  };
+  return {
+    kind: "chat",
+    id: entry.id,
+    authorId: entry.author_id,
+    name: nameOf(entry.author_id),
+    text: entry.text,
+    to: entry.to,
+    toName: entry.to === null ? null : nameOf(entry.to),
+    mine: entry.author_id === meId,
+    mentioned: mentionsMe(entry, meId),
+  };
+}
+
+function loadHistory(
+  feed: Feed,
+  state: SessionState,
+  streaming: Record<string, string>,
+  meId: string | null,
+): Feed {
   if (feed.history) {
     return feed;
   }
@@ -263,6 +322,9 @@ function loadHistory(feed: Feed, state: SessionState, streaming: Record<string, 
   }
   for (const [messageId, text] of Object.entries(streaming)) {
     items.push({ kind: "assistant", id: messageId, text, streaming: true });
+  }
+  for (const entry of state.chat) {
+    items.push(chatItem(entry, state, meId));
   }
   const approvals = Object.fromEntries(Object.values(state.approvals).map((approval) => [approval.id, approval.call]));
   return { ...feed, items, counter, approvals, history: true };
@@ -283,7 +345,8 @@ function fromEntry(entry: TranscriptEntry, state: SessionState, counter: number)
       };
     }
     case "assistant":
-      return entry.text ? { kind: "assistant", id: `h${counter}`, text: entry.text, streaming: false } : null;
+      // The message id, as in the live feed, so every client names the same reply the same way.
+      return entry.text ? { kind: "assistant", id: entry.id, text: entry.text, streaming: false } : null;
     case "tool":
       if (entry.tool === null) {
         return null;

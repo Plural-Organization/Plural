@@ -3,7 +3,7 @@ from collections.abc import AsyncIterator, Callable, Sequence
 
 import structlog
 
-from plural.agent.events import AgentEvent, ContextFill, RunEnd
+from plural.agent.events import AgentEvent, ContextFill, RunEnd, Spend
 from plural.agent.loop import AgentLoop
 from plural.agent.messages import Message, UserTurn
 from plural.agent.providers.base import LLMProvider
@@ -40,6 +40,9 @@ class AgentRun:
     def fill(self) -> ContextFill:
         return self._loop.fill()
 
+    def take_spending(self) -> tuple[Spend, ...]:
+        return self._loop.take_spending()
+
     def _launch(
         self, run_id: str, events: Callable[[asyncio.Event], AsyncIterator[AgentEvent]]
     ) -> None:
@@ -54,8 +57,10 @@ class AgentRun:
     def follow_up(self, turn: UserTurn) -> None:
         self._loop.follow_up(turn)
 
-    def swap_provider(self, provider: LLMProvider, *, context_window: int | None) -> None:
-        self._loop.swap_provider(provider, context_window=context_window)
+    def swap_provider(
+        self, provider: LLMProvider, *, context_window: int | None, helper: LLMProvider | None
+    ) -> None:
+        self._loop.swap_provider(provider, context_window=context_window, helper=helper)
 
     async def close(self) -> None:
         await self._loop.close()

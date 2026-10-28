@@ -12,6 +12,7 @@ from uuid import uuid4
 
 from pydantic import JsonValue
 
+from plural import __version__
 from plural.agent.providers.base import (
     LlmEvent,
     LlmMessage,
@@ -57,7 +58,8 @@ def _schema(request: LlmRequest) -> dict[str, Any]:
 
 def _prompt(request: LlmRequest, messages: tuple[LlmMessage, ...]) -> str:
     serialized_messages = [
-        message.model_dump(mode="json", exclude_none=True) for message in messages
+        message.model_dump(mode="json", exclude_none=True, exclude={"images"})
+        for message in messages
     ]
     tools = [tool.model_dump(mode="json") for tool in request.tools]
     return (
@@ -311,7 +313,7 @@ class CodexCliProvider:
         await self._rpc(
             "initialize",
             {
-                "clientInfo": {"name": "plural", "title": "Plural", "version": "0.2.0"},
+                "clientInfo": {"name": "plural", "title": "Plural", "version": __version__},
                 "capabilities": {},
             },
             cancel=cancel,
