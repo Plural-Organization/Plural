@@ -77,7 +77,12 @@ export function Sidebar({ projection, room, inbox, running, status, onSettings }
       {inbox.length > 0 ? (
         <Section title="needs you" count={inbox.length}>
           {inbox.slice(0, 4).map((item) =>
-            item.kind === "approval" ? (
+            item.kind === "join" ? (
+              <box key={item.id} flexDirection="column">
+                <text fg={theme.warn}>+ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
+                <text fg={theme.dim}>  wants to join</text>
+              </box>
+            ) : item.kind === "approval" ? (
               <box key={item.id} flexDirection="column">
                 <text fg={theme.warn}>! {truncate(`${item.approval.call.name} ${item.approval.call.subject}`, SIDEBAR_WIDTH - 8)}</text>
                 <text fg={theme.dim}>  from {nameOf(projection, item.approval.provenance.initiator_id)}</text>

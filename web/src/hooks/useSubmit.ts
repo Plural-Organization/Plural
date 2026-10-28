@@ -31,7 +31,28 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
         );
         return true;
       case "invite":
-        send({ type: "invite.create", role: rest[0] === "viewer" ? "viewer" : "participant", ttl_s: 3600 });
+        switch (rest[0]) {
+          case undefined:
+          case "link":
+            send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true });
+            break;
+          case "once":
+            send({ type: "invite.create", role: "participant", ttl_s: 3600 });
+            break;
+          case "viewer":
+            send({ type: "invite.create", role: "viewer", ttl_s: 3600 });
+            break;
+          case "revoke":
+            send({ type: "link.revoke" });
+            break;
+          case "open":
+          case "approve":
+            send({ type: "link.set_admission", mode: rest[0] });
+            notify("accent", rest[0] === "open" ? "the room link lets people in at once" : "you will be asked to let each person in");
+            break;
+          default:
+            notify("warn", "usage: /invite [link | once | viewer | revoke | open | approve]");
+        }
         return true;
       case "copy": {
         const reply = lastReply(feed);

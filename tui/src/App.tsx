@@ -192,7 +192,15 @@ export function App({
             showToast(event.to === null ? `${who} mentioned you` : `${who} wrote to you`, preview(event.text, 60), "accent", "✉");
           }
           if (event.type === "invite.created") {
-            copy(event.link, "Invite link copied", "send it to one person, it works once");
+            if (event.reusable) {
+              copy(
+                event.link,
+                "Room link copied",
+                client.projection.state.admission === "open" ? "anyone with it joins at once" : "you will be asked to let each person in",
+              );
+            } else {
+              copy(event.link, "Invite link copied", "send it to one person, it works once");
+            }
           }
           if (event.type === "skills.found") {
             const host = client.projection.me?.role === "host";
@@ -238,7 +246,7 @@ export function App({
   const running = state.run !== null;
   const items = useMemo(
     (): InboxItem[] => (isHost ? [...inboxItems(state), ...(planReady ? [{ kind: "plan", id: "plan" } as const] : [])] : []),
-    [isHost, state.approvals, state.proposals, planReady],
+    [isHost, state.approvals, state.proposals, state.join_requests, planReady],
   );
   const approvals = Object.keys(state.approvals).length;
   const queuedIds = useMemo(
@@ -599,7 +607,28 @@ export function App({
         show(`who · ${Object.values(state.participants).filter((person) => person.connected).length} here`, whoRows(projection));
         return true;
       case "invite":
-        send({ type: "invite.create", role: rest[0] === "viewer" ? "viewer" : "participant", ttl_s: 3600 });
+        switch (rest[0]) {
+          case undefined:
+          case "link":
+            send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true });
+            break;
+          case "once":
+            send({ type: "invite.create", role: "participant", ttl_s: 3600 });
+            break;
+          case "viewer":
+            send({ type: "invite.create", role: "viewer", ttl_s: 3600 });
+            break;
+          case "revoke":
+            send({ type: "link.revoke" });
+            break;
+          case "open":
+          case "approve":
+            send({ type: "link.set_admission", mode: rest[0] });
+            notify("accent", rest[0] === "open" ? "the room link lets people in at once" : "you will be asked to let each person in");
+            break;
+          default:
+            warn("invite", "usage: /invite [link | once | viewer | revoke | open | approve]");
+        }
         return true;
       case "settings":
         setDialog(true);
@@ -751,6 +780,12 @@ export function App({
       setSelected((value) => Math.max(0, value - 1));
     } else if (key.name === "down" || key.name === "j") {
       setSelected((value) => Math.min(items.length - 1, value + 1));
+    } else if (item?.kind === "join") {
+      const choices: Record<string, "allow" | "viewer" | "deny"> = { y: "allow", return: "allow", v: "viewer", n: "deny", x: "deny" };
+      const choice = choices[key.name];
+      if (choice) {
+        send({ type: "join.decide", request_id: item.id, decision: choice });
+      }
     } else if (item?.kind === "approval") {
       const decisions: Record<string, "once" | "always" | "reject" | "block"> = { y: "once", a: "always", n: "reject", b: "block" };
       const decision = key.name === "return" ? "once" : decisions[key.name];
@@ -807,7 +842,9 @@ export function App({
         ready={connection === "online" && me !== undefined}
         status={
           connection === "online"
-            ? "joining the session…"
+            ? projection.waiting
+              ? "waiting for the host to let you in…"
+              : "joining the session…"
             : connection === "connecting"
               ? "connecting to the session…"
               : reached.current
@@ -936,7 +973,9 @@ export function App({
           onSettings={change}
           onKeys={(preset, key, remember) => onKeys?.(preset, key, remember)}
           onMode={(mode) => send({ type: "session.set_prompt_mode", mode })}
-          onInvite={() => send({ type: "invite.create", role: "participant", ttl_s: 3600 })}
+          onInvite={() => send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true })}
+          admission={state.admission}
+          onAdmission={(mode) => send({ type: "link.set_admission", mode })}
           onCopyReply={copyReply}
           onClose={closeSettings}
         />

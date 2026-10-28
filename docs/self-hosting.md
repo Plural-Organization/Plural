@@ -28,7 +28,7 @@ The first lines of the conversation show an invite whose link carries the tunnel
 
 Plural does not install these programs. If one is missing, the command says how to get it.
 
-Two things to know. The tunnel provider terminates TLS, so it can read the traffic: trust it like you would a relay. And your host port is reachable from the internet while the tunnel is up. Only a holder of an invite or a token gets in, and an invite works once and expires after an hour, so share links only with the people you mean.
+Two things to know. The tunnel provider terminates TLS, so it can read the traffic: trust it like you would a relay. And your host port is reachable from the internet while the tunnel is up. Only someone who holds the room link, an invite or a token can even ask to come in, and with the default setting nobody sees anything of the room until you let them in. Still, share the link only with the people you mean, and end it with `/invite revoke` if it leaks.
 
 A tunnel suits one person showing a session to a few teammates. For a team that needs a stable link, run a [relay](#the-relay).
 
@@ -47,7 +47,7 @@ The same choices exist as options for scripts and servers: `--relay <url>` for t
 
 If the relay restarts or the network drops, nothing needs to be done. The host reconnects on its own within a few seconds and takes its room back. Guests see *connection lost, reconnecting…*, keep their seat and carry on. If a tunnel stops, the host shows a warning in the conversation, because the links through it no longer work.
 
-Use a relay you run yourself or one you trust: it sees who connects and when, and the size of every message. Guests join with an invite that expires after an hour and works once.
+Use a relay you run yourself or one you trust: it sees who connects and when, and the size of every message. Guests use the room link and wait for you to let them in, see [Usage](usage.md#let-people-in).
 
 # Running Plural on a server
 
@@ -102,7 +102,7 @@ The image [`deploy/host.Dockerfile`](../deploy/host.Dockerfile) runs a host as a
 | `PLURAL_ROOM` | optional, a fixed room id. Without it the host picks one and keeps it in `/data/room` |
 | `PLURAL_HOST_NAME` | optional, the name the room sees |
 
-When it starts, the host prints the room, a one-time guest link and the host link to its log. Open the host link in the web client or with `plural join` to approve actions and create more invites. Anyone who can read the log can become the host, so keep the logs private.
+When it starts, the host prints the room, the room link and the host link to its log. Start it with `PLURAL_ADMISSION=open` if nobody is there to let people in, and keep the link private then. Open the host link in the web client or with `plural join` to approve actions and create more invites. Anyone who can read the log can become the host, so keep the logs private.
 
 - **Railway:** a service with `RAILWAY_DOCKERFILE_PATH=deploy/host.Dockerfile` (or [`deploy/railway/host.json`](../deploy/railway/host.json)) and a volume at `/data`.
 - **Render:** the `plural-host` worker in [`render.yaml`](../render.yaml).

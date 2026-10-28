@@ -2,6 +2,7 @@
 .count { font: 12px var(--font-mono); color: var(--warn); }
 .card { border: 1px solid var(--fg); padding: 12px 14px; display: grid; gap: 8px; background: var(--panel); }
 .proposal { border-color: var(--warn); }
+.join { border-color: var(--accent); }
 .head { display: flex; justify-content: space-between; gap: 12px; font: 13px var(--font-mono); flex-wrap: wrap; }
 .subject { margin: 0; font-size: 13px; background: var(--bg); border: 1px solid var(--line); padding: 8px 10px; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; }
 .why { margin: 0; font-size: 13px; color: var(--muted); }

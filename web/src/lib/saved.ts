@@ -65,5 +65,5 @@ export function rememberName(name: string): void {
 }
 
 export function linkOf(saved: SavedRoom): JoinLink {
-  return { url: saved.url, room: saved.room, invite: null, token: saved.token };
+  return { url: saved.url, room: saved.room, invite: null, token: saved.token, join: null };
 }

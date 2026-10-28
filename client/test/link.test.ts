@@ -7,6 +7,17 @@ test("an invite link is split into url, room and invite", () => {
     room: "r_1",
     invite: "abc",
     token: null,
+    join: null,
+  });
+});
+
+test("a room link keeps its join code", () => {
+  expect(parseLink("wss://abc.ngrok-free.app/r_1?join=CODE-1")).toEqual({
+    url: "wss://abc.ngrok-free.app/r_1",
+    room: "r_1",
+    invite: null,
+    token: null,
+    join: "CODE-1",
   });
 });
 
@@ -16,6 +27,7 @@ test("a token link keeps the token", () => {
     room: "r_9",
     invite: null,
     token: "t1",
+    join: null,
   });
 });
 

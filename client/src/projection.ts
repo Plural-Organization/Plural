@@ -9,6 +9,7 @@ export class Projection {
   compacting: { tokens: number; since: number } | null = null;
   basePolicy: PolicyRuleView[] = [];
   agent = "";
+  waiting = false;
   meId: string | null = null;
   ready = false;
 

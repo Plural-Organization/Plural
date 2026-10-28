@@ -7,7 +7,7 @@ cd your-project
 plural
 ```
 
-`plural` starts a host in the current directory and opens the client. The first lines of the conversation show the room and an invite link. Words that are not options become the first prompt: `plural "fix the failing test"`.
+`plural` starts a host in the current directory and opens the client. The first lines of the conversation show the room link. Words that are not options become the first prompt: `plural "fix the failing test"`.
 
 | Option | Meaning |
 |---|---|
@@ -78,9 +78,33 @@ By default the invite works only on your computer. To let others in, open `F2` �
 plural join "ws://host:7777/r_…?invite=…" --name alia
 ```
 
-An invite is single-use and expires after an hour. The host creates a new one with `/invite` or from the settings. The link is copied to the clipboard.
+## Let people in
 
-A teammate can also join from a browser: open the web client, paste the invite and type a name. The web client shows the same session, approvals and queue as the terminal. A page served over https can only reach a host through a relay with `wss://`; over plain `ws://` serve the web client over http on the same network.
+The link at the top of the conversation is the **room link**. It is permanent: it never expires, it works for any number of people and it stays the same when you resume the session (while the address of your host stays the same). You can send it at any time.
+
+Anyone who opens it waits on a screen that says the host has to let them in. You get a card in the list of things that wait for you, with their name and the program they use, and a bell if you have it on:
+
+| Key | Answer |
+|---|---|
+| `y` or `enter` | let them in as a participant |
+| `v` | let them in as a viewer |
+| `n` | refuse |
+
+Until you answer they see nothing of the room. A request that nobody answers lapses after two minutes, at most five people can wait at once, and a room holds twenty people. After you let someone in they come back on their own for 24 hours without asking again.
+
+| Command | Does |
+|---|---|
+| `/invite` | copy the room link |
+| `/invite once`, `/invite viewer` | one-time invites for one person, who go in without your answer: a participant or a viewer, valid for an hour |
+| `/invite revoke` | end the room link: those waiting are refused, the old link stops working and the new one is copied. People who are already in stay |
+| `/invite open` | anyone with the link goes in at once, for a team you trust. The link is then as good as a password, keep it private |
+| `/invite approve` | back to letting each person in (the default) |
+
+The same choice is in `F2` → Session → *People who use the room link*. A host started by a script can use `--admission open` (or `PLURAL_ADMISSION=open`).
+
+Someone who joined by a one-time invite or who is already in, with a saved token, is never asked.
+
+A teammate can also join from a browser: open the web client, paste the link and type a name. The web client shows the same session, approvals and queue as the terminal. A page served over https can only reach a host through a relay with `wss://`; over plain `ws://` serve the web client over http on the same network.
 
 ## Talking to the team
 
@@ -187,7 +211,7 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | `/help` | Commands and keys |
 | `/team <message>` | Write to the room, the agent does not see it. `@name <message>` writes to one person |
 | `/who` | Participants |
-| `/invite [participant\|viewer]` | Create an invite link (host) |
+| `/invite [link\|once\|viewer\|revoke\|open\|approve]` | Copy the room link, make a one-time invite, or change who may join (host) |
 | `/mode open\|review` | Who may prompt directly (host) |
 | `/policy` | Show the permission rules (host) |
 | `/policy allow\|ask\|deny <tool> <pattern>` | Add a rule (host) |
@@ -228,7 +252,7 @@ The key is kept in `~/.plural/credentials.json`, readable only by you, when *Rem
 
 **Session**. *Open*: everyone prompts the agent directly. *Host approves*: participants propose and you approve, edit or reject every prompt. Also the typing indicator, the bell for requests that need the host and the bell for mentions and private messages.
 
-**Appearance**. Four themes (Tokyo Night, Daylight, Gruvbox, High contrast), the side panel and copy on select, plus shortcuts to copy the last reply and to create an invite link.
+**Appearance**. Four themes (Tokyo Night, Daylight, Gruvbox, High contrast), the side panel and copy on select, plus shortcuts to copy the last reply and the room link.
 
 Preferences are kept in `tui.json` in the data directory.
 

@@ -70,6 +70,7 @@ export async function startRelay(port?: number): Promise<RunningRelay> {
 export async function startHost(
   mode: "open" | "review" = "open",
   relayUrl?: string,
+  admission: "open" | "approve" = "open",
 ): Promise<RunningHost> {
   const directory = mkdtempSync(join(tmpdir(), "plural-ts-"));
   const workspace = join(directory, "ws");
@@ -89,6 +90,8 @@ export async function startHost(
       String(port),
       "--prompts",
       mode,
+      "--admission",
+      admission,
       ...(relayUrl ? ["--relay", relayUrl] : []),
     ],
     {

@@ -26,6 +26,9 @@ export function useHotkeys({ enabled, first, canAbort, send, onEdit, onFocusInpu
       }
       if (event.key === "Escape" && canAbort) {
         send({ type: "run.abort" });
+      } else if (first?.kind === "join" && (event.key === "y" || event.key === "v" || event.key === "n")) {
+        event.preventDefault();
+        send({ type: "join.decide", request_id: first.id, decision: event.key === "y" ? "allow" : event.key === "v" ? "viewer" : "deny" });
       } else if (first?.kind === "approval" && event.key in DECISIONS) {
         event.preventDefault();
         send({ type: "approval.respond", approval_id: first.id, decision: DECISIONS[event.key as keyof typeof DECISIONS] });

@@ -22,7 +22,8 @@ const CLIENT = { kind: "web", version: "0.2.0" };
 export interface Invite {
   link: string;
   role: string;
-  expiresAt: string;
+  expiresAt: string | null;
+  reusable: boolean;
 }
 
 export interface SessionView {
@@ -82,7 +83,7 @@ class SessionStore {
             alertMention(author ? label(client.projection.state, author) : "someone", event.to !== null);
           }
           if (event.type === "invite.created") {
-            this.update({ invite: { link: event.link, role: event.role, expiresAt: event.expires_at } });
+            this.update({ invite: { link: event.link, role: event.role, expiresAt: event.expires_at, reusable: event.reusable } });
           }
           this.update({
             feed:

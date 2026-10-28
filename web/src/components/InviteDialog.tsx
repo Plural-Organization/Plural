@@ -9,7 +9,7 @@ export function InviteDialog({ invite, onClose }: { invite: Invite; onClose: () 
   const [copied, setCopied] = useState<string | null>(null);
   const web = browserJoinLink(invite.link, window.location);
   const terminal = `plural join "${invite.link}"`;
-  const expires = new Date(invite.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const expires = invite.expiresAt === null ? null : new Date(invite.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
   useEffect(() => {
     dialog.current?.showModal();
@@ -28,11 +28,18 @@ export function InviteDialog({ invite, onClose }: { invite: Invite; onClose: () 
 
   return (
     <dialog ref={dialog} className={styles.dialog} onClose={onClose} aria-labelledby="invite-title">
-      <h2 id="invite-title">invite a {invite.role}</h2>
-      <p className="muted">
-        The link works once and expires at {expires}. Anyone you send it to joins as a {invite.role}
-        {invite.role === "viewer" ? " and can only watch." : " and can prompt the agent. Their writes and commands still ask you."}
-      </p>
+      <h2 id="invite-title">{invite.reusable ? "the room link" : `invite a ${invite.role}`}</h2>
+      {invite.reusable ? (
+        <p className="muted">
+          This link stays the same and does not expire, so you can send it at any time. Each person who uses it waits until you let them in, and you
+          choose whether they take part or only watch. <code>/invite revoke</code> ends it.
+        </p>
+      ) : (
+        <p className="muted">
+          The link works once and expires at {expires}. Anyone you send it to joins as a {invite.role}
+          {invite.role === "viewer" ? " and can only watch." : " and can prompt the agent. Their writes and commands still ask you."}
+        </p>
+      )}
       <div className={styles.share}>
         {links.map((link) => (
           <div key={link.key} className={styles.link}>

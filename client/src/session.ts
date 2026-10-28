@@ -113,6 +113,7 @@ export class SessionClient implements Session {
       client: this.options.client,
       name: this.options.name,
       invite: this.token === null ? this.link.invite : null,
+      join: this.token === null ? this.link.join : null,
       token: this.token,
       since: this.projection.ready ? this.projection.state.last_seq : null,
     };
@@ -134,7 +135,13 @@ export class SessionClient implements Session {
       return this.projection.apply(record) ? event : null;
     }
     switch (event.type) {
+      case "session.pending":
+        this.projection.waiting = true;
+        break;
+      case "session.refused":
+        throw new CommandRejected({ code: "forbidden", message: event.reason });
       case "session.welcome":
+        this.projection.waiting = false;
         this.token = event.token;
         this.options.onWelcome?.({ room: event.room, token: event.token });
         this.projection.meId = event.participant.id;

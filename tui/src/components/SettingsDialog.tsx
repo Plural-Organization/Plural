@@ -59,6 +59,8 @@ export interface DialogProps {
   onKeys: (preset: PresetId, key: string, remember: boolean) => void;
   onMode: (mode: "open" | "review") => void;
   onInvite: () => void;
+  admission?: "approve" | "open";
+  onAdmission?: (mode: "approve" | "open") => void;
   onCopyReply: () => void;
   onClose: () => void;
 }
@@ -86,6 +88,7 @@ export function SettingsDialog(props: DialogProps) {
     choice: local.current.choice,
     keys: local.current.keys,
     mode: live.current.mode,
+    admission: live.current.admission,
     role: live.current.role,
     canConfigure: live.current.control !== null && live.current.role === "host",
     oauthLoggedIn: hasOAuth(),
@@ -238,7 +241,9 @@ export function SettingsDialog(props: DialogProps) {
         change(row, 1);
         break;
       case "radio":
-        if (row.id.startsWith("share-")) {
+        if (row.id.startsWith("join-")) {
+          live.current.onAdmission?.(row.id === "join-open" ? "open" : "approve");
+        } else if (row.id.startsWith("share-")) {
           live.current.onSettings({ ...live.current.settings, share: row.id.slice("share-".length) as ShareMode });
         } else {
           live.current.onMode(row.id === "mode-open" ? "open" : "review");

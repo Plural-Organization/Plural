@@ -27,7 +27,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   const state = projection.state;
   const me = projection.me;
   const isHost = me?.role === "host";
-  const items = useMemo(() => (isHost ? inboxItems(state) : []), [isHost, state.approvals, state.proposals]);
+  const items = useMemo(() => (isHost ? inboxItems(state) : []), [isHost, state.approvals, state.proposals, state.join_requests]);
   const [editing, setEditing] = useState<ProposalView | null>(null);
   const [panel, setPanel] = useState(false);
   const { toast, flash } = useToast();
@@ -73,7 +73,9 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
               room {link.room} · you are {me ? `${me.name}, ${me.role}` : name}
             </div>
             {!projection.ready ? (
-              <div className="muted mono">{connection === "online" ? "loading the session…" : "connecting to the host…"}</div>
+              <div className="muted mono">
+                {projection.waiting ? "waiting for the host to let you in…" : connection === "online" ? "loading the session…" : "connecting to the host…"}
+              </div>
             ) : null}
             <Feed items={feed.items} />
           </div>
@@ -121,7 +123,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
         waiting={items.length}
         open={panel}
         send={send}
-        onInvite={(role) => send({ type: "invite.create", role, ttl_s: 3600 })}
+        onInvite={(role) => send({ type: "invite.create", role, ttl_s: 3600, reusable: role === "participant" })}
       />
 
       {invite ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}

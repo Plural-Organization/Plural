@@ -50,7 +50,7 @@ plural
 
 come back to a session later with `plural -r` (or `plural -c` for the latest one of this folder), and ask once from a script with `plural -p "…"`. see [usage](docs/usage.md).
 
-the first line in the conversation is an invite. send it to a teammate:
+the first line in the conversation is the room link. send it to a teammate, now or later: it does not expire, and you let each person in:
 
 ```bash
 plural join "ws://…"
