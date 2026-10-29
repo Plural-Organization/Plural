@@ -38,6 +38,7 @@ ENV/
 coverage.xml
 htmlcov/
 *.cover
+requirements.txt
 
 # Secrets and local config
 .env
