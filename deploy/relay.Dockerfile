@@ -6,7 +6,7 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH" PORT=878
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 RUN uv sync --frozen --no-dev
-USER plural
 RUN mkdir -p /data && chown plural /data
+USER plural
 EXPOSE 8787
 CMD ["plural-host", "relay"]
