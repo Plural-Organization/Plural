@@ -36,6 +36,8 @@ plural update --check   # only say whether there is one
 
 `plural update` looks up the latest release on GitHub and runs the same installer as the first install, pinned to that version: it upgrades the host (`plural-host`) and replaces the `plural` program next to the one you ran, with the same progress, resume and checksum check. A download that was cut off continues where it stopped when you run it again. It does nothing when you are up to date. A copy that runs from source or from a package manager cannot replace itself and says so.
 
+You do not have to leave plural for it. When plural starts it asks GitHub for the latest release, and if there is a newer one, `● update <version>` appears next to the gear and as the first row of the settings (`F2`). Press `enter` on it to install; the row turns into `✓ installed · restart plural` when it is done. Set `PLURAL_NO_UPDATE_CHECK=1` to skip the look-up. Copies that run from source or from a package manager never see the offer.
+
 ## Resume a session
 
 Every session you host is kept in `~/.plural/sessions` with its folder, its title and the whole conversation.

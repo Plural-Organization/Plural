@@ -37,6 +37,7 @@ import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, ModeLine, Working } from "./components/Working";
 import { helpRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
+import type { UpdateState, Updater } from "./update";
 import { explain } from "./failure";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
@@ -63,6 +64,7 @@ export interface AppProps {
   startup?: Command[];
   initialPrompt?: string | null;
   alerts?: Alerts;
+  updater?: Updater;
   splash?: boolean;
   onQuit: () => void;
 }
@@ -98,6 +100,7 @@ export function App({
   startup = [],
   initialPrompt = null,
   alerts,
+  updater,
   splash = false,
   onQuit,
 }: AppProps) {
@@ -146,6 +149,8 @@ export function App({
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<string | null>(null);
   const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const [update, setUpdate] = useState<UpdateState | null>(updater?.state ?? null);
+  useEffect(() => updater?.subscribe(setUpdate), [updater]);
   const [behind, setBehind] = useState({ away: false, fresh: 0, chat: 0 });
   const anchor = useRef(0);
   const [finished, setFinished] = useState(false);
@@ -1156,7 +1161,7 @@ export function App({
   return (
     <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg}>
       <box flexDirection="column" flexGrow={1} minWidth={0}>
-        <TopBar room={room} state={state} onSettings={() => setDialog(true)} />
+        <TopBar room={room} state={state} update={update} onSettings={() => setDialog(true)} />
         {pinnedItem ? (
           <PinnedPrompt
             item={pinnedItem}
@@ -1303,6 +1308,8 @@ export function App({
           admission={state.admission}
           onAdmission={(mode) => send({ type: "link.set_admission", mode })}
           onCopyReply={copyReply}
+          update={update}
+          onUpdate={() => void updater?.install()}
           onClose={closeSettings}
         />
       ) : null}

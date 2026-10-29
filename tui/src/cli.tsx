@@ -19,7 +19,7 @@ import { emptyOptions, parseArgs, UsageError, type SessionOptions } from "./opti
 import { pickSession } from "./picker";
 import { composePrompt, readStdin, runPrint } from "./print";
 import { startupCommands } from "./startup";
-import { runUpdate, skewNote } from "./update";
+import { runUpdate, skewNote, Updater } from "./update";
 import { listSessions, resolveSession, type SessionInfo } from "./sessions";
 import { parseTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
 
@@ -209,6 +209,8 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   }
   const settings = loadSettings();
   const alerts = new Alerts();
+  const updater = new Updater({ current: pkg.version, execPath: process.execPath });
+  void updater.check();
   let plan;
   let startup;
   try {
@@ -287,6 +289,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
         startup={target.joined ? [] : startup}
         initialPrompt={options.prompt}
         alerts={alerts}
+        updater={updater}
         splash
         onQuit={() => {
           resolve();
