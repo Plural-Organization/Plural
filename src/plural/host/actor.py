@@ -5,6 +5,7 @@ import hashlib
 import json
 from collections.abc import Coroutine, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import PurePath
 
 import structlog
@@ -16,7 +17,7 @@ from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.messages import Message, UserTurn
 from plural.agent.providers.base import LlmImage
 from plural.agent.skills import Package, SkillError, SkillLibrary, parse_package
-from plural.core import approvals, chat, joins, policies, proposals, visibility
+from plural.core import access, approvals, chat, joins, policies, proposals, visibility
 from plural.core.errors import (
     Conflict,
     DomainError,
@@ -60,6 +61,8 @@ from plural.host.team_admission import (
 from plural.host.transport.base import Connection
 from plural.protocol.codec import ProtocolError, decode_command
 from plural.protocol.commands import (
+    AccessDecide,
+    AccessRequest,
     AdmissionSet,
     AgentsCreate,
     AgentsRemove,
@@ -238,6 +241,7 @@ class SessionActor:
         team: TeamAdmission | None = None,
     ) -> None:
         self._team = team
+        self._access_denied: dict[str, datetime] = {}
         self._inbox = inbox
         self._store = store
         self._publisher = publisher
@@ -580,6 +584,26 @@ class SessionActor:
                         link=invite.link,
                     ),
                 )
+            case AccessRequest():
+                await self._emit(
+                    access.request(
+                        self._state,
+                        participant,
+                        command.note,
+                        now=self._clock.now(),
+                        limit=self._max_pending_joins,
+                        denied_at=self._access_denied,
+                    ),
+                    actor_id=participant.id,
+                )
+            case AccessDecide():
+                allow = command.decision == "allow"
+                for event in access.decide(
+                    self._state, command.participant_id, allow, participant.id
+                ):
+                    await self._emit(event, actor_id=participant.id)
+                if not allow:
+                    self._access_denied[command.participant_id] = self._clock.now()
             case JoinDecide():
                 await self._decide_join(participant, command)
             case LinkRevoke():

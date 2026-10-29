@@ -112,6 +112,20 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
       return note("dim", `${nameOf(event.participant_id)} is now ${event.role}`);
     case "participant.revoked":
       return note("danger", `access revoked for ${event.participant_id}`);
+    case "access.requested": {
+      if (event.request.participant_id === projection.meId) {
+        return note("dim", "you asked the host for the right to write, waiting for an answer");
+      }
+      const reason = event.request.note ? `: ${event.request.note}` : "";
+      return note("warn", `${nameOf(event.request.participant_id)} asks for the right to write${reason}`);
+    }
+    case "access.resolved": {
+      const granted = event.decision === "granted";
+      if (event.participant_id === projection.meId) {
+        return note(granted ? "ok" : "warn", granted ? "the host let you write" : "the host said no for now, you can ask again in a few minutes");
+      }
+      return note("dim", `${granted ? "you let" : "you said no to"} ${nameOf(event.participant_id)}${granted ? " write" : ""}`);
+    }
     case "session.prompt_mode_changed":
       return note(
         "accent",

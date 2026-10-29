@@ -354,12 +354,27 @@ class JoinRequestView(Model):
     requested_at: datetime
 
 
+class AccessDecision(StrEnum):
+    GRANTED = "granted"
+    DENIED = "denied"
+
+
+class AccessRequestView(Model):
+    participant_id: str
+    name: str
+    note: str | None = None
+    requested_at: datetime
+
+
 class SessionState(Model):
     last_seq: int = 0
     prompt_mode: PromptMode = PromptMode.OPEN
     permission_mode: PermissionMode = PermissionMode.DEFAULT
     admission: AdmissionMode = AdmissionMode.APPROVE
     join_requests: dict[str, JoinRequestView] = Field(default_factory=dict[str, JoinRequestView])
+    access_requests: dict[str, AccessRequestView] = Field(
+        default_factory=dict[str, AccessRequestView]
+    )
     participants: dict[str, Participant] = Field(default_factory=dict[str, Participant])
     proposals: dict[str, ProposalView] = Field(default_factory=dict[str, ProposalView])
     approvals: dict[str, ApprovalView] = Field(default_factory=dict[str, ApprovalView])

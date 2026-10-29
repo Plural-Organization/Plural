@@ -1,6 +1,8 @@
 from typing import Final
 
 from plural.protocol.events import (
+    AccessRequested,
+    AccessResolved,
     AdmissionChanged,
     AgentChanged,
     AgentsChanged,
@@ -81,10 +83,26 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
         case ParticipantLeft(participant_id=participant_id):
             return _patch_participant(state, participant_id, {"connected": False})
         case ParticipantRoleChanged(participant_id=participant_id, role=role):
-            return _patch_participant(state, participant_id, {"role": role})
+            patched = _patch_participant(state, participant_id, {"role": role})
+            return patched.model_copy(
+                update={"access_requests": _without(patched.access_requests, participant_id)}
+            )
         case ParticipantRevoked(participant_id=participant_id):
             return state.model_copy(
-                update={"participants": _without(state.participants, participant_id)}
+                update={
+                    "participants": _without(state.participants, participant_id),
+                    "access_requests": _without(state.access_requests, participant_id),
+                }
+            )
+        case AccessRequested(request=request):
+            return state.model_copy(
+                update={
+                    "access_requests": {**state.access_requests, request.participant_id: request}
+                }
+            )
+        case AccessResolved(participant_id=participant_id):
+            return state.model_copy(
+                update={"access_requests": _without(state.access_requests, participant_id)}
             )
         case AdmissionChanged(mode=mode):
             return state.model_copy(update={"admission": mode})

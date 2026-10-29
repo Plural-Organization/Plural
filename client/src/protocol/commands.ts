@@ -67,6 +67,8 @@ export interface CommandsSchema {
     | RunAbort
     | InviteCreate
     | JoinDecide
+    | AccessRequest
+    | AccessDecide
     | LinkRevoke
     | AdmissionSet
     | ParticipantSetRole
@@ -203,6 +205,23 @@ export interface JoinDecide {
   decision: "allow" | "viewer" | "deny";
   request_id: string;
   type?: "join.decide";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "AccessRequest".
+ */
+export interface AccessRequest {
+  note?: string | null;
+  type?: "access.request";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "AccessDecide".
+ */
+export interface AccessDecide {
+  decision: "allow" | "deny";
+  participant_id: string;
+  type?: "access.decide";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

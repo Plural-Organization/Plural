@@ -168,6 +168,12 @@ You come in as a viewer: you see the whole conversation and what the agent does,
 
 If the host's relay is not the one the team uses, nothing changes for you: the card carries the address to connect to.
 
+### Asking to write
+
+A viewer who wants to take part types `/access` (with a note if they like: `/access I can fix the login test`). The host gets a card, `y` lets them write, `n` says not now, and the viewer is told either way. After a refusal they can ask again in five minutes. Nobody can ask twice at once, and only a few people wait at a time.
+
+From then on they are a participant: their prompts show their name, the agent still asks the host before it changes anything on their behalf, and in `review` mode the host approves each prompt. A team member keeps the right when they come back to the same session. The host can take it back with `/access revoke alia`; `/access` alone lists who is asking, `/access allow alia` and `/access deny alia` answer by name, and `/kick alia` removes someone.
+
 You are identified by a key that plural creates once in `~/.plural/identity.pem`. Joining gives you a certificate signed for the team, valid for 30 days and renewed by itself. Removing a member stops their access at once. One person is in one team at a time.
 
 ## Prompt modes

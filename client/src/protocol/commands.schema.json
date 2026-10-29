@@ -1,5 +1,52 @@
 {
   "$defs": {
+    "AccessDecide": {
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow",
+            "deny"
+          ],
+          "type": "string"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "access.decide",
+          "default": "access.decide",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "AccessRequest": {
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "access.request",
+          "default": "access.request",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "AdmissionMode": {
       "enum": [
         "approve",
@@ -1165,6 +1212,8 @@
     "command": {
       "discriminator": {
         "mapping": {
+          "access.decide": "#/$defs/AccessDecide",
+          "access.request": "#/$defs/AccessRequest",
           "agents.create": "#/$defs/AgentsCreate",
           "agents.remove": "#/$defs/AgentsRemove",
           "approval.respond": "#/$defs/ApprovalRespond",
@@ -1234,6 +1283,12 @@
         },
         {
           "$ref": "#/$defs/JoinDecide"
+        },
+        {
+          "$ref": "#/$defs/AccessRequest"
+        },
+        {
+          "$ref": "#/$defs/AccessDecide"
         },
         {
           "$ref": "#/$defs/LinkRevoke"

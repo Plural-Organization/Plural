@@ -50,7 +50,7 @@ def ensure_ready(settings: HostSettings, store: TeamStore) -> None:
 
 
 def status_of(state: SessionState) -> SessionStatus:
-    if state.approvals or state.proposals or state.join_requests:
+    if state.approvals or state.proposals or state.join_requests or state.access_requests:
         return SessionStatus.WAITING
     return SessionStatus.RUNNING if state.run is not None else SessionStatus.IDLE
 

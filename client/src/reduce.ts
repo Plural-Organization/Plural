@@ -30,6 +30,7 @@ export function emptyState(): SessionState {
     chat: [],
     admission: "approve",
     join_requests: {},
+    access_requests: {},
     board: { open: false, strokes: [] },
   };
 }
@@ -64,10 +65,20 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       };
     case "participant.left":
       return patchParticipant(state, event.participant_id, { connected: false });
-    case "participant.role_changed":
-      return patchParticipant(state, event.participant_id, { role: event.role });
+    case "participant.role_changed": {
+      const patched = patchParticipant(state, event.participant_id, { role: event.role });
+      return { ...patched, access_requests: without(patched.access_requests, event.participant_id) };
+    }
     case "participant.revoked":
-      return { ...state, participants: without(state.participants, event.participant_id) };
+      return {
+        ...state,
+        participants: without(state.participants, event.participant_id),
+        access_requests: without(state.access_requests, event.participant_id),
+      };
+    case "access.requested":
+      return { ...state, access_requests: { ...state.access_requests, [event.request.participant_id]: event.request } };
+    case "access.resolved":
+      return { ...state, access_requests: without(state.access_requests, event.participant_id) };
     case "link.admission_changed":
       return { ...state, admission: event.mode };
     case "join.requested":

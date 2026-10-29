@@ -234,3 +234,38 @@ async def test_a_team_viewer_who_arrives_late_gets_the_whole_conversation(
         assert "ok" in texts
     finally:
         await stop(host, serving, owner, watcher)
+
+
+async def test_a_team_member_the_host_let_write_keeps_the_right_when_they_come_back(
+    relay: RelayServer, tmp_path: Path
+) -> None:
+    from plural.protocol.commands import AccessDecide, AccessRequest
+    from plural.protocol.events import AccessRequested, ParticipantRoleChanged
+
+    vlad, alia = await two_members(relay, tmp_path)
+    host, serving = await hosting(relay, vlad, tmp_path)
+    owner = Watcher(SessionClient(JoinLink.parse(host.host_link), name="vlad", client=CLIENT))
+    first = Watcher(visit(relay, alia))
+    try:
+        await first.next(SessionSnapshot)
+        await first.client.send(AccessRequest(note="I can take the login bug"))
+        asked = await owner.next(AccessRequested)
+        assert asked.request.name == "alia"
+        await owner.client.send(
+            AccessDecide(participant_id=asked.request.participant_id, decision="allow")
+        )
+        changed = await first.next(ParticipantRoleChanged)
+        assert changed.role is Role.PARTICIPANT
+        await first.stop()
+
+        second = Watcher(visit(relay, alia))
+        try:
+            await second.next(SessionSnapshot)
+            me = second.client.projection.me
+            assert me is not None
+            assert me.role is Role.PARTICIPANT
+            await second.client.send(PromptSubmit(text="look at the login bug"))
+        finally:
+            await second.stop()
+    finally:
+        await stop(host, serving, owner, first)

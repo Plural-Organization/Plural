@@ -60,6 +60,11 @@ export type AdmissionMode = "approve" | "open";
 export type JoinDecision = "allow" | "viewer" | "deny" | "expired" | "gone" | "revoked";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessDecision".
+ */
+export type AccessDecision = "granted" | "denied";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "DequeueReason".
  */
 export type DequeueReason = "delivered" | "cancelled" | "dropped";
@@ -124,6 +129,8 @@ export interface EventsSchema {
     | AdmissionChanged
     | JoinRequested
     | JoinResolved
+    | AccessRequested
+    | AccessResolved
     | JoinPending
     | JoinRefused
     | PromptDequeued
@@ -336,6 +343,34 @@ export interface JoinResolved {
   decision: JoinDecision;
   request_id: string;
   type: "join.resolved";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessRequested".
+ */
+export interface AccessRequested {
+  request: AccessRequestView;
+  type: "access.requested";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessRequestView".
+ */
+export interface AccessRequestView {
+  name: string;
+  note: string | null;
+  participant_id: string;
+  requested_at: string;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessResolved".
+ */
+export interface AccessResolved {
+  decided_by: string | null;
+  decision: AccessDecision;
+  participant_id: string;
+  type: "access.resolved";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -872,6 +907,9 @@ export interface SessionSnapshot {
  * via the `definition` "SessionState".
  */
 export interface SessionState {
+  access_requests: {
+    [k: string]: AccessRequestView;
+  };
   admission: "approve" | "open";
   agent: string;
   agents: AgentView[];
@@ -998,6 +1036,8 @@ export interface EventRecord {
     | AdmissionChanged
     | JoinRequested
     | JoinResolved
+    | AccessRequested
+    | AccessResolved
     | JoinPending
     | JoinRefused
     | PromptDequeued

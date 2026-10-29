@@ -109,6 +109,17 @@ class AdmissionSet(Model):
     mode: AdmissionMode
 
 
+class AccessRequest(Model):
+    type: Literal["access.request"] = "access.request"
+    note: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class AccessDecide(Model):
+    type: Literal["access.decide"] = "access.decide"
+    participant_id: str
+    decision: Literal["allow", "deny"]
+
+
 class ParticipantSetRole(Model):
     type: Literal["participant.set_role"] = "participant.set_role"
     participant_id: str
@@ -287,6 +298,8 @@ Command = Annotated[
     | RunAbort
     | InviteCreate
     | JoinDecide
+    | AccessRequest
+    | AccessDecide
     | LinkRevoke
     | AdmissionSet
     | ParticipantSetRole

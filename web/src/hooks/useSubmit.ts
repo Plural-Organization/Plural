@@ -1,4 +1,4 @@
-import { findPerson, label, lastReply, mentionable, parseChat, parseSlash, ruleLine, SlashError, type ProposalView } from "@plural/client";
+import { findPerson, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
 import { commandName, helpText, isHostOnly } from "../lib/commands";
 import type { Session } from "./useSession";
@@ -70,6 +70,28 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
           notify("warn", state.queue.length === 0 ? "the queue is empty" : "usage: /cancel <number from the queue>");
         } else {
           send({ type: "queue.cancel", prompt_id: entry.prompt_id });
+        }
+        return true;
+      }
+      case "access": {
+        const people = mentionable(state, projection.meId);
+        const [verb, ...names] = rest;
+        if (projection.me?.role === "viewer") {
+          send({ type: "access.request", note: rest.join(" ").trim() || null });
+        } else if (!isHost) {
+          notify("warn", "you can already write");
+        } else if (verb === undefined) {
+          const waiting = Object.values(state.access_requests);
+          notify("accent", waiting.length === 0 ? "nobody is asking to write" : waiting.map((ask) => `${ask.name}${ask.note ? `: ${ask.note}` : ""}`).join("\n"));
+        } else {
+          const person = findPerson(names.join(" "), people);
+          if (person === null || !["allow", "deny", "revoke"].includes(verb)) {
+            notify("warn", "usage: /access [allow|deny|revoke <name>]");
+          } else if (verb === "revoke") {
+            send({ type: "participant.set_role", participant_id: person.id, role: "viewer" });
+          } else {
+            send({ type: "access.decide", participant_id: person.id, decision: verb as "allow" | "deny" });
+          }
         }
         return true;
       }
@@ -164,6 +186,10 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
   };
 
   return (text: string) => {
+    if (routeOf(text, state, projection.meId).label === "watching") {
+      notify("warn", "you are only watching. /access asks the host for the right to write");
+      return;
+    }
     if (editing) {
       send({ type: "proposal.decide", proposal_id: editing.id, decision: "approve", edited_text: text });
       onEdited();

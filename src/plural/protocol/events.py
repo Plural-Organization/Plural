@@ -5,6 +5,8 @@ from pydantic import Field
 
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.models import (
+    AccessDecision,
+    AccessRequestView,
     AdmissionMode,
     AgentView,
     ApprovalDecision,
@@ -109,6 +111,18 @@ class JoinResolved(EventBase):
     type: Literal["join.resolved"] = "join.resolved"
     request_id: str
     decision: JoinDecision
+    decided_by: str | None = None
+
+
+class AccessRequested(EventBase):
+    type: Literal["access.requested"] = "access.requested"
+    request: AccessRequestView
+
+
+class AccessResolved(EventBase):
+    type: Literal["access.resolved"] = "access.resolved"
+    participant_id: str
+    decision: AccessDecision
     decided_by: str | None = None
 
 
@@ -383,6 +397,8 @@ Event = Annotated[
     | AdmissionChanged
     | JoinRequested
     | JoinResolved
+    | AccessRequested
+    | AccessResolved
     | JoinPending
     | JoinRefused
     | PromptDequeued

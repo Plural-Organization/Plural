@@ -6,6 +6,8 @@ from typing import Any
 
 from plural.client.projection import Projection
 from plural.protocol.events import (
+    AccessRequested,
+    AccessResolved,
     AdmissionChanged,
     AgentChanged,
     ApprovalRequested,
@@ -38,6 +40,8 @@ from plural.protocol.events import (
     ToolStarted,
 )
 from plural.protocol.models import (
+    AccessDecision,
+    AccessRequestView,
     AdmissionMode,
     ApprovalDecision,
     ApprovalView,
@@ -100,6 +104,48 @@ def _steps() -> list[tuple[str, Event]]:
         ("record", ParticipantJoined(participant=BEK_TWO)),
         ("record", ParticipantRoleChanged(participant_id="p_bek2222", role=Role.PARTICIPANT)),
         ("record", ParticipantLeft(participant_id="p_bek1111")),
+        (
+            "record",
+            AccessRequested(
+                request=AccessRequestView(
+                    participant_id="p_bek2222",
+                    name="Bek",
+                    note="can I try the fix?",
+                    requested_at=START,
+                )
+            ),
+        ),
+        (
+            "record",
+            AccessResolved(
+                participant_id="p_bek2222", decision=AccessDecision.DENIED, decided_by="p_host"
+            ),
+        ),
+        (
+            "record",
+            AccessRequested(
+                request=AccessRequestView(
+                    participant_id="p_bek2222", name="Bek", requested_at=START
+                )
+            ),
+        ),
+        (
+            "record",
+            AccessResolved(
+                participant_id="p_bek2222", decision=AccessDecision.GRANTED, decided_by="p_host"
+            ),
+        ),
+        ("record", ParticipantRoleChanged(participant_id="p_bek2222", role=Role.PARTICIPANT)),
+        ("record", ParticipantRoleChanged(participant_id="p_bek2222", role=Role.VIEWER)),
+        (
+            "record",
+            AccessRequested(
+                request=AccessRequestView(
+                    participant_id="p_bek2222", name="Bek", requested_at=START
+                )
+            ),
+        ),
+        ("record", ParticipantRoleChanged(participant_id="p_bek2222", role=Role.PARTICIPANT)),
         ("record", PromptModeChanged(mode=PromptMode.REVIEW)),
         ("record", AgentChanged(agent="anthropic · claude-opus-5-5")),
         (

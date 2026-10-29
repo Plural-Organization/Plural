@@ -466,14 +466,14 @@ describe("App", () => {
     ]);
   });
 
-  test("a participant is told the host reviews prompts, a viewer cannot type", async () => {
+  test("a participant is told the host reviews prompts, a viewer is told how to ask to write", async () => {
     const review = session("participant");
     review.emit({ type: "session.snapshot", state: { ...review.projection.state, prompt_mode: "review" }, streaming: {}, typing: [] });
     const participant = await mount(review);
     expect(await frame(participant, "the host approves it")).toContain("review");
 
     const viewer = await mount(session("viewer"));
-    expect(await frame(viewer, "viewers can only watch")).toContain("viewers can only watch");
+    expect(await frame(viewer, "/access asks the host")).toContain("watching");
   });
 
   test("the side panel hides with ctrl+b and on narrow terminals", async () => {

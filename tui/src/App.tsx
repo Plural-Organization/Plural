@@ -294,7 +294,7 @@ export function App({
   const running = state.run !== null;
   const items = useMemo(
     (): InboxItem[] => (isHost ? [...inboxItems(state), ...(planReady ? [{ kind: "plan", id: "plan" } as const] : [])] : []),
-    [isHost, state.approvals, state.proposals, state.join_requests, planReady],
+    [isHost, state.approvals, state.proposals, state.join_requests, state.access_requests, planReady],
   );
   const approvals = Object.keys(state.approvals).length;
   const queuedIds = useMemo(
@@ -935,6 +935,28 @@ export function App({
         }
         return true;
       }
+      case "access": {
+        const people = mentionable(state, projection.meId);
+        const [verb, ...names] = rest;
+        if (me?.role === "viewer") {
+          send({ type: "access.request", note: rest.join(" ").trim() || null });
+        } else if (!isHost) {
+          warn("access", "you can already write");
+        } else if (verb === undefined) {
+          const waiting = Object.values(state.access_requests);
+          show("access", waiting.length === 0 ? [[{ text: "nobody is asking to write", fg: theme.dim }]] : waiting.map((ask): Row => [{ text: ask.name, bold: true }, { text: ask.note ? `  ${ask.note}` : "", fg: theme.dim }]));
+        } else {
+          const person = findPerson(names.join(" "), people);
+          if (person === null || !["allow", "deny", "revoke"].includes(verb)) {
+            warn("access", "usage: /access [allow|deny|revoke <name>]");
+          } else if (verb === "revoke") {
+            send({ type: "participant.set_role", participant_id: person.id, role: "viewer" });
+          } else {
+            send({ type: "access.decide", participant_id: person.id, decision: verb as "allow" | "deny" });
+          }
+        }
+        return true;
+      }
       case "kick": {
         const person = findPerson(rest.join(" "), mentionable(state, projection.meId));
         if (person === null) {
@@ -964,6 +986,10 @@ export function App({
     }
     if (wizard?.kind === "mcp-add" && wizard.step === "field") {
       advance(wizard, text);
+      return;
+    }
+    if (routeOf(text, projection.state, projection.meId).label === "watching") {
+      warn("watching", "you are only watching. /access asks the host for the right to write");
       return;
     }
     stopTyping();
@@ -1127,6 +1153,12 @@ export function App({
       if (choice) {
         send({ type: "join.decide", request_id: item.id, decision: choice });
       }
+    } else if (item?.kind === "access") {
+      if (key.name === "y" || key.name === "return") {
+        send({ type: "access.decide", participant_id: item.id, decision: "allow" });
+      } else if (key.name === "n" || key.name === "x") {
+        send({ type: "access.decide", participant_id: item.id, decision: "deny" });
+      }
     } else if (item?.kind === "approval") {
       const decisions: Record<string, "once" | "always" | "reject" | "block"> = { y: "once", a: "always", n: "reject", b: "block" };
       const decision = key.name === "return" ? "once" : decisions[key.name];
@@ -1174,10 +1206,14 @@ export function App({
         ? { label: formAsk.label, hint: formAsk.hint, secret: false }
         : undefined;
   const placeholder =
-    me?.role === "participant" && state.prompt_mode === "review"
-      ? "Propose a prompt, the host approves it"
-      : "Message the agent, / for commands";
-  const disabled = me?.role === "viewer" ? "viewers can only watch the session" : null;
+    me?.role === "viewer"
+      ? me.id in state.access_requests
+        ? "You asked to write, waiting for the host…"
+        : "You are watching · /access asks the host for the right to write"
+      : me?.role === "participant" && state.prompt_mode === "review"
+        ? "Propose a prompt, the host approves it"
+        : "Message the agent, / for commands";
+  const disabled = null;
   const showPanel = settings.panel && width >= MIN_WIDTH_FOR_PANEL;
 
   if (intro) {

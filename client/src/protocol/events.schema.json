@@ -1,5 +1,94 @@
 {
   "$defs": {
+    "AccessDecision": {
+      "enum": [
+        "granted",
+        "denied"
+      ],
+      "type": "string"
+    },
+    "AccessRequestView": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id",
+        "name",
+        "note",
+        "requested_at"
+      ],
+      "type": "object"
+    },
+    "AccessRequested": {
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/AccessRequestView"
+        },
+        "type": {
+          "const": "access.requested",
+          "default": "access.requested",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request"
+      ],
+      "type": "object"
+    },
+    "AccessResolved": {
+      "properties": {
+        "decided_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "decision": {
+          "$ref": "#/$defs/AccessDecision"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "access.resolved",
+          "default": "access.resolved",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "participant_id",
+        "decision",
+        "decided_by"
+      ],
+      "type": "object"
+    },
     "AdmissionChanged": {
       "properties": {
         "mode": {
@@ -925,6 +1014,8 @@
         "event": {
           "discriminator": {
             "mapping": {
+              "access.requested": "#/$defs/AccessRequested",
+              "access.resolved": "#/$defs/AccessResolved",
               "agent.changed": "#/$defs/AgentChanged",
               "agents.changed": "#/$defs/AgentsChanged",
               "approval.requested": "#/$defs/ApprovalRequested",
@@ -1016,6 +1107,12 @@
             },
             {
               "$ref": "#/$defs/JoinResolved"
+            },
+            {
+              "$ref": "#/$defs/AccessRequested"
+            },
+            {
+              "$ref": "#/$defs/AccessResolved"
             },
             {
               "$ref": "#/$defs/JoinPending"
@@ -2108,6 +2205,12 @@
     },
     "SessionState": {
       "properties": {
+        "access_requests": {
+          "additionalProperties": {
+            "$ref": "#/$defs/AccessRequestView"
+          },
+          "type": "object"
+        },
         "admission": {
           "$ref": "#/$defs/AdmissionMode",
           "default": "approve"
@@ -2261,6 +2364,7 @@
         "permission_mode",
         "admission",
         "join_requests",
+        "access_requests",
         "participants",
         "proposals",
         "approvals",
@@ -2725,6 +2829,8 @@
     "event": {
       "discriminator": {
         "mapping": {
+          "access.requested": "#/$defs/AccessRequested",
+          "access.resolved": "#/$defs/AccessResolved",
           "agent.changed": "#/$defs/AgentChanged",
           "agents.changed": "#/$defs/AgentsChanged",
           "approval.requested": "#/$defs/ApprovalRequested",
@@ -2816,6 +2922,12 @@
         },
         {
           "$ref": "#/$defs/JoinResolved"
+        },
+        {
+          "$ref": "#/$defs/AccessRequested"
+        },
+        {
+          "$ref": "#/$defs/AccessResolved"
         },
         {
           "$ref": "#/$defs/JoinPending"

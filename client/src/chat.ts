@@ -132,6 +132,11 @@ export interface Route {
 }
 
 export function routeOf(text: string, state: SessionState, meId: string | null): Route {
+  const me = meId === null ? undefined : state.participants[meId];
+  const first = text.startsWith("/") ? (text.slice(1).split(/\s/)[0] ?? "") : "";
+  if (me?.role === "viewer" && (!text.startsWith("/") || (TEAM_COMMANDS as readonly string[]).includes(first))) {
+    return { kind: "command", label: "watching", note: "you cannot write here, /access asks the host for the right", blocked: true };
+  }
   if (text.startsWith("/")) {
     const space = text.search(/\s/);
     const name = text.slice(1, space === -1 ? undefined : space);
@@ -154,7 +159,6 @@ export function routeOf(text: string, state: SessionState, meId: string | null):
       };
     }
   }
-  const me = meId === null ? undefined : state.participants[meId];
   const reviewed = me?.role === "participant" && state.prompt_mode === "review";
   return { kind: "agent", label: "agent", note: reviewed ? "the host approves it first" : "everyone in the room sees it", blocked: false };
 }

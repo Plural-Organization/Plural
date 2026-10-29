@@ -1,8 +1,9 @@
-import { label, type ApprovalView, type JoinRequestView, type ProposalView, type SessionState } from "@plural/client";
+import { label, type AccessRequestView, type ApprovalView, type JoinRequestView, type ProposalView, type SessionState } from "@plural/client";
 import { colorFor, theme } from "../theme";
 
 export type InboxItem =
   | { kind: "join"; id: string; request: JoinRequestView }
+  | { kind: "access"; id: string; request: AccessRequestView }
   | { kind: "approval"; id: string; approval: ApprovalView }
   | { kind: "proposal"; id: string; proposal: ProposalView }
   | { kind: "plan"; id: string };
@@ -10,6 +11,7 @@ export type InboxItem =
 export function inboxItems(state: SessionState): InboxItem[] {
   return [
     ...Object.values(state.join_requests).map((request): InboxItem => ({ kind: "join", id: request.id, request })),
+    ...Object.values(state.access_requests).map((request): InboxItem => ({ kind: "access", id: request.participant_id, request })),
     ...Object.values(state.approvals).map((approval): InboxItem => ({ kind: "approval", id: approval.id, approval })),
     ...Object.values(state.proposals).map((proposal): InboxItem => ({ kind: "proposal", id: proposal.id, proposal })),
   ];
@@ -62,7 +64,7 @@ export function Inbox({ items, state, selected, focused, now }: InboxProps) {
     >
       <text>
         <span fg={theme.warn}>
-          <b>{item.kind === "join" ? "wants to join" : item.kind === "approval" ? "approval needed" : item.kind === "plan" ? "plan ready" : "proposal"}</b>
+          <b>{item.kind === "join" ? "wants to join" : item.kind === "access" ? "wants to write" : item.kind === "approval" ? "approval needed" : item.kind === "plan" ? "plan ready" : "proposal"}</b>
         </span>
         <span fg={theme.dim}>
           {"  "}
@@ -71,6 +73,8 @@ export function Inbox({ items, state, selected, focused, now }: InboxProps) {
       </text>
       {item.kind === "join" ? (
         <JoinBody request={item.request} now={now} focused={focused} />
+      ) : item.kind === "access" ? (
+        <AccessBody request={item.request} now={now} focused={focused} />
       ) : item.kind === "approval" ? (
         <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} />
       ) : item.kind === "plan" ? (
@@ -100,6 +104,22 @@ function JoinBody({ request, now, focused }: { request: JoinRequestView; now: nu
       ) : (
         <text fg={theme.dim}>tab to answer</text>
       )}
+    </>
+  );
+}
+
+function AccessBody({ request, now, focused }: { request: AccessRequestView; now: number; focused: boolean }) {
+  const seconds = Math.max(0, Math.round((now - Date.parse(request.requested_at)) / 1000));
+  return (
+    <>
+      <text>
+        <span fg={colorFor(request.participant_id)}>
+          <b>{request.name}</b>
+        </span>
+        <span fg={theme.dim}> · watching · asked {seconds}s ago</span>
+      </text>
+      {request.note ? <text>{request.note}</text> : null}
+      {focused ? <Keys items={[["y", "let them write"], ["n", "not now"]]} /> : <text fg={theme.dim}>tab to answer</text>}
     </>
   );
 }
