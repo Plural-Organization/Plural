@@ -22,6 +22,9 @@
 | a private message read by another guest | the host delivers a `chat.posted` with a recipient only to its author and its addressee: live events, history, replay and the snapshot are filtered per connection (`core/chat.py`, `host/publisher.py`); the host, its log and the relay can still read it, so it is private from guests only |
 | chat text steering the agent | chat events are not part of the conversation the agent is built from, so no chat text reaches the model (`host/history.py`, tested in `tests/e2e/test_chat.py`) |
 | a stranger lists or opens a team's sessions | the directory answers only a valid member certificate plus a signature over a fresh nonce, and a host checks both against the team key it pinned (ADR 0007) |
+| a member shows a card under someone else's name, or takes over their room | the directory writes the owner of a card from the member's certificate, never from the card, and refuses a room that already belongs to another member (`relay/presence.py`) |
+| a member floods the directory with cards | a card frame is at most 8 KB, a member can show 5 sessions, and a card not renewed within a minute is dropped (`relay/team_routes.py`, `relay/presence.py`) |
+| a removed member keeps showing sessions | removal drops their cards at once and the next frame on their open connection closes it (`relay/directory.py`) |
 | a stolen member certificate | the certificate alone is useless without the member's private key, it expires, and removing the member revokes it |
 | a compromised directory adds a member | the new member can at most become a viewer of sessions that admit team viewers; writing always needs the host to approve `access.request` |
 | a viewer reads what the owner did not share | sessions are private and unpublished by default; the card holds no prompts, replies or file contents, only names, repository, status and changed paths |

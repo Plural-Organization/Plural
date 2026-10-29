@@ -127,7 +127,7 @@ A private message is private from the other guests, not from the host: it is sto
 
 ## Teams
 
-A team is a group of people who run their own plural, each with their own agent and key, and trust each other enough to see who is around. This part only forms the team; seeing and opening each other's sessions comes next.
+A team is a group of people who run their own plural, each with their own agent and key, and trust each other enough to see who is around. You see who shares a session; opening each other's sessions comes next.
 
 ```bash
 plural team create Backend --relay wss://relay.example.com --as vlad
@@ -141,6 +141,19 @@ plural team status
 ```
 
 `create` prints an invite code that works once and for an hour; give it to a teammate, who runs `join` with the same relay. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
+
+### Showing your session to the team
+
+```bash
+plural --team                 # uses the team's relay as the way in
+plural --team --tunnel ngrok  # or your own tunnel
+plural ls                     # who shares what right now
+plural ls --json
+```
+
+A session is private unless you start it with `--team`. A team session needs an address others can reach, so it uses the team relay, `--relay`, `--public-url` or a tunnel; plural says so and stops if there is none. The team sees your name, the repository and branch, the title, whether the agent is working or waiting for you, and how many people watch. It does not see prompts, replies or files. The card goes away when you quit, or about a minute after your machine drops off.
+
+The side panel has a TEAM section with the same list, refreshed every few seconds: `●` working, `◆` waiting for its host, `○` idle.
 
 You are identified by a key that plural creates once in `~/.plural/identity.pem`. Joining gives you a certificate signed for the team, valid for 30 days and renewed by itself. Removing a member stops their access at once. One person is in one team at a time.
 

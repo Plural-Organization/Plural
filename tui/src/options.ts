@@ -28,7 +28,7 @@ export type Parsed =
   | { kind: "join"; link: string | null; displayName: string | null }
   | { kind: "session"; options: SessionOptions };
 
-const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm", "team"]);
+const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm", "team", "ls"]);
 
 const HOST_VALUES: Record<string, string> = {
   "--workspace": "--workspace",
@@ -186,6 +186,9 @@ function session(args: string[]): SessionOptions {
         }
         break;
       }
+      case "--team":
+        options.hostArgs.push("--team");
+        break;
       case "--name":
         options.displayName = valueOf(args, index, arg);
         index += 1;

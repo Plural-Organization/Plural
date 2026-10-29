@@ -2,6 +2,7 @@ import { label, PERMISSION_LABELS, type Participant, type Projection } from "@pl
 import { useState, type ReactNode } from "react";
 import { colorFor, theme } from "../theme";
 import { truncate } from "../lib/wrap";
+import type { TeamView } from "../team";
 import type { InboxItem } from "./Inbox";
 import { Spinner, useElapsed } from "./Spinner";
 import { ContextMeterView } from "./StatusBar";
@@ -35,7 +36,40 @@ function ParticipantRow({ participant, name, me, typing }: { participant: Partic
   );
 }
 
+const STATUS_MARK = { running: "●", waiting: "◆", idle: "○" } as const;
+
+function TeamSection({ view }: { view: TeamView }) {
+  const shown = view.sessions.slice(0, 6);
+  return (
+    <Section title={`team · ${truncate(view.name, 14)}`} count={view.sessions.length}>
+      {shown.map((card) => {
+        const color = card.status === "running" ? theme.ok : card.status === "waiting" ? theme.warn : theme.dim;
+        return (
+          <box key={card.room} flexDirection="column">
+            <text>
+              <span fg={color}>{STATUS_MARK[card.status]} </span>
+              <span fg={colorFor(card.owner_id)}>{truncate(card.owner, 14)}</span>
+              <span fg={theme.dim}>{card.owner_id === view.me ? " (you)" : ""}</span>
+              <span fg={color}>{card.status === "idle" ? "" : `  ${card.status}`}</span>
+              <span fg={theme.dim}>{card.viewers > 0 ? `  👁 ${card.viewers}` : ""}</span>
+            </text>
+            <text fg={theme.dim}>  {truncate(card.branch ? `${card.repo} · ${card.branch}` : card.repo, SIDEBAR_WIDTH - 8)}</text>
+          </box>
+        );
+      })}
+      {view.sessions.length > shown.length ? <text fg={theme.dim}>  +{view.sessions.length - shown.length} more</text> : null}
+      {view.sessions.length === 0 && view.error === null ? <text fg={theme.dim}>nobody shares a session</text> : null}
+      {view.error !== null ? (
+        <text fg={theme.warn} wrapMode="word">
+          team offline: {view.error}
+        </text>
+      ) : null}
+    </Section>
+  );
+}
+
 interface SidebarProps {
+  team?: TeamView | null;
   onSettings: () => void;
   projection: Projection;
   room: string;
@@ -44,7 +78,7 @@ interface SidebarProps {
   status: string;
 }
 
-export function Sidebar({ projection, room, inbox, running, status, onSettings }: SidebarProps) {
+export function Sidebar({ projection, room, inbox, running, status, team, onSettings }: SidebarProps) {
   const state = projection.state;
   const [hover, setHover] = useState(false);
   const elapsed = useElapsed(running);
@@ -74,6 +108,7 @@ export function Sidebar({ projection, room, inbox, running, status, onSettings }
           />
         ))}
       </Section>
+      {team ? <TeamSection view={team} /> : null}
       {inbox.length > 0 ? (
         <Section title="needs you" count={inbox.length}>
           {inbox.slice(0, 4).map((item) =>

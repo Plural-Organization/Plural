@@ -38,6 +38,7 @@ import { Compacting, ModeLine, Working } from "./components/Working";
 import { helpRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
+import type { TeamView, TeamWatcher } from "./team";
 import { explain } from "./failure";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
@@ -65,6 +66,7 @@ export interface AppProps {
   initialPrompt?: string | null;
   alerts?: Alerts;
   updater?: Updater;
+  team?: TeamWatcher;
   splash?: boolean;
   onQuit: () => void;
 }
@@ -101,6 +103,7 @@ export function App({
   initialPrompt = null,
   alerts,
   updater,
+  team,
   splash = false,
   onQuit,
 }: AppProps) {
@@ -151,6 +154,8 @@ export function App({
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [update, setUpdate] = useState<UpdateState | null>(updater?.state ?? null);
   useEffect(() => updater?.subscribe(setUpdate), [updater]);
+  const [teamView, setTeamView] = useState<TeamView | null>(team?.view ?? null);
+  useEffect(() => team?.subscribe(setTeamView), [team]);
   const [behind, setBehind] = useState({ away: false, fresh: 0, chat: 0 });
   const anchor = useRef(0);
   const [finished, setFinished] = useState(false);
@@ -1313,7 +1318,7 @@ export function App({
           onClose={closeSettings}
         />
       ) : null}
-      {showPanel ? <Sidebar projection={projection} room={room} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} /> : null}
+      {showPanel ? <Sidebar projection={projection} room={room} team={teamView} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} /> : null}
     </box>
   );
 }
