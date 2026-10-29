@@ -1,5 +1,52 @@
 {
   "$defs": {
+    "AccessDecide": {
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow",
+            "deny"
+          ],
+          "type": "string"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "access.decide",
+          "default": "access.decide",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "AccessRequest": {
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "access.request",
+          "default": "access.request",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "AdmissionMode": {
       "enum": [
         "approve",
@@ -336,6 +383,116 @@
         "erase"
       ],
       "type": "string"
+    },
+    "BriefingDecide": {
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow",
+            "deny"
+          ],
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "briefing.decide",
+          "default": "briefing.decide",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "BriefingImport": {
+      "properties": {
+        "as_of_seq": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "pattern": "^\\w[\\w .@#-]{0,79}$",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "briefing.import",
+          "default": "briefing.import",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "text"
+      ],
+      "type": "object"
+    },
+    "BriefingRequest": {
+      "properties": {
+        "focus": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "briefing.request",
+          "default": "briefing.request",
+          "type": "string"
+        },
+        "update": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "BriefingSharing": {
+      "enum": [
+        "off",
+        "ask",
+        "team"
+      ],
+      "type": "string"
+    },
+    "BriefingSharingSet": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/BriefingSharing"
+        },
+        "type": {
+          "const": "session.set_briefing_sharing",
+          "default": "session.set_briefing_sharing",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
     },
     "ChatSend": {
       "properties": {
@@ -1108,10 +1265,16 @@
         "ts": {
           "minimum": 0,
           "type": "integer"
+        },
+        "url": {
+          "maxLength": 300,
+          "minLength": 8,
+          "type": "string"
         }
       },
       "required": [
         "certificate",
+        "url",
         "ts",
         "nonce",
         "proof"
@@ -1165,6 +1328,8 @@
     "command": {
       "discriminator": {
         "mapping": {
+          "access.decide": "#/$defs/AccessDecide",
+          "access.request": "#/$defs/AccessRequest",
           "agents.create": "#/$defs/AgentsCreate",
           "agents.remove": "#/$defs/AgentsRemove",
           "approval.respond": "#/$defs/ApprovalRespond",
@@ -1174,6 +1339,9 @@
           "board.erase": "#/$defs/BoardErase",
           "board.move": "#/$defs/BoardMove",
           "board.open": "#/$defs/BoardOpen",
+          "briefing.decide": "#/$defs/BriefingDecide",
+          "briefing.import": "#/$defs/BriefingImport",
+          "briefing.request": "#/$defs/BriefingRequest",
           "chat.send": "#/$defs/ChatSend",
           "context.compact": "#/$defs/ContextCompact",
           "file.attach": "#/$defs/FileAttach",
@@ -1199,6 +1367,7 @@
           "queue.cancel": "#/$defs/QueueCancel",
           "run.abort": "#/$defs/RunAbort",
           "session.hello": "#/$defs/SessionHello",
+          "session.set_briefing_sharing": "#/$defs/BriefingSharingSet",
           "session.set_permission_mode": "#/$defs/PermissionModeSet",
           "session.set_prompt_mode": "#/$defs/PromptModeSet",
           "skills.install": "#/$defs/SkillsInstall",
@@ -1234,6 +1403,24 @@
         },
         {
           "$ref": "#/$defs/JoinDecide"
+        },
+        {
+          "$ref": "#/$defs/AccessRequest"
+        },
+        {
+          "$ref": "#/$defs/AccessDecide"
+        },
+        {
+          "$ref": "#/$defs/BriefingRequest"
+        },
+        {
+          "$ref": "#/$defs/BriefingDecide"
+        },
+        {
+          "$ref": "#/$defs/BriefingSharingSet"
+        },
+        {
+          "$ref": "#/$defs/BriefingImport"
         },
         {
           "$ref": "#/$defs/LinkRevoke"

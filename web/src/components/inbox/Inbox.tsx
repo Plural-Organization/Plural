@@ -1,5 +1,7 @@
 import type { Command, ProposalView, SessionState } from "@plural/client";
 import { useNow } from "../../hooks/useNow";
+import { AccessCard } from "./AccessCard";
+import { BriefingAsk } from "./BriefingAsk";
 import { ApprovalCard } from "./ApprovalCard";
 import { JoinCard } from "./JoinCard";
 import type { InboxItem } from "./items";
@@ -24,6 +26,10 @@ export function Inbox({ items, state, send, onEdit }: InboxProps) {
       {items.length > 1 ? <div className={styles.count}>{items.length} things wait for you · the oldest is first</div> : null}
       {first.kind === "join" ? (
         <JoinCard request={first.request} send={send} />
+      ) : first.kind === "access" ? (
+        <AccessCard request={first.request} send={send} />
+      ) : first.kind === "briefing" ? (
+        <BriefingAsk request={first.request} send={send} />
       ) : first.kind === "approval" ? (
         <ApprovalCard approval={first.approval} state={state} now={now} send={send} />
       ) : (

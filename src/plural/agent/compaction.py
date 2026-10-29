@@ -20,9 +20,11 @@ SUMMARY_PROMPT: Final = (
     "respond with text only."
 )
 
-_TAGGED = re.compile(r"<summary>(.*?)</summary>", re.DOTALL)
+
+def extract_tagged(text: str, tag: str) -> str:
+    tagged = re.search(rf"<{tag}>(.*?)</{tag}>", text, re.DOTALL)
+    return (tagged.group(1) if tagged else text).strip()
 
 
 def extract_summary(text: str) -> str:
-    tagged = _TAGGED.search(text)
-    return (tagged.group(1) if tagged else text).strip()
+    return extract_tagged(text, "summary")

@@ -7,7 +7,7 @@ from plural.host.transport.base import Connection
 from plural.protocol.commands import BoardDraw, BoardErase, BoardMove, BoardOpen
 from plural.protocol.envelope import Envelope
 from plural.protocol.events import SkillsFound
-from plural.protocol.models import ApprovalView
+from plural.protocol.models import ApprovalView, BriefingRequestView
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,6 +70,19 @@ class SkillsUpdated:
 
 
 @dataclass(frozen=True, slots=True)
+class TeamSweep:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class BriefingReady:
+    request: BriefingRequestView
+    text: str
+    as_of_seq: int
+    error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class SkillsReply:
     connection: Connection
     event: SkillsFound | None = None
@@ -95,6 +108,8 @@ InboxMessage = (
     | Reconfigure
     | SkillsUpdated
     | McpUpdated
+    | BriefingReady
+    | TeamSweep
     | SkillsReply
     | BoardRequest
 )

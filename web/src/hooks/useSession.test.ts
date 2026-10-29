@@ -8,7 +8,7 @@ vi.mock("../lib/saved", () => ({ forgetRoom: vi.fn(), rememberRoom: vi.fn() }));
 afterEach(() => { vi.restoreAllMocks(); vi.clearAllMocks(); });
 
 const requests: Event[] = [
-  { type: "approval.requested", approval: { id: "ap_1", call: { id: "t1", name: "bash", risk: "exec", subject: "ls", args: {} }, provenance: { initiator_id: "p_guest", initiator_role: "participant", origin: "direct" }, timeout_at: "2026-10-28T23:00:00Z", suggested_patterns: [] } },
+  { type: "approval.requested", approval: { id: "ap_1", call: { id: "t1", name: "bash", risk: "exec", subject: "ls", args: {} }, provenance: { initiator_id: "p_guest", initiator_role: "participant", origin: "direct" }, timeout_at: "2026-10-28T23:00:00Z", suggested_patterns: [], warnings: [] } },
   { type: "proposal.created", proposal: { id: "pr_1", author_id: "p_guest", text: "Review this", delivery: "now", attachments: [] } },
   { type: "join.requested", request: { id: "j_1", name: "Newcomer", client: "web", requested_at: "2026-10-28T22:00:00Z" } },
 ];

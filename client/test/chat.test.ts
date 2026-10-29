@@ -121,6 +121,14 @@ describe("who will see what I am typing", () => {
     expect(routeOf("@", room(), "p_me").kind).toBe("agent");
   });
 
+  test("a viewer is told they only watch and how to ask, but may use other commands", () => {
+    const state = room();
+    expect(routeOf("fix it", state, "p_view")).toMatchObject({ label: "watching", blocked: true });
+    expect(routeOf("@alia hi", state, "p_view").label).toBe("watching");
+    expect(routeOf("/team hi", state, "p_view").label).toBe("watching");
+    expect(routeOf("/access please", state, "p_view")).toMatchObject({ kind: "command", label: "/access" });
+  });
+
   test("other slash commands are not prompts", () => {
     expect(routeOf("/compact", room(), "p_me")).toMatchObject({ kind: "command", label: "/compact" });
   });

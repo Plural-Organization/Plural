@@ -5,6 +5,7 @@ import hashlib
 import json
 from collections.abc import Coroutine, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import PurePath
 
 import structlog
@@ -12,12 +13,13 @@ from pydantic import ValidationError
 
 from plural.agent import events as agent
 from plural.agent.agents import AgentError, AgentLibrary, AgentSpec, agent_tools
+from plural.agent.loop import BriefingFailed
 from plural.agent.mcp import McpError, McpHub, ServerSpec
-from plural.agent.messages import Message, UserTurn
+from plural.agent.messages import Message, NotesTurn, UserTurn
 from plural.agent.providers.base import LlmImage
 from plural.agent.skills import Package, SkillError, SkillLibrary, parse_package
 from plural.agent.tools.board import AGENT_AUTHOR, BoardRefused
-from plural.core import approvals, chat, joins, policies, proposals, visibility
+from plural.core import access, approvals, briefings, chat, joins, policies, proposals, visibility
 from plural.core.errors import (
     Conflict,
     DomainError,
@@ -34,12 +36,15 @@ from plural.host import history
 from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.attachments import AttachmentVault, image_type
+from plural.host.briefing import BriefingService
+from plural.host.conflicts import ConflictBoard
 from plural.host.gateway import Admission, Gateway, NeedsApproval
 from plural.host.inbox import (
     AgentOutput,
     ApprovalExpired,
     ApprovalNeeded,
     BoardRequest,
+    BriefingReady,
     Disconnected,
     Inbox,
     InboxMessage,
@@ -49,9 +54,11 @@ from plural.host.inbox import (
     Reconfigure,
     SkillsReply,
     SkillsUpdated,
+    TeamSweep,
     TypingExpired,
 )
 from plural.host.invites import InviteBook, RoomLink
+from plural.host.ledger import ChangeLedger
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.publisher import Publisher
 from plural.host.team_admission import (
@@ -62,6 +69,8 @@ from plural.host.team_admission import (
 from plural.host.transport.base import Connection
 from plural.protocol.codec import ProtocolError, decode_command
 from plural.protocol.commands import (
+    AccessDecide,
+    AccessRequest,
     AdmissionSet,
     AgentsCreate,
     AgentsRemove,
@@ -72,6 +81,10 @@ from plural.protocol.commands import (
     BoardErase,
     BoardMove,
     BoardOpen,
+    BriefingDecide,
+    BriefingImport,
+    BriefingRequest,
+    BriefingSharingSet,
     ChatSend,
     Command,
     ContextCompact,
@@ -116,6 +129,10 @@ from plural.protocol.events import (
     BoardMoved,
     BoardOpened,
     BoardStroked,
+    BriefingDelivered,
+    BriefingImported,
+    BriefingResolved,
+    BriefingSharingChanged,
     ContextCompacted,
     ContextCompacting,
     ContextUsage,
@@ -164,6 +181,10 @@ from plural.protocol.models import (
     BoardShape,
     BoardStroke,
     BoardView,
+    BriefingDecision,
+    BriefingImportView,
+    BriefingRequestView,
+    BriefingSharing,
     ContextView,
     Delivery,
     DequeueReason,
@@ -239,8 +260,18 @@ class SessionActor:
         max_pending_joins: int = 5,
         max_participants: int = 20,
         team: TeamAdmission | None = None,
+        conflicts: ConflictBoard | None = None,
+        briefing: BriefingService | None = None,
+        ledger: ChangeLedger | None = None,
+        team_sweep_s: float = 30.0,
     ) -> None:
+        self._team_sweep_s = team_sweep_s
+        self._briefing = briefing
+        self._ledger = ledger
+        self._briefing_at: dict[str, datetime] = {}
         self._team = team
+        self._conflicts = conflicts
+        self._access_denied: dict[str, datetime] = {}
         self._inbox = inbox
         self._store = store
         self._publisher = publisher
@@ -288,6 +319,19 @@ class SessionActor:
         self._sync_policy()
         if conversation := await self._history(records):
             self._agent.restore(conversation)
+        if self._state.briefings_imported:
+            self._agent.mark_shared()
+        if self._ledger is not None:
+            for record in records:
+                self._ledger.observe(record.event)
+        for stale in list(self._state.briefing_requests.values()):
+            await self._emit(
+                BriefingResolved(
+                    request_id=stale.id,
+                    participant_id=stale.participant_id,
+                    decision=BriefingDecision.DENIED,
+                )
+            )
         for resolved in approvals.abandon_all(self._state):
             await self._emit(resolved)
         for left_waiting in joins.abandon_all(self._state, JoinDecision.EXPIRED):
@@ -328,12 +372,34 @@ class SessionActor:
         await self._sync_agents()
 
     async def run(self) -> None:
+        sweeper = asyncio.create_task(self._sweep_team_loop()) if self._team else None
+        try:
+            while True:
+                message = await self._inbox.get()
+                try:
+                    await self._handle(message)
+                except Exception:
+                    log.exception("actor.message_failed", message=type(message).__name__)
+        finally:
+            if sweeper is not None:
+                sweeper.cancel()
+
+    async def _sweep_team_loop(self) -> None:
         while True:
-            message = await self._inbox.get()
-            try:
-                await self._handle(message)
-            except Exception:
-                log.exception("actor.message_failed", message=type(message).__name__)
+            await asyncio.sleep(self._team_sweep_s)
+            self._inbox.put(TeamSweep())
+
+    async def _sweep_team(self) -> None:
+        if self._team is None:
+            return
+        for person in list(self._state.participants.values()):
+            member = member_id_of(person.id)
+            if member is None or not person.connected:
+                continue
+            if await self._team.still_member(member):
+                continue
+            await self._emit(ParticipantRevoked(participant_id=person.id))
+            self._publisher.disconnect(person.id, "you are no longer in the team")
 
     async def _handle(self, message: InboxMessage) -> None:
         match message:
@@ -344,10 +410,26 @@ class SessionActor:
             case AgentOutput(run_id=run_id, event=event):
                 await self._on_agent(run_id, event)
             case ApprovalNeeded(approval=approval):
+                if self._conflicts is not None:
+                    warnings = self._conflicts.warnings_for(approval.call, self._clock.now())
+                    approval = approval.model_copy(update={"warnings": warnings})
                 await self._emit(ApprovalRequested(approval=approval))
                 delay = max((approval.timeout_at - self._clock.now()).total_seconds(), 0)
                 self._timers[approval.id] = asyncio.get_running_loop().call_later(
                     delay, self._inbox.put, ApprovalExpired(approval.id)
+                )
+            case TeamSweep():
+                await self._sweep_team()
+            case BriefingReady(request=ask, text=text, as_of_seq=as_of, error=error):
+                await self._emit(
+                    BriefingDelivered(
+                        request_id=ask.id,
+                        to=ask.participant_id,
+                        text=text,
+                        as_of_seq=as_of,
+                        update=ask.update,
+                        error=error,
+                    )
                 )
             case Reconfigure() as change:
                 await self._reconfigure(change)
@@ -541,6 +623,54 @@ class SessionActor:
                         link=invite.link,
                     ),
                 )
+            case BriefingRequest():
+                asked = briefings.request(
+                    self._state,
+                    participant,
+                    command.focus,
+                    command.update,
+                    request_id=self._ids.new("b_"),
+                    now=self._clock.now(),
+                    limit=self._max_pending_joins,
+                    last_at=self._briefing_at,
+                )
+                await self._emit(asked, actor_id=participant.id)
+                if self._state.briefing_sharing is BriefingSharing.TEAM:
+                    await self._grant_briefing(asked.request, decided_by=None)
+            case BriefingDecide():
+                allow = command.decision == "allow"
+                waiting = self._state.briefing_requests.get(command.request_id)
+                answer = briefings.decide(self._state, command.request_id, allow, participant.id)
+                await self._emit(answer, actor_id=participant.id)
+                if allow and waiting is not None:
+                    self._start_briefing(waiting)
+            case BriefingSharingSet():
+                if command.mode is not self._state.briefing_sharing:
+                    await self._emit(
+                        BriefingSharingChanged(mode=command.mode), actor_id=participant.id
+                    )
+            case BriefingImport():
+                await self._import_briefing(participant, command)
+            case AccessRequest():
+                await self._emit(
+                    access.request(
+                        self._state,
+                        participant,
+                        command.note,
+                        now=self._clock.now(),
+                        limit=self._max_pending_joins,
+                        denied_at=self._access_denied,
+                    ),
+                    actor_id=participant.id,
+                )
+            case AccessDecide():
+                allow = command.decision == "allow"
+                for event in access.decide(
+                    self._state, command.participant_id, allow, participant.id
+                ):
+                    await self._emit(event, actor_id=participant.id)
+                if not allow:
+                    self._access_denied[command.participant_id] = self._clock.now()
             case JoinDecide():
                 await self._decide_join(participant, command)
             case LinkRevoke():
@@ -1228,6 +1358,54 @@ class SessionActor:
                 parts.append(f"[image {meta.name}, no longer available]")
         return "\n\n".join(parts), tuple(pictures)
 
+    async def _grant_briefing(self, ask: BriefingRequestView, *, decided_by: str | None) -> None:
+        await self._emit(
+            briefings.decide(self._state, ask.id, True, decided_by), actor_id=decided_by
+        )
+        self._start_briefing(ask)
+
+    def _start_briefing(self, ask: BriefingRequestView) -> None:
+        self._briefing_at[ask.participant_id] = self._clock.now()
+        self._background(self._write_briefing(ask, self._state.last_seq))
+
+    async def _write_briefing(self, ask: BriefingRequestView, as_of: int) -> None:
+        if self._briefing is None:
+            self._inbox.put(BriefingReady(ask, "", as_of, "this host cannot write briefings"))
+            return
+        try:
+            written = await self._briefing.write(
+                ask.participant_id,
+                ask.focus,
+                ask.update,
+                as_of=as_of,
+                when=self._clock.now(),
+                cancel=asyncio.Event(),
+            )
+        except BriefingFailed as error:
+            self._inbox.put(BriefingReady(ask, "", as_of, f"the model could not write it: {error}"))
+        except Exception:
+            log.exception("actor.briefing_failed")
+            self._inbox.put(BriefingReady(ask, "", as_of, "could not write the briefing"))
+        else:
+            self._inbox.put(BriefingReady(ask, written.text, as_of))
+
+    async def _import_briefing(self, host: Participant, command: BriefingImport) -> None:
+        if any(
+            item.source == command.source and item.as_of_seq == command.as_of_seq
+            for item in self._state.briefings_imported
+        ):
+            raise Conflict("your agent already has this briefing")
+        text = self._redactor.redact(command.text)
+        self._agent.add_notes(NotesTurn(source=command.source, text=text))
+        item = BriefingImportView(
+            id=self._ids.new("bi_"),
+            source=command.source,
+            as_of_seq=command.as_of_seq,
+            chars=len(text),
+            at=self._clock.now(),
+        )
+        await self._emit(BriefingImported(item=item, text=text), actor_id=host.id)
+
     async def _ban_team_member(self, participant_id: str) -> None:
         member = member_id_of(participant_id)
         if member is None or self._team is None:
@@ -1256,6 +1434,10 @@ class SessionActor:
             event, event_id=self._ids.new("e_"), ts=self._clock.now(), actor_id=actor_id
         )
         self._state = reduce(self._state, record)
+        if self._conflicts is not None:
+            self._conflicts.observe(event, record.ts)
+        if self._ledger is not None:
+            self._ledger.observe(event)
         if isinstance(event, PolicyRuleAdded | PolicyRuleRemoved | PermissionModeChanged):
             self._sync_policy()
         self._publisher.publish(record)

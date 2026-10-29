@@ -26,7 +26,8 @@ export type FeedItem =
     }
   | { kind: "assistant"; id: string; text: string; streaming: boolean }
   | { kind: "tool"; id: string; call: ToolCallView; status: ToolStatus; output: string; diff: string | null; live: string }
-  | { kind: "notice"; id: string; tone: Tone; text: string; action?: "board" };
+  | { kind: "notice"; id: string; tone: Tone; text: string; action?: "board" }
+  | { kind: "briefing"; id: string; from: string; text: string; asOf: number; update: boolean };
 
 export interface Feed {
   items: FeedItem[];
@@ -112,6 +113,45 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
       return note("dim", `${nameOf(event.participant_id)} is now ${event.role}`);
     case "participant.revoked":
       return note("danger", `access revoked for ${event.participant_id}`);
+    case "briefing.requested":
+      return event.request.participant_id === projection.meId
+        ? note("dim", "you asked for a briefing of this session, waiting for the host")
+        : note("warn", `${nameOf(event.request.participant_id)} asks for a briefing of this session${event.request.focus ? `: ${event.request.focus}` : ""}`);
+    case "briefing.resolved":
+      if (event.participant_id !== projection.meId) {
+        return note("dim", `${event.decision === "granted" ? "you agreed to" : "you refused"} a briefing for ${nameOf(event.participant_id)}`);
+      }
+      return event.decision === "granted" ? note("dim", "the host agreed, the briefing is being written") : note("warn", "the host said no to the briefing");
+    case "briefing.delivered": {
+      if (event.to !== projection.meId) {
+        return note("dim", `the briefing for ${nameOf(event.to)} ${event.error ? "could not be written" : "was written"}`);
+      }
+      if (event.error) {
+        return note("danger", `the briefing could not be written: ${event.error}`);
+      }
+      const counter = feed.counter + 1;
+      const host = Object.values(state.participants).find((person) => person.role === "host");
+      const from = host ? label(state, host) : "the host";
+      return { ...feed, counter, items: [...feed.items, { kind: "briefing", id: `b${counter}`, from, text: event.text, asOf: event.as_of_seq, update: event.update }] };
+    }
+    case "briefing.sharing_changed":
+      return note("accent", { off: "this session shares no briefings", ask: "briefings of this session are given when you agree", team: "briefings of this session are given to anyone who asks" }[event.mode]);
+    case "briefing.imported":
+      return note("ok", `${event.item.source}'s briefing${event.item.as_of_seq === null ? "" : ` (as of event ${event.item.as_of_seq})`} is now in the agent's notes`);
+    case "access.requested": {
+      if (event.request.participant_id === projection.meId) {
+        return note("dim", "you asked the host for the right to write, waiting for an answer");
+      }
+      const reason = event.request.note ? `: ${event.request.note}` : "";
+      return note("warn", `${nameOf(event.request.participant_id)} asks for the right to write${reason}`);
+    }
+    case "access.resolved": {
+      const granted = event.decision === "granted";
+      if (event.participant_id === projection.meId) {
+        return note(granted ? "ok" : "warn", granted ? "the host let you write" : "the host said no for now, you can ask again in a few minutes");
+      }
+      return note("dim", `${granted ? "you let" : "you said no to"} ${nameOf(event.participant_id)}${granted ? " write" : ""}`);
+    }
     case "session.prompt_mode_changed":
       return note(
         "accent",

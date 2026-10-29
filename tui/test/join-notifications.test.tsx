@@ -59,7 +59,7 @@ test("guests do not receive the host's join alert", async () => {
 
 test("tool approvals and participant proposals each ring for the host by default", async () => {
   const { fake, setup } = await mount();
-  fake.emit({ type: "approval.requested", approval: { id: "ap_1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60000).toISOString(), suggested_patterns: [] } });
+  fake.emit({ type: "approval.requested", approval: { id: "ap_1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60000).toISOString(), suggested_patterns: [], warnings: [] } });
   await settle(setup);
   expect(ringing).toHaveBeenCalledTimes(1);
   fake.emit({ type: "proposal.created", proposal: { id: "pr_1", author_id: ALIA.id, text: "Please review", delivery: "now", attachments: [] } });
@@ -69,7 +69,7 @@ test("tool approvals and participant proposals each ring for the host by default
 
 test("muting requests keeps approval cards visible without ringing", async () => {
   const { fake, setup } = await mount(true, true, false);
-  fake.emit({ type: "approval.requested", approval: { id: "ap_1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60000).toISOString(), suggested_patterns: [] } });
+  fake.emit({ type: "approval.requested", approval: { id: "ap_1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60000).toISOString(), suggested_patterns: [], warnings: [] } });
   await settle(setup);
   expect(ringing).not.toHaveBeenCalled();
   expect(setup.captureCharFrame()).toContain("approval needed");

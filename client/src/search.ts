@@ -14,6 +14,8 @@ export function searchableText(item: FeedItem): string {
       return [item.call.name, item.call.subject, item.output, item.diff ?? "", item.live].join("\n");
     case "notice":
       return item.text;
+    case "briefing":
+      return `${item.from}\n${item.text}`;
   }
 }
 
@@ -25,6 +27,7 @@ const KINDS: Record<string, (item: FeedItem) => boolean> = {
   chat: (item) => item.kind === "chat",
   reply: (item) => item.kind === "assistant",
   notice: (item) => item.kind === "notice",
+  briefing: (item) => item.kind === "briefing",
 };
 
 export const SEARCH_FILTERS = Object.keys(KINDS);

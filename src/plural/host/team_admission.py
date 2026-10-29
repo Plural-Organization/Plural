@@ -6,7 +6,12 @@ from plural.core.errors import Forbidden, Unauthorized
 from plural.core.ports import Clock
 from plural.protocol.commands import TeamProof
 from plural.protocol.team import MemberList
-from plural.security.identity import CertVerifier, InvalidCertificate, verify_team_proof
+from plural.security.identity import (
+    CertVerifier,
+    InvalidCertificate,
+    normalize_url,
+    verify_team_proof,
+)
 
 PARTICIPANT_PREFIX = "p_team_"
 
@@ -35,12 +40,14 @@ class TeamAdmission:
         team_key: str,
         members: Callable[[], Awaitable[MemberList]],
         clock: Clock,
+        urls: Iterable[str] = (),
         banned: Iterable[str] = (),
         roster_ttl_s: float = 30.0,
         roster_stale_s: float = 300.0,
         skew_s: int = 60,
     ) -> None:
         self._team_id = team_id
+        self._urls = frozenset(normalize_url(url) for url in urls)
         self._verifier = CertVerifier(team_key)
         self._members = members
         self._clock = clock
@@ -69,6 +76,8 @@ class TeamAdmission:
             raise Unauthorized("that certificate is for another team")
         if not verify_team_proof(proof, claims, room):
             raise Unauthorized("could not prove that this key is yours")
+        if normalize_url(proof.url) not in self._urls:
+            raise Unauthorized("that proof was made for another address")
         if abs(int(now.timestamp()) - proof.ts) > self._skew_s:
             raise Unauthorized("your clock is off by more than a minute")
         self._remember(claims.member, proof, int(now.timestamp()))

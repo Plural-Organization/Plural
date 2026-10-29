@@ -133,7 +133,7 @@ describe("App", () => {
     const setup = await mount(fake);
     fake.emit({
       type: "approval.requested",
-      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [] },
+      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [], warnings: [] },
     });
     await frame(setup, "approval needed");
     await frame(setup, "answer above");
@@ -408,7 +408,7 @@ describe("App", () => {
     fake.emit({ type: "participant.joined", participant: ALIA });
     fake.emit({
       type: "approval.requested",
-      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: ["rm *"] },
+      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: ["rm *"], warnings: [] },
     });
     const text = await frame(setup, "approval needed");
     expect(text).toContain("$ rm a.txt");
@@ -425,7 +425,7 @@ describe("App", () => {
     const setup = await mount(fake);
     fake.emit({
       type: "approval.requested",
-      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [] },
+      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [], warnings: [] },
     });
     await frame(setup, "approval needed");
     await setup.mockInput.pressKey("y");
@@ -439,7 +439,7 @@ describe("App", () => {
     await setup.mockInput.typeText("ye");
     fake.emit({
       type: "approval.requested",
-      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [] },
+      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [], warnings: [] },
     });
     await frame(setup, "tab: 1 waiting for you");
     await setup.mockInput.typeText("s");
@@ -466,14 +466,14 @@ describe("App", () => {
     ]);
   });
 
-  test("a participant is told the host reviews prompts, a viewer cannot type", async () => {
+  test("a participant is told the host reviews prompts, a viewer is told how to ask to write", async () => {
     const review = session("participant");
     review.emit({ type: "session.snapshot", state: { ...review.projection.state, prompt_mode: "review" }, streaming: {}, typing: [] });
     const participant = await mount(review);
     expect(await frame(participant, "the host approves it")).toContain("review");
 
     const viewer = await mount(session("viewer"));
-    expect(await frame(viewer, "viewers can only watch")).toContain("viewers can only watch");
+    expect(await frame(viewer, "/access asks the host")).toContain("watching");
   });
 
   test("the side panel hides with ctrl+b and on narrow terminals", async () => {

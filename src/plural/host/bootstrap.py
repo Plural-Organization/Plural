@@ -35,10 +35,13 @@ from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.attachments import AttachmentVault
 from plural.host.board_desk import InboxDesk
+from plural.host.briefing import BriefingService
 from plural.host.config import HostSettings
+from plural.host.conflicts import ConflictBoard
 from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook, RoomLink
+from plural.host.ledger import ChangeLedger
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.providers import (
     ConfigError,
@@ -76,6 +79,7 @@ class Host:
     host_link: str
     mcp: McpHub | None = None
     web_search: WebSearchSlot | None = None
+    conflicts: ConflictBoard | None = None
 
     async def serve(self) -> None:
         async with asyncio.TaskGroup() as group:
@@ -228,8 +232,25 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         token_ttl_s=settings.token_ttl_s,
     )
     host = Participant(id=HOST_PARTICIPANT_ID, name=settings.host_name, role=Role.HOST)
-    team = await _team_admission(settings, store, clock) if settings.team else None
+    team = await _team_admission(settings, store, clock, room) if settings.team else None
+    board = ConflictBoard(workspace.root) if settings.team else None
     agent_run = AgentRun(loop, inbox)
+    redactor = Redactor.from_environment(
+        os.environ,
+        extra=(
+            *provider_secrets(settings, api_key),
+            *(helper.secrets if helper else ()),
+            *mcp.secrets(),
+        ),
+    )
+    ledger = ChangeLedger(workspace.root)
+    briefing = BriefingService(
+        agent=agent_run,
+        ledger=ledger,
+        workspace=workspace.root,
+        owner=settings.host_name,
+        scrub=redactor.redact,
+    )
     actor = SessionActor(
         inbox=inbox,
         store=store,
@@ -241,14 +262,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         approval_registry=registry,
         gate=gate,
         vault=AttachmentVault(state_dir / "attachments" / room),
-        redactor=Redactor.from_environment(
-            os.environ,
-            extra=(
-                *provider_secrets(settings, api_key),
-                *(helper.secrets if helper else ()),
-                *mcp.secrets(),
-            ),
-        ),
+        redactor=redactor,
         ids=ids,
         clock=clock,
         host=host,
@@ -266,6 +280,10 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         max_pending_joins=settings.max_pending_joins,
         max_participants=settings.max_participants,
         team=team,
+        conflicts=board,
+        briefing=briefing,
+        ledger=ledger,
+        team_sweep_s=settings.team_roster_ttl_s,
     )
     desk.attach(actor.board)
     await actor.start()
@@ -288,11 +306,12 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         host_link=f"{room_url}?token={host_token}",
         mcp=mcp,
         web_search=web_search,
+        conflicts=board,
     )
 
 
 async def _team_admission(
-    settings: HostSettings, store: SqliteEventStore, clock: SystemClock
+    settings: HostSettings, store: SqliteEventStore, clock: SystemClock, room: str
 ) -> TeamAdmission:
     team_store = TeamStore(settings.state_dir)
     profile = await asyncio.to_thread(team_store.load)
@@ -310,6 +329,7 @@ async def _team_admission(
         team_id=profile.team_id,
         team_key=profile.team_key,
         members=directory.members,
+        urls=(settings.room_url(room),),
         clock=clock,
         banned=banned,
         roster_ttl_s=settings.team_roster_ttl_s,

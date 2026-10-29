@@ -15,7 +15,7 @@ export interface SessionOptions {
   name: string;
   client: ClientInfo;
   onWelcome?: (welcome: { room: string; token: string }) => void;
-  team?: (room: string) => TeamProof;
+  team?: (room: string, url: string) => TeamProof;
 }
 
 export interface Session {
@@ -115,7 +115,7 @@ export class SessionClient implements Session {
       name: this.options.name,
       invite: this.token === null ? this.link.invite : null,
       join: this.token === null ? this.link.join : null,
-      team: this.token === null && this.options.team ? this.options.team(this.link.room) : null,
+      team: this.token === null && this.options.team ? this.options.team(this.link.room, this.link.url) : null,
       token: this.token,
       since: this.projection.ready ? this.projection.state.last_seq : null,
     };

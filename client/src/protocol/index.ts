@@ -17,6 +17,8 @@ export type {
   BoardStroke,
   BoardView,
   ChatEntry,
+  AccessRequestView,
+  BriefingRequestView,
   JoinRequestView,
   ContextView,
   Envelope,

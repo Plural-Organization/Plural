@@ -5,6 +5,8 @@ from pydantic import Field
 
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.models import (
+    AccessDecision,
+    AccessRequestView,
     AdmissionMode,
     AgentView,
     ApprovalDecision,
@@ -12,6 +14,10 @@ from plural.protocol.models import (
     AttachmentMeta,
     BoardCursor,
     BoardStroke,
+    BriefingDecision,
+    BriefingImportView,
+    BriefingRequestView,
+    BriefingSharing,
     ContextView,
     Delivery,
     DequeueReason,
@@ -110,6 +116,52 @@ class JoinResolved(EventBase):
     request_id: str
     decision: JoinDecision
     decided_by: str | None = None
+
+
+class AccessRequested(EventBase):
+    type: Literal["access.requested"] = "access.requested"
+    request: AccessRequestView
+
+
+class AccessResolved(EventBase):
+    type: Literal["access.resolved"] = "access.resolved"
+    participant_id: str
+    decision: AccessDecision
+    decided_by: str | None = None
+
+
+class BriefingRequested(EventBase):
+    type: Literal["briefing.requested"] = "briefing.requested"
+    request: BriefingRequestView
+
+
+class BriefingResolved(EventBase):
+    type: Literal["briefing.resolved"] = "briefing.resolved"
+    request_id: str
+    participant_id: str
+    decision: BriefingDecision
+    decided_by: str | None = None
+
+
+class BriefingDelivered(EventBase):
+    type: Literal["briefing.delivered"] = "briefing.delivered"
+    request_id: str
+    to: str
+    text: str = ""
+    as_of_seq: int = 0
+    update: bool = False
+    error: str | None = None
+
+
+class BriefingSharingChanged(EventBase):
+    type: Literal["briefing.sharing_changed"] = "briefing.sharing_changed"
+    mode: BriefingSharing
+
+
+class BriefingImported(EventBase):
+    type: Literal["briefing.imported"] = "briefing.imported"
+    item: BriefingImportView
+    text: str
 
 
 class JoinPending(TransientEvent):
@@ -383,6 +435,13 @@ Event = Annotated[
     | AdmissionChanged
     | JoinRequested
     | JoinResolved
+    | AccessRequested
+    | AccessResolved
+    | BriefingRequested
+    | BriefingResolved
+    | BriefingDelivered
+    | BriefingSharingChanged
+    | BriefingImported
     | JoinPending
     | JoinRefused
     | PromptDequeued

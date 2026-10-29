@@ -19,6 +19,10 @@
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
         "participants": {},
         "proposals": {},
         "approvals": {},
@@ -67,6 +71,10 @@
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -122,6 +130,10 @@
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -183,6 +195,10 @@
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -250,6 +266,10 @@
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -319,6 +339,10 @@
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -387,6 +411,10 @@
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -445,16 +473,32 @@
         "ts": "2026-10-26T12:00:08Z",
         "actor_id": null,
         "event": {
-          "type": "session.prompt_mode_changed",
-          "mode": "review"
+          "type": "access.requested",
+          "request": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": "can I try the fix?",
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
         }
       },
       "state": {
         "last_seq": 8,
-        "prompt_mode": "review",
+        "prompt_mode": "open",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {
+          "p_bek2222": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": "can I try the fix?",
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -513,17 +557,22 @@
         "ts": "2026-10-26T12:00:09Z",
         "actor_id": null,
         "event": {
-          "type": "agent.changed",
-          "agent": "anthropic · claude-opus-5-5",
-          "fast": ""
+          "type": "access.resolved",
+          "participant_id": "p_bek2222",
+          "decision": "denied",
+          "decided_by": "p_host"
         }
       },
       "state": {
         "last_seq": 9,
-        "prompt_mode": "review",
+        "prompt_mode": "open",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -536,6 +585,1331 @@
             "name": "Alia",
             "role": "participant",
             "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 10,
+        "id": "e_10",
+        "ts": "2026-10-26T12:00:10Z",
+        "actor_id": null,
+        "event": {
+          "type": "access.requested",
+          "request": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        }
+      },
+      "state": {
+        "last_seq": 10,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {
+          "p_bek2222": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 11,
+        "id": "e_11",
+        "ts": "2026-10-26T12:00:11Z",
+        "actor_id": null,
+        "event": {
+          "type": "access.resolved",
+          "participant_id": "p_bek2222",
+          "decision": "granted",
+          "decided_by": "p_host"
+        }
+      },
+      "state": {
+        "last_seq": 11,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 12,
+        "id": "e_12",
+        "ts": "2026-10-26T12:00:12Z",
+        "actor_id": null,
+        "event": {
+          "type": "participant.role_changed",
+          "participant_id": "p_bek2222",
+          "role": "participant"
+        }
+      },
+      "state": {
+        "last_seq": 12,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 13,
+        "id": "e_13",
+        "ts": "2026-10-26T12:00:13Z",
+        "actor_id": null,
+        "event": {
+          "type": "participant.role_changed",
+          "participant_id": "p_bek2222",
+          "role": "viewer"
+        }
+      },
+      "state": {
+        "last_seq": 13,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "viewer",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 14,
+        "id": "e_14",
+        "ts": "2026-10-26T12:00:14Z",
+        "actor_id": null,
+        "event": {
+          "type": "access.requested",
+          "request": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        }
+      },
+      "state": {
+        "last_seq": 14,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {
+          "p_bek2222": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefing_sharing": "ask",
+        "briefing_requests": {},
+        "briefings_imported": [],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "viewer",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 15,
+        "id": "e_15",
+        "ts": "2026-10-26T12:00:15Z",
+        "actor_id": null,
+        "event": {
+          "type": "briefing.sharing_changed",
+          "mode": "team"
+        }
+      },
+      "state": {
+        "last_seq": 15,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {
+          "p_bek2222": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefing_sharing": "team",
+        "briefing_requests": {},
+        "briefings_imported": [],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "viewer",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 16,
+        "id": "e_16",
+        "ts": "2026-10-26T12:00:16Z",
+        "actor_id": null,
+        "event": {
+          "type": "briefing.requested",
+          "request": {
+            "id": "b_1",
+            "participant_id": "p_alia",
+            "name": "Alia",
+            "focus": "how was the login fixed?",
+            "update": false,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        }
+      },
+      "state": {
+        "last_seq": 16,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {
+          "p_bek2222": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefing_sharing": "team",
+        "briefing_requests": {
+          "b_1": {
+            "id": "b_1",
+            "participant_id": "p_alia",
+            "name": "Alia",
+            "focus": "how was the login fixed?",
+            "update": false,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefings_imported": [],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "viewer",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 17,
+        "id": "e_17",
+        "ts": "2026-10-26T12:00:17Z",
+        "actor_id": null,
+        "event": {
+          "type": "briefing.resolved",
+          "request_id": "b_1",
+          "participant_id": "p_alia",
+          "decision": "granted",
+          "decided_by": null
+        }
+      },
+      "state": {
+        "last_seq": 17,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {
+          "p_bek2222": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefing_sharing": "team",
+        "briefing_requests": {},
+        "briefings_imported": [],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "viewer",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 18,
+        "id": "e_18",
+        "ts": "2026-10-26T12:00:18Z",
+        "actor_id": null,
+        "event": {
+          "type": "briefing.delivered",
+          "request_id": "b_1",
+          "to": "p_alia",
+          "text": "the briefing",
+          "as_of_seq": 7,
+          "update": false,
+          "error": null
+        }
+      },
+      "state": {
+        "last_seq": 18,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {
+          "p_bek2222": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefing_sharing": "team",
+        "briefing_requests": {},
+        "briefings_imported": [],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "viewer",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 19,
+        "id": "e_19",
+        "ts": "2026-10-26T12:00:19Z",
+        "actor_id": null,
+        "event": {
+          "type": "briefing.requested",
+          "request": {
+            "id": "b_2",
+            "participant_id": "p_alia",
+            "name": "Alia",
+            "focus": null,
+            "update": false,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        }
+      },
+      "state": {
+        "last_seq": 19,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {
+          "p_bek2222": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefing_sharing": "team",
+        "briefing_requests": {
+          "b_2": {
+            "id": "b_2",
+            "participant_id": "p_alia",
+            "name": "Alia",
+            "focus": null,
+            "update": false,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefings_imported": [],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": true
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "viewer",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 20,
+        "id": "e_20",
+        "ts": "2026-10-26T12:00:20Z",
+        "actor_id": null,
+        "event": {
+          "type": "participant.left",
+          "participant_id": "p_alia"
+        }
+      },
+      "state": {
+        "last_seq": 20,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {
+          "p_bek2222": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefing_sharing": "team",
+        "briefing_requests": {},
+        "briefings_imported": [],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "viewer",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 21,
+        "id": "e_21",
+        "ts": "2026-10-26T12:00:21Z",
+        "actor_id": null,
+        "event": {
+          "type": "briefing.imported",
+          "item": {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          },
+          "text": "the briefing"
+        }
+      },
+      "state": {
+        "last_seq": 21,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {
+          "p_bek2222": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefing_sharing": "team",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "viewer",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 22,
+        "id": "e_22",
+        "ts": "2026-10-26T12:00:22Z",
+        "actor_id": null,
+        "event": {
+          "type": "briefing.sharing_changed",
+          "mode": "off"
+        }
+      },
+      "state": {
+        "last_seq": 22,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {
+          "p_bek2222": {
+            "participant_id": "p_bek2222",
+            "name": "Bek",
+            "note": null,
+            "requested_at": "2026-10-26T12:00:00Z"
+          }
+        },
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "viewer",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 23,
+        "id": "e_23",
+        "ts": "2026-10-26T12:00:23Z",
+        "actor_id": null,
+        "event": {
+          "type": "participant.role_changed",
+          "participant_id": "p_bek2222",
+          "role": "participant"
+        }
+      },
+      "state": {
+        "last_seq": 23,
+        "prompt_mode": "open",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 24,
+        "id": "e_24",
+        "ts": "2026-10-26T12:00:24Z",
+        "actor_id": null,
+        "event": {
+          "type": "session.prompt_mode_changed",
+          "mode": "review"
+        }
+      },
+      "state": {
+        "last_seq": 24,
+        "prompt_mode": "review",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek1111": {
+            "id": "p_bek1111",
+            "name": "Bek",
+            "role": "participant",
+            "connected": false
+          },
+          "p_bek2222": {
+            "id": "p_bek2222",
+            "name": "Bek",
+            "role": "participant",
+            "connected": true
+          }
+        },
+        "proposals": {},
+        "approvals": {},
+        "attachments": {},
+        "policy": [],
+        "skills": [],
+        "context": null,
+        "mcp": [],
+        "usage": [],
+        "agents": [],
+        "queue": [],
+        "agent": "demo agent (scripted)",
+        "fast_agent": "",
+        "summary": null,
+        "run": null,
+        "transcript": [],
+        "chat": [],
+        "board": {
+          "open": false,
+          "strokes": []
+        }
+      },
+      "streaming": {},
+      "reasoning": 0
+    },
+    {
+      "kind": "record",
+      "record": {
+        "seq": 25,
+        "id": "e_25",
+        "ts": "2026-10-26T12:00:25Z",
+        "actor_id": null,
+        "event": {
+          "type": "agent.changed",
+          "agent": "anthropic · claude-opus-5-5",
+          "fast": ""
+        }
+      },
+      "state": {
+        "last_seq": 25,
+        "prompt_mode": "review",
+        "permission_mode": "default",
+        "admission": "approve",
+        "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
+        "participants": {
+          "p_host": {
+            "id": "p_host",
+            "name": "vlad",
+            "role": "host",
+            "connected": true
+          },
+          "p_alia": {
+            "id": "p_alia",
+            "name": "Alia",
+            "role": "participant",
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -577,9 +1951,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 10,
-        "id": "e_10",
-        "ts": "2026-10-26T12:00:10Z",
+        "seq": 26,
+        "id": "e_26",
+        "ts": "2026-10-26T12:00:26Z",
         "actor_id": null,
         "event": {
           "type": "proposal.created",
@@ -593,11 +1967,23 @@
         }
       },
       "state": {
-        "last_seq": 10,
+        "last_seq": 26,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -609,7 +1995,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -659,9 +2045,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 11,
-        "id": "e_11",
-        "ts": "2026-10-26T12:00:11Z",
+        "seq": 27,
+        "id": "e_27",
+        "ts": "2026-10-26T12:00:27Z",
         "actor_id": null,
         "event": {
           "type": "proposal.approved",
@@ -671,11 +2057,23 @@
         }
       },
       "state": {
-        "last_seq": 11,
+        "last_seq": 27,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -687,7 +2085,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -729,9 +2127,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 12,
-        "id": "e_12",
-        "ts": "2026-10-26T12:00:12Z",
+        "seq": 28,
+        "id": "e_28",
+        "ts": "2026-10-26T12:00:28Z",
         "actor_id": null,
         "event": {
           "type": "proposal.created",
@@ -745,11 +2143,23 @@
         }
       },
       "state": {
-        "last_seq": 12,
+        "last_seq": 28,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -761,7 +2171,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -811,9 +2221,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 13,
-        "id": "e_13",
-        "ts": "2026-10-26T12:00:13Z",
+        "seq": 29,
+        "id": "e_29",
+        "ts": "2026-10-26T12:00:29Z",
         "actor_id": null,
         "event": {
           "type": "proposal.rejected",
@@ -822,11 +2232,23 @@
         }
       },
       "state": {
-        "last_seq": 13,
+        "last_seq": 29,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -838,7 +2260,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -880,9 +2302,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 14,
-        "id": "e_14",
-        "ts": "2026-10-26T12:00:14Z",
+        "seq": 30,
+        "id": "e_30",
+        "ts": "2026-10-26T12:00:30Z",
         "actor_id": null,
         "event": {
           "type": "prompt.accepted",
@@ -899,11 +2321,23 @@
         }
       },
       "state": {
-        "last_seq": 14,
+        "last_seq": 30,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -915,7 +2349,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -967,9 +2401,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 15,
-        "id": "e_15",
-        "ts": "2026-10-26T12:00:15Z",
+        "seq": 31,
+        "id": "e_31",
+        "ts": "2026-10-26T12:00:31Z",
         "actor_id": null,
         "event": {
           "type": "run.started",
@@ -983,11 +2417,23 @@
         }
       },
       "state": {
-        "last_seq": 15,
+        "last_seq": 31,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -999,7 +2445,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -1059,9 +2505,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 16,
-        "id": "e_16",
-        "ts": "2026-10-26T12:00:16Z",
+        "seq": 32,
+        "id": "e_32",
+        "ts": "2026-10-26T12:00:32Z",
         "actor_id": null,
         "event": {
           "type": "prompt.accepted",
@@ -1078,11 +2524,23 @@
         }
       },
       "state": {
-        "last_seq": 16,
+        "last_seq": 32,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1094,7 +2552,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -1170,9 +2628,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 17,
-        "id": "e_17",
-        "ts": "2026-10-26T12:00:17Z",
+        "seq": 33,
+        "id": "e_33",
+        "ts": "2026-10-26T12:00:33Z",
         "actor_id": null,
         "event": {
           "type": "prompt.accepted",
@@ -1189,11 +2647,23 @@
         }
       },
       "state": {
-        "last_seq": 17,
+        "last_seq": 33,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1205,7 +2675,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -1296,9 +2766,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 18,
-        "id": "e_18",
-        "ts": "2026-10-26T12:00:18Z",
+        "seq": 34,
+        "id": "e_34",
+        "ts": "2026-10-26T12:00:34Z",
         "actor_id": null,
         "event": {
           "type": "prompt.dequeued",
@@ -1307,11 +2777,23 @@
         }
       },
       "state": {
-        "last_seq": 18,
+        "last_seq": 34,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1323,7 +2805,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -1408,9 +2890,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 19,
-        "id": "e_19",
-        "ts": "2026-10-26T12:00:19Z",
+        "seq": 35,
+        "id": "e_35",
+        "ts": "2026-10-26T12:00:35Z",
         "actor_id": null,
         "event": {
           "type": "prompt.dequeued",
@@ -1419,11 +2901,23 @@
         }
       },
       "state": {
-        "last_seq": 19,
+        "last_seq": 35,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1435,7 +2929,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -1519,11 +3013,23 @@
         "thinking": true
       },
       "state": {
-        "last_seq": 19,
+        "last_seq": 35,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1535,7 +3041,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -1613,9 +3119,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 21,
-        "id": "e_21",
-        "ts": "2026-10-26T12:00:21Z",
+        "seq": 37,
+        "id": "e_37",
+        "ts": "2026-10-26T12:00:37Z",
         "actor_id": null,
         "event": {
           "type": "message.started",
@@ -1624,11 +3130,23 @@
         }
       },
       "state": {
-        "last_seq": 21,
+        "last_seq": 37,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1640,7 +3158,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -1726,11 +3244,23 @@
         "thinking": false
       },
       "state": {
-        "last_seq": 21,
+        "last_seq": 37,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1742,7 +3272,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -1828,11 +3358,23 @@
         "thinking": false
       },
       "state": {
-        "last_seq": 21,
+        "last_seq": 37,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1844,7 +3386,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -1924,9 +3466,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 24,
-        "id": "e_24",
-        "ts": "2026-10-26T12:00:24Z",
+        "seq": 40,
+        "id": "e_40",
+        "ts": "2026-10-26T12:00:40Z",
         "actor_id": null,
         "event": {
           "type": "message.ended",
@@ -1937,11 +3479,23 @@
         }
       },
       "state": {
-        "last_seq": 24,
+        "last_seq": 40,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -1953,7 +3507,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -2040,9 +3594,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 25,
-        "id": "e_25",
-        "ts": "2026-10-26T12:00:25Z",
+        "seq": 41,
+        "id": "e_41",
+        "ts": "2026-10-26T12:00:41Z",
         "actor_id": null,
         "event": {
           "type": "tool.started",
@@ -2057,11 +3611,23 @@
         }
       },
       "state": {
-        "last_seq": 25,
+        "last_seq": 41,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2073,7 +3639,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -2175,9 +3741,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 26,
-        "id": "e_26",
-        "ts": "2026-10-26T12:00:26Z",
+        "seq": 42,
+        "id": "e_42",
+        "ts": "2026-10-26T12:00:42Z",
         "actor_id": null,
         "event": {
           "type": "approval.requested",
@@ -2198,16 +3764,29 @@
             "timeout_at": "2026-10-26T12:02:00Z",
             "suggested_patterns": [
               "ls*"
-            ]
+            ],
+            "warnings": []
           }
         }
       },
       "state": {
-        "last_seq": 26,
+        "last_seq": 42,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2219,7 +3798,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -2253,7 +3832,8 @@
             "timeout_at": "2026-10-26T12:02:00Z",
             "suggested_patterns": [
               "ls*"
-            ]
+            ],
+            "warnings": []
           }
         },
         "attachments": {},
@@ -2341,9 +3921,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 27,
-        "id": "e_27",
-        "ts": "2026-10-26T12:00:27Z",
+        "seq": 43,
+        "id": "e_43",
+        "ts": "2026-10-26T12:00:43Z",
         "actor_id": null,
         "event": {
           "type": "approval.resolved",
@@ -2353,11 +3933,23 @@
         }
       },
       "state": {
-        "last_seq": 27,
+        "last_seq": 43,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2369,7 +3961,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -2471,9 +4063,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 28,
-        "id": "e_28",
-        "ts": "2026-10-26T12:00:28Z",
+        "seq": 44,
+        "id": "e_44",
+        "ts": "2026-10-26T12:00:44Z",
         "actor_id": null,
         "event": {
           "type": "tool.ended",
@@ -2485,11 +4077,23 @@
         }
       },
       "state": {
-        "last_seq": 28,
+        "last_seq": 44,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2501,7 +4105,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -2603,9 +4207,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 29,
-        "id": "e_29",
-        "ts": "2026-10-26T12:00:29Z",
+        "seq": 45,
+        "id": "e_45",
+        "ts": "2026-10-26T12:00:45Z",
         "actor_id": null,
         "event": {
           "type": "tool.started",
@@ -2620,11 +4224,23 @@
         }
       },
       "state": {
-        "last_seq": 29,
+        "last_seq": 45,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2636,7 +4252,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -2753,9 +4369,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 30,
-        "id": "e_30",
-        "ts": "2026-10-26T12:00:30Z",
+        "seq": 46,
+        "id": "e_46",
+        "ts": "2026-10-26T12:00:46Z",
         "actor_id": null,
         "event": {
           "type": "tool.ended",
@@ -2767,11 +4383,23 @@
         }
       },
       "state": {
-        "last_seq": 30,
+        "last_seq": 46,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2783,7 +4411,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -2900,9 +4528,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 31,
-        "id": "e_31",
-        "ts": "2026-10-26T12:00:31Z",
+        "seq": 47,
+        "id": "e_47",
+        "ts": "2026-10-26T12:00:47Z",
         "actor_id": null,
         "event": {
           "type": "policy.rule_added",
@@ -2915,11 +4543,23 @@
         }
       },
       "state": {
-        "last_seq": 31,
+        "last_seq": 47,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -2931,7 +4571,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -3055,9 +4695,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 32,
-        "id": "e_32",
-        "ts": "2026-10-26T12:00:32Z",
+        "seq": 48,
+        "id": "e_48",
+        "ts": "2026-10-26T12:00:48Z",
         "actor_id": null,
         "event": {
           "type": "policy.rule_removed",
@@ -3065,11 +4705,23 @@
         }
       },
       "state": {
-        "last_seq": 32,
+        "last_seq": 48,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3081,7 +4733,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -3198,9 +4850,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 33,
-        "id": "e_33",
-        "ts": "2026-10-26T12:00:33Z",
+        "seq": 49,
+        "id": "e_49",
+        "ts": "2026-10-26T12:00:49Z",
         "actor_id": null,
         "event": {
           "type": "attachment.added",
@@ -3214,11 +4866,23 @@
         }
       },
       "state": {
-        "last_seq": 33,
+        "last_seq": 49,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3230,7 +4894,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -3355,9 +5019,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 34,
-        "id": "e_34",
-        "ts": "2026-10-26T12:00:34Z",
+        "seq": 50,
+        "id": "e_50",
+        "ts": "2026-10-26T12:00:50Z",
         "actor_id": null,
         "event": {
           "type": "context.compacted",
@@ -3367,11 +5031,23 @@
         }
       },
       "state": {
-        "last_seq": 34,
+        "last_seq": 50,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3383,7 +5059,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -3496,7 +5172,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -3517,9 +5193,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 35,
-        "id": "e_35",
-        "ts": "2026-10-26T12:00:35Z",
+        "seq": 51,
+        "id": "e_51",
+        "ts": "2026-10-26T12:00:51Z",
         "actor_id": null,
         "event": {
           "type": "approval.requested",
@@ -3540,16 +5216,29 @@
             "timeout_at": "2026-10-26T12:02:00Z",
             "suggested_patterns": [
               "ls*"
-            ]
+            ],
+            "warnings": []
           }
         }
       },
       "state": {
-        "last_seq": 35,
+        "last_seq": 51,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3561,7 +5250,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -3595,7 +5284,8 @@
             "timeout_at": "2026-10-26T12:02:00Z",
             "suggested_patterns": [
               "ls*"
-            ]
+            ],
+            "warnings": []
           }
         },
         "attachments": {
@@ -3694,7 +5384,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -3715,9 +5405,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 36,
-        "id": "e_36",
-        "ts": "2026-10-26T12:00:36Z",
+        "seq": 52,
+        "id": "e_52",
+        "ts": "2026-10-26T12:00:52Z",
         "actor_id": null,
         "event": {
           "type": "approval.resolved",
@@ -3727,11 +5417,23 @@
         }
       },
       "state": {
-        "last_seq": 36,
+        "last_seq": 52,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3743,7 +5445,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -3856,7 +5558,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -3877,9 +5579,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 37,
-        "id": "e_37",
-        "ts": "2026-10-26T12:00:37Z",
+        "seq": 53,
+        "id": "e_53",
+        "ts": "2026-10-26T12:00:53Z",
         "actor_id": null,
         "event": {
           "type": "prompt.accepted",
@@ -3896,11 +5598,23 @@
         }
       },
       "state": {
-        "last_seq": 37,
+        "last_seq": 53,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -3912,7 +5626,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -4032,7 +5746,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -4062,9 +5776,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 38,
-        "id": "e_38",
-        "ts": "2026-10-26T12:00:38Z",
+        "seq": 54,
+        "id": "e_54",
+        "ts": "2026-10-26T12:00:54Z",
         "actor_id": null,
         "event": {
           "type": "run.ended",
@@ -4080,11 +5794,23 @@
         }
       },
       "state": {
-        "last_seq": 38,
+        "last_seq": 54,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -4096,7 +5822,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -4208,7 +5934,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -4238,9 +5964,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 39,
-        "id": "e_39",
-        "ts": "2026-10-26T12:00:39Z",
+        "seq": 55,
+        "id": "e_55",
+        "ts": "2026-10-26T12:00:55Z",
         "actor_id": null,
         "event": {
           "type": "run.ended",
@@ -4256,11 +5982,23 @@
         }
       },
       "state": {
-        "last_seq": 39,
+        "last_seq": 55,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -4272,7 +6010,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -4384,7 +6122,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -4414,9 +6152,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 40,
-        "id": "e_40",
-        "ts": "2026-10-26T12:00:40Z",
+        "seq": 56,
+        "id": "e_56",
+        "ts": "2026-10-26T12:00:56Z",
         "actor_id": null,
         "event": {
           "type": "chat.posted",
@@ -4428,11 +6166,23 @@
         }
       },
       "state": {
-        "last_seq": 40,
+        "last_seq": 56,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -4444,7 +6194,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -4556,7 +6306,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -4579,7 +6329,7 @@
             "id": "c_1",
             "author_id": "p_host",
             "text": "standup in five",
-            "ts": "2026-10-26T12:00:40Z",
+            "ts": "2026-10-26T12:00:56Z",
             "to": null,
             "mentions": []
           }
@@ -4595,9 +6345,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 41,
-        "id": "e_41",
-        "ts": "2026-10-26T12:00:41Z",
+        "seq": 57,
+        "id": "e_57",
+        "ts": "2026-10-26T12:00:57Z",
         "actor_id": null,
         "event": {
           "type": "chat.posted",
@@ -4611,11 +6361,23 @@
         }
       },
       "state": {
-        "last_seq": 41,
+        "last_seq": 57,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -4627,7 +6389,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -4739,7 +6501,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -4762,7 +6524,7 @@
             "id": "c_1",
             "author_id": "p_host",
             "text": "standup in five",
-            "ts": "2026-10-26T12:00:40Z",
+            "ts": "2026-10-26T12:00:56Z",
             "to": null,
             "mentions": []
           },
@@ -4770,7 +6532,7 @@
             "id": "c_2",
             "author_id": "p_alia",
             "text": "@Bek can you look at this",
-            "ts": "2026-10-26T12:00:41Z",
+            "ts": "2026-10-26T12:00:57Z",
             "to": null,
             "mentions": [
               "p_bek2222"
@@ -4788,9 +6550,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 42,
-        "id": "e_42",
-        "ts": "2026-10-26T12:00:42Z",
+        "seq": 58,
+        "id": "e_58",
+        "ts": "2026-10-26T12:00:58Z",
         "actor_id": null,
         "event": {
           "type": "chat.posted",
@@ -4802,11 +6564,23 @@
         }
       },
       "state": {
-        "last_seq": 42,
+        "last_seq": 58,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -4818,7 +6592,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -4930,7 +6704,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -4953,7 +6727,7 @@
             "id": "c_1",
             "author_id": "p_host",
             "text": "standup in five",
-            "ts": "2026-10-26T12:00:40Z",
+            "ts": "2026-10-26T12:00:56Z",
             "to": null,
             "mentions": []
           },
@@ -4961,7 +6735,7 @@
             "id": "c_2",
             "author_id": "p_alia",
             "text": "@Bek can you look at this",
-            "ts": "2026-10-26T12:00:41Z",
+            "ts": "2026-10-26T12:00:57Z",
             "to": null,
             "mentions": [
               "p_bek2222"
@@ -4971,7 +6745,7 @@
             "id": "c_3",
             "author_id": "p_host",
             "text": "only for Alia",
-            "ts": "2026-10-26T12:00:42Z",
+            "ts": "2026-10-26T12:00:58Z",
             "to": "p_alia",
             "mentions": []
           }
@@ -4987,9 +6761,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 43,
-        "id": "e_43",
-        "ts": "2026-10-26T12:00:43Z",
+        "seq": 59,
+        "id": "e_59",
+        "ts": "2026-10-26T12:00:59Z",
         "actor_id": null,
         "event": {
           "type": "join.requested",
@@ -5002,7 +6776,7 @@
         }
       },
       "state": {
-        "last_seq": 43,
+        "last_seq": 59,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
@@ -5014,6 +6788,18 @@
             "requested_at": "2026-10-26T12:00:00Z"
           }
         },
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -5025,7 +6811,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -5137,7 +6923,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -5160,7 +6946,7 @@
             "id": "c_1",
             "author_id": "p_host",
             "text": "standup in five",
-            "ts": "2026-10-26T12:00:40Z",
+            "ts": "2026-10-26T12:00:56Z",
             "to": null,
             "mentions": []
           },
@@ -5168,7 +6954,7 @@
             "id": "c_2",
             "author_id": "p_alia",
             "text": "@Bek can you look at this",
-            "ts": "2026-10-26T12:00:41Z",
+            "ts": "2026-10-26T12:00:57Z",
             "to": null,
             "mentions": [
               "p_bek2222"
@@ -5178,7 +6964,7 @@
             "id": "c_3",
             "author_id": "p_host",
             "text": "only for Alia",
-            "ts": "2026-10-26T12:00:42Z",
+            "ts": "2026-10-26T12:00:58Z",
             "to": "p_alia",
             "mentions": []
           }
@@ -5194,9 +6980,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 44,
-        "id": "e_44",
-        "ts": "2026-10-26T12:00:44Z",
+        "seq": 60,
+        "id": "e_60",
+        "ts": "2026-10-26T12:01:00Z",
         "actor_id": null,
         "event": {
           "type": "link.admission_changed",
@@ -5204,7 +6990,7 @@
         }
       },
       "state": {
-        "last_seq": 44,
+        "last_seq": 60,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "open",
@@ -5216,6 +7002,18 @@
             "requested_at": "2026-10-26T12:00:00Z"
           }
         },
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -5227,7 +7025,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -5339,7 +7137,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -5362,7 +7160,7 @@
             "id": "c_1",
             "author_id": "p_host",
             "text": "standup in five",
-            "ts": "2026-10-26T12:00:40Z",
+            "ts": "2026-10-26T12:00:56Z",
             "to": null,
             "mentions": []
           },
@@ -5370,7 +7168,7 @@
             "id": "c_2",
             "author_id": "p_alia",
             "text": "@Bek can you look at this",
-            "ts": "2026-10-26T12:00:41Z",
+            "ts": "2026-10-26T12:00:57Z",
             "to": null,
             "mentions": [
               "p_bek2222"
@@ -5380,7 +7178,7 @@
             "id": "c_3",
             "author_id": "p_host",
             "text": "only for Alia",
-            "ts": "2026-10-26T12:00:42Z",
+            "ts": "2026-10-26T12:00:58Z",
             "to": "p_alia",
             "mentions": []
           }
@@ -5396,9 +7194,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 45,
-        "id": "e_45",
-        "ts": "2026-10-26T12:00:45Z",
+        "seq": 61,
+        "id": "e_61",
+        "ts": "2026-10-26T12:01:01Z",
         "actor_id": null,
         "event": {
           "type": "join.resolved",
@@ -5408,11 +7206,23 @@
         }
       },
       "state": {
-        "last_seq": 45,
+        "last_seq": 61,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "open",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -5424,7 +7234,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -5536,7 +7346,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -5559,7 +7369,7 @@
             "id": "c_1",
             "author_id": "p_host",
             "text": "standup in five",
-            "ts": "2026-10-26T12:00:40Z",
+            "ts": "2026-10-26T12:00:56Z",
             "to": null,
             "mentions": []
           },
@@ -5567,7 +7377,7 @@
             "id": "c_2",
             "author_id": "p_alia",
             "text": "@Bek can you look at this",
-            "ts": "2026-10-26T12:00:41Z",
+            "ts": "2026-10-26T12:00:57Z",
             "to": null,
             "mentions": [
               "p_bek2222"
@@ -5577,7 +7387,7 @@
             "id": "c_3",
             "author_id": "p_host",
             "text": "only for Alia",
-            "ts": "2026-10-26T12:00:42Z",
+            "ts": "2026-10-26T12:00:58Z",
             "to": "p_alia",
             "mentions": []
           }
@@ -5593,9 +7403,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 46,
-        "id": "e_46",
-        "ts": "2026-10-26T12:00:46Z",
+        "seq": 62,
+        "id": "e_62",
+        "ts": "2026-10-26T12:01:02Z",
         "actor_id": null,
         "event": {
           "type": "link.admission_changed",
@@ -5603,11 +7413,23 @@
         }
       },
       "state": {
-        "last_seq": 46,
+        "last_seq": 62,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -5619,7 +7441,7 @@
             "id": "p_alia",
             "name": "Alia",
             "role": "participant",
-            "connected": true
+            "connected": false
           },
           "p_bek1111": {
             "id": "p_bek1111",
@@ -5731,7 +7553,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -5754,7 +7576,7 @@
             "id": "c_1",
             "author_id": "p_host",
             "text": "standup in five",
-            "ts": "2026-10-26T12:00:40Z",
+            "ts": "2026-10-26T12:00:56Z",
             "to": null,
             "mentions": []
           },
@@ -5762,7 +7584,7 @@
             "id": "c_2",
             "author_id": "p_alia",
             "text": "@Bek can you look at this",
-            "ts": "2026-10-26T12:00:41Z",
+            "ts": "2026-10-26T12:00:57Z",
             "to": null,
             "mentions": [
               "p_bek2222"
@@ -5772,7 +7594,7 @@
             "id": "c_3",
             "author_id": "p_host",
             "text": "only for Alia",
-            "ts": "2026-10-26T12:00:42Z",
+            "ts": "2026-10-26T12:00:58Z",
             "to": "p_alia",
             "mentions": []
           }
@@ -5788,9 +7610,9 @@
     {
       "kind": "record",
       "record": {
-        "seq": 47,
-        "id": "e_47",
-        "ts": "2026-10-26T12:00:47Z",
+        "seq": 63,
+        "id": "e_63",
+        "ts": "2026-10-26T12:01:03Z",
         "actor_id": null,
         "event": {
           "type": "participant.revoked",
@@ -5798,11 +7620,23 @@
         }
       },
       "state": {
-        "last_seq": 47,
+        "last_seq": 63,
         "prompt_mode": "review",
         "permission_mode": "default",
         "admission": "approve",
         "join_requests": {},
+        "access_requests": {},
+        "briefing_sharing": "off",
+        "briefing_requests": {},
+        "briefings_imported": [
+          {
+            "id": "bi_1",
+            "source": "alia",
+            "as_of_seq": 7,
+            "chars": 12,
+            "at": "2026-10-26T12:00:00Z"
+          }
+        ],
         "participants": {
           "p_host": {
             "id": "p_host",
@@ -5920,7 +7754,7 @@
             "output": "denied by policy"
           },
           {
-            "id": "e_34",
+            "id": "e_50",
             "kind": "compaction",
             "author_id": null,
             "text": "context compacted (900 tokens summarized)",
@@ -5943,7 +7777,7 @@
             "id": "c_1",
             "author_id": "p_host",
             "text": "standup in five",
-            "ts": "2026-10-26T12:00:40Z",
+            "ts": "2026-10-26T12:00:56Z",
             "to": null,
             "mentions": []
           },
@@ -5951,7 +7785,7 @@
             "id": "c_2",
             "author_id": "p_alia",
             "text": "@Bek can you look at this",
-            "ts": "2026-10-26T12:00:41Z",
+            "ts": "2026-10-26T12:00:57Z",
             "to": null,
             "mentions": [
               "p_bek2222"
@@ -5961,7 +7795,7 @@
             "id": "c_3",
             "author_id": "p_host",
             "text": "only for Alia",
-            "ts": "2026-10-26T12:00:42Z",
+            "ts": "2026-10-26T12:00:58Z",
             "to": "p_alia",
             "mentions": []
           }

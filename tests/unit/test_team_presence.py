@@ -43,7 +43,7 @@ class Tick:
 def test_a_published_card_carries_the_owner_from_the_certificate() -> None:
     presence = Presence()
     assert presence.publish(claims(), draft(), object(), NOW)
-    (card,) = presence.sessions("t_1")
+    (card,) = presence.sessions("t_1", NOW)
     assert (card.owner, card.owner_id, card.room, card.updated_at) == ("alia", "m_a", "r_1", NOW)
 
 
@@ -53,13 +53,13 @@ def test_a_card_is_gone_after_its_time_to_live_unless_it_is_renewed() -> None:
     holder = object()
     presence.publish(claims(), draft(), holder, NOW)
     tick.now = 59
-    assert len(presence.sessions("t_1")) == 1
+    assert len(presence.sessions("t_1", NOW)) == 1
     presence.publish(claims(), draft(status=SessionStatus.RUNNING), holder, NOW)
     tick.now = 100
-    (card,) = presence.sessions("t_1")
+    (card,) = presence.sessions("t_1", NOW)
     assert card.status is SessionStatus.RUNNING
     tick.now = 200
-    assert presence.sessions("t_1") == ()
+    assert presence.sessions("t_1", NOW) == ()
 
 
 def test_a_card_disappears_when_its_connection_does() -> None:
@@ -68,7 +68,7 @@ def test_a_card_disappears_when_its_connection_does() -> None:
     presence.publish(claims(), draft("r_1"), gone, NOW)
     presence.publish(claims(member="m_b", name="bek"), draft("r_2"), kept, NOW)
     presence.drop_held_by(gone)
-    assert [card.room for card in presence.sessions("t_1")] == ["r_2"]
+    assert [card.room for card in presence.sessions("t_1", NOW)] == ["r_2"]
 
 
 def test_nobody_can_take_over_someone_elses_room_or_another_teams_view() -> None:
@@ -78,8 +78,8 @@ def test_nobody_can_take_over_someone_elses_room_or_another_teams_view() -> None
     assert presence.publish(
         claims(team="t_2", member="m_c", name="cleo"), draft("r_9"), object(), NOW
     )
-    assert [card.owner for card in presence.sessions("t_1")] == ["alia"]
-    assert [card.owner for card in presence.sessions("t_2")] == ["cleo"]
+    assert [card.owner for card in presence.sessions("t_1", NOW)] == ["alia"]
+    assert [card.owner for card in presence.sessions("t_2", NOW)] == ["cleo"]
 
 
 def test_one_member_can_show_only_so_many_sessions() -> None:
@@ -95,16 +95,16 @@ def test_removing_a_member_or_a_team_clears_their_cards() -> None:
     presence.publish(claims(), draft("r_1"), object(), NOW)
     presence.publish(claims(member="m_b", name="bek"), draft("r_2"), object(), NOW)
     presence.forget_member("t_1", "m_a")
-    assert [card.owner for card in presence.sessions("t_1")] == ["bek"]
+    assert [card.owner for card in presence.sessions("t_1", NOW)] == ["bek"]
     presence.forget_team("t_1")
-    assert presence.sessions("t_1") == ()
+    assert presence.sessions("t_1", NOW) == ()
 
 
 def test_the_cards_are_listed_by_owner() -> None:
     presence = Presence()
     presence.publish(claims(member="m_b", name="Bek"), draft("r_2"), object(), NOW)
     presence.publish(claims(), draft("r_1"), object(), NOW)
-    assert [card.owner for card in presence.sessions("t_1")] == ["alia", "Bek"]
+    assert [card.owner for card in presence.sessions("t_1", NOW)] == ["alia", "Bek"]
 
 
 def test_the_repository_is_named_from_its_remote() -> None:

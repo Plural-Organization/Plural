@@ -1,14 +1,16 @@
 import asyncio
 import time
 from collections.abc import Callable
-from contextlib import suppress
+from datetime import UTC, datetime
 
 import structlog
+from pydantic import ValidationError
 from websockets.asyncio.client import connect
-from websockets.exceptions import InvalidStatus, WebSocketException
+from websockets.exceptions import ConnectionClosed, InvalidStatus, WebSocketException
 
 from plural.host.bootstrap import Host
 from plural.host.config import HostSettings
+from plural.host.conflicts import ConflictBoard
 from plural.host.repo import RepoFacts, repo_facts
 from plural.host.team import DirectoryClient, TeamError, TeamStore
 from plural.protocol.models import Role, SessionState
@@ -17,13 +19,15 @@ from plural.protocol.team import (
     Endpoint,
     EndpointKind,
     PresenceCard,
+    PresencePeers,
     SessionStatus,
 )
 from plural.security.identity import authorization
 
 log = structlog.get_logger(__name__)
 
-HEARTBEAT_S = 20.0
+HEARTBEAT_S = 10.0
+REFRESH_S = 3600.0
 POLL_S = 2.0
 REPO_REFRESH_S = 30.0
 RETRY_MIN_S = 2.0
@@ -50,7 +54,7 @@ def ensure_ready(settings: HostSettings, store: TeamStore) -> None:
 
 
 def status_of(state: SessionState) -> SessionStatus:
-    if state.approvals or state.proposals or state.join_requests:
+    if state.approvals or state.proposals or state.join_requests or state.access_requests:
         return SessionStatus.WAITING
     return SessionStatus.RUNNING if state.run is not None else SessionStatus.IDLE
 
@@ -63,7 +67,14 @@ def viewers_of(state: SessionState) -> int:
     )
 
 
-def draft_of(settings: HostSettings, room: str, state: SessionState, repo: RepoFacts) -> CardDraft:
+def draft_of(
+    settings: HostSettings,
+    room: str,
+    state: SessionState,
+    repo: RepoFacts,
+    board: ConflictBoard | None = None,
+    now: datetime | None = None,
+) -> CardDraft:
     return CardDraft(
         room=room,
         repo=repo.name,
@@ -72,6 +83,8 @@ def draft_of(settings: HostSettings, room: str, state: SessionState, repo: RepoF
         status=status_of(state),
         viewers=viewers_of(state),
         endpoints=endpoints_of(settings, room),
+        repo_id=repo.repo_id,
+        touching=board.touching(now or datetime.now(UTC)) if board is not None else (),
     )
 
 
@@ -143,26 +156,51 @@ class TeamPresence:
             log.info("team.presence_connected", team=profile.team_name)
             last: str | None = None
             sent_at = float("-inf")
+            refreshed = self._clock()
             while True:
+                if self._clock() - refreshed >= REFRESH_S:
+                    refreshed = self._clock()
+                    if (await client.refresh()).certificate != profile.certificate:
+                        return
                 card = await self._card()
                 text = PresenceCard(card=card).model_dump_json()
                 if text != last or self._clock() - sent_at >= HEARTBEAT_S:
                     await socket.send(text)
                     last, sent_at = text, self._clock()
-                with suppress(TimeoutError):
+                try:
                     async with asyncio.timeout(POLL_S):
-                        await socket.wait_closed()
-                if socket.close_code is not None:
+                        raw = await socket.recv()
+                except TimeoutError:
+                    continue
+                except ConnectionClosed as error:
                     if socket.close_code == CLOSE_DENIED:
                         raise PresenceUnavailable(
                             socket.close_reason or "the team refused this session"
-                        )
+                        ) from error
                     raise ConnectionError(
                         socket.close_reason or "the directory closed the connection"
-                    )
+                    ) from error
+                self._receive(raw)
+
+    def _receive(self, raw: str | bytes) -> None:
+        if self._host.conflicts is None:
+            return
+        try:
+            frame = PresencePeers.model_validate_json(raw)
+        except ValidationError:
+            return
+        self._host.conflicts.update(frame.peers)
 
     async def _card(self) -> CardDraft:
         if self._clock() - self._repo_at >= REPO_REFRESH_S:
             self._repo = await repo_facts(self._settings.workspace)
             self._repo_at = self._clock()
-        return draft_of(self._settings, self._host.room, self._host.actor.state, self._repo)
+            if self._host.conflicts is not None:
+                self._host.conflicts.use_prefix(self._repo.prefix)
+        return draft_of(
+            self._settings,
+            self._host.room,
+            self._host.actor.state,
+            self._repo,
+            self._host.conflicts,
+        )

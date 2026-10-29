@@ -88,6 +88,28 @@ class Endpoint(Model):
     url: str = Field(min_length=8, max_length=300, pattern=r"^(wss?|https?)://\S+$")
 
 
+class Touch(Model):
+    path: str = Field(min_length=1, max_length=300)
+    at: datetime
+
+
+class Conflict(Model):
+    owner: MemberName
+    room: str
+    branch: str | None = None
+    paths: tuple[str, ...] = Field(max_length=10)
+    same_branch: bool
+    latest: datetime
+
+
+class Peer(Model):
+    owner: MemberName
+    room: str
+    branch: str | None = None
+    same_branch: bool
+    touched: tuple[Touch, ...] = Field(max_length=50)
+
+
 class CardDraft(Model):
     room: str = Field(min_length=1, max_length=64)
     repo: str = Field(min_length=1, max_length=80)
@@ -96,12 +118,15 @@ class CardDraft(Model):
     status: SessionStatus
     viewers: int = Field(default=0, ge=0, le=1000)
     endpoints: tuple[Endpoint, ...] = Field(min_length=1, max_length=4)
+    repo_id: str | None = Field(default=None, max_length=200)
+    touching: tuple[Touch, ...] = Field(default=(), max_length=50)
 
 
 class SessionCard(CardDraft):
     owner: MemberName
     owner_id: str
     updated_at: datetime
+    conflicts: tuple[Conflict, ...] = ()
 
 
 class SessionList(Model):
@@ -111,3 +136,8 @@ class SessionList(Model):
 class PresenceCard(Model):
     type: Literal["card"] = "card"
     card: CardDraft
+
+
+class PresencePeers(Model):
+    type: Literal["peers"] = "peers"
+    peers: tuple[Peer, ...]

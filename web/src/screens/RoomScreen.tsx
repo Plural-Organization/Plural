@@ -181,7 +181,13 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
     .filter((person) => person !== undefined)
     .map((person) => label(state, person));
   const placeholder =
-    me?.role === "participant" && state.prompt_mode === "review" ? "Propose a prompt, the host approves it" : "Message the agent, / for commands";
+    me?.role === "viewer"
+      ? me.id in state.access_requests
+        ? "You asked to write, waiting for the host…"
+        : "You are watching · /access asks the host for the right to write"
+      : me?.role === "participant" && state.prompt_mode === "review"
+        ? "Propose a prompt, the host approves it"
+        : "Message the agent, / for commands";
 
   return (
     <div className={cx(styles.room, (doc || boardShown) && styles.withCanvas)}>
@@ -238,7 +244,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
             role={me?.role}
             people={mentionable(state, projection.meId)}
             placeholder={placeholder}
-            disabled={me?.role === "viewer" ? "Viewers watch the session and can't prompt" : null}
+            disabled={null}
             editing={editing}
             quote={quote}
             attachments={canDraw ? files.attachments : []}

@@ -1,11 +1,10 @@
 import asyncio
-import time
 from collections.abc import AsyncGenerator
 from contextlib import suppress
 from pathlib import Path
 
 import pytest
-from websockets.asyncio.client import connect
+from websockets.asyncio.client import ClientConnection
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from plural.agent.providers.fake import FakeProvider, reply
@@ -17,9 +16,8 @@ from plural.host.team import TeamError, TeamStore
 from plural.host.team_presence import TeamPresence, ensure_ready
 from plural.protocol.models import Role
 from plural.protocol.team import CardDraft, Endpoint, EndpointKind, PresenceCard, SessionStatus
-from plural.security.identity import authorization
 from tests.e2e.support import CLIENT, RelayServer, Session, Watcher, free_port
-from tests.e2e.team_support import Member, two_members
+from tests.e2e.team_support import Member, connect_as, two_members
 
 
 @pytest.fixture
@@ -50,20 +48,15 @@ async def listed(member: Member, until: int = 1, timeout: float = 5) -> list[str
             await asyncio.sleep(0.05)
 
 
-def connect_as(member: Member, relay: RelayServer) -> connect:
-    profile = member.store.load()
-    assert profile is not None
-    url = f"{relay.url}/teams/{profile.team_id}/presence"
-    header = authorization(
-        member.store.identity(),
-        profile.certificate,
-        "GET",
-        f"/teams/{profile.team_id}/presence",
-        b"",
-        timestamp=int(time.time()),
-        nonce=time.time_ns().to_bytes(8, "big").hex(),
-    )
-    return connect(url, additional_headers={"authorization": header})
+async def _flood(socket: ClientConnection, frame: str) -> None:
+    for _ in range(100):
+        await socket.send(frame)
+    await _until_closed(socket)
+
+
+async def _until_closed(socket: ClientConnection) -> None:
+    while True:
+        await socket.recv()
 
 
 async def test_a_card_a_member_publishes_is_listed_for_the_team_with_the_owner_stamped(
@@ -138,7 +131,7 @@ async def test_a_removed_member_loses_their_card_at_once(
         assert await _gone(vlad)
         await socket.send(PresenceCard(card=draft()).model_dump_json())
         with pytest.raises(ConnectionClosed) as closed:
-            await socket.recv()
+            await _until_closed(socket)
         assert closed.value.rcvd is not None
         assert closed.value.rcvd.code == 4401
 
@@ -233,3 +226,91 @@ async def test_the_ls_command_lists_live_sessions(
             ("vlad", "api", "r_x")
         ]
         assert "(you)" in await run(vlad, "ls")
+
+
+async def test_a_member_cannot_flood_the_directory_with_frames(
+    relay: RelayServer, tmp_path: Path
+) -> None:
+    vlad, _ = await two_members(relay, tmp_path)
+    async with connect_as(vlad, relay) as socket:
+        frame = PresenceCard(card=draft()).model_dump_json()
+        with pytest.raises(ConnectionClosed) as closed:
+            await _flood(socket, frame)
+        assert closed.value.rcvd is not None
+        assert closed.value.rcvd.code == 4429
+
+
+async def test_a_huge_request_is_refused_before_it_is_read(
+    relay: RelayServer, tmp_path: Path
+) -> None:
+    import asyncio
+    from urllib.error import HTTPError
+    from urllib.request import Request, urlopen
+
+    base = relay.url.replace("ws://", "http://")
+
+    def post() -> int:
+        request = Request(
+            f"{base}/teams",
+            data=b"x" * 200_000,
+            method="POST",
+            headers={"content-type": "application/json"},
+        )
+        try:
+            urlopen(request, timeout=10)
+        except HTTPError as error:
+            return error.code
+        return 200
+
+    assert await asyncio.to_thread(post) == 413
+
+
+async def test_a_host_that_runs_for_weeks_renews_its_certificate_and_stays_listed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from datetime import timedelta
+
+    from plural.relay.directory import TeamLimits
+
+    server = RelayServer(
+        teams=tmp_path / "relay" / "teams.db",
+        team_limits=TeamLimits(certificate_ttl_s=int(timedelta(days=6).total_seconds())),
+    )
+    await server.start()
+    monkeypatch.setattr(team_presence, "POLL_S", 0.05)
+    monkeypatch.setattr(team_presence, "REFRESH_S", 0.2)
+    try:
+        vlad, alia = await two_members(server, tmp_path)
+        workspace = tmp_path / "ws"
+        workspace.mkdir()
+        settings = HostSettings(
+            workspace=workspace,
+            data_dir=vlad.root / "data",
+            room="r_long",
+            port=free_port(),
+            relay_url=server.url,
+            provider="fake",
+            team=True,
+        )
+        host = await build_host(settings, provider=FakeProvider([reply("ok")]))
+        serving = asyncio.create_task(host.serve())
+        presence = asyncio.create_task(TeamPresence(host, settings, vlad.store).run())
+        try:
+            assert await listed(alia) == ["vlad:r_long"]
+            seen = {vlad.store.load().certificate}  # type: ignore[union-attr]
+            async with asyncio.timeout(10):
+                while len(seen) < 3:
+                    await asyncio.sleep(0.1)
+                    profile = vlad.store.load()
+                    assert profile is not None
+                    seen.add(profile.certificate)
+            assert await listed(alia) == ["vlad:r_long"]
+        finally:
+            presence.cancel()
+            serving.cancel()
+            for task in (presence, serving):
+                with suppress(asyncio.CancelledError):
+                    await task
+            await host.close()
+    finally:
+        await server.stop()

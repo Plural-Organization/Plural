@@ -91,7 +91,7 @@ export class SessionStore {
           if (client.projection.me?.role === "host") {
             if (event.type === "participant.joined" && event.participant.id !== client.projection.meId) {
               alertNotice(`${label(client.projection.state, event.participant)} joined`);
-            } else if (event.type === "join.requested" || event.type === "approval.requested" || event.type === "proposal.created") {
+            } else if (event.type === "join.requested" || event.type === "access.requested" || event.type === "briefing.requested" || event.type === "approval.requested" || event.type === "proposal.created") {
               alertNotice("A request needs your attention");
             }
           }

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { buildSpaces, neighbour, OWN, type Visit } from "../src/spaces";
-import type { SessionCard, TeamView } from "../src/team";
+import { buildSpaces, describeConflict, neighbour, ownConflicts, OWN, type Visit } from "../src/spaces";
+import type { Conflict, SessionCard, TeamView } from "../src/team";
 
 const card = (owner: string, status: SessionCard["status"] = "idle", branch: string | null = "main", viewers = 0): SessionCard => ({
   room: `r_${owner}`,
@@ -63,5 +63,26 @@ describe("the list of spaces", () => {
     expect(neighbour(rows, "r_bek", 1)).toBe(OWN);
     expect(neighbour(rows, OWN, -1)).toBe("r_bek");
     expect(neighbour(rows, "gone", 1)).toBe("r_alia");
+  });
+});
+
+describe("conflicts in the list", () => {
+  const clash = (owner: string, ...paths: string[]): Conflict => ({ owner, room: `r_${owner}`, branch: "main", paths, same_branch: true, latest: "2026-10-29T12:00:00Z" });
+  const mine = (...conflicts: Conflict[]): SessionCard => ({ ...card("vlad"), conflicts });
+
+  test("my row says who else changed the same file and theirs is marked", () => {
+    const rows = buildSpaces({ home: "api", team: team(mine(clash("alia", "src/auth.py")), card("alia"), card("bek")), visits: [], active: OWN, summaries: {} });
+    expect(rows.map((row) => [row.id, row.warning, row.clash])).toEqual([
+      [OWN, "alia also changed src/auth.py", false],
+      ["r_alia", null, true],
+      ["r_bek", null, false],
+    ]);
+  });
+
+  test("a long list of files is shortened and my conflicts are the ones on my own card", () => {
+    expect(describeConflict(clash("alia", "a.py", "b.py", "c.py"))).toBe("alia also changed a.py, b.py …");
+    expect(ownConflicts(team(mine(clash("alia", "a.py")), card("bek"))).map((conflict) => conflict.owner)).toEqual(["alia"]);
+    expect(ownConflicts(team(card("bek")))).toEqual([]);
+    expect(ownConflicts(null)).toEqual([]);
   });
 });

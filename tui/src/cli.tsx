@@ -301,7 +301,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   const client = new SessionClient(parsed, {
     name,
     client: { kind: "tui", version: pkg.version },
-    team: target.visiting === null ? undefined : (room) => teamProof(target.visiting as Team, room),
+    team: target.visiting === null ? undefined : (room, url) => teamProof(target.visiting as Team, url, room),
     onWelcome: target.joined ? ({ room, token }) => rememberJoined({ room, url: parsed.url, token, name }) : undefined,
   });
   progress.step("opening the session…");
@@ -317,7 +317,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
           new SessionClient(parseLink((card.endpoints[0] as { url: string }).url), {
             name,
             client: { kind: "tui", version: pkg.version },
-            team: (room) => teamProof(member, room),
+            team: (room, url) => teamProof(member, url, room),
           })
         }
         app={{

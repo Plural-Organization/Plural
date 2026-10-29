@@ -60,6 +60,21 @@ export type AdmissionMode = "approve" | "open";
 export type JoinDecision = "allow" | "viewer" | "deny" | "expired" | "gone" | "revoked";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessDecision".
+ */
+export type AccessDecision = "granted" | "denied";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingDecision".
+ */
+export type BriefingDecision = "granted" | "denied";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingSharing".
+ */
+export type BriefingSharing = "off" | "ask" | "team";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "DequeueReason".
  */
 export type DequeueReason = "delivered" | "cancelled" | "dropped";
@@ -124,6 +139,13 @@ export interface EventsSchema {
     | AdmissionChanged
     | JoinRequested
     | JoinResolved
+    | AccessRequested
+    | AccessResolved
+    | BriefingRequested
+    | BriefingResolved
+    | BriefingDelivered
+    | BriefingSharingChanged
+    | BriefingImported
     | JoinPending
     | JoinRefused
     | PromptDequeued
@@ -336,6 +358,106 @@ export interface JoinResolved {
   decision: JoinDecision;
   request_id: string;
   type: "join.resolved";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessRequested".
+ */
+export interface AccessRequested {
+  request: AccessRequestView;
+  type: "access.requested";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessRequestView".
+ */
+export interface AccessRequestView {
+  name: string;
+  note: string | null;
+  participant_id: string;
+  requested_at: string;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessResolved".
+ */
+export interface AccessResolved {
+  decided_by: string | null;
+  decision: AccessDecision;
+  participant_id: string;
+  type: "access.resolved";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingRequested".
+ */
+export interface BriefingRequested {
+  request: BriefingRequestView;
+  type: "briefing.requested";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingRequestView".
+ */
+export interface BriefingRequestView {
+  focus: string | null;
+  id: string;
+  name: string;
+  participant_id: string;
+  requested_at: string;
+  update: boolean;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingResolved".
+ */
+export interface BriefingResolved {
+  decided_by: string | null;
+  decision: BriefingDecision;
+  participant_id: string;
+  request_id: string;
+  type: "briefing.resolved";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingDelivered".
+ */
+export interface BriefingDelivered {
+  as_of_seq: number;
+  error: string | null;
+  request_id: string;
+  text: string;
+  to: string;
+  type: "briefing.delivered";
+  update: boolean;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingSharingChanged".
+ */
+export interface BriefingSharingChanged {
+  mode: BriefingSharing;
+  type: "briefing.sharing_changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingImported".
+ */
+export interface BriefingImported {
+  item: BriefingImportView;
+  text: string;
+  type: "briefing.imported";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingImportView".
+ */
+export interface BriefingImportView {
+  as_of_seq: number | null;
+  at: string;
+  chars: number;
+  id: string;
+  source: string;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -787,6 +909,7 @@ export interface ApprovalView {
   provenance: Provenance;
   suggested_patterns: string[];
   timeout_at: string;
+  warnings: string[];
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -872,6 +995,9 @@ export interface SessionSnapshot {
  * via the `definition` "SessionState".
  */
 export interface SessionState {
+  access_requests: {
+    [k: string]: AccessRequestView;
+  };
   admission: "approve" | "open";
   agent: string;
   agents: AgentView[];
@@ -882,6 +1008,11 @@ export interface SessionState {
     [k: string]: AttachmentMeta;
   };
   board: BoardView;
+  briefing_requests: {
+    [k: string]: BriefingRequestView;
+  };
+  briefing_sharing: "off" | "ask" | "team";
+  briefings_imported: BriefingImportView[];
   chat: ChatEntry[];
   context: ContextView | null;
   fast_agent: string;
@@ -998,6 +1129,13 @@ export interface EventRecord {
     | AdmissionChanged
     | JoinRequested
     | JoinResolved
+    | AccessRequested
+    | AccessResolved
+    | BriefingRequested
+    | BriefingResolved
+    | BriefingDelivered
+    | BriefingSharingChanged
+    | BriefingImported
     | JoinPending
     | JoinRefused
     | PromptDequeued

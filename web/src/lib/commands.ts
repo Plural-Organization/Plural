@@ -13,6 +13,8 @@ export const COMMANDS: CommandHint[] = [
   { name: "draw", usage: "/draw", description: "open a board everyone draws on" },
   { name: "team", usage: "/team <message>", description: "write to the room, the agent does not see it" },
   { name: "invite", usage: "/invite [link|once|viewer|revoke|open|approve]", description: "show the room link, or a one-time invite, or change who may join", hostOnly: true },
+  { name: "brief", usage: "/brief share off|ask|team", description: "who may ask your agent for a briefing of this session", hostOnly: true },
+  { name: "access", usage: "/access [note]", description: "ask the host for the right to write (host: allow|deny|revoke <name>)" },
   { name: "kick", usage: "/kick <name>", description: "remove someone from the session; a team member stays out", hostOnly: true },
   { name: "mode", usage: "/mode open|review", description: "who may prompt directly", hostOnly: true },
   { name: "policy", usage: "/policy [allow|ask|deny <tool> <pattern> | rm <id>]", description: "show or edit permission rules", hostOnly: true },

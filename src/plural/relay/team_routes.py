@@ -8,12 +8,22 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import BaseRoute, Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from plural.protocol.team import MemberClaims, PresenceCard, SessionList, TeamCreate, TeamJoin
+from plural.protocol.team import (
+    MemberClaims,
+    PresenceCard,
+    PresencePeers,
+    SessionList,
+    TeamCreate,
+    TeamJoin,
+)
 from plural.relay.directory import DirectoryError, TeamDirectory
-from plural.relay.limits import Throttle, peer_of
+from plural.relay.limits import Throttle, TokenBucket, peer_of
 from plural.relay.presence import Presence
 
 MAX_FRAME_BYTES = 8 * 1024
+MAX_BODY_BYTES = 16 * 1024
+FRAMES_PER_SECOND = 2.0
+FRAME_BURST = 6
 CLOSE_DENIED = 4401
 CLOSE_LIMIT = 4429
 CLOSE_BAD_FRAME = 4400
@@ -43,6 +53,17 @@ def team_routes(
             proxy_hops,
         )
 
+    async def read_body(request: Request) -> bytes:
+        declared = request.headers.get("content-length")
+        if declared is not None and declared.isdigit() and int(declared) > MAX_BODY_BYTES:
+            raise DirectoryError(413, "that request is too large")
+        body = bytearray()
+        async for chunk in request.stream():
+            body.extend(chunk)
+            if len(body) > MAX_BODY_BYTES:
+                raise DirectoryError(413, "that request is too large")
+        return bytes(body)
+
     def guarded(handler: Handler) -> Handler:
         async def run(request: Request) -> Response:
             try:
@@ -54,7 +75,7 @@ def team_routes(
 
     def signed(handler: Signed) -> Handler:
         async def run(request: Request) -> Response:
-            body = await request.body()
+            body = await read_body(request)
             claims = await directory.authenticate(
                 str(request.path_params["team"]),
                 request.headers.get("authorization"),
@@ -70,7 +91,7 @@ def team_routes(
         if not creations.allow(peer(request)):
             raise DirectoryError(429, "too many teams from this address, try later")
         try:
-            body = TeamCreate.model_validate_json(await request.body())
+            body = TeamCreate.model_validate_json(await read_body(request))
         except ValidationError as error:
             raise DirectoryError(400, _invalid(error)) from error
         return _json(await directory.create(body), 201)
@@ -79,7 +100,7 @@ def team_routes(
         if not joins.allow(peer(request)):
             raise DirectoryError(429, "too many tries from this address, wait a minute")
         try:
-            body = TeamJoin.model_validate_json(await request.body())
+            body = TeamJoin.model_validate_json(await read_body(request))
         except ValidationError as error:
             raise DirectoryError(400, _invalid(error)) from error
         return _json(await directory.join(body), 201)
@@ -104,7 +125,7 @@ def team_routes(
         return Response(status_code=204)
 
     async def sessions(_: Request, claims: MemberClaims, __: bytes) -> Response:
-        return _json(SessionList(sessions=presence.sessions(claims.team)))
+        return _json(SessionList(sessions=presence.sessions(claims.team, datetime.now(UTC))))
 
     async def presence_socket(socket: WebSocket) -> None:
         try:
@@ -119,9 +140,13 @@ def team_routes(
             await socket.close(code=CLOSE_DENIED, reason=error.message)
             return
         await socket.accept()
+        frames = TokenBucket(FRAMES_PER_SECOND, FRAME_BURST)
         try:
             while True:
                 text = await socket.receive_text()
+                if not frames.take():
+                    await socket.close(code=CLOSE_LIMIT, reason="too many frames")
+                    return
                 if len(text) > MAX_FRAME_BYTES:
                     await socket.close(code=CLOSE_BAD_FRAME, reason="frame too large")
                     return
@@ -133,9 +158,12 @@ def team_routes(
                 except ValidationError:
                     await socket.close(code=CLOSE_BAD_FRAME, reason="not a session card")
                     return
-                if not presence.publish(claims, frame.card, socket, datetime.now(UTC)):
+                now = datetime.now(UTC)
+                if not presence.publish(claims, frame.card, socket, now):
                     await socket.close(code=CLOSE_LIMIT, reason="too many sessions")
                     return
+                reply = PresencePeers(peers=presence.peers_of(claims.team, frame.card.room, now))
+                await socket.send_text(reply.model_dump_json())
         except WebSocketDisconnect:
             return
         finally:

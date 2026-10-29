@@ -6,6 +6,15 @@ import { join } from "node:path";
 
 export type SessionStatus = "idle" | "running" | "waiting";
 
+export interface Conflict {
+  owner: string;
+  room: string;
+  branch: string | null;
+  paths: string[];
+  same_branch: boolean;
+  latest: string;
+}
+
 export interface SessionCard {
   room: string;
   repo: string;
@@ -17,6 +26,8 @@ export interface SessionCard {
   owner: string;
   owner_id: string;
   updated_at: string;
+  repo_id?: string | null;
+  conflicts?: Conflict[];
 }
 
 export interface TeamProfile {
@@ -63,16 +74,17 @@ export function requestMessage(method: string, path: string, body: Uint8Array, t
   return `${method.toUpperCase()}\n${path}\n${timestamp}\n${nonce}\n${createHash("sha256").update(body).digest("hex")}`;
 }
 
-export function joinMessage(room: string, timestamp: number, nonce: string): string {
-  return `plural-team-join\n${room}\n${timestamp}\n${nonce}`;
+export function joinMessage(url: string, room: string, timestamp: number, nonce: string): string {
+  return `plural-team-join\n${url}\n${room}\n${timestamp}\n${nonce}`;
 }
 
-export function teamProof(team: Team, room: string, timestamp = Math.floor(Date.now() / 1000), nonce = randomBytes(8).toString("hex")): TeamProof {
+export function teamProof(team: Team, url: string, room: string, timestamp = Math.floor(Date.now() / 1000), nonce = randomBytes(8).toString("hex")): TeamProof {
   return {
     certificate: team.profile.certificate,
+    url,
     ts: timestamp,
     nonce,
-    proof: sign(null, Buffer.from(joinMessage(room, timestamp, nonce)), team.key).toString("base64url"),
+    proof: sign(null, Buffer.from(joinMessage(url, room, timestamp, nonce)), team.key).toString("base64url"),
   };
 }
 

@@ -101,15 +101,16 @@ describe("the list of sessions", () => {
 });
 
 describe("joining a teammate's session", () => {
-  test("the proof is signed exactly the way the Python host checks it", () => {
-    const proof = teamProof(team(), "r_live", 1700000000, "abcd1234");
+  test("the proof is signed exactly the way the Python host checks it, and names the address it is for", () => {
+    const proof = teamProof(team(), "wss://relay.example.com/r_live", "r_live", 1700000000, "abcd1234");
     expect(proof).toEqual({
       certificate: "CERT",
+      url: "wss://relay.example.com/r_live",
       ts: 1700000000,
       nonce: "abcd1234",
-      proof: "mHYo8HAbgHlS5k5-EAduf6NrVHU9CgbOuTP877VgattI1MmwMx4NFCPqEvWheSV6pY_fV4CZNO86JbO3yz_NDw",
+      proof: "Jw7wGv6Wuf_2h8ClUCqn-L7gxHINWkyYK8tqta_tMuVKpPm-Mf9jQcMXCujFmiSm4aGQmXOmpI1FKs7WrIeIAA",
     });
-    expect(joinMessage("r_live", 1700000000, "abcd1234")).toBe("plural-team-join\nr_live\n1700000000\nabcd1234");
+    expect(joinMessage("wss://relay.example.com/r_live", "r_live", 1700000000, "abcd1234")).toBe("plural-team-join\nwss://relay.example.com/r_live\nr_live\n1700000000\nabcd1234");
   });
 
   const sessions = [card("alia", "r_a1"), { ...card("alia", "r_a2"), repo: "web" }, card("bek", "r_b"), card("vlad", "r_v")];

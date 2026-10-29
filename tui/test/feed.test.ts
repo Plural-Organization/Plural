@@ -69,7 +69,7 @@ describe("feed", () => {
   test("approvals are announced when they are resolved, except for your own answers", () => {
     const request = (id: string): Event => ({
       type: "approval.requested",
-      approval: { id, call: CALL, provenance: DIRECT, timeout_at: "2026-10-26T12:02:00Z", suggested_patterns: [] },
+      approval: { id, call: CALL, provenance: DIRECT, timeout_at: "2026-10-26T12:02:00Z", suggested_patterns: [], warnings: [] },
     });
     const { feed } = replay(
       joined(HOST),

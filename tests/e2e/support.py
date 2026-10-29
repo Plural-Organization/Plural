@@ -18,6 +18,7 @@ from plural.protocol.envelope import ErrorCode
 from plural.protocol.events import Event, SessionWelcome
 from plural.protocol.models import Role
 from plural.relay.app import create_app
+from plural.relay.directory import TeamLimits
 
 CLIENT = ClientInfo(kind="test", version="0")
 ROOM = "r_e2e"
@@ -66,9 +67,15 @@ class Watcher:
 
 
 class RelayServer:
-    def __init__(self, port: int | None = None, teams: Path | None = None) -> None:
+    def __init__(
+        self,
+        port: int | None = None,
+        teams: Path | None = None,
+        team_limits: TeamLimits | None = None,
+    ) -> None:
         self.port = port or free_port()
         self._teams = teams
+        self._team_limits = team_limits
         self._server: uvicorn.Server | None = None
         self._task: asyncio.Task[None] | None = None
 
@@ -83,7 +90,7 @@ class RelayServer:
     async def start(self) -> None:
         server = uvicorn.Server(
             uvicorn.Config(
-                create_app(teams=self._teams),
+                create_app(teams=self._teams, team_limits=self._team_limits),
                 host="127.0.0.1",
                 port=self.port,
                 log_level="warning",

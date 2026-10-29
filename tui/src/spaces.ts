@@ -1,4 +1,4 @@
-import type { SessionCard, SessionStatus, TeamView } from "./team";
+import type { Conflict, SessionCard, SessionStatus, TeamView } from "./team";
 
 export type Phase = "idle" | "running" | "waiting" | "done";
 
@@ -20,6 +20,8 @@ export interface SpaceRow {
   mine: boolean;
   active: boolean;
   offline: boolean;
+  clash: boolean;
+  warning: string | null;
 }
 
 export const OWN = "own";
@@ -40,9 +42,19 @@ export interface SpacesInput {
   summaries: Record<string, Summary | undefined>;
 }
 
+export function describeConflict(conflict: Conflict): string {
+  const files = conflict.paths.slice(0, 2).join(", ") + (conflict.paths.length > 2 ? " …" : "");
+  return `${conflict.owner} also changed ${files}`;
+}
+
+export function ownConflicts(team: TeamView | null): Conflict[] {
+  return team?.sessions.find((card) => card.owner_id === team.me)?.conflicts ?? [];
+}
+
 export function buildSpaces({ home, team, visits, active, summaries }: SpacesInput): SpaceRow[] {
   const cards = team?.sessions ?? [];
   const mine = cards.find((card) => card.owner_id === team?.me);
+  const clashing = new Set((mine?.conflicts ?? []).map((conflict) => conflict.room));
   const rows: SpaceRow[] = [
     {
       id: OWN,
@@ -53,6 +65,8 @@ export function buildSpaces({ home, team, visits, active, summaries }: SpacesInp
       mine: true,
       active: active === OWN,
       offline: false,
+      clash: false,
+      warning: mine?.conflicts?.[0] ? describeConflict(mine.conflicts[0]) : null,
     },
   ];
   const seen = new Set<string>();
@@ -67,6 +81,8 @@ export function buildSpaces({ home, team, visits, active, summaries }: SpacesInp
       mine: false,
       active: active === card.room,
       offline: false,
+      clash: clashing.has(card.room),
+      warning: null,
     });
   }
   for (const visit of visits.filter((entry) => !seen.has(entry.id))) {
@@ -79,6 +95,8 @@ export function buildSpaces({ home, team, visits, active, summaries }: SpacesInp
       mine: false,
       active: active === visit.id,
       offline: true,
+      clash: clashing.has(visit.id),
+      warning: null,
     });
   }
   return rows;
