@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { SessionState } from "@plural/client";
 import { theme } from "../theme";
+import type { UpdateState } from "../update";
 
-export function TopBar({ room, state, onSettings }: { room: string; state: SessionState; onSettings: () => void }) {
+export function TopBar({ room, state, update, onSettings }: { room: string; state: SessionState; update: UpdateState | null; onSettings: () => void }) {
   const [hover, setHover] = useState(false);
   return (
     <box flexDirection="row" justifyContent="space-between" paddingX={2} height={1} flexShrink={0} backgroundColor={theme.panel}>
@@ -17,6 +18,12 @@ export function TopBar({ room, state, onSettings }: { room: string; state: Sessi
           prompts <span fg={state.prompt_mode === "open" ? theme.ok : theme.warn}>{state.prompt_mode}</span>
           {"  "}
         </text>
+        {update && update.phase !== "failed" ? (
+          <text fg={update.phase === "installed" ? theme.ok : theme.accent}>
+            {update.phase === "installed" ? "✓ restart to update" : update.phase === "installing" ? "↻ updating" : `● update ${update.version}`}
+            {"  "}
+          </text>
+        ) : null}
         <box onMouseDown={onSettings} onMouseOver={() => setHover(true)} onMouseOut={() => setHover(false)}>
           <text fg={hover ? theme.accent : theme.dim}>⚙</text>
         </box>

@@ -16,7 +16,7 @@ export function ProposalCard({ proposal, state, send, onEdit }: ProposalCardProp
     <div className={cx(styles.card, styles.proposal)}>
       <div className={styles.head}>
         <span>
-          proposal from <b>{nameOf(state, proposal.author_id)}</b>
+          <b>{nameOf(state, proposal.author_id)}</b> proposes a prompt
         </span>
         <span className="muted">review mode</span>
       </div>

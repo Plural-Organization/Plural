@@ -5,7 +5,7 @@ services:
       dockerfile: deploy/relay.Dockerfile
     restart: unless-stopped
   caddy:
-    image: caddy:2.8
+    image: caddy:2.10
     restart: unless-stopped
     ports: ["80:80", "443:443"]
     environment:

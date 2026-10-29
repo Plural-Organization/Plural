@@ -50,6 +50,31 @@ export type PermissionMode = "default" | "accept_edits" | "plan" | "auto";
 export type SkillScope = "project" | "global";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AdmissionMode".
+ */
+export type AdmissionMode = "approve" | "open";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinDecision".
+ */
+export type JoinDecision = "allow" | "viewer" | "deny" | "expired" | "gone" | "revoked";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessDecision".
+ */
+export type AccessDecision = "granted" | "denied";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingDecision".
+ */
+export type BriefingDecision = "granted" | "denied";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingSharing".
+ */
+export type BriefingSharing = "off" | "ask" | "team";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "DequeueReason".
  */
 export type DequeueReason = "delivered" | "cancelled" | "dropped";
@@ -98,6 +123,11 @@ export type PolicyAction = "allow" | "ask" | "deny";
  * via the `definition` "EntryKind".
  */
 export type EntryKind = "prompt" | "assistant" | "tool" | "compaction";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardShape".
+ */
+export type BoardShape = "pen" | "line" | "arrow" | "rect" | "ellipse" | "text" | "image" | "erase";
 
 export interface EventsSchema {
   envelope: Envelope;
@@ -111,8 +141,29 @@ export interface EventsSchema {
     | SkillsChanged
     | SkillsFound
     | AgentChanged
+    | AdmissionChanged
+    | JoinRequested
+    | JoinResolved
+    | AccessRequested
+    | AccessResolved
+    | BriefingRequested
+    | BriefingResolved
+    | BriefingDelivered
+    | BriefingSharingChanged
+    | BriefingImported
+    | JoinPending
+    | JoinRefused
     | PromptDequeued
     | ParticipantTyping
+    | ParticipantSelected
+    | ParticipantCursor
+    | BoardOpened
+    | BoardStroked
+    | BoardMoved
+    | AttachmentData
+    | BoardErased
+    | BoardCleared
+    | ChatPosted
     | ProposalCreated
     | ProposalApproved
     | ProposalRejected
@@ -126,6 +177,8 @@ export interface EventsSchema {
     | ContextCompacted
     | ContextUsage
     | McpChanged
+    | UsageRecorded
+    | AgentsChanged
     | PluginsChanged
     | CommandInvoked
     | CommandReplied
@@ -275,7 +328,160 @@ export interface SkillHit {
  */
 export interface AgentChanged {
   agent: string;
+  fast: string;
   type: "agent.changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AdmissionChanged".
+ */
+export interface AdmissionChanged {
+  mode: AdmissionMode;
+  type: "link.admission_changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinRequested".
+ */
+export interface JoinRequested {
+  request: JoinRequestView;
+  type: "join.requested";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinRequestView".
+ */
+export interface JoinRequestView {
+  client: string;
+  id: string;
+  name: string;
+  requested_at: string;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinResolved".
+ */
+export interface JoinResolved {
+  decided_by: string | null;
+  decision: JoinDecision;
+  request_id: string;
+  type: "join.resolved";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessRequested".
+ */
+export interface AccessRequested {
+  request: AccessRequestView;
+  type: "access.requested";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessRequestView".
+ */
+export interface AccessRequestView {
+  name: string;
+  note: string | null;
+  participant_id: string;
+  requested_at: string;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AccessResolved".
+ */
+export interface AccessResolved {
+  decided_by: string | null;
+  decision: AccessDecision;
+  participant_id: string;
+  type: "access.resolved";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingRequested".
+ */
+export interface BriefingRequested {
+  request: BriefingRequestView;
+  type: "briefing.requested";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingRequestView".
+ */
+export interface BriefingRequestView {
+  focus: string | null;
+  id: string;
+  name: string;
+  participant_id: string;
+  requested_at: string;
+  update: boolean;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingResolved".
+ */
+export interface BriefingResolved {
+  decided_by: string | null;
+  decision: BriefingDecision;
+  participant_id: string;
+  request_id: string;
+  type: "briefing.resolved";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingDelivered".
+ */
+export interface BriefingDelivered {
+  as_of_seq: number;
+  error: string | null;
+  request_id: string;
+  text: string;
+  to: string;
+  type: "briefing.delivered";
+  update: boolean;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingSharingChanged".
+ */
+export interface BriefingSharingChanged {
+  mode: BriefingSharing;
+  type: "briefing.sharing_changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingImported".
+ */
+export interface BriefingImported {
+  item: BriefingImportView;
+  text: string;
+  type: "briefing.imported";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BriefingImportView".
+ */
+export interface BriefingImportView {
+  as_of_seq: number | null;
+  at: string;
+  chars: number;
+  id: string;
+  source: string;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinPending".
+ */
+export interface JoinPending {
+  type: "session.pending";
+  waiting: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "JoinRefused".
+ */
+export interface JoinRefused {
+  reason: string;
+  type: "session.refused";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -294,6 +500,143 @@ export interface ParticipantTyping {
   participant_id: string;
   type: "participant.typing";
   typing: boolean;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ParticipantSelected".
+ */
+export interface ParticipantSelected {
+  participant_id: string;
+  selection: TextSelection | null;
+  type: "participant.selected";
+}
+/**
+ * Text someone has selected, as offsets into the text of one item on screen.
+ *
+ * The anchor names the item (a feed entry or a canvas document); every client lays
+ * out the same items, so the offsets point at the same words for everyone.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "TextSelection".
+ */
+export interface TextSelection {
+  anchor: string;
+  end: number;
+  start: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ParticipantCursor".
+ */
+export interface ParticipantCursor {
+  cursor: BoardCursor | null;
+  participant_id: string;
+  type: "participant.cursor";
+}
+/**
+ * Where someone points on the board; with ink, the pen is down and draws.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardCursor".
+ */
+export interface BoardCursor {
+  color: string | null;
+  ink: boolean;
+  width: number | null;
+  x: number;
+  y: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardOpened".
+ */
+export interface BoardOpened {
+  by: string;
+  open: boolean;
+  type: "board.opened";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardStroked".
+ */
+export interface BoardStroked {
+  stroke: BoardStroke;
+  type: "board.stroked";
+}
+/**
+ * One mark on the shared board; points are x0, y0, x1, y1, … in board units.
+ *
+ * A pen keeps every point, a shape or an image its two corners, a text the point it starts at.
+ * An image names the attachment that holds its picture.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardStroke".
+ */
+export interface BoardStroke {
+  author_id: string;
+  color: string;
+  id: string;
+  image: string | null;
+  kind: "pen" | "line" | "arrow" | "rect" | "ellipse" | "text" | "image" | "erase";
+  /**
+   * @minItems 2
+   * @maxItems 4000
+   */
+  points: [number, number, ...number[]];
+  text: string | null;
+  width: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardMoved".
+ */
+export interface BoardMoved {
+  points: number[];
+  stroke_id: string;
+  type: "board.moved";
+}
+/**
+ * The picture of a board image, sent only to the person who asked for it.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AttachmentData".
+ */
+export interface AttachmentData {
+  attachment_id: string;
+  content_b64: string;
+  media_type: string;
+  type: "attachment.data";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardErased".
+ */
+export interface BoardErased {
+  stroke_id: string;
+  type: "board.erased";
+}
+/**
+ * The board lost every mark, or only the marks of author_id when it is set.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardCleared".
+ */
+export interface BoardCleared {
+  author_id: string | null;
+  by: string;
+  type: "board.cleared";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ChatPosted".
+ */
+export interface ChatPosted {
+  author_id: string;
+  mentions: string[];
+  message_id: string;
+  text: string;
+  to: string | null;
+  type: "chat.posted";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -470,6 +813,51 @@ export interface McpServerView {
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "UsageRecorded".
+ */
+export interface UsageRecorded {
+  lines: UsageLine[];
+  type: "usage.recorded";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "UsageLine".
+ */
+export interface UsageLine {
+  agent: string;
+  model: string;
+  role: string;
+  usage: Usage1;
+  uses: number;
+}
+export interface Usage1 {
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AgentsChanged".
+ */
+export interface AgentsChanged {
+  agents: AgentView[];
+  type: "agents.changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AgentView".
+ */
+export interface AgentView {
+  description: string;
+  name: string;
+  read_only: boolean;
+  role: string;
+  scope: SkillScope | null;
+  tools: string[];
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "PluginsChanged".
  */
 export interface PluginsChanged {
@@ -581,6 +969,7 @@ export interface ApprovalView {
   provenance: Provenance;
   suggested_patterns: string[];
   timeout_at: string;
+  warnings: string[];
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -666,15 +1055,31 @@ export interface SessionSnapshot {
  * via the `definition` "SessionState".
  */
 export interface SessionState {
+  access_requests: {
+    [k: string]: AccessRequestView;
+  };
+  admission: "approve" | "open";
   agent: string;
+  agents: AgentView[];
   approvals: {
     [k: string]: ApprovalView;
   };
   attachments: {
     [k: string]: AttachmentMeta;
   };
+  board: BoardView;
+  briefing_requests: {
+    [k: string]: BriefingRequestView;
+  };
+  briefing_sharing: "off" | "ask" | "team";
+  briefings_imported: BriefingImportView[];
+  chat: ChatEntry[];
   commands: PluginCommandView[];
   context: ContextView | null;
+  fast_agent: string;
+  join_requests: {
+    [k: string]: JoinRequestView;
+  };
   last_seq: number;
   mcp: McpServerView[];
   participants: {
@@ -692,6 +1097,27 @@ export interface SessionState {
   skills: SkillView[];
   summary: string | null;
   transcript: TranscriptEntry[];
+  usage: UsageLine[];
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardView".
+ */
+export interface BoardView {
+  open: boolean;
+  strokes: BoardStroke[];
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ChatEntry".
+ */
+export interface ChatEntry {
+  author_id: string;
+  id: string;
+  mentions: string[];
+  text: string;
+  to: string | null;
+  ts: string;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -731,8 +1157,9 @@ export interface TranscriptEntry {
  */
 export interface InviteCreated {
   code: string;
-  expires_at: string;
+  expires_at: string | null;
   link: string;
+  reusable: boolean;
   role: Role;
   type: "invite.created";
 }
@@ -761,8 +1188,29 @@ export interface EventRecord {
     | SkillsChanged
     | SkillsFound
     | AgentChanged
+    | AdmissionChanged
+    | JoinRequested
+    | JoinResolved
+    | AccessRequested
+    | AccessResolved
+    | BriefingRequested
+    | BriefingResolved
+    | BriefingDelivered
+    | BriefingSharingChanged
+    | BriefingImported
+    | JoinPending
+    | JoinRefused
     | PromptDequeued
     | ParticipantTyping
+    | ParticipantSelected
+    | ParticipantCursor
+    | BoardOpened
+    | BoardStroked
+    | BoardMoved
+    | AttachmentData
+    | BoardErased
+    | BoardCleared
+    | ChatPosted
     | ProposalCreated
     | ProposalApproved
     | ProposalRejected
@@ -776,6 +1224,8 @@ export interface EventRecord {
     | ContextCompacted
     | ContextUsage
     | McpChanged
+    | UsageRecorded
+    | AgentsChanged
     | PluginsChanged
     | CommandInvoked
     | CommandReplied
@@ -799,7 +1249,7 @@ export interface EventRecord {
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "Usage".
  */
-export interface Usage1 {
+export interface Usage2 {
   cache_read_tokens: number;
   cache_write_tokens: number;
   input_tokens: number;

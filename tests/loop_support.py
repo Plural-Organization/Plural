@@ -49,7 +49,11 @@ def turn(text: str, *, guest: bool = False) -> UserTurn:
 
 
 def make_loop(
-    tmp_path: Path, provider: LLMProvider, gate: StubGate, limits: LoopLimits | None = None
+    tmp_path: Path,
+    provider: LLMProvider,
+    gate: StubGate,
+    limits: LoopLimits | None = None,
+    helper: LLMProvider | None = None,
 ) -> AgentLoop:
     (tmp_path / "a.txt").write_text("alpha\n")
     return AgentLoop(
@@ -60,6 +64,7 @@ def make_loop(
         tool_ctx=ToolCtx(workspace=Workspace.at(tmp_path), backend=LocalBackend()),
         ids=UlidGenerator(),
         limits=limits,
+        helper=helper,
     )
 
 

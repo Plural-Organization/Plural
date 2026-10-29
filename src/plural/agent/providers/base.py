@@ -25,9 +25,18 @@ class ToolSchema(Model):
     parameters: dict[str, JsonValue]
 
 
+ImageType = Literal["image/png", "image/jpeg", "image/gif", "image/webp"]
+
+
+class LlmImage(Model):
+    media_type: ImageType
+    data: str
+
+
 class LlmMessage(Model):
     role: Literal["user", "assistant", "tool"]
     content: str
+    images: tuple[LlmImage, ...] = ()
     tool_calls: tuple[ToolCallRequest, ...] = ()
     tool_call_id: str | None = None
     is_error: bool = False

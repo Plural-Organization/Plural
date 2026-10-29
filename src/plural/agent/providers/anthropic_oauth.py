@@ -94,7 +94,8 @@ class AnthropicOAuthProvider:
         self._refresh_lock = asyncio.Lock()
         load_credentials(credentials_path)
 
-    async def _token(self) -> str:
+    async def token(self) -> str:
+        """A valid access token, refreshed when it is about to expire."""
         async with self._refresh_lock:
             credentials = await asyncio.to_thread(load_credentials, self._path)
             if credentials.expires <= time.time() + REFRESH_MARGIN_S:
@@ -105,7 +106,7 @@ class AnthropicOAuthProvider:
     async def stream(
         self, request: LlmRequest, *, cancel: asyncio.Event
     ) -> AsyncIterator[LlmEvent]:
-        token = await self._token()
+        token = await self.token()
         client = AsyncAnthropic(
             api_key=None,
             auth_token=token,

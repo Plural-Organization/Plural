@@ -1,8 +1,125 @@
 {
   "$defs": {
+    "AccessDecision": {
+      "enum": [
+        "granted",
+        "denied"
+      ],
+      "type": "string"
+    },
+    "AccessRequestView": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id",
+        "name",
+        "note",
+        "requested_at"
+      ],
+      "type": "object"
+    },
+    "AccessRequested": {
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/AccessRequestView"
+        },
+        "type": {
+          "const": "access.requested",
+          "default": "access.requested",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request"
+      ],
+      "type": "object"
+    },
+    "AccessResolved": {
+      "properties": {
+        "decided_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "decision": {
+          "$ref": "#/$defs/AccessDecision"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "access.resolved",
+          "default": "access.resolved",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "participant_id",
+        "decision",
+        "decided_by"
+      ],
+      "type": "object"
+    },
+    "AdmissionChanged": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/AdmissionMode"
+        },
+        "type": {
+          "const": "link.admission_changed",
+          "default": "link.admission_changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "AdmissionMode": {
+      "enum": [
+        "approve",
+        "open"
+      ],
+      "type": "string"
+    },
     "AgentChanged": {
       "properties": {
         "agent": {
+          "type": "string"
+        },
+        "fast": {
+          "default": "",
           "type": "string"
         },
         "type": {
@@ -13,7 +130,72 @@
       },
       "required": [
         "type",
-        "agent"
+        "agent",
+        "fast"
+      ],
+      "type": "object"
+    },
+    "AgentView": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "read_only": {
+          "default": true,
+          "type": "boolean"
+        },
+        "role": {
+          "type": "string"
+        },
+        "scope": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SkillScope"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tools": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "role",
+        "tools",
+        "scope",
+        "read_only"
+      ],
+      "type": "object"
+    },
+    "AgentsChanged": {
+      "properties": {
+        "agents": {
+          "items": {
+            "$ref": "#/$defs/AgentView"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "agents.changed",
+          "default": "agents.changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "agents"
       ],
       "type": "object"
     },
@@ -97,6 +279,13 @@
         "timeout_at": {
           "format": "date-time",
           "type": "string"
+        },
+        "warnings": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -104,7 +293,8 @@
         "call",
         "provenance",
         "timeout_at",
-        "suggested_patterns"
+        "suggested_patterns",
+        "warnings"
       ],
       "type": "object"
     },
@@ -122,6 +312,32 @@
       "required": [
         "type",
         "attachment"
+      ],
+      "type": "object"
+    },
+    "AttachmentData": {
+      "description": "The picture of a board image, sent only to the person who asked for it.",
+      "properties": {
+        "attachment_id": {
+          "type": "string"
+        },
+        "content_b64": {
+          "type": "string"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "type": {
+          "const": "attachment.data",
+          "default": "attachment.data",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "attachment_id",
+        "media_type",
+        "content_b64"
       ],
       "type": "object"
     },
@@ -149,6 +365,589 @@
         "size",
         "sha256",
         "owner_id"
+      ],
+      "type": "object"
+    },
+    "BoardCleared": {
+      "description": "The board lost every mark, or only the marks of author_id when it is set.",
+      "properties": {
+        "author_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "by": {
+          "type": "string"
+        },
+        "type": {
+          "const": "board.cleared",
+          "default": "board.cleared",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "by",
+        "author_id"
+      ],
+      "type": "object"
+    },
+    "BoardCursor": {
+      "description": "Where someone points on the board; with ink, the pen is down and draws.",
+      "properties": {
+        "color": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ink": {
+          "default": false,
+          "type": "boolean"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "maximum": 40,
+              "minimum": 0.5,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "x": {
+          "maximum": 20,
+          "minimum": -20,
+          "type": "number"
+        },
+        "y": {
+          "maximum": 20,
+          "minimum": -20,
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "ink",
+        "color",
+        "width"
+      ],
+      "type": "object"
+    },
+    "BoardErased": {
+      "properties": {
+        "stroke_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "board.erased",
+          "default": "board.erased",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "stroke_id"
+      ],
+      "type": "object"
+    },
+    "BoardMoved": {
+      "properties": {
+        "points": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "stroke_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "board.moved",
+          "default": "board.moved",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "stroke_id",
+        "points"
+      ],
+      "type": "object"
+    },
+    "BoardOpened": {
+      "properties": {
+        "by": {
+          "type": "string"
+        },
+        "open": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "board.opened",
+          "default": "board.opened",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "open",
+        "by"
+      ],
+      "type": "object"
+    },
+    "BoardShape": {
+      "enum": [
+        "pen",
+        "line",
+        "arrow",
+        "rect",
+        "ellipse",
+        "text",
+        "image",
+        "erase"
+      ],
+      "type": "string"
+    },
+    "BoardStroke": {
+      "description": "One mark on the shared board; points are x0, y0, x1, y1, \u2026 in board units.\n\nA pen keeps every point, a shape or an image its two corners, a text the point it starts at.\nAn image names the attachment that holds its picture.",
+      "properties": {
+        "author_id": {
+          "type": "string"
+        },
+        "color": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "$ref": "#/$defs/BoardShape",
+          "default": "pen"
+        },
+        "points": {
+          "items": {
+            "maximum": 20,
+            "minimum": -20,
+            "type": "number"
+          },
+          "maxItems": 4000,
+          "minItems": 2,
+          "type": "array"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "width": {
+          "maximum": 40,
+          "minimum": 0.5,
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "author_id",
+        "kind",
+        "color",
+        "width",
+        "points",
+        "text",
+        "image"
+      ],
+      "type": "object"
+    },
+    "BoardStroked": {
+      "properties": {
+        "stroke": {
+          "$ref": "#/$defs/BoardStroke"
+        },
+        "type": {
+          "const": "board.stroked",
+          "default": "board.stroked",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "stroke"
+      ],
+      "type": "object"
+    },
+    "BoardView": {
+      "properties": {
+        "open": {
+          "default": false,
+          "type": "boolean"
+        },
+        "strokes": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BoardStroke"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "open",
+        "strokes"
+      ],
+      "type": "object"
+    },
+    "BriefingDecision": {
+      "enum": [
+        "granted",
+        "denied"
+      ],
+      "type": "string"
+    },
+    "BriefingDelivered": {
+      "properties": {
+        "as_of_seq": {
+          "default": 0,
+          "type": "integer"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "type": {
+          "const": "briefing.delivered",
+          "default": "briefing.delivered",
+          "type": "string"
+        },
+        "update": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "to",
+        "text",
+        "as_of_seq",
+        "update",
+        "error"
+      ],
+      "type": "object"
+    },
+    "BriefingImportView": {
+      "properties": {
+        "as_of_seq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "chars": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "as_of_seq",
+        "chars",
+        "at"
+      ],
+      "type": "object"
+    },
+    "BriefingImported": {
+      "properties": {
+        "item": {
+          "$ref": "#/$defs/BriefingImportView"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "briefing.imported",
+          "default": "briefing.imported",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "item",
+        "text"
+      ],
+      "type": "object"
+    },
+    "BriefingRequestView": {
+      "properties": {
+        "focus": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "update": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "participant_id",
+        "name",
+        "focus",
+        "update",
+        "requested_at"
+      ],
+      "type": "object"
+    },
+    "BriefingRequested": {
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/BriefingRequestView"
+        },
+        "type": {
+          "const": "briefing.requested",
+          "default": "briefing.requested",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request"
+      ],
+      "type": "object"
+    },
+    "BriefingResolved": {
+      "properties": {
+        "decided_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "decision": {
+          "$ref": "#/$defs/BriefingDecision"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "briefing.resolved",
+          "default": "briefing.resolved",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "participant_id",
+        "decision",
+        "decided_by"
+      ],
+      "type": "object"
+    },
+    "BriefingSharing": {
+      "enum": [
+        "off",
+        "ask",
+        "team"
+      ],
+      "type": "string"
+    },
+    "BriefingSharingChanged": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/BriefingSharing"
+        },
+        "type": {
+          "const": "briefing.sharing_changed",
+          "default": "briefing.sharing_changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "mode"
+      ],
+      "type": "object"
+    },
+    "ChatEntry": {
+      "properties": {
+        "author_id": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "mentions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "text": {
+          "type": "string"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ts": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "author_id",
+        "text",
+        "ts",
+        "to",
+        "mentions"
+      ],
+      "type": "object"
+    },
+    "ChatPosted": {
+      "properties": {
+        "author_id": {
+          "type": "string"
+        },
+        "mentions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "message_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "chat.posted",
+          "default": "chat.posted",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "message_id",
+        "author_id",
+        "text",
+        "to",
+        "mentions"
       ],
       "type": "object"
     },
@@ -510,10 +1309,25 @@
         "event": {
           "discriminator": {
             "mapping": {
+              "access.requested": "#/$defs/AccessRequested",
+              "access.resolved": "#/$defs/AccessResolved",
               "agent.changed": "#/$defs/AgentChanged",
+              "agents.changed": "#/$defs/AgentsChanged",
               "approval.requested": "#/$defs/ApprovalRequested",
               "approval.resolved": "#/$defs/ApprovalResolved",
               "attachment.added": "#/$defs/AttachmentAdded",
+              "attachment.data": "#/$defs/AttachmentData",
+              "board.cleared": "#/$defs/BoardCleared",
+              "board.erased": "#/$defs/BoardErased",
+              "board.moved": "#/$defs/BoardMoved",
+              "board.opened": "#/$defs/BoardOpened",
+              "board.stroked": "#/$defs/BoardStroked",
+              "briefing.delivered": "#/$defs/BriefingDelivered",
+              "briefing.imported": "#/$defs/BriefingImported",
+              "briefing.requested": "#/$defs/BriefingRequested",
+              "briefing.resolved": "#/$defs/BriefingResolved",
+              "briefing.sharing_changed": "#/$defs/BriefingSharingChanged",
+              "chat.posted": "#/$defs/ChatPosted",
               "command.invoked": "#/$defs/CommandInvoked",
               "command.replied": "#/$defs/CommandReplied",
               "context.compacted": "#/$defs/ContextCompacted",
@@ -521,14 +1335,19 @@
               "context.usage": "#/$defs/ContextUsage",
               "error": "#/$defs/ErrorRaised",
               "invite.created": "#/$defs/InviteCreated",
+              "join.requested": "#/$defs/JoinRequested",
+              "join.resolved": "#/$defs/JoinResolved",
+              "link.admission_changed": "#/$defs/AdmissionChanged",
               "mcp.changed": "#/$defs/McpChanged",
               "message.delta": "#/$defs/MessageDelta",
               "message.ended": "#/$defs/MessageEnded",
               "message.started": "#/$defs/MessageStarted",
+              "participant.cursor": "#/$defs/ParticipantCursor",
               "participant.joined": "#/$defs/ParticipantJoined",
               "participant.left": "#/$defs/ParticipantLeft",
               "participant.revoked": "#/$defs/ParticipantRevoked",
               "participant.role_changed": "#/$defs/ParticipantRoleChanged",
+              "participant.selected": "#/$defs/ParticipantSelected",
               "participant.typing": "#/$defs/ParticipantTyping",
               "plugins.changed": "#/$defs/PluginsChanged",
               "policy.rule_added": "#/$defs/PolicyRuleAdded",
@@ -540,15 +1359,18 @@
               "proposal.rejected": "#/$defs/ProposalRejected",
               "run.ended": "#/$defs/RunEnded",
               "run.started": "#/$defs/RunStarted",
+              "session.pending": "#/$defs/JoinPending",
               "session.permission_mode_changed": "#/$defs/PermissionModeChanged",
               "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
+              "session.refused": "#/$defs/JoinRefused",
               "session.snapshot": "#/$defs/SessionSnapshot",
               "session.welcome": "#/$defs/SessionWelcome",
               "skills.changed": "#/$defs/SkillsChanged",
               "skills.found": "#/$defs/SkillsFound",
               "tool.ended": "#/$defs/ToolEnded",
               "tool.output": "#/$defs/ToolOutput",
-              "tool.started": "#/$defs/ToolStarted"
+              "tool.started": "#/$defs/ToolStarted",
+              "usage.recorded": "#/$defs/UsageRecorded"
             },
             "propertyName": "type"
           },
@@ -581,10 +1403,73 @@
               "$ref": "#/$defs/AgentChanged"
             },
             {
+              "$ref": "#/$defs/AdmissionChanged"
+            },
+            {
+              "$ref": "#/$defs/JoinRequested"
+            },
+            {
+              "$ref": "#/$defs/JoinResolved"
+            },
+            {
+              "$ref": "#/$defs/AccessRequested"
+            },
+            {
+              "$ref": "#/$defs/AccessResolved"
+            },
+            {
+              "$ref": "#/$defs/BriefingRequested"
+            },
+            {
+              "$ref": "#/$defs/BriefingResolved"
+            },
+            {
+              "$ref": "#/$defs/BriefingDelivered"
+            },
+            {
+              "$ref": "#/$defs/BriefingSharingChanged"
+            },
+            {
+              "$ref": "#/$defs/BriefingImported"
+            },
+            {
+              "$ref": "#/$defs/JoinPending"
+            },
+            {
+              "$ref": "#/$defs/JoinRefused"
+            },
+            {
               "$ref": "#/$defs/PromptDequeued"
             },
             {
               "$ref": "#/$defs/ParticipantTyping"
+            },
+            {
+              "$ref": "#/$defs/ParticipantSelected"
+            },
+            {
+              "$ref": "#/$defs/ParticipantCursor"
+            },
+            {
+              "$ref": "#/$defs/BoardOpened"
+            },
+            {
+              "$ref": "#/$defs/BoardStroked"
+            },
+            {
+              "$ref": "#/$defs/BoardMoved"
+            },
+            {
+              "$ref": "#/$defs/AttachmentData"
+            },
+            {
+              "$ref": "#/$defs/BoardErased"
+            },
+            {
+              "$ref": "#/$defs/BoardCleared"
+            },
+            {
+              "$ref": "#/$defs/ChatPosted"
             },
             {
               "$ref": "#/$defs/ProposalCreated"
@@ -624,6 +1509,12 @@
             },
             {
               "$ref": "#/$defs/McpChanged"
+            },
+            {
+              "$ref": "#/$defs/UsageRecorded"
+            },
+            {
+              "$ref": "#/$defs/AgentsChanged"
             },
             {
               "$ref": "#/$defs/PluginsChanged"
@@ -698,11 +1589,23 @@
           "type": "string"
         },
         "expires_at": {
-          "format": "date-time",
-          "type": "string"
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "link": {
           "type": "string"
+        },
+        "reusable": {
+          "default": false,
+          "type": "boolean"
         },
         "role": {
           "$ref": "#/$defs/Role"
@@ -718,7 +1621,128 @@
         "code",
         "role",
         "expires_at",
-        "link"
+        "link",
+        "reusable"
+      ],
+      "type": "object"
+    },
+    "JoinDecision": {
+      "enum": [
+        "allow",
+        "viewer",
+        "deny",
+        "expired",
+        "gone",
+        "revoked"
+      ],
+      "type": "string"
+    },
+    "JoinPending": {
+      "properties": {
+        "type": {
+          "const": "session.pending",
+          "default": "session.pending",
+          "type": "string"
+        },
+        "waiting": {
+          "default": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "waiting"
+      ],
+      "type": "object"
+    },
+    "JoinRefused": {
+      "properties": {
+        "reason": {
+          "type": "string"
+        },
+        "type": {
+          "const": "session.refused",
+          "default": "session.refused",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "JoinRequestView": {
+      "properties": {
+        "client": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "client",
+        "requested_at"
+      ],
+      "type": "object"
+    },
+    "JoinRequested": {
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/JoinRequestView"
+        },
+        "type": {
+          "const": "join.requested",
+          "default": "join.requested",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request"
+      ],
+      "type": "object"
+    },
+    "JoinResolved": {
+      "properties": {
+        "decided_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "decision": {
+          "$ref": "#/$defs/JoinDecision"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "join.resolved",
+          "default": "join.resolved",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "decision",
+        "decided_by"
       ],
       "type": "object"
     },
@@ -908,6 +1932,34 @@
       ],
       "type": "object"
     },
+    "ParticipantCursor": {
+      "properties": {
+        "cursor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoardCursor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "participant.cursor",
+          "default": "participant.cursor",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "participant_id",
+        "cursor"
+      ],
+      "type": "object"
+    },
     "ParticipantJoined": {
       "properties": {
         "participant": {
@@ -977,6 +2029,34 @@
         "type",
         "participant_id",
         "role"
+      ],
+      "type": "object"
+    },
+    "ParticipantSelected": {
+      "properties": {
+        "participant_id": {
+          "type": "string"
+        },
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "participant.selected",
+          "default": "participant.selected",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "participant_id",
+        "selection"
       ],
       "type": "object"
     },
@@ -1554,9 +2634,26 @@
     },
     "SessionState": {
       "properties": {
+        "access_requests": {
+          "additionalProperties": {
+            "$ref": "#/$defs/AccessRequestView"
+          },
+          "type": "object"
+        },
+        "admission": {
+          "$ref": "#/$defs/AdmissionMode",
+          "default": "approve"
+        },
         "agent": {
           "default": "",
           "type": "string"
+        },
+        "agents": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/AgentView"
+          },
+          "type": "array"
         },
         "approvals": {
           "additionalProperties": {
@@ -1569,6 +2666,33 @@
             "$ref": "#/$defs/AttachmentMeta"
           },
           "type": "object"
+        },
+        "board": {
+          "$ref": "#/$defs/BoardView"
+        },
+        "briefing_requests": {
+          "additionalProperties": {
+            "$ref": "#/$defs/BriefingRequestView"
+          },
+          "type": "object"
+        },
+        "briefing_sharing": {
+          "$ref": "#/$defs/BriefingSharing",
+          "default": "ask"
+        },
+        "briefings_imported": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BriefingImportView"
+          },
+          "type": "array"
+        },
+        "chat": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ChatEntry"
+          },
+          "type": "array"
         },
         "commands": {
           "default": [],
@@ -1587,6 +2711,16 @@
             }
           ],
           "default": null
+        },
+        "fast_agent": {
+          "default": "",
+          "type": "string"
+        },
+        "join_requests": {
+          "additionalProperties": {
+            "$ref": "#/$defs/JoinRequestView"
+          },
+          "type": "object"
         },
         "last_seq": {
           "default": 0,
@@ -1675,12 +2809,25 @@
             "$ref": "#/$defs/TranscriptEntry"
           },
           "type": "array"
+        },
+        "usage": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/UsageLine"
+          },
+          "type": "array"
         }
       },
       "required": [
         "last_seq",
         "prompt_mode",
         "permission_mode",
+        "admission",
+        "join_requests",
+        "access_requests",
+        "briefing_sharing",
+        "briefing_requests",
+        "briefings_imported",
         "participants",
         "proposals",
         "approvals",
@@ -1689,13 +2836,18 @@
         "skills",
         "context",
         "mcp",
+        "usage",
+        "agents",
         "plugins",
         "commands",
         "queue",
         "agent",
+        "fast_agent",
         "summary",
         "run",
-        "transcript"
+        "transcript",
+        "chat",
+        "board"
       ],
       "type": "object"
     },
@@ -1840,6 +2992,32 @@
         "type",
         "query",
         "hits"
+      ],
+      "type": "object"
+    },
+    "TextSelection": {
+      "description": "Text someone has selected, as offsets into the text of one item on screen.\n\nThe anchor names the item (a feed entry or a canvas document); every client lays\nout the same items, so the offsets point at the same words for everyone.",
+      "properties": {
+        "anchor": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "end": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "anchor",
+        "start",
+        "end"
       ],
       "type": "object"
     },
@@ -2052,6 +3230,61 @@
         "cache_write_tokens"
       ],
       "type": "object"
+    },
+    "UsageLine": {
+      "properties": {
+        "agent": {
+          "default": "",
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "usage": {
+          "$ref": "#/$defs/Usage",
+          "default": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        },
+        "uses": {
+          "default": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "role",
+        "model",
+        "agent",
+        "uses",
+        "usage"
+      ],
+      "type": "object"
+    },
+    "UsageRecorded": {
+      "properties": {
+        "lines": {
+          "items": {
+            "$ref": "#/$defs/UsageLine"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "usage.recorded",
+          "default": "usage.recorded",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "lines"
+      ],
+      "type": "object"
     }
   },
   "properties": {
@@ -2061,10 +3294,25 @@
     "event": {
       "discriminator": {
         "mapping": {
+          "access.requested": "#/$defs/AccessRequested",
+          "access.resolved": "#/$defs/AccessResolved",
           "agent.changed": "#/$defs/AgentChanged",
+          "agents.changed": "#/$defs/AgentsChanged",
           "approval.requested": "#/$defs/ApprovalRequested",
           "approval.resolved": "#/$defs/ApprovalResolved",
           "attachment.added": "#/$defs/AttachmentAdded",
+          "attachment.data": "#/$defs/AttachmentData",
+          "board.cleared": "#/$defs/BoardCleared",
+          "board.erased": "#/$defs/BoardErased",
+          "board.moved": "#/$defs/BoardMoved",
+          "board.opened": "#/$defs/BoardOpened",
+          "board.stroked": "#/$defs/BoardStroked",
+          "briefing.delivered": "#/$defs/BriefingDelivered",
+          "briefing.imported": "#/$defs/BriefingImported",
+          "briefing.requested": "#/$defs/BriefingRequested",
+          "briefing.resolved": "#/$defs/BriefingResolved",
+          "briefing.sharing_changed": "#/$defs/BriefingSharingChanged",
+          "chat.posted": "#/$defs/ChatPosted",
           "command.invoked": "#/$defs/CommandInvoked",
           "command.replied": "#/$defs/CommandReplied",
           "context.compacted": "#/$defs/ContextCompacted",
@@ -2072,14 +3320,19 @@
           "context.usage": "#/$defs/ContextUsage",
           "error": "#/$defs/ErrorRaised",
           "invite.created": "#/$defs/InviteCreated",
+          "join.requested": "#/$defs/JoinRequested",
+          "join.resolved": "#/$defs/JoinResolved",
+          "link.admission_changed": "#/$defs/AdmissionChanged",
           "mcp.changed": "#/$defs/McpChanged",
           "message.delta": "#/$defs/MessageDelta",
           "message.ended": "#/$defs/MessageEnded",
           "message.started": "#/$defs/MessageStarted",
+          "participant.cursor": "#/$defs/ParticipantCursor",
           "participant.joined": "#/$defs/ParticipantJoined",
           "participant.left": "#/$defs/ParticipantLeft",
           "participant.revoked": "#/$defs/ParticipantRevoked",
           "participant.role_changed": "#/$defs/ParticipantRoleChanged",
+          "participant.selected": "#/$defs/ParticipantSelected",
           "participant.typing": "#/$defs/ParticipantTyping",
           "plugins.changed": "#/$defs/PluginsChanged",
           "policy.rule_added": "#/$defs/PolicyRuleAdded",
@@ -2091,15 +3344,18 @@
           "proposal.rejected": "#/$defs/ProposalRejected",
           "run.ended": "#/$defs/RunEnded",
           "run.started": "#/$defs/RunStarted",
+          "session.pending": "#/$defs/JoinPending",
           "session.permission_mode_changed": "#/$defs/PermissionModeChanged",
           "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
+          "session.refused": "#/$defs/JoinRefused",
           "session.snapshot": "#/$defs/SessionSnapshot",
           "session.welcome": "#/$defs/SessionWelcome",
           "skills.changed": "#/$defs/SkillsChanged",
           "skills.found": "#/$defs/SkillsFound",
           "tool.ended": "#/$defs/ToolEnded",
           "tool.output": "#/$defs/ToolOutput",
-          "tool.started": "#/$defs/ToolStarted"
+          "tool.started": "#/$defs/ToolStarted",
+          "usage.recorded": "#/$defs/UsageRecorded"
         },
         "propertyName": "type"
       },
@@ -2132,10 +3388,73 @@
           "$ref": "#/$defs/AgentChanged"
         },
         {
+          "$ref": "#/$defs/AdmissionChanged"
+        },
+        {
+          "$ref": "#/$defs/JoinRequested"
+        },
+        {
+          "$ref": "#/$defs/JoinResolved"
+        },
+        {
+          "$ref": "#/$defs/AccessRequested"
+        },
+        {
+          "$ref": "#/$defs/AccessResolved"
+        },
+        {
+          "$ref": "#/$defs/BriefingRequested"
+        },
+        {
+          "$ref": "#/$defs/BriefingResolved"
+        },
+        {
+          "$ref": "#/$defs/BriefingDelivered"
+        },
+        {
+          "$ref": "#/$defs/BriefingSharingChanged"
+        },
+        {
+          "$ref": "#/$defs/BriefingImported"
+        },
+        {
+          "$ref": "#/$defs/JoinPending"
+        },
+        {
+          "$ref": "#/$defs/JoinRefused"
+        },
+        {
           "$ref": "#/$defs/PromptDequeued"
         },
         {
           "$ref": "#/$defs/ParticipantTyping"
+        },
+        {
+          "$ref": "#/$defs/ParticipantSelected"
+        },
+        {
+          "$ref": "#/$defs/ParticipantCursor"
+        },
+        {
+          "$ref": "#/$defs/BoardOpened"
+        },
+        {
+          "$ref": "#/$defs/BoardStroked"
+        },
+        {
+          "$ref": "#/$defs/BoardMoved"
+        },
+        {
+          "$ref": "#/$defs/AttachmentData"
+        },
+        {
+          "$ref": "#/$defs/BoardErased"
+        },
+        {
+          "$ref": "#/$defs/BoardCleared"
+        },
+        {
+          "$ref": "#/$defs/ChatPosted"
         },
         {
           "$ref": "#/$defs/ProposalCreated"
@@ -2175,6 +3494,12 @@
         },
         {
           "$ref": "#/$defs/McpChanged"
+        },
+        {
+          "$ref": "#/$defs/UsageRecorded"
+        },
+        {
+          "$ref": "#/$defs/AgentsChanged"
         },
         {
           "$ref": "#/$defs/PluginsChanged"

@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import hashlib
 from collections.abc import AsyncIterator, Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,6 +16,7 @@ from plural.protocol.commands import (
     ApprovalRespond,
     ClientInfo,
     Command,
+    FileAttach,
     ParticipantRevoke,
     PromptSubmit,
     ProposalDecide,
@@ -22,6 +25,7 @@ from plural.protocol.commands import (
 from plural.protocol.envelope import Envelope, ErrorCode, Kind
 from plural.protocol.events import (
     ApprovalRequested,
+    AttachmentAdded,
     Event,
     PromptAccepted,
     ProposalCreated,
@@ -196,3 +200,43 @@ async def test_reconnect_replays_since(host: Host) -> None:
     send(host, again, SessionHello(client=CLIENT, token=host.host_token, since=last_seq))
     await eventually(lambda: any(e.seq and e.seq > last_seq for e in again.sent))
     assert again.first(SessionSnapshot) is None
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+
+async def test_a_pasted_image_reaches_the_model_beside_the_prompt(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    provider = FakeProvider([reply("A tiny image.")])
+    settings = HostSettings(workspace=workspace, data_dir=tmp_path / "data", room="r_test")
+    plural_host = await build_host(settings, provider=provider)
+    task = asyncio.create_task(plural_host.actor.run())
+    try:
+        owner = MemoryConnection("c_host")
+        await connect(plural_host, owner, SessionHello(client=CLIENT, token=plural_host.host_token))
+        content = base64.b64encode(PNG).decode()
+        send(
+            plural_host,
+            owner,
+            FileAttach(
+                name="paste.png", content_b64=content, sha256=hashlib.sha256(PNG).hexdigest()
+            ),
+        )
+        await eventually(lambda: owner.first(AttachmentAdded))
+        added = owner.first(AttachmentAdded)
+        assert added is not None
+
+        send(
+            plural_host,
+            owner,
+            PromptSubmit(text="what is this?", attachments=(added.attachment.id,)),
+        )
+        await eventually(lambda: owner.first(RunEnded))
+        user = provider.requests[0].messages[-1]
+        assert [(image.media_type, image.data) for image in user.images] == [("image/png", content)]
+        assert "[image paste.png, untrusted, attached]" in user.content
+        assert content not in user.content
+    finally:
+        task.cancel()
+        await plural_host.close()

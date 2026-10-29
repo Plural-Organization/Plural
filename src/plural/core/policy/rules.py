@@ -45,7 +45,13 @@ DEFAULT_RULES: Final = RuleSet.from_mapping(
         "web_search": {"*": "ask"},
         "web_fetch": {"*": "ask"},
         "skill": {"*": "allow"},
+        "agent": {"*": "allow"},
         "skill_search": {"*": "allow"},
+        # The board is the room's shared sketch, not the workspace: drawing on it asks no one.
+        "board_view": {"*": "allow"},
+        "board_draw": {"*": "allow"},
+        "board_move": {"*": "allow"},
+        "board_erase": {"*": "allow"},
         "skill_install": {"*": "ask"},
         "write": {"*": "ask"},
         "edit": {"*": "ask"},

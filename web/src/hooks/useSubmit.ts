@@ -1,4 +1,4 @@
-import { label, lastReply, parseSlash, ruleLine, SlashError, type ProposalView } from "@plural/client";
+import { findPerson, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
 import { commandName, helpText, isHostOnly, pluginHints } from "../lib/commands";
 import type { Session } from "./useSession";
@@ -9,9 +9,10 @@ interface Submit {
   onEdited: () => void;
   onLeave: () => void;
   flash: (text: string) => void;
+  onDraw: () => void;
 }
 
-export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit) {
+export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }: Submit) {
   const { projection, feed, send, notify } = session;
   const state = projection.state;
   const isHost = projection.me?.role === "host";
@@ -32,7 +33,28 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
         );
         return true;
       case "invite":
-        send({ type: "invite.create", role: rest[0] === "viewer" ? "viewer" : "participant", ttl_s: 3600 });
+        switch (rest[0]) {
+          case undefined:
+          case "link":
+            send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true });
+            break;
+          case "once":
+            send({ type: "invite.create", role: "participant", ttl_s: 3600 });
+            break;
+          case "viewer":
+            send({ type: "invite.create", role: "viewer", ttl_s: 3600 });
+            break;
+          case "revoke":
+            send({ type: "link.revoke" });
+            break;
+          case "open":
+          case "approve":
+            send({ type: "link.set_admission", mode: rest[0] });
+            notify("accent", rest[0] === "open" ? "the room link lets people in at once" : "you will be asked to let each person in");
+            break;
+          default:
+            notify("warn", "usage: /invite [link | once | viewer | revoke | open | approve]");
+        }
         return true;
       case "copy": {
         const reply = lastReply(feed);
@@ -52,8 +74,54 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
         }
         return true;
       }
+      case "brief": {
+        const [verb, mode] = rest;
+        if (isHost && verb === "share" && ["off", "ask", "team"].includes(mode ?? "")) {
+          send({ type: "session.set_briefing_sharing", mode: mode as "off" | "ask" | "team" });
+        } else if (isHost) {
+          notify("accent", `this session shares briefings: ${state.briefing_sharing} (/brief share off|ask|team)`);
+        } else {
+          notify("warn", "ask for a briefing from the terminal client, plural join @name, then /brief");
+        }
+        return true;
+      }
+      case "access": {
+        const people = mentionable(state, projection.meId);
+        const [verb, ...names] = rest;
+        if (projection.me?.role === "viewer") {
+          send({ type: "access.request", note: rest.join(" ").trim() || null });
+        } else if (!isHost) {
+          notify("warn", "you can already write");
+        } else if (verb === undefined) {
+          const waiting = Object.values(state.access_requests);
+          notify("accent", waiting.length === 0 ? "nobody is asking to write" : waiting.map((ask) => `${ask.name}${ask.note ? `: ${ask.note}` : ""}`).join("\n"));
+        } else {
+          const person = findPerson(names.join(" "), people);
+          if (person === null || !["allow", "deny", "revoke"].includes(verb)) {
+            notify("warn", "usage: /access [allow|deny|revoke <name>]");
+          } else if (verb === "revoke") {
+            send({ type: "participant.set_role", participant_id: person.id, role: "viewer" });
+          } else {
+            send({ type: "access.decide", participant_id: person.id, decision: verb as "allow" | "deny" });
+          }
+        }
+        return true;
+      }
+      case "kick": {
+        const person = findPerson(rest.join(" "), mentionable(state, projection.meId));
+        if (person === null) {
+          notify("warn", "usage: /kick <name> (see /who)");
+        } else {
+          send({ type: "participant.revoke", participant_id: person.id });
+          notify("dim", `${person.label} was removed from the session`);
+        }
+        return true;
+      }
       case "leave":
         onLeave();
+        return true;
+      case "draw":
+        onDraw();
         return true;
       default:
         return false;
@@ -71,6 +139,19 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
     try {
       const parsed = parseSlash(text, new Set(state.commands.map((command) => command.name)));
       if (parsed === null) {
+        return;
+      }
+      if (parsed.type === "show.agents") {
+        const lines = state.agents.map((agent) => `  ${agent.name}  ${agent.role}${agent.read_only ? "  read-only" : ""}  ${agent.description}`);
+        notify("accent", ["agents", ...lines].join("\n"));
+        return;
+      }
+      if (parsed.type === "show.usage") {
+        const lines = state.usage.map(
+          (line) =>
+            `  ${line.role} · ${line.model}  ${line.agent || "conversation"}  ${line.uses}×  in ${line.usage.input_tokens}  out ${line.usage.output_tokens}`,
+        );
+        notify("accent", lines.length > 0 ? ["usage", ...lines].join("\n") : "nothing spent yet in this session");
         return;
       }
       if (parsed.type === "show.plugins") {
@@ -111,10 +192,29 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
     }
   };
 
+  const chat = (text: string): boolean => {
+    try {
+      const intent = parseChat(text, state, projection.meId);
+      if (intent === null) {
+        return false;
+      }
+      send(intent.command);
+    } catch (error) {
+      notify("warn", error instanceof SlashError ? error.message : String(error));
+    }
+    return true;
+  };
+
   return (text: string) => {
+    if (routeOf(text, state, projection.meId).label === "watching") {
+      notify("warn", "you are only watching. /access asks the host for the right to write");
+      return;
+    }
     if (editing) {
       send({ type: "proposal.decide", proposal_id: editing.id, decision: "approve", edited_text: text });
       onEdited();
+    } else if (chat(text)) {
+      return;
     } else if (text.startsWith("/")) {
       slash(text);
     } else {

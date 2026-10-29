@@ -22,6 +22,10 @@ export class FakeSession implements Session {
     this.sent.push(command);
   }
 
+  get isClosed(): boolean {
+    return this.closed;
+  }
+
   close(): void {
     this.closed = true;
     this.wake?.();

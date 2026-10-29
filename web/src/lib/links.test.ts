@@ -27,3 +27,10 @@ test("a https page cannot open a plain ws link", () => {
   expect(blockedByMixedContent(INVITE, "http:")).toBe(false);
   expect(blockedByMixedContent("wss://relay.example.com/r_1", "https:")).toBe(false);
 });
+
+test("a room link with its own join code goes through the browser link and comes back whole", () => {
+  const room = "wss://abc.ngrok-free.app/r_01ABC?join=CODE_123-xyz";
+  const page = browserJoinLink(room, { origin: "https://plural.example", pathname: "/" });
+  expect(unwrapLink(page)).toBe(room);
+  expect(unwrapLink(`plural join "${room}"`)).toBe(room);
+});

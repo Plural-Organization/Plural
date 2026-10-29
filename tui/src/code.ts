@@ -53,6 +53,12 @@ export function chunks(code: string, language: string | undefined): TextChunk[] 
   return result;
 }
 
+let handler: (text: string) => void = () => undefined;
+
+export function onCodeCopy(next: (text: string) => void): void {
+  handler = next;
+}
+
 export function codeBlockRenderer(context: RenderContext): MarkdownOptions["renderNode"] {
   return (token) => {
     if (token.type !== "code") {
@@ -68,10 +74,19 @@ export function codeBlockRenderer(context: RenderContext): MarkdownOptions["rend
       title: language,
       titleColor: theme.dim,
     });
+    const code = String(token.text).replace(/\n$/, "");
     box.add(
       new TextRenderable(context, {
-        content: new StyledText(chunks(String(token.text), language)),
+        content: new StyledText(chunks(code, language)),
         wrapMode: "char",
+      }),
+    );
+    box.add(
+      new TextRenderable(context, {
+        content: "copy",
+        fg: theme.dim,
+        alignSelf: "flex-end",
+        onMouseDown: () => handler(code),
       }),
     );
     return box;

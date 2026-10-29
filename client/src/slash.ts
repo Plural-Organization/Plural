@@ -18,6 +18,8 @@ export type Slash =
   | { type: "show.policy" }
   | { type: "show.skills" }
   | { type: "show.mcp" }
+  | { type: "show.agents" }
+  | { type: "show.usage" }
   | { type: "show.plugins" };
 
 /** `plugins` names the commands the host's plugins provide; they are sent to the host as `command.run`. */
@@ -42,6 +44,18 @@ export function parseSlash(text: string, plugins: ReadonlySet<string> = new Set(
       return skills(argument);
     case "mcp":
       return mcp(argument);
+    case "usage":
+      return { type: "show.usage" };
+    case "agents": {
+      const [verb, name] = argument.split(/\s+/).filter(Boolean);
+      if (verb === undefined) {
+        return { type: "show.agents" };
+      }
+      if (verb === "rm" && name) {
+        return { type: "agents.remove", name };
+      }
+      throw new SlashError("usage: /agents | /agents rm <name>");
+    }
     case "plugins":
       return pluginsCommand(argument);
     default:

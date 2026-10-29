@@ -1,5 +1,142 @@
 {
   "$defs": {
+    "AccessDecide": {
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow",
+            "deny"
+          ],
+          "type": "string"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "access.decide",
+          "default": "access.decide",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "AccessRequest": {
+      "properties": {
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "access.request",
+          "default": "access.request",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "AdmissionMode": {
+      "enum": [
+        "approve",
+        "open"
+      ],
+      "type": "string"
+    },
+    "AdmissionSet": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/AdmissionMode"
+        },
+        "type": {
+          "const": "link.set_admission",
+          "default": "link.set_admission",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "AgentsCreate": {
+      "properties": {
+        "description": {
+          "maxLength": 300,
+          "minLength": 1,
+          "type": "string"
+        },
+        "model": {
+          "default": "fast",
+          "enum": [
+            "fast",
+            "main"
+          ],
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "prompt": {
+          "maxLength": 8000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/SkillScope",
+          "default": "project"
+        },
+        "tools": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "agents.create",
+          "default": "agents.create",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "prompt"
+      ],
+      "type": "object"
+    },
+    "AgentsRemove": {
+      "properties": {
+        "name": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "agents.remove",
+          "default": "agents.remove",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "ApprovalDecision": {
       "enum": [
         "once",
@@ -26,6 +163,370 @@
       "required": [
         "approval_id",
         "decision"
+      ],
+      "type": "object"
+    },
+    "AttachmentFetch": {
+      "description": "Asks for the picture of an image on the board; only those are handed out.",
+      "properties": {
+        "attachment_id": {
+          "maxLength": 64,
+          "type": "string"
+        },
+        "type": {
+          "const": "attachment.fetch",
+          "default": "attachment.fetch",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachment_id"
+      ],
+      "type": "object"
+    },
+    "BoardClear": {
+      "description": "Clears the board; with mine, only the sender's own marks, which anyone who draws may do.",
+      "properties": {
+        "mine": {
+          "default": false,
+          "type": "boolean"
+        },
+        "type": {
+          "const": "board.clear",
+          "default": "board.clear",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "BoardCursor": {
+      "description": "Where someone points on the board; with ink, the pen is down and draws.",
+      "properties": {
+        "color": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ink": {
+          "default": false,
+          "type": "boolean"
+        },
+        "width": {
+          "anyOf": [
+            {
+              "maximum": 40,
+              "minimum": 0.5,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "x": {
+          "maximum": 20,
+          "minimum": -20,
+          "type": "number"
+        },
+        "y": {
+          "maximum": 20,
+          "minimum": -20,
+          "type": "number"
+        }
+      },
+      "required": [
+        "x",
+        "y"
+      ],
+      "type": "object"
+    },
+    "BoardDraw": {
+      "properties": {
+        "color": {
+          "pattern": "^#[0-9a-fA-F]{6}$",
+          "type": "string"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "kind": {
+          "$ref": "#/$defs/BoardShape",
+          "default": "pen"
+        },
+        "points": {
+          "items": {
+            "maximum": 20,
+            "minimum": -20,
+            "type": "number"
+          },
+          "maxItems": 4000,
+          "minItems": 2,
+          "type": "array"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "board.draw",
+          "default": "board.draw",
+          "type": "string"
+        },
+        "width": {
+          "maximum": 40,
+          "minimum": 0.5,
+          "type": "number"
+        }
+      },
+      "required": [
+        "color",
+        "width",
+        "points"
+      ],
+      "type": "object"
+    },
+    "BoardErase": {
+      "properties": {
+        "stroke_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "board.erase",
+          "default": "board.erase",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stroke_id"
+      ],
+      "type": "object"
+    },
+    "BoardMove": {
+      "description": "Moves or resizes a mark: its points, the same kind and count as before.",
+      "properties": {
+        "points": {
+          "items": {
+            "maximum": 20,
+            "minimum": -20,
+            "type": "number"
+          },
+          "maxItems": 4000,
+          "minItems": 2,
+          "type": "array"
+        },
+        "stroke_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "board.move",
+          "default": "board.move",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stroke_id",
+        "points"
+      ],
+      "type": "object"
+    },
+    "BoardOpen": {
+      "properties": {
+        "open": {
+          "type": "boolean"
+        },
+        "type": {
+          "const": "board.open",
+          "default": "board.open",
+          "type": "string"
+        }
+      },
+      "required": [
+        "open"
+      ],
+      "type": "object"
+    },
+    "BoardShape": {
+      "enum": [
+        "pen",
+        "line",
+        "arrow",
+        "rect",
+        "ellipse",
+        "text",
+        "image",
+        "erase"
+      ],
+      "type": "string"
+    },
+    "BriefingDecide": {
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow",
+            "deny"
+          ],
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "briefing.decide",
+          "default": "briefing.decide",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "BriefingImport": {
+      "properties": {
+        "as_of_seq": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source": {
+          "pattern": "^\\w[\\w .@#-]{0,79}$",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "briefing.import",
+          "default": "briefing.import",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "text"
+      ],
+      "type": "object"
+    },
+    "BriefingRequest": {
+      "properties": {
+        "focus": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "briefing.request",
+          "default": "briefing.request",
+          "type": "string"
+        },
+        "update": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "BriefingSharing": {
+      "enum": [
+        "off",
+        "ask",
+        "team"
+      ],
+      "type": "string"
+    },
+    "BriefingSharingSet": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/BriefingSharing"
+        },
+        "type": {
+          "const": "session.set_briefing_sharing",
+          "default": "session.set_briefing_sharing",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
+    "ChatSend": {
+      "properties": {
+        "mentions": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "text": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "type": "string"
+        },
+        "to": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "chat.send",
+          "default": "chat.send",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
       ],
       "type": "object"
     },
@@ -75,6 +576,29 @@
           "type": "string"
         }
       },
+      "type": "object"
+    },
+    "CursorSet": {
+      "properties": {
+        "cursor": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BoardCursor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "presence.cursor",
+          "default": "presence.cursor",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cursor"
+      ],
       "type": "object"
     },
     "Delivery": {
@@ -142,6 +666,10 @@
     },
     "InviteCreate": {
       "properties": {
+        "reusable": {
+          "default": false,
+          "type": "boolean"
+        },
         "role": {
           "$ref": "#/$defs/Role",
           "default": "participant"
@@ -155,6 +683,41 @@
         "type": {
           "const": "invite.create",
           "default": "invite.create",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "JoinDecide": {
+      "properties": {
+        "decision": {
+          "enum": [
+            "allow",
+            "viewer",
+            "deny"
+          ],
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "join.decide",
+          "default": "join.decide",
+          "type": "string"
+        }
+      },
+      "required": [
+        "request_id",
+        "decision"
+      ],
+      "type": "object"
+    },
+    "LinkRevoke": {
+      "properties": {
+        "type": {
+          "const": "link.revoke",
+          "default": "link.revoke",
           "type": "string"
         }
       },
@@ -561,12 +1124,46 @@
       },
       "type": "object"
     },
+    "SelectionSet": {
+      "properties": {
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TextSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "presence.select",
+          "default": "presence.select",
+          "type": "string"
+        }
+      },
+      "required": [
+        "selection"
+      ],
+      "type": "object"
+    },
     "SessionHello": {
       "properties": {
         "client": {
           "$ref": "#/$defs/ClientInfo"
         },
         "invite": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "join": {
           "anyOf": [
             {
               "type": "string"
@@ -595,6 +1192,17 @@
             {
               "minimum": 0,
               "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "team": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeamProof"
             },
             {
               "type": "null"
@@ -689,6 +1297,68 @@
       ],
       "type": "object"
     },
+    "TeamProof": {
+      "properties": {
+        "certificate": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        "nonce": {
+          "maxLength": 64,
+          "minLength": 8,
+          "type": "string"
+        },
+        "proof": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "ts": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "url": {
+          "maxLength": 300,
+          "minLength": 8,
+          "type": "string"
+        }
+      },
+      "required": [
+        "certificate",
+        "url",
+        "ts",
+        "nonce",
+        "proof"
+      ],
+      "type": "object"
+    },
+    "TextSelection": {
+      "description": "Text someone has selected, as offsets into the text of one item on screen.\n\nThe anchor names the item (a feed entry or a canvas document); every client lays\nout the same items, so the offsets point at the same words for everyone.",
+      "properties": {
+        "anchor": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "end": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "start": {
+          "maximum": 1000000,
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "anchor",
+        "start",
+        "end"
+      ],
+      "type": "object"
+    },
     "TypingSet": {
       "properties": {
         "type": {
@@ -710,12 +1380,29 @@
     "command": {
       "discriminator": {
         "mapping": {
+          "access.decide": "#/$defs/AccessDecide",
+          "access.request": "#/$defs/AccessRequest",
+          "agents.create": "#/$defs/AgentsCreate",
+          "agents.remove": "#/$defs/AgentsRemove",
           "approval.respond": "#/$defs/ApprovalRespond",
+          "attachment.fetch": "#/$defs/AttachmentFetch",
+          "board.clear": "#/$defs/BoardClear",
+          "board.draw": "#/$defs/BoardDraw",
+          "board.erase": "#/$defs/BoardErase",
+          "board.move": "#/$defs/BoardMove",
+          "board.open": "#/$defs/BoardOpen",
+          "briefing.decide": "#/$defs/BriefingDecide",
+          "briefing.import": "#/$defs/BriefingImport",
+          "briefing.request": "#/$defs/BriefingRequest",
+          "chat.send": "#/$defs/ChatSend",
           "command.run": "#/$defs/CommandRun",
           "context.compact": "#/$defs/ContextCompact",
           "file.attach": "#/$defs/FileAttach",
           "history.get": "#/$defs/HistoryGet",
           "invite.create": "#/$defs/InviteCreate",
+          "join.decide": "#/$defs/JoinDecide",
+          "link.revoke": "#/$defs/LinkRevoke",
+          "link.set_admission": "#/$defs/AdmissionSet",
           "mcp.add": "#/$defs/McpAdd",
           "mcp.import": "#/$defs/McpImport",
           "mcp.remove": "#/$defs/McpRemove",
@@ -727,12 +1414,15 @@
           "plugins.reload": "#/$defs/PluginsReload",
           "policy.add": "#/$defs/PolicyAdd",
           "policy.remove": "#/$defs/PolicyRemove",
+          "presence.cursor": "#/$defs/CursorSet",
+          "presence.select": "#/$defs/SelectionSet",
           "presence.typing": "#/$defs/TypingSet",
           "prompt.submit": "#/$defs/PromptSubmit",
           "proposal.decide": "#/$defs/ProposalDecide",
           "queue.cancel": "#/$defs/QueueCancel",
           "run.abort": "#/$defs/RunAbort",
           "session.hello": "#/$defs/SessionHello",
+          "session.set_briefing_sharing": "#/$defs/BriefingSharingSet",
           "session.set_permission_mode": "#/$defs/PermissionModeSet",
           "session.set_prompt_mode": "#/$defs/PromptModeSet",
           "skills.install": "#/$defs/SkillsInstall",
@@ -752,6 +1442,9 @@
           "$ref": "#/$defs/PromptSubmit"
         },
         {
+          "$ref": "#/$defs/ChatSend"
+        },
+        {
           "$ref": "#/$defs/ProposalDecide"
         },
         {
@@ -762,6 +1455,33 @@
         },
         {
           "$ref": "#/$defs/InviteCreate"
+        },
+        {
+          "$ref": "#/$defs/JoinDecide"
+        },
+        {
+          "$ref": "#/$defs/AccessRequest"
+        },
+        {
+          "$ref": "#/$defs/AccessDecide"
+        },
+        {
+          "$ref": "#/$defs/BriefingRequest"
+        },
+        {
+          "$ref": "#/$defs/BriefingDecide"
+        },
+        {
+          "$ref": "#/$defs/BriefingSharingSet"
+        },
+        {
+          "$ref": "#/$defs/BriefingImport"
+        },
+        {
+          "$ref": "#/$defs/LinkRevoke"
+        },
+        {
+          "$ref": "#/$defs/AdmissionSet"
         },
         {
           "$ref": "#/$defs/ParticipantSetRole"
@@ -803,6 +1523,12 @@
           "$ref": "#/$defs/McpImport"
         },
         {
+          "$ref": "#/$defs/AgentsCreate"
+        },
+        {
+          "$ref": "#/$defs/AgentsRemove"
+        },
+        {
           "$ref": "#/$defs/CommandRun"
         },
         {
@@ -813,6 +1539,30 @@
         },
         {
           "$ref": "#/$defs/TypingSet"
+        },
+        {
+          "$ref": "#/$defs/SelectionSet"
+        },
+        {
+          "$ref": "#/$defs/CursorSet"
+        },
+        {
+          "$ref": "#/$defs/BoardOpen"
+        },
+        {
+          "$ref": "#/$defs/BoardDraw"
+        },
+        {
+          "$ref": "#/$defs/BoardMove"
+        },
+        {
+          "$ref": "#/$defs/AttachmentFetch"
+        },
+        {
+          "$ref": "#/$defs/BoardErase"
+        },
+        {
+          "$ref": "#/$defs/BoardClear"
         },
         {
           "$ref": "#/$defs/QueueCancel"

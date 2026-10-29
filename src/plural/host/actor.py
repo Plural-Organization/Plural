@@ -2,17 +2,24 @@ import asyncio
 import base64
 import binascii
 import hashlib
+import json
 from collections.abc import Coroutine, Sequence
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import PurePath
 
 import structlog
 from pydantic import ValidationError
 
 from plural.agent import events as agent
+from plural.agent.agents import AgentError, AgentLibrary, AgentSpec, agent_tools
+from plural.agent.loop import BriefingFailed
 from plural.agent.mcp import McpError, McpHub, ServerSpec
-from plural.agent.messages import Message, UserTurn
+from plural.agent.messages import Message, NotesTurn, UserTurn
+from plural.agent.providers.base import LlmImage
 from plural.agent.skills import Package, SkillError, SkillLibrary, parse_package
-from plural.core import approvals, policies, proposals
+from plural.agent.tools.board import AGENT_AUTHOR, BoardRefused
+from plural.core import access, approvals, briefings, chat, joins, policies, proposals, visibility
 from plural.core.errors import (
     Conflict,
     DomainError,
@@ -28,39 +35,70 @@ from plural.core.state import reduce
 from plural.host import history
 from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
-from plural.host.attachments import AttachmentVault
-from plural.host.gateway import Gateway
+from plural.host.attachments import AttachmentVault, image_type
+from plural.host.briefing import BriefingService
+from plural.host.conflicts import ConflictBoard
+from plural.host.gateway import Admission, Gateway, NeedsApproval
 from plural.host.inbox import (
     AgentOutput,
     ApprovalExpired,
     ApprovalNeeded,
+    BoardRequest,
+    BriefingReady,
     Disconnected,
     Inbox,
     InboxMessage,
     Incoming,
+    JoinExpired,
     McpUpdated,
     PluginPrompt,
     PluginReply,
     Reconfigure,
     SkillsReply,
     SkillsUpdated,
+    TeamSweep,
     TypingExpired,
 )
-from plural.host.invites import InviteBook
+from plural.host.invites import InviteBook, RoomLink
+from plural.host.ledger import ChangeLedger
 from plural.host.plugins import CommandContext, PluginCommand, PluginError, PluginHost
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.publisher import Publisher
+from plural.host.team_admission import (
+    TeamAdmission,
+    member_id_of,
+    participant_id_of,
+)
 from plural.host.transport.base import Connection
 from plural.protocol.codec import ProtocolError, decode_command
 from plural.protocol.commands import (
     MAX_PROMPT_CHARS,
+    AccessDecide,
+    AccessRequest,
+    AdmissionSet,
+    AgentsCreate,
+    AgentsRemove,
     ApprovalRespond,
+    AttachmentFetch,
+    BoardClear,
+    BoardDraw,
+    BoardErase,
+    BoardMove,
+    BoardOpen,
+    BriefingDecide,
+    BriefingImport,
+    BriefingRequest,
+    BriefingSharingSet,
+    ChatSend,
     Command,
     CommandRun,
     ContextCompact,
+    CursorSet,
     FileAttach,
     HistoryGet,
     InviteCreate,
+    JoinDecide,
+    LinkRevoke,
     McpAdd,
     McpImport,
     McpRemove,
@@ -78,17 +116,30 @@ from plural.protocol.commands import (
     ProposalDecide,
     QueueCancel,
     RunAbort,
+    SelectionSet,
     SessionHello,
     SkillsInstall,
     SkillsRemove,
     SkillsSearch,
+    TeamProof,
     TypingSet,
 )
 from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo
 from plural.protocol.events import (
     AgentChanged,
+    AgentsChanged,
     ApprovalRequested,
     AttachmentAdded,
+    AttachmentData,
+    BoardCleared,
+    BoardErased,
+    BoardMoved,
+    BoardOpened,
+    BoardStroked,
+    BriefingDelivered,
+    BriefingImported,
+    BriefingResolved,
+    BriefingSharingChanged,
     CommandInvoked,
     CommandReplied,
     ContextCompacted,
@@ -98,14 +149,18 @@ from plural.protocol.events import (
     Event,
     EventRecord,
     InviteCreated,
+    JoinPending,
+    JoinRefused,
     McpChanged,
     MessageDelta,
     MessageEnded,
     MessageStarted,
+    ParticipantCursor,
     ParticipantJoined,
     ParticipantLeft,
     ParticipantRevoked,
     ParticipantRoleChanged,
+    ParticipantSelected,
     ParticipantTyping,
     PermissionModeChanged,
     PluginsChanged,
@@ -124,15 +179,26 @@ from plural.protocol.events import (
     ToolEnded,
     ToolOutput,
     ToolStarted,
+    UsageRecorded,
 )
 from plural.protocol.models import (
+    BOARD_DECIMALS,
     Actor,
     ActorKind,
+    AdmissionMode,
     ApprovalDecision,
     AttachmentMeta,
+    BoardShape,
+    BoardStroke,
+    BoardView,
+    BriefingDecision,
+    BriefingImportView,
+    BriefingRequestView,
+    BriefingSharing,
     ContextView,
     Delivery,
     DequeueReason,
+    JoinDecision,
     Participant,
     PermissionMode,
     PromptMode,
@@ -142,6 +208,7 @@ from plural.protocol.models import (
     SessionState,
     SkillScope,
     Usage,
+    UsageLine,
 )
 from plural.security.secrets import Redactor, is_denied_path
 
@@ -154,6 +221,24 @@ PLAN_NOTE = (
 MAX_REPLY_CHARS = 8000
 
 
+def _check_points(kind: BoardShape, points: tuple[float, ...]) -> None:
+    """A pen or an eraser needs whole points, a text one point, a shape or an image two corners."""
+    if len(points) % 2 != 0:
+        raise Invalid("a stroke needs x and y for every point")
+    if kind is BoardShape.TEXT and len(points) != 2:
+        raise Invalid("a text needs one point")
+    if kind not in (BoardShape.PEN, BoardShape.ERASE, BoardShape.TEXT) and len(points) != 4:
+        raise Invalid("a shape needs its two corners")
+
+
+@dataclass(slots=True)
+class Knock:
+    request_id: str
+    connection: Connection
+    name: str
+    timer: asyncio.TimerHandle
+
+
 class SessionActor:
     def __init__(
         self,
@@ -163,6 +248,7 @@ class SessionActor:
         publisher: Publisher,
         gateway: Gateway,
         invites: InviteBook,
+        link: RoomLink,
         agent_run: AgentRun,
         approval_registry: ApprovalRegistry,
         gate: HostPolicyGate,
@@ -172,18 +258,42 @@ class SessionActor:
         clock: Clock,
         host: Participant,
         max_attachment_bytes: int,
+        max_image_bytes: int,
         prompt_mode: PromptMode | None = None,
+        admission: AdmissionMode | None = None,
         skills: SkillLibrary | None = None,
         mcp: McpHub | None = None,
+        agents: AgentLibrary | None = None,
         plugins: PluginHost | None = None,
         typing_ttl_s: float = 6.0,
         agent_label: str = "",
+        fast_label: str = "",
+        join_timeout_s: float = 120.0,
+        max_pending_joins: int = 5,
+        max_participants: int = 20,
+        team: TeamAdmission | None = None,
+        conflicts: ConflictBoard | None = None,
+        briefing: BriefingService | None = None,
+        ledger: ChangeLedger | None = None,
+        team_sweep_s: float = 30.0,
     ) -> None:
+        self._team_sweep_s = team_sweep_s
+        self._briefing = briefing
+        self._ledger = ledger
+        self._briefing_at: dict[str, datetime] = {}
+        self._team = team
+        self._conflicts = conflicts
+        self._access_denied: dict[str, datetime] = {}
         self._inbox = inbox
         self._store = store
         self._publisher = publisher
         self._gateway = gateway
         self._invites = invites
+        self._link = link
+        self._join_timeout_s = join_timeout_s
+        self._max_pending_joins = max_pending_joins
+        self._max_participants = max_participants
+        self._knocking: dict[str, Knock] = {}
         self._agent = agent_run
         self._registry = approval_registry
         self._gate = gate
@@ -193,14 +303,20 @@ class SessionActor:
         self._clock = clock
         self._host = host
         self._max_attachment_bytes = max_attachment_bytes
+        self._max_image_bytes = max_image_bytes
         self._initial_mode = prompt_mode
+        self._initial_admission = admission
         self._skills = skills
         self._mcp = mcp
+        self._agents = agents
         self._plugins = plugins
         self._jobs: set[asyncio.Task[None]] = set()
         self._typing_ttl_s = typing_ttl_s
         self._agent_label = agent_label
+        self._fast_label = fast_label
         self._typing: dict[str, asyncio.TimerHandle] = {}
+        self._selecting: set[str] = set()
+        self._pointing: set[str] = set()
         self._state = SessionState()
         self._streaming: dict[str, str] = {}
         self._timers: dict[str, asyncio.TimerHandle] = {}
@@ -216,8 +332,23 @@ class SessionActor:
         self._sync_policy()
         if conversation := await self._history(records):
             self._agent.restore(conversation)
+        if self._state.briefings_imported:
+            self._agent.mark_shared()
+        if self._ledger is not None:
+            for record in records:
+                self._ledger.observe(record.event)
+        for stale in list(self._state.briefing_requests.values()):
+            await self._emit(
+                BriefingResolved(
+                    request_id=stale.id,
+                    participant_id=stale.participant_id,
+                    decision=BriefingDecision.DENIED,
+                )
+            )
         for resolved in approvals.abandon_all(self._state):
             await self._emit(resolved)
+        for left_waiting in joins.abandon_all(self._state, JoinDecision.EXPIRED):
+            await self._emit(left_waiting)
         if self._state.run is not None:
             await self._emit(
                 RunEnded(
@@ -233,27 +364,58 @@ class SessionActor:
                 await self._emit(ParticipantLeft(participant_id=participant.id))
         if self._host.id not in self._state.participants:
             await self._emit(ParticipantJoined(participant=self._host), actor_id=self._host.id)
-        if self._agent_label and self._state.agent != self._agent_label:
-            await self._emit(AgentChanged(agent=self._agent_label), actor_id=self._host.id)
+        if self._agent_label and (
+            self._state.agent != self._agent_label or self._state.fast_agent != self._fast_label
+        ):
+            await self._emit(
+                AgentChanged(agent=self._agent_label, fast=self._fast_label), actor_id=self._host.id
+            )
         if self._initial_mode is not None:
             await self._set_prompt_mode(self._initial_mode, actor_id=self._host.id)
+        if self._initial_admission is not None:
+            changed = joins.set_admission(self._state, self._initial_admission)
+            if changed is not None:
+                await self._emit(changed, actor_id=self._host.id)
         await self._set_permission_mode(PermissionMode.DEFAULT, actor_id=self._host.id)
         if self._skills is not None:
             await self._skills.refresh()
             await self._sync_skills()
         await self._sync_context(self._agent.fill())
         await self._sync_mcp()
+        await self._sync_agents()
         if self._plugins is not None:
             await asyncio.to_thread(self._plugins.load)
             await self._sync_plugins()
 
     async def run(self) -> None:
+        sweeper = asyncio.create_task(self._sweep_team_loop()) if self._team else None
+        try:
+            while True:
+                message = await self._inbox.get()
+                try:
+                    await self._handle(message)
+                except Exception:
+                    log.exception("actor.message_failed", message=type(message).__name__)
+        finally:
+            if sweeper is not None:
+                sweeper.cancel()
+
+    async def _sweep_team_loop(self) -> None:
         while True:
-            message = await self._inbox.get()
-            try:
-                await self._handle(message)
-            except Exception:
-                log.exception("actor.message_failed", message=type(message).__name__)
+            await asyncio.sleep(self._team_sweep_s)
+            self._inbox.put(TeamSweep())
+
+    async def _sweep_team(self) -> None:
+        if self._team is None:
+            return
+        for person in list(self._state.participants.values()):
+            member = member_id_of(person.id)
+            if member is None or not person.connected:
+                continue
+            if await self._team.still_member(member):
+                continue
+            await self._emit(ParticipantRevoked(participant_id=person.id))
+            self._publisher.disconnect(person.id, "you are no longer in the team")
 
     async def _handle(self, message: InboxMessage) -> None:
         match message:
@@ -264,10 +426,26 @@ class SessionActor:
             case AgentOutput(run_id=run_id, event=event):
                 await self._on_agent(run_id, event)
             case ApprovalNeeded(approval=approval):
+                if self._conflicts is not None:
+                    warnings = self._conflicts.warnings_for(approval.call, self._clock.now())
+                    approval = approval.model_copy(update={"warnings": warnings})
                 await self._emit(ApprovalRequested(approval=approval))
                 delay = max((approval.timeout_at - self._clock.now()).total_seconds(), 0)
                 self._timers[approval.id] = asyncio.get_running_loop().call_later(
                     delay, self._inbox.put, ApprovalExpired(approval.id)
+                )
+            case TeamSweep():
+                await self._sweep_team()
+            case BriefingReady(request=ask, text=text, as_of_seq=as_of, error=error):
+                await self._emit(
+                    BriefingDelivered(
+                        request_id=ask.id,
+                        to=ask.participant_id,
+                        text=text,
+                        as_of_seq=as_of,
+                        update=ask.update,
+                        error=error,
+                    )
                 )
             case Reconfigure() as change:
                 await self._reconfigure(change)
@@ -279,11 +457,18 @@ class SessionActor:
                     self._publisher.deliver(
                         connection, ErrorRaised(code=ErrorCode.INVALID, message=error)
                     )
+            case BoardRequest(command=command, reply=reply):
+                try:
+                    reply.set_result(await self._board(command, AGENT_AUTHOR, privileged=True))
+                except DomainError as error:
+                    reply.set_exception(BoardRefused(str(error)))
             case SkillsReply(connection=connection, event=found, error=error):
                 self._publisher.deliver(
                     connection,
                     found or ErrorRaised(code=ErrorCode.INVALID, message=error or "search failed"),
                 )
+            case JoinExpired(request_id=request_id):
+                await self._expire_join(request_id)
             case PluginReply(command=command, invoker_id=invoker_id, text=text, ok=ok):
                 replied = CommandReplied(
                     command=command,
@@ -329,6 +514,16 @@ class SessionActor:
                     self._publisher.deliver_record(connection, record)
             case PromptSubmit():
                 await self._submit(participant, command)
+            case ChatSend():
+                await self._emit(
+                    chat.post(
+                        self._state,
+                        message_id=self._ids.new("c_"),
+                        author=participant,
+                        command=command,
+                    ),
+                    actor_id=participant.id,
+                )
             case ProposalDecide():
                 await self._decide(participant, command)
             case ApprovalRespond():
@@ -375,6 +570,8 @@ class SessionActor:
                 await self._set_prompt_mode(command.mode, actor_id=participant.id)
             case PermissionModeSet():
                 await self._set_permission_mode(command.mode, actor_id=participant.id)
+            case AgentsCreate() | AgentsRemove():
+                await self._agents_command(command, actor_id=participant.id)
             case McpAdd() | McpRemove() | McpToggle() | McpRestart() | McpImport():
                 await self._mcp_command(command, actor_id=participant.id)
             case SkillsSearch():
@@ -406,6 +603,34 @@ class SessionActor:
                 await self._sync_plugins(actor_id=participant.id)
             case TypingSet():
                 await self._set_typing(participant.id, typing=command.typing)
+            case SelectionSet():
+                await self._set_selection(participant.id, command)
+            case CursorSet():
+                await self._set_cursor(participant.id, command)
+            case BoardOpen() | BoardDraw() | BoardMove():
+                await self._board(command, participant.id, privileged=participant.role is Role.HOST)
+            case AttachmentFetch():
+                if not any(s.image == command.attachment_id for s in self._state.board.strokes):
+                    raise NotFound("no such picture on the board")
+                data = await self._vault.read(command.attachment_id)
+                self._publisher.deliver(
+                    connection,
+                    AttachmentData(
+                        attachment_id=command.attachment_id,
+                        media_type=image_type(data) or "application/octet-stream",
+                        content_b64=base64.b64encode(data).decode(),
+                    ),
+                )
+            case BoardErase():
+                await self._board(command, participant.id, privileged=participant.role is Role.HOST)
+            case BoardClear():
+                if not command.mine and participant.role is not Role.HOST:
+                    raise Forbidden("only the host clears the whole board")
+                author = participant.id if command.mine else None
+                if any(author in (None, s.author_id) for s in self._state.board.strokes):
+                    await self._emit(
+                        BoardCleared(by=participant.id, author_id=author), actor_id=participant.id
+                    )
             case QueueCancel():
                 await self._cancel_queued(participant, command)
             case PolicyAdd():
@@ -424,6 +649,9 @@ class SessionActor:
             case InviteCreate():
                 if command.role is Role.HOST:
                     raise Invalid("cannot invite another host")
+                if command.reusable:
+                    self._publisher.deliver(connection, self._room_link_event())
+                    return
                 invite = self._invites.create(command.role, command.ttl_s)
                 self._publisher.deliver(
                     connection,
@@ -434,6 +662,63 @@ class SessionActor:
                         link=invite.link,
                     ),
                 )
+            case BriefingRequest():
+                asked = briefings.request(
+                    self._state,
+                    participant,
+                    command.focus,
+                    command.update,
+                    request_id=self._ids.new("b_"),
+                    now=self._clock.now(),
+                    limit=self._max_pending_joins,
+                    last_at=self._briefing_at,
+                )
+                await self._emit(asked, actor_id=participant.id)
+                if self._state.briefing_sharing is BriefingSharing.TEAM:
+                    await self._grant_briefing(asked.request, decided_by=None)
+            case BriefingDecide():
+                allow = command.decision == "allow"
+                waiting = self._state.briefing_requests.get(command.request_id)
+                answer = briefings.decide(self._state, command.request_id, allow, participant.id)
+                await self._emit(answer, actor_id=participant.id)
+                if allow and waiting is not None:
+                    self._start_briefing(waiting)
+            case BriefingSharingSet():
+                if command.mode is not self._state.briefing_sharing:
+                    await self._emit(
+                        BriefingSharingChanged(mode=command.mode), actor_id=participant.id
+                    )
+            case BriefingImport():
+                await self._import_briefing(participant, command)
+            case AccessRequest():
+                await self._emit(
+                    access.request(
+                        self._state,
+                        participant,
+                        command.note,
+                        now=self._clock.now(),
+                        limit=self._max_pending_joins,
+                        denied_at=self._access_denied,
+                    ),
+                    actor_id=participant.id,
+                )
+            case AccessDecide():
+                allow = command.decision == "allow"
+                for event in access.decide(
+                    self._state, command.participant_id, allow, participant.id
+                ):
+                    await self._emit(event, actor_id=participant.id)
+                if not allow:
+                    self._access_denied[command.participant_id] = self._clock.now()
+            case JoinDecide():
+                await self._decide_join(participant, command)
+            case LinkRevoke():
+                await self._revoke_link(participant)
+                self._publisher.deliver(connection, self._room_link_event())
+            case AdmissionSet():
+                changed = joins.set_admission(self._state, command.mode)
+                if changed is not None:
+                    await self._emit(changed, actor_id=participant.id)
             case ParticipantSetRole():
                 self._require_guest(command.participant_id)
                 await self._emit(
@@ -448,14 +733,47 @@ class SessionActor:
                     ParticipantRevoked(participant_id=command.participant_id),
                     actor_id=participant.id,
                 )
+                await self._ban_team_member(command.participant_id)
                 self._publisher.disconnect(command.participant_id, "access revoked")
             case FileAttach():
                 await self._attach(participant, command)
 
     async def _hello(self, connection: Connection, hello: SessionHello) -> None:
-        admission = self._gateway.admit(hello, self._state)
+        if hello.team is not None:
+            admission = await self._admit_team(hello.team)
+        else:
+            admission = self._gateway.admit(hello, self._state)
+            if isinstance(admission, Admission):
+                await self._recheck_team(admission.participant)
+        if isinstance(admission, NeedsApproval):
+            await self._knock(connection, admission)
+            return
+        await self._welcome(connection, admission, since=hello.since)
+
+    async def _admit_team(self, proof: TeamProof) -> Admission:
+        if self._team is None:
+            raise Forbidden("this session is not shared with a team")
+        member = await self._team.admit(proof, self._publisher.room)
+        participant = Participant(
+            id=participant_id_of(member.id), name=member.name, role=Role.VIEWER
+        )
+        return Admission(participant, self._gateway.issue(participant))
+
+    async def _recheck_team(self, participant: Participant) -> None:
+        member = member_id_of(participant.id)
+        if member is None:
+            return
+        if self._team is None or not await self._team.still_member(member):
+            raise Unauthorized("access revoked")
+
+    async def _welcome(
+        self, connection: Connection, admission: Admission, *, since: int | None
+    ) -> None:
         participant_id = admission.participant.id
-        known = self._state.participants.get(participant_id, admission.participant)
+        known = self._state.participants.get(participant_id)
+        if known is None and self._connected() >= self._max_participants:
+            raise Forbidden("the room is full")
+        known = known or admission.participant
         if not known.connected:
             joined = known.model_copy(update={"connected": True})
             await self._emit(ParticipantJoined(participant=joined), actor_id=participant_id)
@@ -468,14 +786,103 @@ class SessionActor:
             agent=self._agent_label,
         )
         self._publisher.deliver(connection, welcome)
-        if hello.since is None:
+        if since is None:
             snapshot = SessionSnapshot(
-                state=self._state, streaming=dict(self._streaming), typing=tuple(self._typing)
+                state=visibility.state_for(self._state, participant_id),
+                streaming=dict(self._streaming),
+                typing=tuple(self._typing),
             )
             self._publisher.deliver(connection, snapshot)
             return
-        for record in await self._store.read(after=hello.since):
+        for record in await self._store.read(after=since):
             self._publisher.deliver_record(connection, record)
+
+    def _connected(self) -> int:
+        return sum(1 for person in self._state.participants.values() if person.connected)
+
+    def _room_link_event(self) -> InviteCreated:
+        return InviteCreated(
+            code=self._link.code,
+            role=Role.PARTICIPANT,
+            expires_at=None,
+            link=self._link.link,
+            reusable=True,
+        )
+
+    def _refuse(self, connection: Connection, reason: str) -> None:
+        self._publisher.deliver(connection, JoinRefused(reason=reason))
+        connection.close(reason)
+
+    async def _knock(self, connection: Connection, need: NeedsApproval) -> None:
+        if connection.id in self._knocking:
+            return
+        try:
+            asked = joins.request(
+                self._state,
+                request_id=self._ids.new("j_"),
+                name=need.name,
+                client=need.client,
+                now=self._clock.now(),
+                limit=self._max_pending_joins,
+            )
+        except Conflict as error:
+            raise Forbidden(str(error)) from error
+        await self._emit(asked)
+        request_id = asked.request.id
+        timer = asyncio.get_running_loop().call_later(
+            self._join_timeout_s, self._inbox.put, JoinExpired(request_id)
+        )
+        self._knocking[connection.id] = Knock(request_id, connection, need.name, timer)
+        self._publisher.deliver(connection, JoinPending(waiting=len(self._knocking)))
+
+    def _take_knock(self, request_id: str) -> Knock | None:
+        for connection_id, knock in self._knocking.items():
+            if knock.request_id == request_id:
+                knock.timer.cancel()
+                return self._knocking.pop(connection_id)
+        return None
+
+    async def _decide_join(self, host: Participant, command: JoinDecide) -> None:
+        decision = {
+            "allow": JoinDecision.ALLOW,
+            "viewer": JoinDecision.VIEWER,
+            "deny": JoinDecision.DENY,
+        }[command.decision]
+        resolved = joins.resolve(self._state, command.request_id, decision, host.id)
+        knock = self._take_knock(command.request_id)
+        await self._emit(resolved, actor_id=host.id)
+        if knock is None:
+            return
+        if decision is JoinDecision.DENY:
+            self._refuse(knock.connection, "the host did not let you in")
+            return
+        role = Role.VIEWER if decision is JoinDecision.VIEWER else Role.PARTICIPANT
+        try:
+            await self._welcome(
+                knock.connection, self._gateway.admit_approved(knock.name, role), since=None
+            )
+        except DomainError as error:
+            self._refuse(knock.connection, str(error))
+
+    async def _expire_join(self, request_id: str) -> None:
+        knock = self._take_knock(request_id)
+        if request_id not in self._state.join_requests:
+            return
+        await self._emit(joins.resolve(self._state, request_id, JoinDecision.EXPIRED, None))
+        if knock is not None:
+            self._refuse(knock.connection, "the host did not answer in time, ask them again")
+
+    async def _revoke_link(self, host: Participant) -> None:
+        code = self._link.rotate()
+        await self._store.set_meta("room_link", code)
+        for request_id in list(self._state.join_requests):
+            knock = self._take_knock(request_id)
+            await self._emit(
+                joins.resolve(self._state, request_id, JoinDecision.REVOKED, host.id),
+                actor_id=host.id,
+            )
+            if knock is not None:
+                self._refuse(knock.connection, "this room link was withdrawn by the host")
 
     def _authenticate(self, connection: Connection, token: str | None) -> Participant:
         if token is None:
@@ -507,14 +914,112 @@ class SessionActor:
                 Conflict("the agent is busy, wait for the current run to end")
             )
             return
-        self._agent.swap_provider(change.provider, context_window=change.context_window)
+        self._agent.swap_provider(
+            change.provider, context_window=change.context_window, helper=change.helper
+        )
         for secret in change.secrets:
             self._redactor.add(secret)
         self._agent_label = change.label
-        if change.label != self._state.agent:
-            await self._emit(AgentChanged(agent=change.label), actor_id=self._host.id)
+        self._fast_label = change.helper_label
+        if change.label != self._state.agent or change.helper_label != self._state.fast_agent:
+            await self._emit(
+                AgentChanged(agent=change.label, fast=change.helper_label), actor_id=self._host.id
+            )
         await self._sync_context(self._agent.fill())
         change.reply.set_result(None)
+
+    async def _set_selection(self, participant_id: str, command: SelectionSet) -> None:
+        if command.selection is None:
+            if participant_id not in self._selecting:
+                return
+            self._selecting.discard(participant_id)
+        else:
+            self._selecting.add(participant_id)
+        await self._emit(
+            ParticipantSelected(participant_id=participant_id, selection=command.selection)
+        )
+
+    async def _board(
+        self,
+        command: BoardOpen | BoardDraw | BoardMove | BoardErase,
+        author_id: str,
+        *,
+        privileged: bool,
+    ) -> str:
+        """Applies a board change by a participant or the agent; a new mark returns its id.
+
+        The privileged (the host, or the agent working for the room) change anyone's marks.
+        """
+        match command:
+            case BoardOpen():
+                # Opening again shows the board to everyone again; closing twice says nothing.
+                if command.open or self._state.board.open:
+                    await self._emit(
+                        BoardOpened(open=command.open, by=author_id), actor_id=author_id
+                    )
+                return ""
+            case BoardDraw():
+                _check_points(command.kind, command.points)
+                if (command.kind is BoardShape.TEXT) != bool(command.text):
+                    raise Invalid("a text needs its words, and only a text carries words")
+                if (command.kind is BoardShape.IMAGE) != (command.image is not None):
+                    raise Invalid("an image needs its attachment, and only an image has one")
+                if command.image is not None:
+                    await self._require_picture(command.image)
+                stroke = BoardStroke(
+                    id=self._ids.new("st_"),
+                    author_id=author_id,
+                    kind=command.kind,
+                    text=command.text,
+                    image=command.image,
+                    color=command.color,
+                    width=command.width,
+                    points=tuple(round(point, BOARD_DECIMALS) for point in command.points),
+                )
+                await self._emit(BoardStroked(stroke=stroke), actor_id=author_id)
+                return stroke.id
+            case BoardMove():
+                stroke = self._stroke(command.stroke_id, author_id, privileged=privileged)
+                _check_points(stroke.kind, command.points)
+                if stroke.kind not in (BoardShape.PEN, BoardShape.ERASE) and len(
+                    command.points
+                ) != len(stroke.points):
+                    raise Invalid("a move keeps the mark's points")
+                points = tuple(round(point, BOARD_DECIMALS) for point in command.points)
+                await self._emit(BoardMoved(stroke_id=stroke.id, points=points), actor_id=author_id)
+                return stroke.id
+            case BoardErase():
+                stroke = self._stroke(command.stroke_id, author_id, privileged=privileged)
+                await self._emit(BoardErased(stroke_id=stroke.id), actor_id=author_id)
+                return stroke.id
+
+    def _stroke(self, stroke_id: str, author_id: str, *, privileged: bool) -> BoardStroke:
+        stroke = next((s for s in self._state.board.strokes if s.id == stroke_id), None)
+        if stroke is None:
+            raise NotFound(f"no mark {stroke_id} on the board")
+        if stroke.author_id != author_id and not privileged:
+            raise Forbidden("only the host changes someone else's drawing")
+        return stroke
+
+    def board(self) -> tuple[BoardView, dict[str, str]]:
+        """The board and the names of everyone who drew on it, for the agent to look at."""
+        names = {pid: p.name for pid, p in self._state.participants.items()}
+        return self._state.board, names
+
+    async def _require_picture(self, attachment_id: str) -> None:
+        if attachment_id not in self._state.attachments:
+            raise NotFound("no such attachment")
+        if image_type(await self._vault.read(attachment_id)) is None:
+            raise Invalid("only a picture goes on the board as an image")
+
+    async def _set_cursor(self, participant_id: str, command: CursorSet) -> None:
+        if command.cursor is None:
+            if participant_id not in self._pointing:
+                return
+            self._pointing.discard(participant_id)
+        else:
+            self._pointing.add(participant_id)
+        await self._emit(ParticipantCursor(participant_id=participant_id, cursor=command.cursor))
 
     async def _set_typing(self, participant_id: str, *, typing: bool) -> None:
         timer = self._typing.pop(participant_id, None)
@@ -616,12 +1121,54 @@ class SessionActor:
             self._redactor.add(secret)
         await self._sync_mcp(actor_id=actor_id)
 
+    async def _agents_command(self, command: AgentsCreate | AgentsRemove, *, actor_id: str) -> None:
+        if self._agents is None:
+            raise Conflict("sub-agents are not available on this host")
+        try:
+            match command:
+                case AgentsCreate():
+                    spec = AgentSpec(
+                        name=command.name,
+                        description=" ".join(command.description.split()),
+                        prompt=command.prompt,
+                        role=command.model,
+                        tools=agent_tools(", ".join(command.tools)),
+                    )
+                    self._agents.create(spec, command.scope)
+                case AgentsRemove():
+                    self._agents.remove(command.name)
+        except AgentError as error:
+            raise Invalid(str(error)) from None
+        await self._sync_agents(actor_id=actor_id)
+
+    async def _sync_agents(self, *, actor_id: str | None = None) -> None:
+        if self._agents is None:
+            return
+        agents = self._agents.views()
+        if agents != self._state.agents:
+            await self._emit(AgentsChanged(agents=agents), actor_id=actor_id or self._host.id)
+
     async def _sync_mcp(self, *, actor_id: str | None = None) -> None:
         if self._mcp is None:
             return
         servers = self._mcp.views()
         if servers != self._state.mcp:
             await self._emit(McpChanged(servers=servers), actor_id=actor_id or self._host.id)
+
+    async def _record_usage(self) -> None:
+        models = {"main": self._agent_label, "fast": self._fast_label or self._agent_label}
+        lines = tuple(
+            UsageLine(
+                role=spend.role,
+                model=models.get(spend.role, spend.role),
+                agent=spend.who,
+                uses=spend.uses,
+                usage=spend.usage,
+            )
+            for spend in self._agent.take_spending()
+        )
+        if lines:
+            await self._emit(UsageRecorded(lines=lines))
 
     async def _sync_context(self, fill: agent.ContextFill) -> None:
         context = ContextView(tokens=fill.tokens, window=fill.window, compact_at=fill.compact_at)
@@ -744,7 +1291,7 @@ class SessionActor:
         )
         await self._emit(accepted, actor_id=author.id)
         await self._set_typing(author.id, typing=False)
-        body = await self._with_attachments(text, attachments)
+        body, images = await self._with_attachments(text, attachments)
         if self._state.permission_mode is PermissionMode.PLAN:
             body = f"{body}\n\n{PLAN_NOTE}"
         turn = UserTurn(
@@ -752,6 +1299,7 @@ class SessionActor:
             author=Actor(id=author.id, kind=ActorKind.HUMAN, name=author.name),
             provenance=provenance,
             text=body,
+            images=images,
         )
         if self._state.run is None:
             await self._start_run(turn)
@@ -819,6 +1367,7 @@ class SessionActor:
             self._registry.resolve(resolved.approval_id, ApprovalDecision.REJECT)
             await self._emit(resolved)
         self._streaming.clear()
+        await self._record_usage()
         await self._emit(RunEnded(run_id=run_id, reason=reason, usage=usage, error=error))
         pending = self._agent.drain_pending()
         if reason is RunEndReason.ABORTED:
@@ -834,10 +1383,20 @@ class SessionActor:
             self._agent.follow_up(turn)
 
     async def _on_disconnect(self, connection: Connection) -> None:
+        knock = self._knocking.pop(connection.id, None)
+        if knock is not None:
+            knock.timer.cancel()
+            if knock.request_id in self._state.join_requests:
+                await self._emit(
+                    joins.resolve(self._state, knock.request_id, JoinDecision.GONE, None)
+                )
+            return
         participant_id = self._publisher.unbind(connection)
         if participant_id is None or self._publisher.is_online(participant_id):
             return
         await self._set_typing(participant_id, typing=False)
+        await self._set_selection(participant_id, SelectionSet(selection=None))
+        await self._set_cursor(participant_id, CursorSet(cursor=None))
         if participant_id in self._state.participants:
             await self._emit(
                 ParticipantLeft(participant_id=participant_id), actor_id=participant_id
@@ -850,8 +1409,9 @@ class SessionActor:
             data = base64.b64decode(command.content_b64, validate=True)
         except binascii.Error as error:
             raise Invalid("content is not valid base64") from error
-        if len(data) > self._max_attachment_bytes:
-            raise Invalid(f"attachment exceeds {self._max_attachment_bytes} bytes")
+        limit = self._max_image_bytes if image_type(data) else self._max_attachment_bytes
+        if len(data) > limit:
+            raise Invalid(f"attachment exceeds {limit} bytes")
         if hashlib.sha256(data).hexdigest() != command.sha256:
             raise Invalid("sha256 mismatch")
         attachment_id = self._ids.new("at_")
@@ -872,20 +1432,91 @@ class SessionActor:
             event = record.event
             if isinstance(event, PromptAccepted) and event.attachments:
                 try:
-                    texts[event.prompt_id] = await self._with_attachments(
-                        event.text, event.attachments
+                    texts[event.prompt_id], _ = await self._with_attachments(
+                        event.text, event.attachments, images=False
                     )
                 except (KeyError, OSError):
                     log.warning("actor.attachment_missing", prompt_id=event.prompt_id)
         return history.replay(records, names=names, texts=texts)
 
-    async def _with_attachments(self, text: str, attachment_ids: tuple[str, ...]) -> str:
+    async def _with_attachments(
+        self, text: str, attachment_ids: tuple[str, ...], *, images: bool = True
+    ) -> tuple[str, tuple[LlmImage, ...]]:
+        """The prompt with its text attachments inlined and its images apart.
+
+        A replayed history keeps only a note of each image, so a restart does not resend them.
+        """
         parts = [text]
+        pictures: list[LlmImage] = []
         for attachment_id in attachment_ids:
             meta = self._state.attachments[attachment_id]
-            body = await self._vault.read_text(attachment_id)
-            parts.append(f"[attachment {meta.name}, untrusted]\n{body}")
-        return "\n\n".join(parts)
+            data = await self._vault.read(attachment_id)
+            if (media_type := image_type(data)) is None:
+                body = data.decode(errors="replace")
+                parts.append(f"[attachment {meta.name}, untrusted]\n{body}")
+            elif images:
+                parts.append(f"[image {meta.name}, untrusted, attached]")
+                pictures.append(
+                    LlmImage(media_type=media_type, data=base64.b64encode(data).decode())
+                )
+            else:
+                parts.append(f"[image {meta.name}, no longer available]")
+        return "\n\n".join(parts), tuple(pictures)
+
+    async def _grant_briefing(self, ask: BriefingRequestView, *, decided_by: str | None) -> None:
+        await self._emit(
+            briefings.decide(self._state, ask.id, True, decided_by), actor_id=decided_by
+        )
+        self._start_briefing(ask)
+
+    def _start_briefing(self, ask: BriefingRequestView) -> None:
+        self._briefing_at[ask.participant_id] = self._clock.now()
+        self._background(self._write_briefing(ask, self._state.last_seq))
+
+    async def _write_briefing(self, ask: BriefingRequestView, as_of: int) -> None:
+        if self._briefing is None:
+            self._inbox.put(BriefingReady(ask, "", as_of, "this host cannot write briefings"))
+            return
+        try:
+            written = await self._briefing.write(
+                ask.participant_id,
+                ask.focus,
+                ask.update,
+                as_of=as_of,
+                when=self._clock.now(),
+                cancel=asyncio.Event(),
+            )
+        except BriefingFailed as error:
+            self._inbox.put(BriefingReady(ask, "", as_of, f"the model could not write it: {error}"))
+        except Exception:
+            log.exception("actor.briefing_failed")
+            self._inbox.put(BriefingReady(ask, "", as_of, "could not write the briefing"))
+        else:
+            self._inbox.put(BriefingReady(ask, written.text, as_of))
+
+    async def _import_briefing(self, host: Participant, command: BriefingImport) -> None:
+        if any(
+            item.source == command.source and item.as_of_seq == command.as_of_seq
+            for item in self._state.briefings_imported
+        ):
+            raise Conflict("your agent already has this briefing")
+        text = self._redactor.redact(command.text)
+        self._agent.add_notes(NotesTurn(source=command.source, text=text))
+        item = BriefingImportView(
+            id=self._ids.new("bi_"),
+            source=command.source,
+            as_of_seq=command.as_of_seq,
+            chars=len(text),
+            at=self._clock.now(),
+        )
+        await self._emit(BriefingImported(item=item, text=text), actor_id=host.id)
+
+    async def _ban_team_member(self, participant_id: str) -> None:
+        member = member_id_of(participant_id)
+        if member is None or self._team is None:
+            return
+        self._team.ban(member)
+        await self._store.set_meta("team_banned", json.dumps(self._team.banned))
 
     def _require_guest(self, participant_id: str) -> None:
         target = self._state.participants.get(participant_id)
@@ -908,6 +1539,10 @@ class SessionActor:
             event, event_id=self._ids.new("e_"), ts=self._clock.now(), actor_id=actor_id
         )
         self._state = reduce(self._state, record)
+        if self._conflicts is not None:
+            self._conflicts.observe(event, record.ts)
+        if self._ledger is not None:
+            self._ledger.observe(event)
         if isinstance(event, PolicyRuleAdded | PolicyRuleRemoved | PermissionModeChanged):
             self._sync_policy()
         self._publisher.publish(record)

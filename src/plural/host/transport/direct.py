@@ -1,6 +1,7 @@
 import asyncio
 import secrets
 from contextlib import suppress
+from dataclasses import dataclass
 
 import structlog
 from pydantic import ValidationError
@@ -13,11 +14,16 @@ from plural.protocol.envelope import Envelope
 log = structlog.get_logger(__name__)
 
 
+@dataclass(frozen=True, slots=True)
+class _Close:
+    reason: str
+
+
 class WebSocketLink:
     def __init__(self, socket: ServerConnection, *, queue_size: int) -> None:
         self._id = f"c_{secrets.token_hex(8)}"
         self._socket = socket
-        self._outbox: asyncio.Queue[Envelope] = asyncio.Queue(maxsize=queue_size)
+        self._outbox: asyncio.Queue[Envelope | _Close] = asyncio.Queue(maxsize=queue_size)
         self._closing: asyncio.Task[None] | None = None
 
     @property
@@ -28,17 +34,26 @@ class WebSocketLink:
         try:
             self._outbox.put_nowait(envelope)
         except asyncio.QueueFull:
-            self.close("slow consumer")
+            self._close_now("slow consumer")
 
     def close(self, reason: str) -> None:
+        try:
+            self._outbox.put_nowait(_Close(reason))
+        except asyncio.QueueFull:
+            self._close_now(reason)
+
+    def _close_now(self, reason: str) -> None:
         if self._closing is None:
             self._closing = asyncio.create_task(self._socket.close(code=1008, reason=reason))
 
     async def pump(self) -> None:
         with suppress(ConnectionClosed):
             while True:
-                envelope = await self._outbox.get()
-                await self._socket.send(envelope.model_dump_json())
+                item = await self._outbox.get()
+                if isinstance(item, _Close):
+                    await self._socket.close(code=1008, reason=item.reason)
+                    return
+                await self._socket.send(item.model_dump_json())
 
 
 class DirectTransport:

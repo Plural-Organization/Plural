@@ -1,6 +1,9 @@
 import type { Command, ProposalView, SessionState } from "@plural/client";
 import { useNow } from "../../hooks/useNow";
+import { AccessCard } from "./AccessCard";
+import { BriefingAsk } from "./BriefingAsk";
 import { ApprovalCard } from "./ApprovalCard";
+import { JoinCard } from "./JoinCard";
 import type { InboxItem } from "./items";
 import { ProposalCard } from "./ProposalCard";
 import styles from "./Inbox.module.css";
@@ -21,7 +24,13 @@ export function Inbox({ items, state, send, onEdit }: InboxProps) {
   return (
     <section className={styles.inbox} aria-label="Waits for you">
       {items.length > 1 ? <div className={styles.count}>{items.length} things wait for you · the oldest is first</div> : null}
-      {first.kind === "approval" ? (
+      {first.kind === "join" ? (
+        <JoinCard request={first.request} send={send} />
+      ) : first.kind === "access" ? (
+        <AccessCard request={first.request} send={send} />
+      ) : first.kind === "briefing" ? (
+        <BriefingAsk request={first.request} send={send} />
+      ) : first.kind === "approval" ? (
         <ApprovalCard approval={first.approval} state={state} now={now} send={send} />
       ) : (
         <ProposalCard proposal={first.proposal} state={state} send={send} onEdit={onEdit} />

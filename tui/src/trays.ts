@@ -10,6 +10,9 @@ const KEYS: [string, string][] = [
   ["shift+tab", "cycle permissions: ask · accept edits · plan · auto"],
   ["esc", "close this panel, or interrupt the run"],
   ["pgup / pgdn", "scroll the conversation"],
+  ["ctrl+f", "search: text, commands, paths, is:failed, is:prompt, by:name"],
+  ["end", "jump to the latest message"],
+  ["alt+↑ / alt+↓", "previous or next prompt"],
   ["ctrl+o", "expand or collapse tool details"],
   ["ctrl+b", "show or hide the side panel"],
   ["ctrl+y", "copy the last reply"],
@@ -105,5 +108,39 @@ export function policyRows(projection: Projection): Row[] {
   return [
     [{ text: `${projection.basePolicy.length} built-in rules, `, fg: theme.dim }, { text: `${rules.length} for this session`, fg: theme.dim }],
     ...rules.map((rule): Row => [{ text: rule.action.padEnd(6), fg: tint[rule.action], bold: true }, { text: ruleLine(rule).slice(6), fg: theme.text }, { text: `  ${rule.id}`, fg: theme.dim }]),
+  ];
+}
+
+function tokens(count: number): string {
+  return count >= 1_000_000 ? `${(count / 1_000_000).toFixed(1)}M` : count >= 1000 ? `${Math.round(count / 1000)}K` : String(count);
+}
+
+export function usageRows(projection: Projection): Row[] {
+  const lines = projection.state.usage;
+  if (lines.length === 0) {
+    return [[{ text: "nothing spent yet in this session", fg: theme.dim }]];
+  }
+  const label = (line: (typeof lines)[number]): string =>
+    line.agent === "" ? "conversation" : line.agent === "compact" ? "summaries" : `agent ${line.agent}`;
+  const width = Math.max(...lines.map((line) => `${line.role} · ${line.model}`.length));
+  const what = Math.max(...lines.map((line) => label(line).length));
+  const total = lines.reduce(
+    (sum, line) => ({
+      input: sum.input + line.usage.input_tokens + line.usage.cache_read_tokens + line.usage.cache_write_tokens,
+      output: sum.output + line.usage.output_tokens,
+    }),
+    { input: 0, output: 0 },
+  );
+  return [
+    ...lines.map((line): Row => [
+      { text: `${line.role} · ${line.model}`.padEnd(width + 2), fg: line.role === "fast" ? theme.info : theme.accent },
+      { text: label(line).padEnd(what + 2), fg: theme.text },
+      { text: `${line.uses}×`.padStart(5), fg: theme.dim },
+      { text: `  in ${tokens(line.usage.input_tokens)}`.padEnd(11), fg: theme.text },
+      { text: `out ${tokens(line.usage.output_tokens)}`.padEnd(10), fg: theme.text },
+      { text: line.usage.cache_read_tokens > 0 ? `cache ${tokens(line.usage.cache_read_tokens)}` : "", fg: theme.dim },
+    ]),
+    [""],
+    [{ text: "total  ", fg: theme.dim }, { text: `in ${tokens(total.input)} · out ${tokens(total.output)} tokens`, fg: theme.text, bold: true }],
   ];
 }

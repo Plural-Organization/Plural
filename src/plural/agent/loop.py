@@ -7,7 +7,8 @@ from dataclasses import dataclass, field, replace
 import structlog
 from pydantic import ValidationError
 
-from plural.agent.compaction import SUMMARY_PROMPT, extract_summary
+from plural.agent.briefing import BRIEFING_TAG
+from plural.agent.compaction import SUMMARY_PROMPT, extract_tagged
 from plural.agent.context import ContextBuilder
 from plural.agent.events import (
     AgentEvent,
@@ -19,6 +20,7 @@ from plural.agent.events import (
     MessageEnd,
     MessageStart,
     RunEnd,
+    Spend,
     ToolEnd,
     ToolOutput,
     ToolStart,
@@ -28,13 +30,16 @@ from plural.agent.interrupt import Interrupted, TimedOut, interruptible
 from plural.agent.messages import (
     AssistantTurn,
     Message,
+    NotesTurn,
     SummaryTurn,
     ToolResultTurn,
     UserTurn,
+    settled,
     to_llm,
 )
 from plural.agent.providers.base import (
     ContextOverflow,
+    LlmEvent,
     LlmMessage,
     LLMProvider,
     LlmRequest,
@@ -57,13 +62,28 @@ from plural.agent.tools.base import PreparedCall, ToolCtx, ToolError, ToolResult
 from plural.agent.tools.registry import ToolRegistry, UnknownTool
 from plural.core.ports import IdGenerator
 from plural.core.provenance import merge
-from plural.protocol.models import Provenance, RunEndReason, ToolCallView, ToolRisk, Usage
+from plural.protocol.models import (
+    Origin,
+    Provenance,
+    Role,
+    RunEndReason,
+    ToolCallView,
+    ToolRisk,
+    Usage,
+)
 
 log = structlog.get_logger(__name__)
 
 
 class CompactionFailed(Exception):
     pass
+
+
+class BriefingFailed(Exception):
+    pass
+
+
+SHARED = Provenance(initiator_id="shared-context", initiator_role=Role.VIEWER, origin=Origin.DIRECT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,7 +125,9 @@ class AgentLoop:
         tool_ctx: ToolCtx,
         ids: IdGenerator,
         limits: LoopLimits | None = None,
+        helper: LLMProvider | None = None,
     ) -> None:
+        self._spending: dict[tuple[str, str], Spend] = {}
         self._tools = tools
         self._gate = gate
         self._context = context
@@ -113,8 +135,11 @@ class AgentLoop:
         self._ids = ids
         self._limits = limits or LoopLimits()
         self._provider = self._resilient(provider)
+        self._helper = self._resilient(helper) if helper is not None else None
         self._prompt: tuple[str, tuple[ToolSchema, ...]] | None = None
         self._conversation: list[Message] = []
+        self._notes: list[NotesTurn] = []
+        self._shared = False
         self._steer: deque[UserTurn] = deque()
         self._follow_up: deque[UserTurn] = deque()
         self._usage = Usage()
@@ -123,6 +148,32 @@ class AgentLoop:
         self._compaction_failed = False
         self._verify_compaction = False
         self._provider_close_tasks: set[asyncio.Task[None]] = set()
+
+    def spend(self, role: str, who: str, usage: Usage, *, uses: int = 0) -> None:
+        key = (role, who)
+        previous = self._spending.get(key, Spend(role, who, Usage(), 0))
+        self._spending[key] = Spend(role, who, previous.usage + usage, previous.uses + uses)
+
+    def take_spending(self) -> tuple[Spend, ...]:
+        spending = tuple(
+            spend
+            for spend in self._spending.values()
+            if spend.uses or spend.usage.prompt_tokens or spend.usage.output_tokens
+        )
+        self._spending = {}
+        return spending
+
+    @property
+    def provider(self) -> LLMProvider:
+        return self._provider.inner
+
+    @property
+    def helper(self) -> LLMProvider | None:
+        return self._helper.inner if self._helper is not None else None
+
+    @property
+    def limits(self) -> LoopLimits:
+        return self._limits
 
     @property
     def usage(self) -> Usage:
@@ -138,14 +189,22 @@ class AgentLoop:
     def follow_up(self, turn: UserTurn) -> None:
         self._follow_up.append(turn)
 
-    def swap_provider(self, provider: LLMProvider, *, context_window: int | None = None) -> None:
-        previous = self._provider
+    def swap_provider(
+        self,
+        provider: LLMProvider,
+        *,
+        context_window: int | None = None,
+        helper: LLMProvider | None = None,
+    ) -> None:
+        retired = [wrapper.inner for wrapper in (self._provider, self._helper) if wrapper]
         self._provider = self._resilient(provider)
-        close = getattr(previous, "close", None)
-        if close is not None:
-            task = asyncio.create_task(close())
-            self._provider_close_tasks.add(task)
-            task.add_done_callback(self._provider_close_tasks.discard)
+        self._helper = self._resilient(helper) if helper is not None else None
+        for previous in retired:
+            close = getattr(previous, "close", None)
+            if close is not None and previous not in (provider, helper):
+                task = asyncio.create_task(close())
+                self._provider_close_tasks.add(task)
+                task.add_done_callback(self._provider_close_tasks.discard)
         if context_window is not None:
             self._limits = replace(self._limits, context_window=context_window)
         self._conversation = [
@@ -188,8 +247,16 @@ class AgentLoop:
         yield self.fill()
         yield RunEnd(RunEndReason.ABORTED if cancel.is_set() else RunEndReason.STOP, self._usage)
 
+    def mark_shared(self) -> None:
+        self._shared = True
+
+    def add_notes(self, turn: NotesTurn) -> None:
+        self._notes.append(turn)
+        self._shared = True
+
     def restore(self, conversation: Sequence[Message]) -> None:
         self._conversation = list(conversation)
+        self._shared = any(isinstance(message, NotesTurn) for message in conversation)
         self._context_tokens = sum(_estimate_tokens(message) for message in conversation)
 
     def cancel_pending(self, prompt_id: str) -> bool:
@@ -207,9 +274,12 @@ class AgentLoop:
         return pending
 
     async def run(self, prompt: UserTurn, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
-        provenance = prompt.provenance
+        provenance = merge(prompt.provenance, SHARED) if self._shared else prompt.provenance
+        self._conversation.extend(self._notes)
+        self._notes.clear()
         self._conversation.append(prompt)
         self._usage = Usage()
+        self.spend("main", "", Usage(), uses=1)
         self._gate.begin_run()
         self._prompt = (self._context.system(), self._tools.schemas())
         self._compaction_failed = False
@@ -232,7 +302,7 @@ class AgentLoop:
                 turn = _Turn(self._ids.new("m_"))
                 yield MessageStart(turn.message_id)
                 try:
-                    async for event in self._provider.stream(self._request(), cancel=cancel):
+                    async for event in self._events(self._request(), cancel):
                         match event:
                             case TextDelta(text=text):
                                 turn.text.append(text)
@@ -248,6 +318,7 @@ class AgentLoop:
                                 turn.native = content
                             case UsageReport(usage=delta):
                                 self._usage = self._usage + delta
+                                self.spend("main", "", delta)
                                 self._context_tokens = delta.prompt_tokens
                                 self._check_compaction_helped()
                                 yield self.fill()
@@ -269,7 +340,10 @@ class AgentLoop:
                     continue
                 except ProviderError as error:
                     yield MessageEnd(turn.message_id, "".join(turn.text), "".join(turn.thinking))
-                    yield RunEnd(RunEndReason.ERROR, self._usage, str(error))
+                    reason = str(error)
+                    if "image" in reason.lower() and self._drop_images():
+                        reason = f"{reason} (the images were removed so the session can go on)"
+                    yield RunEnd(RunEndReason.ERROR, self._usage, reason)
                     return
                 recovering = False
                 assistant = turn.assistant()
@@ -359,29 +433,88 @@ class AgentLoop:
             messages=(*to_llm(self._conversation), LlmMessage(role="user", content=SUMMARY_PROMPT)),
             tools=tools,
         )
+        summary = ""
+        for provider in (self._helper, self._provider):
+            if provider is None:
+                continue
+            try:
+                summary = await self._summarize(request, provider, cancel)
+                self.spend(
+                    "fast" if provider is self._helper else "main", "compact", Usage(), uses=1
+                )
+                break
+            except CompactionFailed as error:
+                if cancel.is_set() or provider is self._provider:
+                    raise
+                log.warning("agent.helper_compaction_failed", error=str(error))
+        before = self._context_tokens
+        self._conversation = [SummaryTurn(text=summary), *([prompt] if prompt is not None else [])]
+        self._context_tokens = sum(_estimate_tokens(message) for message in self._conversation)
+        self._verify_compaction = True
+        return Compacted(summary, before)
+
+    async def brief(self, instruction: str, *, cancel: asyncio.Event) -> str:
+        """Write a briefing of the conversation, outside any run, without changing it."""
+        history = settled(self._conversation)
+        if not history:
+            return ""
+        request = LlmRequest(
+            system=self._context.system(),
+            messages=(*to_llm(history), LlmMessage(role="user", content=instruction)),
+            tools=self._tools.schemas(),
+        )
+        for provider in (self._helper, self._provider):
+            if provider is None:
+                continue
+            try:
+                text = await self._summarize(
+                    request, provider, cancel, tag=BRIEFING_TAG, purpose="briefing"
+                )
+            except CompactionFailed as error:
+                if cancel.is_set() or provider is self._provider:
+                    raise BriefingFailed(str(error)) from error
+                log.warning("agent.helper_briefing_failed", error=str(error))
+                continue
+            self.spend("fast" if provider is self._helper else "main", "briefing", Usage(), uses=1)
+            return text
+        raise BriefingFailed("no model is available")
+
+    async def _summarize(
+        self,
+        request: LlmRequest,
+        provider: LLMProvider,
+        cancel: asyncio.Event,
+        *,
+        tag: str = "summary",
+        purpose: str = "compact",
+    ) -> str:
         text: list[str] = []
         called = False
+        role = "fast" if provider is self._helper else "main"
         try:
-            async for event in self._provider.stream(request, cancel=cancel):
+            async for event in self._events(request, cancel, provider):
                 match event:
                     case TextDelta(text=chunk):
                         text.append(chunk)
                     case ToolCallReady():
                         called = True
                     case UsageReport(usage=delta):
-                        self._usage = self._usage + delta
+                        if purpose == "compact":
+                            self._usage = self._usage + delta
+                        self.spend(role, purpose, delta)
                     case _:
                         pass
         except ProviderError as error:
             raise CompactionFailed(str(error)) from error
-        summary = extract_summary("".join(text))
+        summary = extract_tagged("".join(text), tag)
         if cancel.is_set() or called or not summary:
             raise CompactionFailed("the model did not produce a summary")
-        before = self._context_tokens
-        self._conversation = [SummaryTurn(text=summary), *([prompt] if prompt is not None else [])]
-        self._context_tokens = sum(_estimate_tokens(message) for message in self._conversation)
-        self._verify_compaction = True
-        return Compacted(summary, before)
+        return summary
+
+    def _events(
+        self, request: LlmRequest, cancel: asyncio.Event, provider: LLMProvider | None = None
+    ) -> AsyncIterator[LlmEvent]:
+        return (provider or self._provider).stream(request, cancel=cancel)
 
     def _next_input(self, *, has_tool_calls: bool) -> list[UserTurn]:
         if self._steer:
@@ -500,7 +633,16 @@ class AgentLoop:
             if verdict.allowed:
                 queue: asyncio.Queue[str] = asyncio.Queue()
                 runner = asyncio.create_task(
-                    self._invoke(prepared, cancel, replace(self._tool_ctx, emit=queue.put_nowait))
+                    self._invoke(
+                        prepared,
+                        cancel,
+                        replace(
+                            self._tool_ctx,
+                            emit=queue.put_nowait,
+                            provenance=provenance,
+                            cancel=cancel,
+                        ),
+                    )
                 )
                 try:
                     while not runner.done() or not queue.empty():
@@ -527,7 +669,7 @@ class AgentLoop:
             return await interruptible(prepared.execute(ctx), cancel, self._limits.tool_timeout_s)
         except TimedOut:
             return ToolResult("Tool timed out", is_error=True)
-        except (ToolError, SandboxError, OSError, UnicodeDecodeError) as error:
+        except (ToolError, SandboxError, OSError, UnicodeError) as error:
             return ToolResult(f"{type(error).__name__}: {error}", is_error=True)
 
     def _skip(self, call: ToolCallRequest, reason: str) -> tuple[ToolStart, ToolEnd]:
@@ -540,6 +682,16 @@ class AgentLoop:
                 call_id=call.id, name=call.name, content=result.content, is_error=result.is_error
             )
         )
+
+    def _drop_images(self) -> bool:
+        """Forget every image, so one the model cannot read does not fail each later request."""
+        dropped = False
+        for index, message in enumerate(self._conversation):
+            if isinstance(message, UserTurn) and message.images:
+                note = f"{message.text}\n\n[{len(message.images)} image(s) removed: unreadable]"
+                self._conversation[index] = message.model_copy(update={"images": (), "text": note})
+                dropped = True
+        return dropped
 
     def _settle(self) -> None:
         for index in range(len(self._conversation) - 1, -1, -1):
@@ -565,6 +717,9 @@ class AgentLoop:
 
 _ABORTED = "Not executed: run aborted"
 
+# What a 1568 px image costs on Anthropic, the largest the terminal client sends.
+IMAGE_TOKENS = 1600
+
 _UNFINISHED: dict[StopReason, str] = {
     "max_tokens": "Not executed: the response hit the output limit before the call was complete",
     "refusal": "Not executed: the model declined the request",
@@ -573,7 +728,9 @@ _UNFINISHED: dict[StopReason, str] = {
 
 def _estimate_tokens(message: Message) -> int:
     match message:
-        case ToolResultTurn(content=text) | UserTurn(text=text) | SummaryTurn(text=text):
+        case UserTurn(text=text, images=images):
+            return len(text) // 4 + IMAGE_TOKENS * len(images)
+        case ToolResultTurn(content=text) | SummaryTurn(text=text) | NotesTurn(text=text):
             return len(text) // 4
         case AssistantTurn(text=text, tool_calls=calls):
             return (len(text) + sum(len(_signature(call)) for call in calls)) // 4

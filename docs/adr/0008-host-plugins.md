@@ -1,4 +1,4 @@
-# ADR 0007: host plugins with slash commands
+# ADR 0008: host plugins with slash commands
 
 Status: accepted
 

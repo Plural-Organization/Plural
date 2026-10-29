@@ -25,12 +25,12 @@ describe("plugin commands", () => {
   ]);
 
   test("are suggested next to the built-in commands", () => {
-    expect(suggestions("/he", "participant", plugins).map((hint) => hint.name)).toEqual(["help", "hello"]);
+    expect(suggestions("/he", "participant", [], plugins).map((hint) => hint.name)).toEqual(["help", "hello"]);
     expect(plugins[1]?.description).toBe("from the fun plugin");
   });
 
   test("hide host-only plugin commands from guests", () => {
-    expect(suggestions("/dep", "participant", plugins)).toEqual([]);
-    expect(suggestions("/dep", "host", plugins).map((hint) => hint.usage)).toEqual(["/deploy <env>"]);
+    expect(suggestions("/dep", "participant", [], plugins)).toEqual([]);
+    expect(suggestions("/dep", "host", [], plugins).map((hint) => hint.usage)).toEqual(["/deploy <env>"]);
   });
 });

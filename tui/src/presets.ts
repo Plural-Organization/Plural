@@ -287,6 +287,7 @@ export interface AgentChoice {
   model: string;
   baseUrl: string;
   contextWindow: string;
+  fastModel?: string;
 }
 
 export const DEFAULT_CHOICE: AgentChoice = { preset: "demo", model: "", baseUrl: "", contextWindow: "" };
@@ -298,6 +299,7 @@ export interface AgentConfig {
   base_url: string | null;
   api_key: string | null;
   context_window: number | null;
+  fast_model?: string;
 }
 
 export function toConfig(choice: AgentChoice, key: string): AgentConfig {
@@ -310,6 +312,7 @@ export function toConfig(choice: AgentChoice, key: string): AgentConfig {
     base_url: preset.editableUrl ? choice.baseUrl.trim() || preset.baseUrl || null : preset.baseUrl || null,
     api_key: preset.needsKey || key.trim() !== "" ? key.trim() || null : null,
     context_window: preset.contextWindow && Number.isInteger(window) && window > 0 ? window : null,
+    fast_model: choice.fastModel ?? "",
   };
 }
 

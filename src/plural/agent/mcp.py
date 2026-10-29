@@ -1,7 +1,8 @@
 """Connects the host to MCP servers and offers their tools to the agent.
 
 Servers come from `.mcp.json` in the workspace and `~/.plural/mcp.json`, in the `mcpServers`
-format Claude Code and Cursor use, so a config can be copied or imported as is.
+format Claude Code and Cursor use, so a config can be copied or imported as is. Built-in servers,
+such as the browser, start first and a configured server of the same name replaces them.
 """
 
 import asyncio
@@ -37,6 +38,9 @@ CALL_TIMEOUT_S: Final = 120.0
 MAX_TOOL_NAME: Final = 64
 SERVER_NAME: Final = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,31}$")
 UNSAFE: Final = re.compile(r"[^A-Za-z0-9_-]")
+BROWSER_SERVER: Final = "playwright"
+PLAYWRIGHT_MCP: Final = "@playwright/mcp@0.0.83"
+BUILTINS_OFF: Final = "disabledBuiltins"
 
 
 class McpError(Exception):
@@ -110,16 +114,31 @@ def parse_servers(raw: Mapping[str, JsonValue]) -> dict[str, ServerSpec]:
 
 
 def write_config(path: Path, servers: Mapping[str, ServerSpec]) -> None:
-    try:
-        loaded: object = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        loaded = {}
-    data: dict[str, object] = (
-        dict(cast("dict[str, object]", loaded)) if isinstance(loaded, dict) else {}
-    )
+    data = _raw(path)
     data["mcpServers"] = {
         name: spec.model_dump(exclude_defaults=True) for name, spec in servers.items()
     }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def _raw(path: Path) -> dict[str, object]:
+    try:
+        loaded: object = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return dict(cast("dict[str, object]", loaded)) if isinstance(loaded, dict) else {}
+
+
+def disabled_builtins(path: Path) -> frozenset[str]:
+    """Built-in servers the host turned off. Only their names are kept, so they stay current."""
+    names = _raw(path).get(BUILTINS_OFF)
+    return frozenset(cast("list[str]", names)) if isinstance(names, list) else frozenset()
+
+
+def write_disabled_builtins(path: Path, names: Iterable[str]) -> None:
+    data = _raw(path)
+    data[BUILTINS_OFF] = sorted(names)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -134,6 +153,23 @@ def importable(home: Path, workspace: Path) -> dict[str, ServerSpec]:
         if project is not None:
             found |= parse_servers(project.servers)
     return found
+
+
+def browser_spec(browser: str, home: Path) -> ServerSpec:
+    """Pinned Playwright MCP that drives Chrome for the agent.
+
+    `launch` opens a Chrome window of its own on first use, with a profile under `home` so
+    logins survive restarts. Any other value is a CDP endpoint to attach to; `chrome` finds
+    the host's running Chrome once remote debugging is on in chrome://inspect.
+    """
+    args = ["-y", PLAYWRIGHT_MCP, "--image-responses", "omit"]
+    if browser == "launch":
+        args += ["--browser", "chrome", "--user-data-dir", str(home / "profile")]
+    else:
+        args += ["--cdp-endpoint", browser]
+    # Snapshots and console logs go here instead of into the workspace.
+    args += ["--output-dir", str(home / "output")]
+    return ServerSpec(command="npx", args=args)
 
 
 def tool_name(server: str, tool: str) -> str:
@@ -206,8 +242,10 @@ class McpHub:
         home: Path,
         logs: Path,
         on_change: Callable[[], None] = lambda: None,
+        builtin: Mapping[str, ServerSpec] | None = None,
     ) -> None:
         self._workspace = workspace
+        self._builtin = dict(builtin or {})
         self._home = home
         self._logs = logs
         self._on_change = on_change
@@ -235,7 +273,12 @@ class McpHub:
                     yield McpTool(self, server.name, info)
 
     def start(self) -> None:
+        off = disabled_builtins(self.global_file)
         configured = {
+            **{
+                name: (spec.model_copy(update={"disabled": name in off}), SkillScope.GLOBAL)
+                for name, spec in self._builtin.items()
+            },
             **{
                 name: (spec, SkillScope.GLOBAL)
                 for name, spec in read_config(self.global_file).items()
@@ -276,9 +319,11 @@ class McpHub:
 
     async def remove(self, name: str) -> None:
         server = self._get(name)
-        await self._halt(server)
         path = self.global_file if server.scope is SkillScope.GLOBAL else self.project_file
         servers = read_config(path)
+        if name in self._builtin and name not in servers:
+            raise McpError(f"{name} is built in; turn it off instead")
+        await self._halt(server)
         servers.pop(name, None)
         write_config(path, servers)
         del self._servers[name]
@@ -291,6 +336,9 @@ class McpHub:
         if name in servers:
             servers[name] = servers[name].model_copy(update={"disabled": not enabled})
             write_config(path, servers)
+        elif name in self._builtin:
+            off = disabled_builtins(self.global_file) - {name}
+            write_disabled_builtins(self.global_file, off if enabled else off | {name})
         server.spec = server.spec.model_copy(update={"disabled": not enabled})
         if enabled:
             await self._halt(server)

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type UIEvent } from "react";
 
 const THRESHOLD = 80;
 
-export function useStickToBottom(dependency: unknown) {
+export function useStickToBottom(feed: unknown, status: string | undefined) {
   const ref = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const [behind, setBehind] = useState(false);
@@ -12,7 +12,7 @@ export function useStickToBottom(dependency: unknown) {
     if (element && pinned.current) {
       element.scrollTop = element.scrollHeight;
     }
-  }, [dependency]);
+  }, [feed, status]);
 
   const onScroll = (event: UIEvent<HTMLDivElement>) => {
     const element = event.currentTarget;

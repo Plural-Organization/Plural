@@ -1,25 +1,24 @@
 .tool { font: 13px var(--font-mono); min-width: 0; }
-.line { width: 100%; display: flex; gap: 10px; align-items: baseline; background: none; border: 0; color: var(--muted); font: inherit; text-align: left; padding: 2px 0; cursor: pointer; min-width: 0; }
+.top { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.open { flex: none; background: none; border: 0; padding: 0; font: 12px var(--font-text); color: var(--accent); cursor: pointer; }
+.open:hover { text-decoration: underline; }
+.line { width: 100%; border-radius: 6px; display: flex; gap: 10px; align-items: baseline; background: none; border: 0; color: var(--muted); font: inherit; text-align: left; padding: 2px 0; cursor: pointer; min-width: 0; }
 .line:hover { color: var(--fg); }
-.mark { width: 1.2em; flex: none; color: var(--fg); }
+.chevron { flex: none; width: 1ch; color: var(--dim); }
+.mark { width: 1.2em; flex: none; color: var(--ok); }
 .name { color: var(--fg); flex: none; }
 .subject { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 0 1 auto; }
 .peek { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 0; min-width: 0; }
 .meta { margin-left: auto; color: var(--dim); flex: none; padding-left: 8px; }
 .failed .mark, .failed .meta { color: var(--danger); }
-.spin { display: inline-block; width: 8px; height: 8px; background: var(--fg); animation: spin 0.8s steps(4) infinite; }
-.body { margin: 6px 0 4px 1.2em; border-left: 1px solid var(--line); padding: 4px 0 4px 12px; overflow-x: auto; }
+.spin { display: inline-block; width: 10px; height: 10px; border: 2px solid var(--dim); border-top-color: var(--ok); border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: -1px; }
+.body { margin: 4px 0 6px 1.6em; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; overflow-x: auto; max-height: 420px; overflow-y: auto; }
 .body pre { margin: 0; color: var(--muted); white-space: pre; }
 .failed .body pre { color: var(--danger); }
 .command { color: var(--accent); margin-bottom: 4px; }
 .more { color: var(--dim); margin-top: 4px; }
-.row { display: grid; grid-template-columns: 4ch 2ch minmax(0, 1fr); white-space: pre; }
-.add { background: var(--add-bg); }
-.add .sign { color: var(--ok); }
-.del { background: var(--del-bg); }
-.del .sign { color: var(--danger); }
-.ctx { color: var(--muted); }
-.gap { color: var(--dim); grid-template-columns: 1fr; padding-left: 4ch; }
-.no { color: var(--dim); text-align: right; padding-right: 8px; }
 @keyframes spin { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+.diff { margin: 6px 0 4px 1.6em; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 0; overflow: hidden; }
+.diff .more { background: none; border: 0; cursor: pointer; font: 12px var(--font-text); color: var(--accent); padding: 4px 0 2px 6.5ch; }

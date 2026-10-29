@@ -1,13 +1,19 @@
-import { label, type ApprovalView, type ProposalView, type SessionState } from "@plural/client";
+import { label, type AccessRequestView, type BriefingRequestView, type ApprovalView, type JoinRequestView, type ProposalView, type SessionState } from "@plural/client";
 import { colorFor, theme } from "../theme";
 
 export type InboxItem =
+  | { kind: "join"; id: string; request: JoinRequestView }
+  | { kind: "access"; id: string; request: AccessRequestView }
+  | { kind: "briefing"; id: string; request: BriefingRequestView }
   | { kind: "approval"; id: string; approval: ApprovalView }
   | { kind: "proposal"; id: string; proposal: ProposalView }
   | { kind: "plan"; id: string };
 
 export function inboxItems(state: SessionState): InboxItem[] {
   return [
+    ...Object.values(state.join_requests).map((request): InboxItem => ({ kind: "join", id: request.id, request })),
+    ...Object.values(state.access_requests).map((request): InboxItem => ({ kind: "access", id: request.participant_id, request })),
+    ...Object.values(state.briefing_requests).map((request): InboxItem => ({ kind: "briefing", id: request.id, request })),
     ...Object.values(state.approvals).map((approval): InboxItem => ({ kind: "approval", id: approval.id, approval })),
     ...Object.values(state.proposals).map((proposal): InboxItem => ({ kind: "proposal", id: proposal.id, proposal })),
   ];
@@ -60,14 +66,20 @@ export function Inbox({ items, state, selected, focused, now }: InboxProps) {
     >
       <text>
         <span fg={theme.warn}>
-          <b>{item.kind === "approval" ? "approval needed" : item.kind === "plan" ? "plan ready" : "proposal"}</b>
+          <b>{item.kind === "join" ? "wants to join" : item.kind === "access" ? "wants to write" : item.kind === "briefing" ? "wants a briefing" : item.kind === "approval" ? "approval needed" : item.kind === "plan" ? "plan ready" : "proposal"}</b>
         </span>
         <span fg={theme.dim}>
           {"  "}
           {index + 1}/{items.length}
         </span>
       </text>
-      {item.kind === "approval" ? (
+      {item.kind === "join" ? (
+        <JoinBody request={item.request} now={now} focused={focused} />
+      ) : item.kind === "access" ? (
+        <AccessBody request={item.request} now={now} focused={focused} />
+      ) : item.kind === "briefing" ? (
+        <BriefingBody request={item.request} now={now} focused={focused} />
+      ) : item.kind === "approval" ? (
         <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} />
       ) : item.kind === "plan" ? (
         <PlanBody focused={focused} />
@@ -75,6 +87,60 @@ export function Inbox({ items, state, selected, focused, now }: InboxProps) {
         <ProposalBody proposal={item.proposal} state={state} focused={focused} />
       )}
     </box>
+  );
+}
+
+function JoinBody({ request, now, focused }: { request: JoinRequestView; now: number; focused: boolean }) {
+  const seconds = Math.max(0, Math.round((now - Date.parse(request.requested_at)) / 1000));
+  return (
+    <>
+      <text>
+        <span fg={colorFor(request.id)}>
+          <b>{request.name}</b>
+        </span>
+        <span fg={theme.dim}>
+          {" "}
+          · {request.client} · waiting {seconds}s · came in with the room link
+        </span>
+      </text>
+      {focused ? (
+        <Keys items={[["y", "let in"], ["v", "as a viewer"], ["n", "refuse"]]} />
+      ) : (
+        <text fg={theme.dim}>tab to answer</text>
+      )}
+    </>
+  );
+}
+
+function BriefingBody({ request, now, focused }: { request: BriefingRequestView; now: number; focused: boolean }) {
+  const seconds = Math.max(0, Math.round((now - Date.parse(request.requested_at)) / 1000));
+  return (
+    <>
+      <text>
+        <span fg={colorFor(request.participant_id)}>
+          <b>{request.name}</b>
+        </span>
+        <span fg={theme.dim}> · asks your agent to brief them{request.update ? " (an update)" : ""} · {seconds}s ago</span>
+      </text>
+      {request.focus ? <text>{request.focus}</text> : null}
+      {focused ? <Keys items={[["y", "write it"], ["n", "not now"]]} /> : <text fg={theme.dim}>tab to answer</text>}
+    </>
+  );
+}
+
+function AccessBody({ request, now, focused }: { request: AccessRequestView; now: number; focused: boolean }) {
+  const seconds = Math.max(0, Math.round((now - Date.parse(request.requested_at)) / 1000));
+  return (
+    <>
+      <text>
+        <span fg={colorFor(request.participant_id)}>
+          <b>{request.name}</b>
+        </span>
+        <span fg={theme.dim}> · watching · asked {seconds}s ago</span>
+      </text>
+      {request.note ? <text>{request.note}</text> : null}
+      {focused ? <Keys items={[["y", "let them write"], ["n", "not now"]]} /> : <text fg={theme.dim}>tab to answer</text>}
+    </>
   );
 }
 
@@ -94,6 +160,11 @@ function ApprovalBody({ approval, state, now, focused }: { approval: ApprovalVie
         </span>
       </text>
       <text fg={theme.info}>{call.name === "bash" ? `$ ${call.subject}` : call.subject}</text>
+      {(approval.warnings ?? []).map((warning) => (
+        <text key={warning} fg={theme.warn}>
+          ⚠ {warning}
+        </text>
+      ))}
       {focused ? (
         <Keys items={[["y", "once"], ["a", pattern ? `always ${pattern}` : "always"], ["n", "reject"], ["b", "block this kind"]]} />
       ) : (

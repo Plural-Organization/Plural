@@ -7,9 +7,11 @@ import { beginOAuth, clearOAuth, exchangeCode, hasOAuth, openOAuth, saveOAuth, t
 import type { Keys } from "../credentials";
 import { presetOf, problemWith, toConfig, type AgentChoice, type PresetId } from "../presets";
 import type { Settings } from "../settings";
+import { relayProblem, type ShareMode } from "../share";
 import {
   friendlyError,
   maskKey,
+  nextFast,
   nextModel,
   rowsFor,
   switchConnection,
@@ -20,6 +22,7 @@ import {
   type Tab,
 } from "../settingsModel";
 import { THEME_NAMES, theme, type ThemeName } from "../theme";
+import type { UpdateState } from "../update";
 
 export const DIALOG_WIDTH = 72;
 
@@ -58,7 +61,11 @@ export interface DialogProps {
   onKeys: (preset: PresetId, key: string, remember: boolean) => void;
   onMode: (mode: "open" | "review") => void;
   onInvite: () => void;
+  admission?: "approve" | "open";
+  onAdmission?: (mode: "approve" | "open") => void;
   onCopyReply: () => void;
+  update?: UpdateState | null;
+  onUpdate?: () => void;
   onClose: () => void;
 }
 
@@ -85,9 +92,11 @@ export function SettingsDialog(props: DialogProps) {
     choice: local.current.choice,
     keys: local.current.keys,
     mode: live.current.mode,
+    admission: live.current.admission,
     role: live.current.role,
     canConfigure: live.current.control !== null && live.current.role === "host",
     oauthLoggedIn: hasOAuth(),
+    update: live.current.update,
   });
   const rows = (): Row[] => rowsFor(local.current.tab, state());
   const set = (patch: Partial<Local>): void => {
@@ -150,6 +159,14 @@ export function SettingsDialog(props: DialogProps) {
       });
     } else if (editing.id === "key") {
       set({ editing: null, keys: { ...keys, [choice.preset]: value }, status: null });
+    } else if (editing.id === "relay") {
+      const problem = relayProblem(value);
+      if (problem !== null) {
+        say("error", problem);
+        return;
+      }
+      live.current.onSettings({ ...live.current.settings, relayUrl: value });
+      set({ editing: null, status: { tone: "ok", text: "✓ saved, it applies the next time you start plural" } });
     } else if (editing.id === "model") {
       set({ editing: null, choice: { ...choice, model: value }, status: null });
     } else if (editing.id === "url") {
@@ -171,6 +188,12 @@ export function SettingsDialog(props: DialogProps) {
       case "bell":
         onSettings({ ...settings, bell: !settings.bell });
         break;
+      case "mention-bell":
+        onSettings({ ...settings, mentionBell: !settings.mentionBell });
+        break;
+      case "join-bell":
+        onSettings({ ...settings, joinBell: !settings.joinBell });
+        break;
       case "typing":
         onSettings({ ...settings, announceTyping: !settings.announceTyping });
         break;
@@ -187,6 +210,7 @@ export function SettingsDialog(props: DialogProps) {
       model: choice.model,
       url: choice.baseUrl,
       window: choice.contextWindow,
+      relay: live.current.settings.relayUrl,
     };
     set({ editing: { id: row.id, buffer: raw[row.id] ?? "" } });
   };
@@ -204,6 +228,8 @@ export function SettingsDialog(props: DialogProps) {
       set({ choice: switched.choice, savedChoices: switched.saved, status: null });
     } else if (row.id === "model") {
       set({ choice: { ...choice, model: nextModel(choice, direction) }, status: null });
+    } else if (row.id === "fast") {
+      set({ choice: { ...choice, fastModel: nextFast(choice, direction) }, status: null });
     } else if (row.kind === "toggle") {
       toggleSetting(row.id);
     }
@@ -225,13 +251,21 @@ export function SettingsDialog(props: DialogProps) {
         change(row, 1);
         break;
       case "radio":
-        live.current.onMode(row.id === "mode-open" ? "open" : "review");
+        if (row.id.startsWith("join-")) {
+          live.current.onAdmission?.(row.id === "join-open" ? "open" : "approve");
+        } else if (row.id.startsWith("share-")) {
+          live.current.onSettings({ ...live.current.settings, share: row.id.slice("share-".length) as ShareMode });
+        } else {
+          live.current.onMode(row.id === "mode-open" ? "open" : "review");
+        }
         break;
       case "swatch":
         live.current.onSettings({ ...live.current.settings, theme: row.id.slice("theme:".length) as ThemeName });
         break;
       case "action":
-        if (row.id === "test" || row.id === "save") {
+        if (row.id === "update") {
+          live.current.onUpdate?.();
+        } else if (row.id === "test" || row.id === "save") {
           void run(row.id);
         } else if (row.id === "oauth-login") {
           const attempt = beginOAuth();

@@ -38,6 +38,7 @@ ENV/
 coverage.xml
 htmlcov/
 *.cover
+requirements.txt
 
 # Secrets and local config
 .env
@@ -81,3 +82,4 @@ Thumbs.db
 .claude/
 CLAUDE.local.md
 *.tsbuildinfo
+.vercel

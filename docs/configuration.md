@@ -19,16 +19,30 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 | `PLURAL_PORT` | `7777` | Port for direct mode |
 | `PLURAL_RELAY_URL` | none | Relay URL |
 | `PLURAL_PUBLIC_URL` | none | Public URL used in invite links |
+| `PLURAL_ADMISSION` | `approve` | `approve`: the host lets in everyone who uses the room link; `open`: anyone with it goes in at once |
+| `PLURAL_JOIN_TIMEOUT_S` | `120` | Seconds before an unanswered request to join lapses |
+| `PLURAL_MAX_PENDING_JOINS` | `5` | People who may wait to be let in at once |
+| `PLURAL_MAX_PARTICIPANTS` | `20` | People in the room at once |
 | `PLURAL_FIRST_TOKEN_TIMEOUT_S` | `120` | Seconds to wait for the model's first output before the run fails |
 | `PLURAL_IDLE_TIMEOUT_S` | `60` | Seconds of silence mid-response before the run fails |
 | `PLURAL_CONTEXT_WINDOW` | `128000` | Model context size in tokens. Set it to the real window for local models |
 | `PLURAL_COMPACT_AT` | `0.75` | Fraction of the window at which the conversation is summarized |
+| `PLURAL_FAST_MODEL` | picked from your credentials | The cheaper model for work that does not need the main one, today the conversation summary. By default `claude-haiku-5-5` with Anthropic (API key or OAuth), `gpt-5-mini` with OpenAI, `gemini-2.5-flash` with Gemini, and with Claude Code or Codex whichever of `ANTHROPIC_API_KEY` or `OPENAI_API_KEY` is set. None when the main model is already a small one or nothing cheaper is reachable; then the main model does it. A summary the fast model fails at is retried on the main one |
+| `PLURAL_FAST_PROVIDER` | the main provider | Provider for `PLURAL_FAST_MODEL`, for example `openai` to run it on `OPENAI_API_KEY` while the main model is Claude. It shares `PLURAL_BASE_URL` with the main model |
 | `PLURAL_APPROVAL_TIMEOUT_S` | `120` | Seconds before an approval expires |
 | `PLURAL_REJECTION_LIMIT` | `2` | Rejections of one kind of action per run before the agent stops asking the host |
 | `PLURAL_GUEST_RUN_TOKENS` | none | Token budget for a run that includes a guest's prompt. Input, cache writes and output count; cache reads do not. The run ends after the turn that reaches it |
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24 hours |
 | `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |
+| `PLURAL_MAX_IMAGE_BYTES` | `2500000` | Largest image a participant may attach, at most `2900000` so it fits a 4 MB message. The terminal client scales pasted images to 1568 px first. Claude Code, Codex CLI and models without vision do not see images |
 | `PLURAL_TYPING_TTL_S` | `6` | Seconds after which a typing indicator lapses without a refresh |
+| `PLURAL_WEB_SEARCH` | `true` | Give the agent `web_search`: Pydantic AI's `WebSearchTool`, run by the session provider's own search engine. Works with an Anthropic or OpenAI API key and with Claude OAuth; there is no search with Claude Code, Codex CLI or a custom `PLURAL_BASE_URL`. Each search waits for approval like other tools |
+| `PLURAL_WEB_SEARCH_MODEL` | session model | Model that runs the search, written as `provider:model` like Pydantic AI, for example `anthropic:claude-haiku-4-5` to search cheaply. It applies only while the session uses that provider (`anthropic` covers Claude OAuth too) |
+| `PLURAL_WEB_SEARCH_CONTEXT_SIZE` | `medium` | `low`, `medium` or `high`: how much page text the search reads (OpenAI) |
+| `PLURAL_WEB_SEARCH_MAX_USES` | `5` | Searches per `web_search` call (Anthropic) |
+| `PLURAL_WEB_SEARCH_ALLOWED_DOMAINS` / `PLURAL_WEB_SEARCH_BLOCKED_DOMAINS` | none | JSON lists such as `["docs.python.org"]`; only one of the two at a time on Anthropic |
+| `PLURAL_WEB_SEARCH_CITY` / `_REGION` / `_COUNTRY` / `_TIMEZONE` | none | Location the results are localized for, for example `Almaty`, `KZ`, `Asia/Almaty` |
+| `PLURAL_BROWSER` | `launch` | The browser the agent drives through Playwright MCP. `launch` opens a Chrome window of its own on first use; its profile lives in `~/.plural/browser`, so a login there is kept. A CDP endpoint attaches instead: `chrome` is the host's running Chrome once remote debugging is on in `chrome://inspect`. `off` turns the browser off |
 
 ## Models
 
@@ -63,8 +77,10 @@ Without any of these the host runs a scripted demo agent: any text lists the wor
 A relay lets people connect over the internet without opening a port on the host. It only routes frames: it never decides permissions and never stores content.
 
 ```bash
-plural relay --bind 0.0.0.0 --port 8787
+plural-host relay --bind 0.0.0.0 --port 8787
 plural --relay wss://relay.example.com
 ```
 
-A ready-made deployment with Caddy and TLS is in [`deploy/`](../deploy/).
+The relay takes its port from `PORT` and its address from `PLURAL_RELAY_BIND` when no option is given. In the client, `F2` → Session → *Over the internet* saves the relay address, see [sharing a session](self-hosting.md).
+
+Running the relay and a host on Railway, Render, any VM or your own machine is described in [running on a server](self-hosting.md).

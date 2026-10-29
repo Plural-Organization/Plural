@@ -1,7 +1,8 @@
+import { withDefaults } from "./reduce";
 import { decodeEvent, decodeRecord, ProtocolError } from "./decode";
 import type { JoinLink } from "./link";
 import { Projection } from "./projection";
-import type { ClientInfo, Command, Envelope, ErrorCode, Event } from "./protocol";
+import type { ClientInfo, Command, Envelope, ErrorCode, Event, TeamProof } from "./protocol";
 import { CommandRejected, ConnectionClosed, Wire } from "./wire";
 
 const INITIAL_DELAY_MS = 250;
@@ -13,6 +14,8 @@ export type ConnectionStatus = "connecting" | "online" | "offline";
 export interface SessionOptions {
   name: string;
   client: ClientInfo;
+  onWelcome?: (welcome: { room: string; token: string }) => void;
+  team?: (room: string, url: string) => TeamProof;
 }
 
 export interface Session {
@@ -111,6 +114,8 @@ export class SessionClient implements Session {
       client: this.options.client,
       name: this.options.name,
       invite: this.token === null ? this.link.invite : null,
+      join: this.token === null ? this.link.join : null,
+      team: this.token === null && this.options.team ? this.options.team(this.link.room, this.link.url) : null,
       token: this.token,
       since: this.projection.ready ? this.projection.state.last_seq : null,
     };
@@ -132,14 +137,21 @@ export class SessionClient implements Session {
       return this.projection.apply(record) ? event : null;
     }
     switch (event.type) {
+      case "session.pending":
+        this.projection.waiting = true;
+        break;
+      case "session.refused":
+        throw new CommandRejected({ code: "forbidden", message: event.reason });
       case "session.welcome":
+        this.projection.waiting = false;
         this.token = event.token;
+        this.options.onWelcome?.({ room: event.room, token: event.token });
         this.projection.meId = event.participant.id;
         this.projection.basePolicy = event.base_policy;
         this.projection.agent = event.agent;
         break;
       case "session.snapshot":
-        this.projection.load(event.state, event.streaming, event.typing);
+        this.projection.load(withDefaults(event.state), event.streaming, event.typing);
         break;
       default:
         this.projection.observe(event);

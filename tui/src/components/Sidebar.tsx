@@ -2,6 +2,7 @@ import { label, PERMISSION_LABELS, type Participant, type Projection } from "@pl
 import { useState, type ReactNode } from "react";
 import { colorFor, theme } from "../theme";
 import { truncate } from "../lib/wrap";
+import type { SpaceRow } from "../spaces";
 import type { InboxItem } from "./Inbox";
 import { Spinner, useElapsed } from "./Spinner";
 import { ContextMeterView } from "./StatusBar";
@@ -35,7 +36,49 @@ function ParticipantRow({ participant, name, me, typing }: { participant: Partic
   );
 }
 
+const STATUS_MARK = { running: "●", waiting: "◆", idle: "○" } as const;
+
+function SpacesSection({ rows, name, error, onOpen }: { rows: SpaceRow[]; name: string; error: string | null; onOpen?: (id: string) => void }) {
+  return (
+    <Section title={`spaces · ${truncate(name, 12)}`} count={rows.length}>
+      {rows.slice(0, 8).map((row) => {
+        const color = row.offline ? theme.line : row.status === "running" ? theme.ok : row.status === "waiting" ? theme.warn : theme.dim;
+        return (
+          <box key={row.id} flexDirection="column" backgroundColor={row.active ? theme.bg : undefined} onMouseDown={() => onOpen?.(row.id)}>
+            <text>
+              <span fg={color}>{STATUS_MARK[row.status]} </span>
+              <span fg={row.active ? theme.accent : row.mine ? theme.text : colorFor(row.title)}>
+                <b>{truncate(row.title, 14)}</b>
+              </span>
+              <span fg={color}>{row.status === "idle" ? "" : `  ${row.status}`}</span>
+              <span fg={theme.dim}>{row.viewers > 0 ? `  👁 ${row.viewers}` : ""}</span>
+              <span fg={theme.warn}>{row.clash ? "  ⚠" : ""}</span>
+            </text>
+            <text fg={row.active ? theme.info : theme.dim}>  {truncate(row.detail, SIDEBAR_WIDTH - 8)}</text>
+            {row.warning !== null ? (
+              <text fg={theme.warn} wrapMode="word">
+                {"  ⚠ "}
+                {row.warning}
+              </text>
+            ) : null}
+          </box>
+        );
+      })}
+      {rows.length > 8 ? <text fg={theme.dim}>  +{rows.length - 8} more</text> : null}
+      {error !== null ? (
+        <text fg={theme.warn} wrapMode="word">
+          team offline: {error}
+        </text>
+      ) : null}
+    </Section>
+  );
+}
+
 interface SidebarProps {
+  spaces?: SpaceRow[];
+  teamName?: string | null;
+  teamError?: string | null;
+  onOpenSpace?: (id: string) => void;
   onSettings: () => void;
   projection: Projection;
   room: string;
@@ -44,7 +87,7 @@ interface SidebarProps {
   status: string;
 }
 
-export function Sidebar({ projection, room, inbox, running, status, onSettings }: SidebarProps) {
+export function Sidebar({ projection, room, inbox, running, status, spaces, teamName, teamError, onOpenSpace, onSettings }: SidebarProps) {
   const state = projection.state;
   const [hover, setHover] = useState(false);
   const elapsed = useElapsed(running);
@@ -74,10 +117,26 @@ export function Sidebar({ projection, room, inbox, running, status, onSettings }
           />
         ))}
       </Section>
+      {spaces && spaces.length > 0 && teamName ? <SpacesSection rows={spaces} name={teamName} error={teamError ?? null} onOpen={onOpenSpace} /> : null}
       {inbox.length > 0 ? (
         <Section title="needs you" count={inbox.length}>
           {inbox.slice(0, 4).map((item) =>
-            item.kind === "approval" ? (
+            item.kind === "join" ? (
+              <box key={item.id} flexDirection="column">
+                <text fg={theme.warn}>+ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
+                <text fg={theme.dim}>  wants to join</text>
+              </box>
+            ) : item.kind === "briefing" ? (
+              <box key={item.id} flexDirection="column">
+                <text fg={theme.warn}>✉ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
+                <text fg={theme.dim}>  wants a briefing</text>
+              </box>
+            ) : item.kind === "access" ? (
+              <box key={item.id} flexDirection="column">
+                <text fg={theme.warn}>✎ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
+                <text fg={theme.dim}>  wants to write</text>
+              </box>
+            ) : item.kind === "approval" ? (
               <box key={item.id} flexDirection="column">
                 <text fg={theme.warn}>! {truncate(`${item.approval.call.name} ${item.approval.call.subject}`, SIDEBAR_WIDTH - 8)}</text>
                 <text fg={theme.dim}>  from {nameOf(projection, item.approval.provenance.initiator_id)}</text>
@@ -132,7 +191,12 @@ export function Sidebar({ projection, room, inbox, running, status, onSettings }
           </text>
         ) : null}
         <ContextMeterView state={state} width={8} />
-        <text fg={theme.dim}>{truncate(projection.agent || "agent", SIDEBAR_WIDTH - 4)}</text>
+        <text fg={theme.dim}>{truncate(projection.agentLabel || "agent", SIDEBAR_WIDTH - 4)}</text>
+        {state.fast_agent ? (
+          <text fg={theme.dim}>
+            fast <span fg={theme.info}>{truncate(state.fast_agent, SIDEBAR_WIDTH - 9)}</span>
+          </text>
+        ) : null}
         <text fg={theme.dim}>
           {"  "}
           {running ? <Spinner color={theme.info} /> : null}

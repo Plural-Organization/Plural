@@ -5,12 +5,24 @@ from pydantic import Field
 
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.models import (
+    AccessDecision,
+    AccessRequestView,
+    AdmissionMode,
+    AgentView,
     ApprovalDecision,
     ApprovalView,
     AttachmentMeta,
+    BoardCursor,
+    BoardStroke,
+    BriefingDecision,
+    BriefingImportView,
+    BriefingRequestView,
+    BriefingSharing,
     ContextView,
     Delivery,
     DequeueReason,
+    JoinDecision,
+    JoinRequestView,
     McpServerView,
     Model,
     Participant,
@@ -26,8 +38,10 @@ from plural.protocol.models import (
     SessionState,
     SkillHit,
     SkillView,
+    TextSelection,
     ToolCallView,
     Usage,
+    UsageLine,
 )
 
 
@@ -86,6 +100,80 @@ class SkillsFound(TransientEvent):
 class AgentChanged(EventBase):
     type: Literal["agent.changed"] = "agent.changed"
     agent: str
+    fast: str = ""
+
+
+class AdmissionChanged(EventBase):
+    type: Literal["link.admission_changed"] = "link.admission_changed"
+    mode: AdmissionMode
+
+
+class JoinRequested(EventBase):
+    type: Literal["join.requested"] = "join.requested"
+    request: JoinRequestView
+
+
+class JoinResolved(EventBase):
+    type: Literal["join.resolved"] = "join.resolved"
+    request_id: str
+    decision: JoinDecision
+    decided_by: str | None = None
+
+
+class AccessRequested(EventBase):
+    type: Literal["access.requested"] = "access.requested"
+    request: AccessRequestView
+
+
+class AccessResolved(EventBase):
+    type: Literal["access.resolved"] = "access.resolved"
+    participant_id: str
+    decision: AccessDecision
+    decided_by: str | None = None
+
+
+class BriefingRequested(EventBase):
+    type: Literal["briefing.requested"] = "briefing.requested"
+    request: BriefingRequestView
+
+
+class BriefingResolved(EventBase):
+    type: Literal["briefing.resolved"] = "briefing.resolved"
+    request_id: str
+    participant_id: str
+    decision: BriefingDecision
+    decided_by: str | None = None
+
+
+class BriefingDelivered(EventBase):
+    type: Literal["briefing.delivered"] = "briefing.delivered"
+    request_id: str
+    to: str
+    text: str = ""
+    as_of_seq: int = 0
+    update: bool = False
+    error: str | None = None
+
+
+class BriefingSharingChanged(EventBase):
+    type: Literal["briefing.sharing_changed"] = "briefing.sharing_changed"
+    mode: BriefingSharing
+
+
+class BriefingImported(EventBase):
+    type: Literal["briefing.imported"] = "briefing.imported"
+    item: BriefingImportView
+    text: str
+
+
+class JoinPending(TransientEvent):
+    type: Literal["session.pending"] = "session.pending"
+    waiting: int = 1
+
+
+class JoinRefused(TransientEvent):
+    type: Literal["session.refused"] = "session.refused"
+    reason: str
 
 
 class PromptDequeued(EventBase):
@@ -98,6 +186,66 @@ class ParticipantTyping(TransientEvent):
     type: Literal["participant.typing"] = "participant.typing"
     participant_id: str
     typing: bool
+
+
+class ParticipantSelected(TransientEvent):
+    type: Literal["participant.selected"] = "participant.selected"
+    participant_id: str
+    selection: TextSelection | None
+
+
+class ParticipantCursor(TransientEvent):
+    type: Literal["participant.cursor"] = "participant.cursor"
+    participant_id: str
+    cursor: BoardCursor | None
+
+
+class BoardOpened(EventBase):
+    type: Literal["board.opened"] = "board.opened"
+    open: bool
+    by: str
+
+
+class BoardStroked(EventBase):
+    type: Literal["board.stroked"] = "board.stroked"
+    stroke: BoardStroke
+
+
+class BoardMoved(EventBase):
+    type: Literal["board.moved"] = "board.moved"
+    stroke_id: str
+    points: tuple[float, ...]
+
+
+class AttachmentData(TransientEvent):
+    """The picture of a board image, sent only to the person who asked for it."""
+
+    type: Literal["attachment.data"] = "attachment.data"
+    attachment_id: str
+    media_type: str
+    content_b64: str
+
+
+class BoardErased(EventBase):
+    type: Literal["board.erased"] = "board.erased"
+    stroke_id: str
+
+
+class BoardCleared(EventBase):
+    """The board lost every mark, or only the marks of author_id when it is set."""
+
+    type: Literal["board.cleared"] = "board.cleared"
+    by: str
+    author_id: str | None = None
+
+
+class ChatPosted(EventBase):
+    type: Literal["chat.posted"] = "chat.posted"
+    message_id: str
+    author_id: str
+    text: str
+    to: str | None = None
+    mentions: tuple[str, ...] = ()
 
 
 class ProposalCreated(EventBase):
@@ -168,6 +316,16 @@ class ContextCompacting(TransientEvent):
     type: Literal["context.compacting"] = "context.compacting"
     run_id: str
     tokens_before: int
+
+
+class AgentsChanged(EventBase):
+    type: Literal["agents.changed"] = "agents.changed"
+    agents: tuple[AgentView, ...]
+
+
+class UsageRecorded(EventBase):
+    type: Literal["usage.recorded"] = "usage.recorded"
+    lines: tuple[UsageLine, ...]
 
 
 class McpChanged(EventBase):
@@ -276,8 +434,9 @@ class InviteCreated(TransientEvent):
     type: Literal["invite.created"] = "invite.created"
     code: str
     role: Role
-    expires_at: datetime
+    expires_at: datetime | None = None
     link: str
+    reusable: bool = False
 
 
 class ErrorRaised(TransientEvent):
@@ -296,8 +455,29 @@ Event = Annotated[
     | SkillsChanged
     | SkillsFound
     | AgentChanged
+    | AdmissionChanged
+    | JoinRequested
+    | JoinResolved
+    | AccessRequested
+    | AccessResolved
+    | BriefingRequested
+    | BriefingResolved
+    | BriefingDelivered
+    | BriefingSharingChanged
+    | BriefingImported
+    | JoinPending
+    | JoinRefused
     | PromptDequeued
     | ParticipantTyping
+    | ParticipantSelected
+    | ParticipantCursor
+    | BoardOpened
+    | BoardStroked
+    | BoardMoved
+    | AttachmentData
+    | BoardErased
+    | BoardCleared
+    | ChatPosted
     | ProposalCreated
     | ProposalApproved
     | ProposalRejected
@@ -311,6 +491,8 @@ Event = Annotated[
     | ContextCompacted
     | ContextUsage
     | McpChanged
+    | UsageRecorded
+    | AgentsChanged
     | PluginsChanged
     | CommandInvoked
     | CommandReplied

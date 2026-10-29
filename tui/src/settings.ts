@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { DEFAULT_CHOICE, isPresetId, type AgentChoice, type PresetId } from "./presets";
+import { isShareMode, type ShareMode } from "./share";
 import { THEME_NAMES, type ThemeName } from "./theme";
 
 export interface Settings {
@@ -9,9 +10,13 @@ export interface Settings {
   panel: boolean;
   copyOnSelect: boolean;
   bell: boolean;
+  mentionBell: boolean;
+  joinBell: boolean;
   announceTyping: boolean;
   rememberKey: boolean;
   setupSeen: boolean;
+  share: ShareMode;
+  relayUrl: string;
   agent: AgentChoice;
   agentChoices: Partial<Record<PresetId, AgentChoice>>;
 }
@@ -20,10 +25,14 @@ export const DEFAULT_SETTINGS: Settings = {
   theme: "tokyo",
   panel: true,
   copyOnSelect: true,
-  bell: false,
+  bell: true,
+  mentionBell: true,
+  joinBell: true,
   announceTyping: true,
   rememberKey: true,
   setupSeen: false,
+  share: "local",
+  relayUrl: "",
   agent: DEFAULT_CHOICE,
   agentChoices: {},
 };
@@ -36,6 +45,7 @@ function parseChoice(raw: unknown): AgentChoice {
     model: text("model"),
     baseUrl: text("baseUrl"),
     contextWindow: text("contextWindow"),
+    ...(text("fastModel") ? { fastModel: text("fastModel") } : {}),
   };
 }
 
@@ -46,7 +56,7 @@ export function settingsPath(environment: Record<string, string | undefined> = p
 
 export function parseSettings(raw: unknown): Settings {
   const value = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
-  const flag = (key: "panel" | "copyOnSelect" | "bell" | "announceTyping" | "rememberKey" | "setupSeen"): boolean =>
+  const flag = (key: "panel" | "copyOnSelect" | "bell" | "mentionBell" | "joinBell" | "announceTyping" | "rememberKey" | "setupSeen"): boolean =>
     typeof value[key] === "boolean" ? (value[key] as boolean) : DEFAULT_SETTINGS[key];
   const agent = parseChoice(value["agent"]);
   const rawChoices = typeof value["agentChoices"] === "object" && value["agentChoices"] !== null
@@ -62,9 +72,13 @@ export function parseSettings(raw: unknown): Settings {
     panel: flag("panel"),
     copyOnSelect: flag("copyOnSelect"),
     bell: flag("bell"),
+    mentionBell: flag("mentionBell"),
+    joinBell: flag("joinBell"),
     announceTyping: flag("announceTyping"),
     rememberKey: flag("rememberKey"),
     setupSeen: flag("setupSeen"),
+    share: isShareMode(value["share"]) ? value["share"] : DEFAULT_SETTINGS.share,
+    relayUrl: typeof value["relayUrl"] === "string" ? value["relayUrl"] : DEFAULT_SETTINGS.relayUrl,
     agent,
     agentChoices,
   };

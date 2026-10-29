@@ -81,6 +81,59 @@ describe("TypeScript client against a Python host", () => {
     await guest.pump;
   }, 60_000);
 
+  test("a private message reaches only its two people and the room's message reaches all", async () => {
+    const owner = connect(host.hostLink, "vlad");
+    await until(() => owner.client.projection.me !== undefined);
+    await owner.client.send({ type: "invite.create", role: "participant", ttl_s: 600 });
+    await owner.client.send({ type: "invite.create", role: "participant", ttl_s: 600 });
+    const links = (): string[] => owner.seen.flatMap((event) => (event.type === "invite.created" ? [event.link] : []));
+    await until(() => links().length === 2);
+    const alia = connect(links()[0] as string, "alia");
+    const bek = connect(links()[1] as string, "bek");
+    await until(() => alia.client.projection.me !== undefined && bek.client.projection.me !== undefined);
+    const bekId = bek.client.projection.me?.id as string;
+    const ownerId = owner.client.projection.me?.id as string;
+
+    await owner.client.send({ type: "chat.send", text: "for the room", to: null, mentions: [bekId] });
+    await until(() => alia.client.projection.state.chat.length === 1 && bek.client.projection.state.chat.length === 1);
+
+    await bek.client.send({ type: "chat.send", text: "only for vlad", to: ownerId, mentions: [] });
+    await until(() => owner.client.projection.state.chat.some((entry) => entry.text === "only for vlad"));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+
+    const texts = (who: typeof owner): string[] => who.client.projection.state.chat.map((entry) => entry.text);
+    expect(texts(owner)).toEqual(["for the room", "only for vlad"]);
+    expect(texts(bek)).toEqual(["for the room", "only for vlad"]);
+    expect(texts(alia)).toEqual(["for the room"]);
+    expect(alia.client.projection.state.chat[0]?.mentions).toEqual([bekId]);
+
+    await expect(alia.client.send({ type: "chat.send", text: "x", to: "p_nobody", mentions: [] })).rejects.toBeInstanceOf(CommandRejected);
+
+    for (const person of [owner, alia, bek]) {
+      person.client.close();
+    }
+    await Promise.all([owner.pump, alia.pump, bek.pump]);
+  }, 60_000);
+
+  test("the welcome hands over the room and the token to remember", async () => {
+    const welcomes: { room: string; token: string }[] = [];
+    const client = new SessionClient(parseLink(host.hostLink), { name: "vlad", client: CLIENT, onWelcome: (welcome) => welcomes.push(welcome) });
+    const pump = (async () => {
+      try {
+        for await (const _event of client.events()) {
+          void _event;
+        }
+      } catch {
+        return;
+      }
+    })();
+    await until(() => welcomes.length > 0);
+    expect(welcomes[0]?.room).toBe(parseLink(host.hostLink).room);
+    expect(welcomes[0]?.token.length).toBeGreaterThan(20);
+    client.close();
+    await pump;
+  }, 30_000);
+
   test("a forged token is refused", async () => {
     const forged = host.hostLink.replace(/token=.*/, "token=forged");
     const client = new SessionClient(parseLink(forged), { name: "mallory", client: CLIENT });

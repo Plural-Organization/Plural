@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 
 from plural.agent.providers.base import ToolSchema
 from plural.agent.sandbox.base import ExecutionBackend, Workspace
-from plural.protocol.models import ToolRisk
+from plural.protocol.models import Provenance, ToolRisk
 
 
 class ToolError(Exception):
@@ -65,6 +65,8 @@ class ToolCtx:
     locks: FileLocks = field(default_factory=FileLocks)
     stamps: FileStamps = field(default_factory=FileStamps)
     emit: Callable[[str], None] = _discard
+    provenance: Provenance | None = None
+    cancel: asyncio.Event | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -2,6 +2,7 @@ from plural.core.state import reduce
 from plural.protocol.events import (
     Event,
     EventRecord,
+    JoinPending,
     MessageDelta,
     MessageEnded,
     MessageStarted,
@@ -18,6 +19,7 @@ class Projection:
         self.base_policy: tuple[PolicyRuleView, ...] = ()
         self.me_id: str | None = None
         self.ready = False
+        self.waiting = False
 
     @property
     def me(self) -> Participant | None:
@@ -47,6 +49,9 @@ class Projection:
         return True
 
     def observe(self, event: Event) -> None:
+        if isinstance(event, JoinPending):
+            self.waiting = True
+            return
         if not isinstance(event, MessageDelta):
             return
         if event.thinking:
