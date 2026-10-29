@@ -72,6 +72,7 @@ export function helpText(role: Role | undefined): string {
     "  shift+tab       cycle permissions: ask · accept edits · plan · auto (host)",
     "  esc             interrupt the run",
     "  pgup / pgdn     scroll the conversation",
+    "  ctrl+f          search the conversation: text, commands, paths (enter older, shift+enter newer)",
     "  ctrl+o          expand or collapse tool details (or click a tool line)",
     "  ctrl+b          show or hide the side panel",
     "  select text     copies it to the clipboard",

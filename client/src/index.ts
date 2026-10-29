@@ -7,6 +7,7 @@ export * from "./presenter";
 export * from "./projection";
 export * from "./protocol";
 export * from "./reduce";
+export * from "./search";
 export * from "./session";
 export * from "./slash";
 export * from "./tools";
