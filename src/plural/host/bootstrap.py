@@ -30,6 +30,7 @@ from plural.host.config import HostSettings
 from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook
+from plural.host.plugins import PluginHost
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.publisher import Publisher
 from plural.host.system import SystemClock, UlidGenerator
@@ -158,6 +159,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     )
     tools.add_source(mcp)
     mcp.start()
+    plugins = PluginHost(state_dir / "plugins", workspace=workspace.root)
     registry = ApprovalRegistry()
     gate = HostPolicyGate(
         policy=Policy(guest_run_tokens=settings.guest_run_tokens),
@@ -222,6 +224,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         prompt_mode=settings.prompt_mode,
         skills=skills,
         mcp=mcp,
+        plugins=plugins,
         typing_ttl_s=settings.typing_ttl_s,
         agent_label=settings.agent_label(),
     )

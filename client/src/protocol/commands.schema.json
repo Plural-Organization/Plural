@@ -44,6 +44,29 @@
       ],
       "type": "object"
     },
+    "CommandRun": {
+      "properties": {
+        "args": {
+          "default": "",
+          "maxLength": 32000,
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 32,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "command.run",
+          "default": "command.run",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
     "ContextCompact": {
       "properties": {
         "type": {
@@ -329,6 +352,35 @@
       "required": [
         "mode"
       ],
+      "type": "object"
+    },
+    "PluginsCreate": {
+      "properties": {
+        "name": {
+          "maxLength": 32,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_-]*$",
+          "type": "string"
+        },
+        "type": {
+          "const": "plugins.create",
+          "default": "plugins.create",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "type": "object"
+    },
+    "PluginsReload": {
+      "properties": {
+        "type": {
+          "const": "plugins.reload",
+          "default": "plugins.reload",
+          "type": "string"
+        }
+      },
       "type": "object"
     },
     "PolicyAction": {
@@ -659,6 +711,7 @@
       "discriminator": {
         "mapping": {
           "approval.respond": "#/$defs/ApprovalRespond",
+          "command.run": "#/$defs/CommandRun",
           "context.compact": "#/$defs/ContextCompact",
           "file.attach": "#/$defs/FileAttach",
           "history.get": "#/$defs/HistoryGet",
@@ -670,6 +723,8 @@
           "mcp.toggle": "#/$defs/McpToggle",
           "participant.revoke": "#/$defs/ParticipantRevoke",
           "participant.set_role": "#/$defs/ParticipantSetRole",
+          "plugins.create": "#/$defs/PluginsCreate",
+          "plugins.reload": "#/$defs/PluginsReload",
           "policy.add": "#/$defs/PolicyAdd",
           "policy.remove": "#/$defs/PolicyRemove",
           "presence.typing": "#/$defs/TypingSet",
@@ -746,6 +801,15 @@
         },
         {
           "$ref": "#/$defs/McpImport"
+        },
+        {
+          "$ref": "#/$defs/CommandRun"
+        },
+        {
+          "$ref": "#/$defs/PluginsReload"
+        },
+        {
+          "$ref": "#/$defs/PluginsCreate"
         },
         {
           "$ref": "#/$defs/TypingSet"

@@ -13,7 +13,7 @@ import {
   type PermissionMode,
   type Session,
 } from "@plural/client";
-import { COMMANDS } from "./commands";
+import { COMMANDS, pluginHints } from "./commands";
 import { FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { Composer } from "./components/Composer";
 import { Inbox, inboxItems, type InboxItem } from "./components/Inbox";
@@ -25,7 +25,7 @@ import { TopBar } from "./components/TopBar";
 import { SCOPES, TrayView, type McpWizard, type Row, type Tray } from "./components/Tray";
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, ModeLine, Working } from "./components/Working";
-import { helpRows, policyRows, skillRows, whoRows } from "./trays";
+import { helpRows, pluginRows, policyRows, skillRows, whoRows } from "./trays";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
@@ -160,8 +160,11 @@ export function App({
                 ...event.removed.map((name): Row => [{ text: "✕ ", fg: theme.warn }, { text: name, bold: true }, { text: " removed", fg: theme.dim }]),
               ],
             });
+          } else if (pending && event.type === "plugins.changed") {
+            setTray({ kind: "text", title: `plugins · ${event.plugins.length}`, tone: "accent", rows: pluginRows(client.projection) });
           } else if (pending && event.type === "error") {
-            setTray({ kind: "text", title: "skills", tone: "danger", rows: [[{ text: event.message, fg: theme.danger }]] });
+            const title = trayRef.current?.kind === "busy" ? trayRef.current.title : "skills";
+            setTray({ kind: "text", title, tone: "danger", rows: [[{ text: event.message, fg: theme.danger }]] });
           }
           if (event.type === "run.started" || event.type === "session.permission_mode_changed") {
             setPlanReady(false);
@@ -184,6 +187,7 @@ export function App({
   const projection = client.projection;
   const state = projection.state;
   const me = projection.me;
+  const pluginCommands = useMemo(() => pluginHints(state.commands), [state.commands]);
   const isHost = me?.role === "host";
   const mode = state.permission_mode;
   const running = state.run !== null;
@@ -277,7 +281,7 @@ export function App({
   const send = (command: Command): void => {
     client.send(command).catch((error: unknown) => {
       const text = error instanceof Error ? error.message : String(error);
-      if (command.type.startsWith("skills.") || command.type.startsWith("mcp.") || command.type === "context.compact") {
+      if (command.type.startsWith("skills.") || command.type.startsWith("mcp.") || command.type.startsWith("plugins.") || command.type === "context.compact") {
         show(command.type.split(".")[0] === "context" ? "compact" : command.type.split(".")[0]!, [[{ text, fg: theme.warn }]], "warn");
       } else {
         notify("danger", text);
@@ -495,7 +499,7 @@ export function App({
     const [name = "", ...rest] = text.slice(1).split(/\s+/);
     switch (name) {
       case "help":
-        show("help", helpRows(me?.role));
+        show("help", helpRows(me?.role, pluginCommands));
         return true;
       case "who":
         show(`who · ${Object.values(state.participants).filter((person) => person.connected).length} here`, whoRows(projection));
@@ -543,7 +547,7 @@ export function App({
     }
     if (text.startsWith("/")) {
       const name = text.slice(1).split(/\s+/)[0] ?? "";
-      const known = COMMANDS.find((command) => command.name === name);
+      const known = [...COMMANDS, ...pluginCommands].find((command) => command.name === name);
       if (known?.hostOnly && !isHost) {
         warn(`/${name}`, `/${name} is for the host`);
         return;
@@ -552,9 +556,18 @@ export function App({
         return;
       }
       try {
-        const parsed = parseSlash(text);
+        const parsed = parseSlash(text, new Set(state.commands.map((command) => command.name)));
         if (parsed === null) {
           return;
+        }
+        if (parsed.type === "show.plugins") {
+          show(`plugins · ${state.plugins.length}`, pluginRows(projection));
+          return;
+        }
+        if (parsed.type === "plugins.create") {
+          setTray({ kind: "busy", title: "plugins", text: `creating ~/.plural/plugins/${parsed.name}.py`, key: Date.now() });
+        } else if (parsed.type === "plugins.reload") {
+          setTray({ kind: "busy", title: "plugins", text: "reloading plugins", key: Date.now() });
         }
         if (parsed.type === "show.skills") {
           show(`skills · ${state.skills.length}`, skillRows(projection, width - (showPanel ? SIDEBAR_WIDTH : 0) - 10));
@@ -746,6 +759,7 @@ export function App({
           remember={!asking?.secret}
           tips={!asking}
           role={me?.role}
+          commands={pluginCommands}
           seed={seed}
           label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
           onSubmit={submit}

@@ -68,6 +68,9 @@ export interface CommandsSchema {
     | McpToggle
     | McpRestart
     | McpImport
+    | CommandRun
+    | PluginsReload
+    | PluginsCreate
     | TypingSet
     | QueueCancel
     | PolicyAdd
@@ -262,6 +265,30 @@ export interface McpRestart {
  */
 export interface McpImport {
   type?: "mcp.import";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "CommandRun".
+ */
+export interface CommandRun {
+  args?: string;
+  name: string;
+  type?: "command.run";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "PluginsReload".
+ */
+export interface PluginsReload {
+  type?: "plugins.reload";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "PluginsCreate".
+ */
+export interface PluginsCreate {
+  name: string;
+  type?: "plugins.create";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

@@ -52,6 +52,11 @@ class McpStatus(StrEnum):
     OFF = "off"
 
 
+class PluginStatus(StrEnum):
+    LOADED = "loaded"
+    FAILED = "failed"
+
+
 class DequeueReason(StrEnum):
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
@@ -209,6 +214,22 @@ class McpServerView(Model):
     error: str | None = None
 
 
+class PluginView(Model):
+    name: str
+    path: str
+    status: PluginStatus
+    commands: tuple[str, ...] = ()
+    error: str | None = None
+
+
+class PluginCommandView(Model):
+    name: str
+    plugin: str
+    description: str
+    usage: str = ""
+    host_only: bool = False
+
+
 class ContextView(Model):
     tokens: int
     window: int
@@ -243,6 +264,8 @@ class SessionState(Model):
     skills: tuple[SkillView, ...] = ()
     context: ContextView | None = None
     mcp: tuple[McpServerView, ...] = ()
+    plugins: tuple[PluginView, ...] = ()
+    commands: tuple[PluginCommandView, ...] = ()
     queue: tuple[QueuedPrompt, ...] = ()
     agent: str = ""
     summary: str | None = None

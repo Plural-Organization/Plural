@@ -1,4 +1,4 @@
-import type { Role } from "@plural/client";
+import type { PluginCommandView, Role } from "@plural/client";
 
 export interface CommandHint {
   name: string;
@@ -15,6 +15,7 @@ export const COMMANDS: CommandHint[] = [
   { name: "policy", usage: "/policy [allow|ask|deny <tool> <pattern> | rm <id>]", description: "show or edit permission rules", hostOnly: true },
   { name: "skills", usage: "/skills [search <q> | add <owner/repo@skill> [--global] | rm <name>]", description: "list, find and install skills" },
   { name: "mcp", usage: "/mcp [add <name> <command|url> [--global] | on|off|restart|rm <name> | import]", description: "connect MCP servers and their tools" },
+  { name: "plugins", usage: "/plugins [new <name> | reload]", description: "the host's plugins and their commands" },
   { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
   { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
   { name: "cancel", usage: "/cancel <n>", description: "remove a queued prompt (yours, or any as host)" },
@@ -23,16 +24,25 @@ export const COMMANDS: CommandHint[] = [
   { name: "quit", usage: "/quit", description: "leave the session" },
 ];
 
-export function visibleCommands(role: Role | undefined): CommandHint[] {
-  return COMMANDS.filter((command) => !command.hostOnly || role === "host");
+export function pluginHints(commands: readonly PluginCommandView[]): CommandHint[] {
+  return commands.map((command) => ({
+    name: command.name,
+    usage: command.usage ?? `/${command.name}`,
+    description: command.description || `from the ${command.plugin} plugin`,
+    hostOnly: command.host_only ?? false,
+  }));
 }
 
-export function suggestions(value: string, role: Role | undefined): CommandHint[] {
+export function visibleCommands(role: Role | undefined, plugins: CommandHint[] = []): CommandHint[] {
+  return [...COMMANDS, ...plugins].filter((command) => !command.hostOnly || role === "host");
+}
+
+export function suggestions(value: string, role: Role | undefined, plugins: CommandHint[] = []): CommandHint[] {
   if (!value.startsWith("/") || value.includes(" ") || value.includes("\n")) {
     return [];
   }
   const prefix = value.slice(1).toLowerCase();
-  return visibleCommands(role).filter((command) => command.name.startsWith(prefix));
+  return visibleCommands(role, plugins).filter((command) => command.name.startsWith(prefix));
 }
 
 export function visibleSuggestionWindow(

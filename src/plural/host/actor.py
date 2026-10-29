@@ -39,19 +39,24 @@ from plural.host.inbox import (
     InboxMessage,
     Incoming,
     McpUpdated,
+    PluginPrompt,
+    PluginReply,
     Reconfigure,
     SkillsReply,
     SkillsUpdated,
     TypingExpired,
 )
 from plural.host.invites import InviteBook
+from plural.host.plugins import CommandContext, PluginCommand, PluginError, PluginHost
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.publisher import Publisher
 from plural.host.transport.base import Connection
 from plural.protocol.codec import ProtocolError, decode_command
 from plural.protocol.commands import (
+    MAX_PROMPT_CHARS,
     ApprovalRespond,
     Command,
+    CommandRun,
     ContextCompact,
     FileAttach,
     HistoryGet,
@@ -64,6 +69,8 @@ from plural.protocol.commands import (
     ParticipantRevoke,
     ParticipantSetRole,
     PermissionModeSet,
+    PluginsCreate,
+    PluginsReload,
     PolicyAdd,
     PolicyRemove,
     PromptModeSet,
@@ -82,6 +89,8 @@ from plural.protocol.events import (
     AgentChanged,
     ApprovalRequested,
     AttachmentAdded,
+    CommandInvoked,
+    CommandReplied,
     ContextCompacted,
     ContextCompacting,
     ContextUsage,
@@ -99,6 +108,7 @@ from plural.protocol.events import (
     ParticipantRoleChanged,
     ParticipantTyping,
     PermissionModeChanged,
+    PluginsChanged,
     PolicyRuleAdded,
     PolicyRuleRemoved,
     PromptAccepted,
@@ -141,6 +151,7 @@ PLAN_NOTE = (
     "[plan mode: research only. Read the code, do not change files or run commands that change "
     "anything. End with a concrete step-by-step plan; the host approves it before you start]"
 )
+MAX_REPLY_CHARS = 8000
 
 
 class SessionActor:
@@ -164,6 +175,7 @@ class SessionActor:
         prompt_mode: PromptMode | None = None,
         skills: SkillLibrary | None = None,
         mcp: McpHub | None = None,
+        plugins: PluginHost | None = None,
         typing_ttl_s: float = 6.0,
         agent_label: str = "",
     ) -> None:
@@ -184,6 +196,7 @@ class SessionActor:
         self._initial_mode = prompt_mode
         self._skills = skills
         self._mcp = mcp
+        self._plugins = plugins
         self._jobs: set[asyncio.Task[None]] = set()
         self._typing_ttl_s = typing_ttl_s
         self._agent_label = agent_label
@@ -230,6 +243,9 @@ class SessionActor:
             await self._sync_skills()
         await self._sync_context(self._agent.fill())
         await self._sync_mcp()
+        if self._plugins is not None:
+            await asyncio.to_thread(self._plugins.load)
+            await self._sync_plugins()
 
     async def run(self) -> None:
         while True:
@@ -268,6 +284,16 @@ class SessionActor:
                     connection,
                     found or ErrorRaised(code=ErrorCode.INVALID, message=error or "search failed"),
                 )
+            case PluginReply(command=command, invoker_id=invoker_id, text=text, ok=ok):
+                replied = CommandReplied(
+                    command=command,
+                    invoker_id=invoker_id,
+                    text=text[:MAX_REPLY_CHARS] or "(empty reply)",
+                    ok=ok,
+                )
+                await self._emit(replied, actor_id=invoker_id)
+            case PluginPrompt() as request:
+                await self._plugin_prompt(request)
             case TypingExpired(participant_id=participant_id):
                 if self._typing.pop(participant_id, None) is not None:
                     await self._emit(ParticipantTyping(participant_id=participant_id, typing=False))
@@ -365,6 +391,19 @@ class SessionActor:
                 except SkillError as error:
                     raise NotFound(str(error)) from None
                 await self._sync_skills(actor_id=participant.id)
+            case CommandRun():
+                await self._run_command(participant, command)
+            case PluginsReload():
+                await asyncio.to_thread(self._require_plugins().load)
+                await self._sync_plugins(actor_id=participant.id, force=True)
+            case PluginsCreate():
+                plugins = self._require_plugins()
+                try:
+                    plugins.create(command.name)
+                except PluginError as error:
+                    raise Conflict(str(error)) from None
+                await asyncio.to_thread(plugins.load)
+                await self._sync_plugins(actor_id=participant.id)
             case TypingSet():
                 await self._set_typing(participant.id, typing=command.typing)
             case QueueCancel():
@@ -601,6 +640,72 @@ class SessionActor:
             skills=views, added=tuple(sorted(after - before)), removed=tuple(sorted(before - after))
         )
         await self._emit(changed, actor_id=actor_id or self._host.id)
+
+    def _require_plugins(self) -> PluginHost:
+        if self._plugins is None:
+            raise Conflict("plugins are not available on this host")
+        return self._plugins
+
+    async def _sync_plugins(self, *, actor_id: str | None = None, force: bool = False) -> None:
+        if self._plugins is None:
+            return
+        plugins, commands = self._plugins.views(), self._plugins.command_views()
+        if force or (plugins, commands) != (self._state.plugins, self._state.commands):
+            changed = PluginsChanged(plugins=plugins, commands=commands)
+            await self._emit(changed, actor_id=actor_id or self._host.id)
+
+    async def _run_command(self, participant: Participant, command: CommandRun) -> None:
+        found = self._require_plugins().get(command.name)
+        if found is None:
+            raise NotFound(f"no command /{command.name}")
+        if found.view.host_only and participant.role is not Role.HOST:
+            raise Forbidden(f"/{command.name} is for the host")
+        invoked = CommandInvoked(command=command.name, args=command.args, invoker_id=participant.id)
+        await self._emit(invoked, actor_id=participant.id)
+        context = CommandContext(
+            command=command.name,
+            args=command.args,
+            author=participant.name,
+            author_id=participant.id,
+            role=participant.role,
+            workspace=self._require_plugins().workspace,
+            inbox=self._inbox,
+        )
+        self._background(self._invoke_plugin(found, context))
+
+    async def _invoke_plugin(self, found: PluginCommand, context: CommandContext) -> None:
+        try:
+            await found.handler(context)
+        except Exception as error:
+            log.exception("actor.plugin_command_failed", command=context.command)
+            text = f"/{context.command} failed: {type(error).__name__}: {error}"
+            self._inbox.put(PluginReply(context.command, context.author_id, text, ok=False))
+
+    async def _plugin_prompt(self, request: PluginPrompt) -> None:
+        author = self._state.participants.get(request.invoker_id)
+        text = request.text.strip()[:MAX_PROMPT_CHARS]
+        problem = (
+            "the participant who ran it has left the room"
+            if author is None or author.role is Role.VIEWER
+            else "the prompt is empty"
+            if not text
+            else None
+        )
+        if author is not None and problem is None:
+            delivery = Delivery.FOLLOW_UP if request.follow_up else Delivery.NOW
+            try:
+                await self._submit(author, PromptSubmit(text=text, delivery=delivery))
+            except DomainError as error:
+                problem = str(error)
+            else:
+                return
+        replied = CommandReplied(
+            command=request.command,
+            invoker_id=request.invoker_id,
+            text=f"/{request.command} could not prompt the agent: {problem}",
+            ok=False,
+        )
+        await self._emit(replied, actor_id=request.invoker_id)
 
     async def _decide(self, participant: Participant, command: ProposalDecide) -> None:
         proposal = self._state.proposals.get(command.proposal_id)

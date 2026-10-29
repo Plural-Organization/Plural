@@ -152,6 +152,61 @@
       ],
       "type": "object"
     },
+    "CommandInvoked": {
+      "properties": {
+        "args": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "invoker_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "command.invoked",
+          "default": "command.invoked",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command",
+        "args",
+        "invoker_id"
+      ],
+      "type": "object"
+    },
+    "CommandReplied": {
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "invoker_id": {
+          "type": "string"
+        },
+        "ok": {
+          "default": true,
+          "type": "boolean"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "command.replied",
+          "default": "command.replied",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command",
+        "invoker_id",
+        "text",
+        "ok"
+      ],
+      "type": "object"
+    },
     "ContextCompacted": {
       "properties": {
         "run_id": {
@@ -459,6 +514,8 @@
               "approval.requested": "#/$defs/ApprovalRequested",
               "approval.resolved": "#/$defs/ApprovalResolved",
               "attachment.added": "#/$defs/AttachmentAdded",
+              "command.invoked": "#/$defs/CommandInvoked",
+              "command.replied": "#/$defs/CommandReplied",
               "context.compacted": "#/$defs/ContextCompacted",
               "context.compacting": "#/$defs/ContextCompacting",
               "context.usage": "#/$defs/ContextUsage",
@@ -473,6 +530,7 @@
               "participant.revoked": "#/$defs/ParticipantRevoked",
               "participant.role_changed": "#/$defs/ParticipantRoleChanged",
               "participant.typing": "#/$defs/ParticipantTyping",
+              "plugins.changed": "#/$defs/PluginsChanged",
               "policy.rule_added": "#/$defs/PolicyRuleAdded",
               "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
               "prompt.accepted": "#/$defs/PromptAccepted",
@@ -566,6 +624,15 @@
             },
             {
               "$ref": "#/$defs/McpChanged"
+            },
+            {
+              "$ref": "#/$defs/PluginsChanged"
+            },
+            {
+              "$ref": "#/$defs/CommandInvoked"
+            },
+            {
+              "$ref": "#/$defs/CommandReplied"
             },
             {
               "$ref": "#/$defs/ToolStarted"
@@ -957,6 +1024,108 @@
       "required": [
         "type",
         "mode"
+      ],
+      "type": "object"
+    },
+    "PluginCommandView": {
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "host_only": {
+          "default": false,
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "plugin": {
+          "type": "string"
+        },
+        "usage": {
+          "default": "",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "plugin",
+        "description",
+        "usage",
+        "host_only"
+      ],
+      "type": "object"
+    },
+    "PluginStatus": {
+      "enum": [
+        "loaded",
+        "failed"
+      ],
+      "type": "string"
+    },
+    "PluginView": {
+      "properties": {
+        "commands": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "name": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/PluginStatus"
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "status",
+        "commands",
+        "error"
+      ],
+      "type": "object"
+    },
+    "PluginsChanged": {
+      "properties": {
+        "commands": {
+          "items": {
+            "$ref": "#/$defs/PluginCommandView"
+          },
+          "type": "array"
+        },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/PluginView"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "plugins.changed",
+          "default": "plugins.changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "plugins",
+        "commands"
       ],
       "type": "object"
     },
@@ -1401,6 +1570,13 @@
           },
           "type": "object"
         },
+        "commands": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginCommandView"
+          },
+          "type": "array"
+        },
         "context": {
           "anyOf": [
             {
@@ -1432,6 +1608,13 @@
         "permission_mode": {
           "$ref": "#/$defs/PermissionMode",
           "default": "default"
+        },
+        "plugins": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginView"
+          },
+          "type": "array"
         },
         "policy": {
           "default": [],
@@ -1506,6 +1689,8 @@
         "skills",
         "context",
         "mcp",
+        "plugins",
+        "commands",
         "queue",
         "agent",
         "summary",
@@ -1880,6 +2065,8 @@
           "approval.requested": "#/$defs/ApprovalRequested",
           "approval.resolved": "#/$defs/ApprovalResolved",
           "attachment.added": "#/$defs/AttachmentAdded",
+          "command.invoked": "#/$defs/CommandInvoked",
+          "command.replied": "#/$defs/CommandReplied",
           "context.compacted": "#/$defs/ContextCompacted",
           "context.compacting": "#/$defs/ContextCompacting",
           "context.usage": "#/$defs/ContextUsage",
@@ -1894,6 +2081,7 @@
           "participant.revoked": "#/$defs/ParticipantRevoked",
           "participant.role_changed": "#/$defs/ParticipantRoleChanged",
           "participant.typing": "#/$defs/ParticipantTyping",
+          "plugins.changed": "#/$defs/PluginsChanged",
           "policy.rule_added": "#/$defs/PolicyRuleAdded",
           "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
           "prompt.accepted": "#/$defs/PromptAccepted",
@@ -1987,6 +2175,15 @@
         },
         {
           "$ref": "#/$defs/McpChanged"
+        },
+        {
+          "$ref": "#/$defs/PluginsChanged"
+        },
+        {
+          "$ref": "#/$defs/CommandInvoked"
+        },
+        {
+          "$ref": "#/$defs/CommandReplied"
         },
         {
           "$ref": "#/$defs/ToolStarted"

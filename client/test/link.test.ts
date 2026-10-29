@@ -49,3 +49,13 @@ test.each([
 ])("%s is a slash error", (text) => {
   expect(() => parseSlash(text)).toThrow(SlashError);
 });
+
+test("plugin commands go to the host and /plugins manages them", () => {
+  const plugins = new Set(["deploy"]);
+  expect(parseSlash("/deploy prod now", plugins)).toEqual({ type: "command.run", name: "deploy", args: "prod now" });
+  expect(() => parseSlash("/deploy")).toThrow(SlashError);
+  expect(parseSlash("/plugins")).toEqual({ type: "show.plugins" });
+  expect(parseSlash("/plugins reload")).toEqual({ type: "plugins.reload" });
+  expect(parseSlash("/plugins new git-tools")).toEqual({ type: "plugins.create", name: "git-tools" });
+  expect(() => parseSlash("/plugins new Bad Name")).toThrow(SlashError);
+});

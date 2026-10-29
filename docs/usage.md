@@ -122,6 +122,8 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | `/policy rm <id>` | Remove a rule (host) |
 | `/compact` | Summarize the conversation now, or before the agent's next step when it is busy (host) |
 | `/skills [search\|add\|rm …]` | List, find and install skills, see [Skills](#skills) |
+| `/plugins [new <name>\|reload]` | List the host's plugins, create one or reload them (host), see [plugins](plugins.md) |
+| `/<plugin command>` | Run a command a plugin added; they appear in the suggestions |
 | `/abort` | Stop the current run (host) |
 | `/cancel <n>` | Remove a queued prompt, yours or any as the host |
 | `/copy` | Copy the last reply |

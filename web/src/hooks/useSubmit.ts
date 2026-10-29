@@ -1,6 +1,6 @@
 import { label, lastReply, parseSlash, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
-import { commandName, helpText, isHostOnly } from "../lib/commands";
+import { commandName, helpText, isHostOnly, pluginHints } from "../lib/commands";
 import type { Session } from "./useSession";
 
 interface Submit {
@@ -15,12 +15,13 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
   const { projection, feed, send, notify } = session;
   const state = projection.state;
   const isHost = projection.me?.role === "host";
+  const plugins = pluginHints(state.commands);
 
   const local = (text: string): boolean => {
     const [, ...rest] = text.slice(1).split(/\s+/);
     switch (commandName(text)) {
       case "help":
-        notify("accent", helpText(projection.me?.role));
+        notify("accent", helpText(projection.me?.role, plugins));
         return true;
       case "who":
         notify(
@@ -60,7 +61,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
   };
 
   const slash = (text: string) => {
-    if (isHostOnly(text) && !isHost) {
+    if (isHostOnly(text, plugins) && !isHost) {
       notify("warn", `/${commandName(text)} is for the host`);
       return;
     }
@@ -68,8 +69,16 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash }: Submit
       return;
     }
     try {
-      const parsed = parseSlash(text);
+      const parsed = parseSlash(text, new Set(state.commands.map((command) => command.name)));
       if (parsed === null) {
+        return;
+      }
+      if (parsed.type === "show.plugins") {
+        const lines = state.plugins.map(
+          (plugin) =>
+            `  ${plugin.status === "loaded" ? "✓" : "✕"} ${plugin.name}  ${plugin.status === "loaded" ? plugin.commands.map((command) => `/${command}`).join(" ") || "no commands" : (plugin.error ?? "failed to load")}`,
+        );
+        notify("accent", lines.length > 0 ? ["plugins", ...lines].join("\n") : "no plugins yet: the host creates one with /plugins new <name>");
         return;
       }
       if (parsed.type === "show.mcp") {

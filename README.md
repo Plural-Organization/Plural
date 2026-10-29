@@ -70,7 +70,7 @@ Claude OAuth defaults to Haiku 4.5. Newer Claude models may reject third-party O
 
 ## docs
 
-[usage](docs/usage.md) · [configuration](docs/configuration.md) · [relay deployment](deploy/) · [wire protocol](docs/protocol.md) · [threat model](docs/threat-model.md) · [design decisions](docs/adr/) · [development](docs/development.md)
+[usage](docs/usage.md) · [configuration](docs/configuration.md) · [plugins](docs/plugins.md) · [relay deployment](deploy/) · [wire protocol](docs/protocol.md) · [threat model](docs/threat-model.md) · [design decisions](docs/adr/) · [development](docs/development.md)
 
 ## acknowledgements
 

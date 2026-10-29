@@ -6,6 +6,7 @@ from plural.core.errors import Forbidden
 from plural.protocol.commands import (
     ApprovalRespond,
     Command,
+    CommandRun,
     ContextCompact,
     FileAttach,
     HistoryGet,
@@ -18,6 +19,8 @@ from plural.protocol.commands import (
     ParticipantRevoke,
     ParticipantSetRole,
     PermissionModeSet,
+    PluginsCreate,
+    PluginsReload,
     PolicyAdd,
     PolicyRemove,
     PromptModeSet,
@@ -62,6 +65,9 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         McpToggle: HOST_ONLY,
         McpRestart: HOST_ONLY,
         McpImport: HOST_ONLY,
+        CommandRun: CONTRIBUTORS,
+        PluginsReload: HOST_ONLY,
+        PluginsCreate: HOST_ONLY,
         TypingSet: CONTRIBUTORS,
         QueueCancel: CONTRIBUTORS,
     }

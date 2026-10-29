@@ -10,6 +10,7 @@ interface ComposerProps {
   disabled: string | null;
   placeholder: string;
   role: Role | undefined;
+  commands?: CommandHint[];
   seed: { text: string; key: number } | null;
   label: string | null;
   onSubmit: (text: string) => void;
@@ -56,7 +57,7 @@ export function Composer(props: ComposerProps) {
   const position = useRef(-1);
   const draft = useRef("");
 
-  const hints = dismissed ? [] : suggest(value, role);
+  const hints = dismissed ? [] : suggest(value, role, props.commands);
   const selected: CommandHint | undefined = hints[Math.min(choice, Math.max(0, hints.length - 1))];
   const hintWindow = visibleSuggestionWindow(hints, choice);
 

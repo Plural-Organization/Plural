@@ -14,6 +14,7 @@ import { useSubmit } from "../hooks/useSubmit";
 import { useToast } from "../hooks/useToast";
 import { useTyping } from "../hooks/useTyping";
 import { copyText } from "../lib/clipboard";
+import { pluginHints } from "../lib/commands";
 import styles from "./RoomScreen.module.css";
 
 interface RoomScreenProps {
@@ -26,6 +27,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   const { projection, feed, connection, invite, send } = session;
   const state = projection.state;
   const me = projection.me;
+  const pluginCommands = useMemo(() => pluginHints(state.commands), [state.commands]);
   const isHost = me?.role === "host";
   const items = useMemo(() => (isHost ? inboxItems(state) : []), [isHost, state.approvals, state.proposals]);
   const [editing, setEditing] = useState<ProposalView | null>(null);
@@ -99,6 +101,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
           </div>
           <Composer
             role={me?.role}
+            commands={pluginCommands}
             placeholder={placeholder}
             disabled={me?.role === "viewer" ? "Viewers watch the session and can't prompt" : null}
             editing={editing}

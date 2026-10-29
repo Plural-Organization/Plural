@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import type { ProposalView, Role } from "@plural/client";
-import { suggestions } from "../lib/commands";
+import { suggestions, type CommandHint } from "../lib/commands";
 import styles from "./Composer.module.css";
 
 const MAX_HEIGHT = 240;
 
 interface ComposerProps {
   role: Role | undefined;
+  commands?: CommandHint[];
   placeholder: string;
   disabled: string | null;
   editing: ProposalView | null;
@@ -16,11 +17,11 @@ interface ComposerProps {
   onActivity: (text: string) => void;
 }
 
-export function Composer({ role, placeholder, disabled, editing, onSubmit, onCancelEdit, onEscape, onActivity }: ComposerProps) {
+export function Composer({ role, commands, placeholder, disabled, editing, onSubmit, onCancelEdit, onEscape, onActivity }: ComposerProps) {
   const [value, setValue] = useState("");
   const [pick, setPick] = useState(0);
   const area = useRef<HTMLTextAreaElement>(null);
-  const hints = suggestions(value, role);
+  const hints = suggestions(value, role, commands);
 
   useEffect(() => {
     if (editing) {
