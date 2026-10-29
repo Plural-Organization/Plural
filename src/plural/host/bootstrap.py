@@ -34,6 +34,7 @@ from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.attachments import AttachmentVault
 from plural.host.config import HostSettings
+from plural.host.conflicts import ConflictBoard
 from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook, RoomLink
@@ -74,6 +75,7 @@ class Host:
     host_link: str
     mcp: McpHub | None = None
     web_search: WebSearchSlot | None = None
+    conflicts: ConflictBoard | None = None
 
     async def serve(self) -> None:
         async with asyncio.TaskGroup() as group:
@@ -224,6 +226,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     )
     host = Participant(id=HOST_PARTICIPANT_ID, name=settings.host_name, role=Role.HOST)
     team = await _team_admission(settings, store, clock) if settings.team else None
+    board = ConflictBoard(workspace.root) if settings.team else None
     agent_run = AgentRun(loop, inbox)
     actor = SessionActor(
         inbox=inbox,
@@ -261,6 +264,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         max_pending_joins=settings.max_pending_joins,
         max_participants=settings.max_participants,
         team=team,
+        conflicts=board,
     )
     await actor.start()
     transport: HostTransport = (
@@ -282,6 +286,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         host_link=f"{room_url}?token={host_token}",
         mcp=mcp,
         web_search=web_search,
+        conflicts=board,
     )
 
 

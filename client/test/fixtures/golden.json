@@ -2818,7 +2818,8 @@
             "timeout_at": "2026-10-26T12:02:00Z",
             "suggested_patterns": [
               "ls*"
-            ]
+            ],
+            "warnings": []
           }
         }
       },
@@ -2874,7 +2875,8 @@
             "timeout_at": "2026-10-26T12:02:00Z",
             "suggested_patterns": [
               "ls*"
-            ]
+            ],
+            "warnings": []
           }
         },
         "attachments": {},
@@ -4169,7 +4171,8 @@
             "timeout_at": "2026-10-26T12:02:00Z",
             "suggested_patterns": [
               "ls*"
-            ]
+            ],
+            "warnings": []
           }
         }
       },
@@ -4225,7 +4228,8 @@
             "timeout_at": "2026-10-26T12:02:00Z",
             "suggested_patterns": [
               "ls*"
-            ]
+            ],
+            "warnings": []
           }
         },
         "attachments": {

@@ -168,6 +168,16 @@ You come in as a viewer: you see the whole conversation and what the agent does,
 
 If the host's relay is not the one the team uses, nothing changes for you: the card carries the address to connect to.
 
+### When two agents work on the same file
+
+A team session also tells the team which files its agent changed in the last half hour and which repository it is in (the remote address without any credentials). When two people in the same repository changed the same file, both of them are told, nothing is blocked:
+
+- your row in the side panel says `⚠ alia also changed src/auth.py` and hers is marked `⚠`, and the conversation gets a note and a short message when it first happens;
+- `plural ls` prints the same line under both sessions;
+- when your agent asks to edit or write a file a teammate changed in the last half hour, even if you have not touched it yet, the approval card says `⚠ src/auth.py was also changed by alia 3 min ago on feat/x`, so you can wait, ask her, or go on.
+
+Only edits and writes by the agent count, not commands it runs in the shell, and only files inside the workspace. A session that is not a team session shares nothing.
+
 ### Asking to write
 
 A viewer who wants to take part types `/access` (with a note if they like: `/access I can fix the login test`). The host gets a card, `y` lets them write, `n` says not now, and the viewer is told either way. After a refusal they can ask again in five minutes. Nobody can ask twice at once, and only a few people wait at a time.

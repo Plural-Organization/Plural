@@ -1,11 +1,10 @@
 import asyncio
-import time
 from collections.abc import AsyncGenerator
 from contextlib import suppress
 from pathlib import Path
 
 import pytest
-from websockets.asyncio.client import connect
+from websockets.asyncio.client import ClientConnection
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from plural.agent.providers.fake import FakeProvider, reply
@@ -17,9 +16,8 @@ from plural.host.team import TeamError, TeamStore
 from plural.host.team_presence import TeamPresence, ensure_ready
 from plural.protocol.models import Role
 from plural.protocol.team import CardDraft, Endpoint, EndpointKind, PresenceCard, SessionStatus
-from plural.security.identity import authorization
 from tests.e2e.support import CLIENT, RelayServer, Session, Watcher, free_port
-from tests.e2e.team_support import Member, two_members
+from tests.e2e.team_support import Member, connect_as, two_members
 
 
 @pytest.fixture
@@ -50,20 +48,9 @@ async def listed(member: Member, until: int = 1, timeout: float = 5) -> list[str
             await asyncio.sleep(0.05)
 
 
-def connect_as(member: Member, relay: RelayServer) -> connect:
-    profile = member.store.load()
-    assert profile is not None
-    url = f"{relay.url}/teams/{profile.team_id}/presence"
-    header = authorization(
-        member.store.identity(),
-        profile.certificate,
-        "GET",
-        f"/teams/{profile.team_id}/presence",
-        b"",
-        timestamp=int(time.time()),
-        nonce=time.time_ns().to_bytes(8, "big").hex(),
-    )
-    return connect(url, additional_headers={"authorization": header})
+async def _until_closed(socket: ClientConnection) -> None:
+    while True:
+        await socket.recv()
 
 
 async def test_a_card_a_member_publishes_is_listed_for_the_team_with_the_owner_stamped(
@@ -138,7 +125,7 @@ async def test_a_removed_member_loses_their_card_at_once(
         assert await _gone(vlad)
         await socket.send(PresenceCard(card=draft()).model_dump_json())
         with pytest.raises(ConnectionClosed) as closed:
-            await socket.recv()
+            await _until_closed(socket)
         assert closed.value.rcvd is not None
         assert closed.value.rcvd.code == 4401
 

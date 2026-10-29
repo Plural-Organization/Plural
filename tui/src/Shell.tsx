@@ -2,7 +2,7 @@ import { useRenderer } from "@opentui/react";
 import type { Session } from "@plural/client";
 import { useEffect, useMemo, useState } from "react";
 import { App, type AppProps } from "./App";
-import { buildSpaces, neighbour, OWN, type Phase, type Summary, type Visit } from "./spaces";
+import { buildSpaces, neighbour, OWN, ownConflicts, type Phase, type Summary, type Visit } from "./spaces";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import type { SessionCard, Team, TeamView, TeamWatcher } from "./team";
 
@@ -66,6 +66,7 @@ export function Shell({ app, team, watcher, home, connect }: ShellProps) {
 
   const summary = (id: string) => (next: Summary) => setSummaries((current) => (current[id]?.phase === next.phase ? current : { ...current, [id]: next }));
 
+  const conflicts = useMemo(() => ownConflicts(view), [view]);
   const shared = {
     spaces: rows,
     teamName: view?.name ?? null,
@@ -80,7 +81,7 @@ export function Shell({ app, team, watcher, home, connect }: ShellProps) {
 
   return (
     <>
-      <App {...app} {...shared} settings={settings} onSettings={change} active={active === OWN} onSummary={summary(OWN)} />
+      <App {...app} {...shared} conflicts={conflicts} settings={settings} onSettings={change} active={active === OWN} onSummary={summary(OWN)} />
       {visits.map((visit) => (
         <App
           key={visit.id}

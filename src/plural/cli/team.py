@@ -207,3 +207,9 @@ def ls(
         )
         if card.title:
             console.print(f"  [dim]{escape(card.title)}[/dim]", soft_wrap=True)
+        for conflict in card.conflicts:
+            files = ", ".join(conflict.paths[:3]) + (" …" if len(conflict.paths) > 3 else "")
+            console.print(
+                f"  [yellow]⚠ {escape(conflict.owner)} also changed {escape(files)}[/yellow]",
+                soft_wrap=True,
+            )

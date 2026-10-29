@@ -10,3 +10,9 @@
 .args pre { font-size: 12px; margin: 6px 0 0; color: var(--muted); overflow: auto; max-height: 200px; }
 .text { white-space: pre-wrap; overflow-wrap: anywhere; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.warning {
+  margin: 0.25rem 0;
+  color: var(--warn);
+  font-weight: 600;
+}

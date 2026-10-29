@@ -822,6 +822,7 @@ export interface ApprovalView {
   provenance: Provenance;
   suggested_patterns: string[];
   timeout_at: string;
+  warnings: string[];
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema

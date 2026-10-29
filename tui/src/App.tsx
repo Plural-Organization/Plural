@@ -39,7 +39,8 @@ import { Compacting, ModeLine, Working } from "./components/Working";
 import { helpRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
-import type { SpaceRow, Summary } from "./spaces";
+import { describeConflict, type SpaceRow, type Summary } from "./spaces";
+import type { Conflict } from "./team";
 import { explain } from "./failure";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
@@ -76,6 +77,7 @@ export interface AppProps {
   onCycleSpace?: (direction: 1 | -1) => void;
   onClose?: () => void;
   onSummary?: (summary: Summary) => void;
+  conflicts?: Conflict[];
   splash?: boolean;
   onQuit: () => void;
 }
@@ -121,6 +123,7 @@ export function App({
   onCycleSpace,
   onClose,
   onSummary,
+  conflicts = [],
   splash = false,
   onQuit,
 }: AppProps) {
@@ -410,6 +413,18 @@ export function App({
 
   const phase = isHost && items.length > 0 ? "waiting" : running ? "running" : finished ? "done" : "idle";
   useEffect(() => onSummary?.({ phase }), [phase]);
+
+  const knownConflicts = useRef<ReadonlySet<string>>(new Set());
+  useEffect(() => {
+    const keys = new Set(conflicts.map((conflict) => `${conflict.room}:${conflict.paths.join(",")}`));
+    for (const conflict of conflicts) {
+      if (!knownConflicts.current.has(`${conflict.room}:${conflict.paths.join(",")}`)) {
+        notify("warn", `${describeConflict(conflict)}${conflict.same_branch ? "" : ` on ${conflict.branch ?? "another branch"}`}`);
+        showToast("Same file", describeConflict(conflict), "accent", "⚠");
+      }
+    }
+    knownConflicts.current = keys;
+  }, [conflicts]);
 
   useEffect(() => {
     if (!active) {

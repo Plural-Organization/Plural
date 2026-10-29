@@ -133,7 +133,7 @@ describe("App", () => {
     const setup = await mount(fake);
     fake.emit({
       type: "approval.requested",
-      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [] },
+      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [], warnings: [] },
     });
     await frame(setup, "approval needed");
     await frame(setup, "answer above");
@@ -408,7 +408,7 @@ describe("App", () => {
     fake.emit({ type: "participant.joined", participant: ALIA });
     fake.emit({
       type: "approval.requested",
-      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: ["rm *"] },
+      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: ["rm *"], warnings: [] },
     });
     const text = await frame(setup, "approval needed");
     expect(text).toContain("$ rm a.txt");
@@ -425,7 +425,7 @@ describe("App", () => {
     const setup = await mount(fake);
     fake.emit({
       type: "approval.requested",
-      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [] },
+      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [], warnings: [] },
     });
     await frame(setup, "approval needed");
     await setup.mockInput.pressKey("y");
@@ -439,7 +439,7 @@ describe("App", () => {
     await setup.mockInput.typeText("ye");
     fake.emit({
       type: "approval.requested",
-      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [] },
+      approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [], warnings: [] },
     });
     await frame(setup, "tab: 1 waiting for you");
     await setup.mockInput.typeText("s");

@@ -196,6 +196,7 @@ class ApprovalView(Model):
     provenance: Provenance
     timeout_at: datetime
     suggested_patterns: tuple[str, ...] = ()
+    warnings: tuple[str, ...] = ()
 
 
 class PolicyRuleView(Model):

@@ -8,6 +8,8 @@ from urllib.parse import urlsplit
 class RepoFacts:
     name: str
     branch: str | None
+    repo_id: str | None = None
+    prefix: str = ""
 
 
 async def _git(root: Path, *args: str) -> str | None:
@@ -45,7 +47,27 @@ def name_from_remote(remote: str) -> str | None:
     return name or None
 
 
+def repo_id_from_remote(remote: str) -> str | None:
+    if "://" in remote:
+        parts = urlsplit(remote)
+        host, path = (parts.hostname or "").lower(), parts.path
+    elif ":" in remote and "@" in remote.split(":", 1)[0]:
+        host, path = remote.split("@", 1)[1].split(":", 1)
+        host = host.lower()
+        path = "/" + path
+    else:
+        return None
+    path = path.strip("/").removesuffix(".git").lower()
+    return f"{host}/{path}" if host and path else None
+
+
 async def repo_facts(root: Path) -> RepoFacts:
     remote = await _git(root, "config", "--get", "remote.origin.url")
     name = name_from_remote(remote) if remote else None
-    return RepoFacts(name=name or root.name or "project", branch=await git_branch(root))
+    prefix = await _git(root, "rev-parse", "--show-prefix") or ""
+    return RepoFacts(
+        name=name or root.name or "project",
+        branch=await git_branch(root),
+        repo_id=repo_id_from_remote(remote) if remote else None,
+        prefix=prefix,
+    )

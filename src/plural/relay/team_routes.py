@@ -8,7 +8,14 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import BaseRoute, Route, WebSocketRoute
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from plural.protocol.team import MemberClaims, PresenceCard, SessionList, TeamCreate, TeamJoin
+from plural.protocol.team import (
+    MemberClaims,
+    PresenceCard,
+    PresencePeers,
+    SessionList,
+    TeamCreate,
+    TeamJoin,
+)
 from plural.relay.directory import DirectoryError, TeamDirectory
 from plural.relay.limits import Throttle, peer_of
 from plural.relay.presence import Presence
@@ -104,7 +111,7 @@ def team_routes(
         return Response(status_code=204)
 
     async def sessions(_: Request, claims: MemberClaims, __: bytes) -> Response:
-        return _json(SessionList(sessions=presence.sessions(claims.team)))
+        return _json(SessionList(sessions=presence.sessions(claims.team, datetime.now(UTC))))
 
     async def presence_socket(socket: WebSocket) -> None:
         try:
@@ -133,9 +140,12 @@ def team_routes(
                 except ValidationError:
                     await socket.close(code=CLOSE_BAD_FRAME, reason="not a session card")
                     return
-                if not presence.publish(claims, frame.card, socket, datetime.now(UTC)):
+                now = datetime.now(UTC)
+                if not presence.publish(claims, frame.card, socket, now):
                     await socket.close(code=CLOSE_LIMIT, reason="too many sessions")
                     return
+                reply = PresencePeers(peers=presence.peers_of(claims.team, frame.card.room, now))
+                await socket.send_text(reply.model_dump_json())
         except WebSocketDisconnect:
             return
         finally:

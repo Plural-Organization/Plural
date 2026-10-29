@@ -6,6 +6,15 @@ import { join } from "node:path";
 
 export type SessionStatus = "idle" | "running" | "waiting";
 
+export interface Conflict {
+  owner: string;
+  room: string;
+  branch: string | null;
+  paths: string[];
+  same_branch: boolean;
+  latest: string;
+}
+
 export interface SessionCard {
   room: string;
   repo: string;
@@ -17,6 +26,8 @@ export interface SessionCard {
   owner: string;
   owner_id: string;
   updated_at: string;
+  repo_id?: string | null;
+  conflicts?: Conflict[];
 }
 
 export interface TeamProfile {

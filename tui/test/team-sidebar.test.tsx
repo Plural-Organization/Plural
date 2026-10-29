@@ -219,3 +219,15 @@ test("without a team the panel has no spaces", async () => {
   await setup.renderOnce();
   expect(setup.captureCharFrame().toLowerCase()).not.toContain("spaces");
 });
+
+test("a file my teammate changed too is flagged on my row, theirs and in the conversation", async () => {
+  const own: SessionCard = {
+    ...card("vlad", "idle", "main"),
+    conflicts: [{ owner: "alia", room: "r_alia", branch: "feat/x", paths: ["src/auth.py"], same_branch: false, latest: "2026-10-29T12:00:00Z" }],
+  };
+  const { setup } = await mount([own, card("alia", "running", "feat/x")]);
+  const text = await frame(setup, "alia also changed src/auth.py");
+  expect(text).toContain("⚠");
+  await frame(setup, "on feat/x");
+  await frame(setup, "Same file");
+});

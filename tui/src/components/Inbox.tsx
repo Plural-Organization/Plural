@@ -140,6 +140,11 @@ function ApprovalBody({ approval, state, now, focused }: { approval: ApprovalVie
         </span>
       </text>
       <text fg={theme.info}>{call.name === "bash" ? `$ ${call.subject}` : call.subject}</text>
+      {(approval.warnings ?? []).map((warning) => (
+        <text key={warning} fg={theme.warn}>
+          ⚠ {warning}
+        </text>
+      ))}
       {focused ? (
         <Keys items={[["y", "once"], ["a", pattern ? `always ${pattern}` : "always"], ["n", "reject"], ["b", "block this kind"]]} />
       ) : (

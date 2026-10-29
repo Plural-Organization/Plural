@@ -52,8 +52,15 @@ function SpacesSection({ rows, name, error, onOpen }: { rows: SpaceRow[]; name: 
               </span>
               <span fg={color}>{row.status === "idle" ? "" : `  ${row.status}`}</span>
               <span fg={theme.dim}>{row.viewers > 0 ? `  👁 ${row.viewers}` : ""}</span>
+              <span fg={theme.warn}>{row.clash ? "  ⚠" : ""}</span>
             </text>
             <text fg={row.active ? theme.info : theme.dim}>  {truncate(row.detail, SIDEBAR_WIDTH - 8)}</text>
+            {row.warning !== null ? (
+              <text fg={theme.warn} wrapMode="word">
+                {"  ⚠ "}
+                {row.warning}
+              </text>
+            ) : null}
           </box>
         );
       })}

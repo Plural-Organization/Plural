@@ -279,6 +279,13 @@
         "timeout_at": {
           "format": "date-time",
           "type": "string"
+        },
+        "warnings": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -286,7 +293,8 @@
         "call",
         "provenance",
         "timeout_at",
-        "suggested_patterns"
+        "suggested_patterns",
+        "warnings"
       ],
       "type": "object"
     },

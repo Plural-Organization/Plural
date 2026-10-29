@@ -34,6 +34,7 @@ from plural.host import history
 from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.attachments import AttachmentVault, image_type
+from plural.host.conflicts import ConflictBoard
 from plural.host.gateway import Admission, Gateway, NeedsApproval
 from plural.host.inbox import (
     AgentOutput,
@@ -239,8 +240,10 @@ class SessionActor:
         max_pending_joins: int = 5,
         max_participants: int = 20,
         team: TeamAdmission | None = None,
+        conflicts: ConflictBoard | None = None,
     ) -> None:
         self._team = team
+        self._conflicts = conflicts
         self._access_denied: dict[str, datetime] = {}
         self._inbox = inbox
         self._store = store
@@ -345,6 +348,9 @@ class SessionActor:
             case AgentOutput(run_id=run_id, event=event):
                 await self._on_agent(run_id, event)
             case ApprovalNeeded(approval=approval):
+                if self._conflicts is not None:
+                    warnings = self._conflicts.warnings_for(approval.call, self._clock.now())
+                    approval = approval.model_copy(update={"warnings": warnings})
                 await self._emit(ApprovalRequested(approval=approval))
                 delay = max((approval.timeout_at - self._clock.now()).total_seconds(), 0)
                 self._timers[approval.id] = asyncio.get_running_loop().call_later(
@@ -1252,6 +1258,8 @@ class SessionActor:
             event, event_id=self._ids.new("e_"), ts=self._clock.now(), actor_id=actor_id
         )
         self._state = reduce(self._state, record)
+        if self._conflicts is not None:
+            self._conflicts.observe(event, record.ts)
         if isinstance(event, PolicyRuleAdded | PolicyRuleRemoved | PermissionModeChanged):
             self._sync_policy()
         self._publisher.publish(record)

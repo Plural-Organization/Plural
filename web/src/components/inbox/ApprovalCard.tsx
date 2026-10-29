@@ -48,6 +48,11 @@ export function ApprovalCard({ approval, state, now, send }: ApprovalCardProps) 
           <pre>{JSON.stringify(Object.fromEntries(extra), null, 2)}</pre>
         </details>
       ) : null}
+      {(approval.warnings ?? []).map((warning) => (
+        <p key={warning} className={styles.warning} role="alert">
+          ⚠ {warning}
+        </p>
+      ))}
       <p className={styles.why}>
         {why}
         {session}
