@@ -41,6 +41,13 @@ const REACH_PX = 8;
 // A new picture takes this share of the board's width.
 const PICTURE_WIDTH = 0.4;
 const PICTURE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
+// The board zooms between half and three times the panel's width.
+const MIN_ZOOM = 0.5;
+const MAX_ZOOM = 3;
+const ZOOM_STEP = 1.25;
+// A canvas stays within what browsers draw reliably: 8192 pixels a side and 40 million in all.
+const MAX_SIDE_PX = 8192;
+const MAX_AREA_PX = 40_000_000;
 
 const ICONS: Record<Tool, string> = {
   select: "M5 3l14 8-6 2-3 6L5 3z",
@@ -181,8 +188,37 @@ export function Board(props: BoardProps) {
 
   // The board spans the panel's width and runs as deep as its lowest mark needs, the panel scrolling.
   const deepest = Math.max(0, ...shown.flatMap((stroke) => stroke.points.filter((_, index) => index % 2 === 1)));
-  const size = { width: view.width, height: Math.min(view.width * MAX_DEPTH, Math.max(view.height, (deepest + ROOM_BELOW) * view.width)) };
+  const [zoom, setZoom] = useState(1);
+  const zoomAnchor = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
+  const boardWidth = view.width * zoom;
+  const size = { width: boardWidth, height: Math.min(boardWidth * MAX_DEPTH, Math.max(view.height, (deepest + ROOM_BELOW) * boardWidth)) };
   const scale = size.width;
+  // Sharp on a retina screen, but never a canvas too large for the browser when zoomed in far.
+  const pixelRatio = () =>
+    Math.max(0.5, Math.min(window.devicePixelRatio || 1, 2, MAX_SIDE_PX / Math.max(1, size.width), MAX_SIDE_PX / Math.max(1, size.height), Math.sqrt(MAX_AREA_PX / Math.max(1, size.width * size.height))));
+
+  // Zooming keeps the point under the pointer (or the middle of the view) where it was.
+  const zoomTo = (next: number, at?: { clientX: number; clientY: number }) => {
+    const element = room.current;
+    const target = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
+    if (!element || scale === 0 || target === zoom) {
+      return;
+    }
+    const box = element.getBoundingClientRect();
+    const left = at ? at.clientX - box.left : element.clientWidth / 2;
+    const top = at ? at.clientY - box.top : element.clientHeight / 2;
+    zoomAnchor.current = { x: (element.scrollLeft + left) / scale, y: (element.scrollTop + top) / scale, left, top };
+    setZoom(target);
+  };
+  useLayoutEffect(() => {
+    const element = room.current;
+    const anchor = zoomAnchor.current;
+    if (element && anchor) {
+      element.scrollLeft = anchor.x * scale - anchor.left;
+      element.scrollTop = anchor.y * scale - anchor.top;
+      zoomAnchor.current = null;
+    }
+  }, [zoom]);
   const reach = scale > 0 ? REACH_PX / scale : 0.01;
   const picture: Pictures = (id) => {
     const image = images.current.get(id);
@@ -294,7 +330,7 @@ export function Board(props: BoardProps) {
     if (scale === 0) {
       return;
     }
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const ratio = pixelRatio();
     const layer = (base.current ??= document.createElement("canvas"));
     layer.width = Math.round(size.width * ratio);
     layer.height = Math.round(size.height * ratio);
@@ -310,7 +346,7 @@ export function Board(props: BoardProps) {
     if (!element || !layer || scale === 0) {
       return;
     }
-    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    const ratio = pixelRatio();
     if (element.width !== layer.width || element.height !== layer.height) {
       element.width = layer.width;
       element.height = layer.height;
@@ -582,6 +618,42 @@ export function Board(props: BoardProps) {
     }
   };
 
+  // Ctrl+Z or Cmd+Z takes back your last mark, unless you are typing somewhere.
+  const latestUndo = useRef(undo);
+  latestUndo.current = undo;
+  useEffect(() => {
+    if (!canDraw) {
+      return;
+    }
+    const key = (event: KeyboardEvent) => {
+      const typingHere = event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]") !== null;
+      if (!typingHere && (event.ctrlKey || event.metaKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        latestUndo.current();
+      }
+    };
+    window.addEventListener("keydown", key);
+    return () => window.removeEventListener("keydown", key);
+  }, [canDraw]);
+
+  // Ctrl or Cmd with the wheel, and a pinch on a trackpad, zoom; a plain wheel scrolls.
+  const latestZoom = useRef(zoomTo);
+  latestZoom.current = zoomTo;
+  useEffect(() => {
+    const element = room.current;
+    if (!element) {
+      return;
+    }
+    const wheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        latestZoom.current(zoom * Math.exp(-event.deltaY * 0.01), event);
+      }
+    };
+    element.addEventListener("wheel", wheel, { passive: false });
+    return () => element.removeEventListener("wheel", wheel);
+  }, [zoom]);
+
   const toAgent = () =>
     void boardImage([...shown.filter((stroke) => !hidden.has(stroke.id)), ...pending.map((item) => item.line)], picture)
       .then(onSendToAgent)
@@ -690,7 +762,7 @@ export function Board(props: BoardProps) {
                 </button>
               ))}
             </div>
-            <button className="button small ghost" type="button" onClick={undo} disabled={mine.length === 0}>
+            <button className="button small ghost" type="button" onClick={undo} disabled={mine.length === 0} title="Take back your last mark (Ctrl or Cmd + Z)">
               undo
             </button>
           </>
@@ -717,6 +789,17 @@ export function Board(props: BoardProps) {
             </button>
           </>
         ) : null}
+        <div className={styles.zoom} role="group" aria-label="Zoom">
+          <button type="button" onClick={() => zoomTo(zoom / ZOOM_STEP)} disabled={zoom <= MIN_ZOOM} aria-label="Zoom out" title="Zoom out (Ctrl or Cmd and the wheel)">
+            −
+          </button>
+          <button type="button" onClick={() => zoomTo(1)} title="Back to 100%" className={styles.zoomLevel}>
+            {Math.round(zoom * 100)}%
+          </button>
+          <button type="button" onClick={() => zoomTo(zoom * ZOOM_STEP)} disabled={zoom >= MAX_ZOOM} aria-label="Zoom in" title="Zoom in (Ctrl or Cmd and the wheel)">
+            +
+          </button>
+        </div>
         <button
           className="button small ghost"
           type="button"
