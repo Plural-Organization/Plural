@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from plural.agent.events import AgentEvent
 from plural.agent.providers.base import LLMProvider
 from plural.host.transport.base import Connection
+from plural.protocol.commands import BoardDraw, BoardErase, BoardMove, BoardOpen
 from plural.protocol.envelope import Envelope
 from plural.protocol.events import SkillsFound
 from plural.protocol.models import ApprovalView
@@ -75,6 +76,14 @@ class SkillsReply:
     error: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class BoardRequest:
+    """A board change by the agent, applied by the actor like a participant's."""
+
+    command: BoardOpen | BoardDraw | BoardMove | BoardErase
+    reply: "asyncio.Future[str]"
+
+
 InboxMessage = (
     Incoming
     | Disconnected
@@ -87,6 +96,7 @@ InboxMessage = (
     | SkillsUpdated
     | McpUpdated
     | SkillsReply
+    | BoardRequest
 )
 
 
