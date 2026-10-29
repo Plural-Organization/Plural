@@ -23,6 +23,7 @@ from plural.agent.sandbox.local import LocalBackend
 from plural.agent.skills import SkillLibrary
 from plural.agent.tools.agent import AgentTool
 from plural.agent.tools.base import ToolCtx
+from plural.agent.tools.board import board_tools
 from plural.agent.tools.registry import builtin_tools
 from plural.agent.tools.search import Searcher, WebSearchSlot
 from plural.agent.tools.skills import skill_tools
@@ -31,6 +32,7 @@ from plural.host.actor import SessionActor
 from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.attachments import AttachmentVault
+from plural.host.board_desk import InboxDesk
 from plural.host.config import HostSettings
 from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
@@ -179,6 +181,9 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     await asyncio.to_thread(agents.refresh)
     delegate = AgentTool(library=agents, tools=tools, gate=gate, environment=environment, ids=ids)
     tools.register(delegate)
+    desk = InboxDesk(inbox)
+    for tool in board_tools(desk):
+        tools.register(tool)
     loop = AgentLoop(
         provider=agent,
         helper=helper.provider if helper else None,
@@ -254,6 +259,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         max_pending_joins=settings.max_pending_joins,
         max_participants=settings.max_participants,
     )
+    desk.attach(actor.board)
     await actor.start()
     transport: HostTransport = (
         RelayLink(url=settings.relay_url, room=room, signer=signer)

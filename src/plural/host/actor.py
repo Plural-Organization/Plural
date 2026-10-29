@@ -15,6 +15,7 @@ from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.messages import Message, UserTurn
 from plural.agent.providers.base import LlmImage
 from plural.agent.skills import Package, SkillError, SkillLibrary, parse_package
+from plural.agent.tools.board import AGENT_AUTHOR, BoardRefused
 from plural.core import approvals, chat, joins, policies, proposals, visibility
 from plural.core.errors import (
     Conflict,
@@ -37,6 +38,7 @@ from plural.host.inbox import (
     AgentOutput,
     ApprovalExpired,
     ApprovalNeeded,
+    BoardRequest,
     Disconnected,
     Inbox,
     InboxMessage,
@@ -154,6 +156,7 @@ from plural.protocol.models import (
     AttachmentMeta,
     BoardShape,
     BoardStroke,
+    BoardView,
     ContextView,
     Delivery,
     DequeueReason,
@@ -347,6 +350,11 @@ class SessionActor:
                     self._publisher.deliver(
                         connection, ErrorRaised(code=ErrorCode.INVALID, message=error)
                     )
+            case BoardRequest(command=command, reply=reply):
+                try:
+                    reply.set_result(await self._board(command, AGENT_AUTHOR, privileged=True))
+                except DomainError as error:
+                    reply.set_exception(BoardRefused(str(error)))
             case SkillsReply(connection=connection, event=found, error=error):
                 self._publisher.deliver(
                     connection,
@@ -469,48 +477,8 @@ class SessionActor:
                 await self._set_selection(participant.id, command)
             case CursorSet():
                 await self._set_cursor(participant.id, command)
-            case BoardOpen():
-                # Opening again shows the board to everyone again; closing twice says nothing.
-                if command.open or self._state.board.open:
-                    await self._emit(
-                        BoardOpened(open=command.open, by=participant.id), actor_id=participant.id
-                    )
-            case BoardDraw():
-                _check_points(command.kind, command.points)
-                if (command.kind is BoardShape.TEXT) != bool(command.text):
-                    raise Invalid("a text needs its words, and only a text carries words")
-                if (command.kind is BoardShape.IMAGE) != (command.image is not None):
-                    raise Invalid("an image needs its attachment, and only an image has one")
-                if command.image is not None:
-                    await self._require_picture(command.image)
-                stroke = BoardStroke(
-                    id=self._ids.new("st_"),
-                    author_id=participant.id,
-                    kind=command.kind,
-                    text=command.text,
-                    image=command.image,
-                    color=command.color,
-                    width=command.width,
-                    points=tuple(round(point, BOARD_DECIMALS) for point in command.points),
-                )
-                await self._emit(BoardStroked(stroke=stroke), actor_id=participant.id)
-            case BoardMove():
-                stroke = next(
-                    (s for s in self._state.board.strokes if s.id == command.stroke_id), None
-                )
-                if stroke is None:
-                    raise NotFound("no such stroke on the board")
-                if stroke.author_id != participant.id and participant.role is not Role.HOST:
-                    raise Forbidden("only the host moves someone else's drawing")
-                _check_points(stroke.kind, command.points)
-                if stroke.kind not in (BoardShape.PEN, BoardShape.ERASE) and len(
-                    command.points
-                ) != len(stroke.points):
-                    raise Invalid("a move keeps the mark's points")
-                points = tuple(round(point, BOARD_DECIMALS) for point in command.points)
-                await self._emit(
-                    BoardMoved(stroke_id=stroke.id, points=points), actor_id=participant.id
-                )
+            case BoardOpen() | BoardDraw() | BoardMove():
+                await self._board(command, participant.id, privileged=participant.role is Role.HOST)
             case AttachmentFetch():
                 if not any(s.image == command.attachment_id for s in self._state.board.strokes):
                     raise NotFound("no such picture on the board")
@@ -524,14 +492,7 @@ class SessionActor:
                     ),
                 )
             case BoardErase():
-                stroke = next(
-                    (s for s in self._state.board.strokes if s.id == command.stroke_id), None
-                )
-                if stroke is None:
-                    raise NotFound("no such stroke on the board")
-                if stroke.author_id != participant.id and participant.role is not Role.HOST:
-                    raise Forbidden("only the host erases someone else's drawing")
-                await self._emit(BoardErased(stroke_id=stroke.id), actor_id=participant.id)
+                await self._board(command, participant.id, privileged=participant.role is Role.HOST)
             case BoardClear():
                 if not command.mine and participant.role is not Role.HOST:
                     raise Forbidden("only the host clears the whole board")
@@ -777,6 +738,73 @@ class SessionActor:
         await self._emit(
             ParticipantSelected(participant_id=participant_id, selection=command.selection)
         )
+
+    async def _board(
+        self,
+        command: BoardOpen | BoardDraw | BoardMove | BoardErase,
+        author_id: str,
+        *,
+        privileged: bool,
+    ) -> str:
+        """Applies a board change by a participant or the agent; a new mark returns its id.
+
+        The privileged (the host, or the agent working for the room) change anyone's marks.
+        """
+        match command:
+            case BoardOpen():
+                # Opening again shows the board to everyone again; closing twice says nothing.
+                if command.open or self._state.board.open:
+                    await self._emit(
+                        BoardOpened(open=command.open, by=author_id), actor_id=author_id
+                    )
+                return ""
+            case BoardDraw():
+                _check_points(command.kind, command.points)
+                if (command.kind is BoardShape.TEXT) != bool(command.text):
+                    raise Invalid("a text needs its words, and only a text carries words")
+                if (command.kind is BoardShape.IMAGE) != (command.image is not None):
+                    raise Invalid("an image needs its attachment, and only an image has one")
+                if command.image is not None:
+                    await self._require_picture(command.image)
+                stroke = BoardStroke(
+                    id=self._ids.new("st_"),
+                    author_id=author_id,
+                    kind=command.kind,
+                    text=command.text,
+                    image=command.image,
+                    color=command.color,
+                    width=command.width,
+                    points=tuple(round(point, BOARD_DECIMALS) for point in command.points),
+                )
+                await self._emit(BoardStroked(stroke=stroke), actor_id=author_id)
+                return stroke.id
+            case BoardMove():
+                stroke = self._stroke(command.stroke_id, author_id, privileged=privileged)
+                _check_points(stroke.kind, command.points)
+                if stroke.kind not in (BoardShape.PEN, BoardShape.ERASE) and len(
+                    command.points
+                ) != len(stroke.points):
+                    raise Invalid("a move keeps the mark's points")
+                points = tuple(round(point, BOARD_DECIMALS) for point in command.points)
+                await self._emit(BoardMoved(stroke_id=stroke.id, points=points), actor_id=author_id)
+                return stroke.id
+            case BoardErase():
+                stroke = self._stroke(command.stroke_id, author_id, privileged=privileged)
+                await self._emit(BoardErased(stroke_id=stroke.id), actor_id=author_id)
+                return stroke.id
+
+    def _stroke(self, stroke_id: str, author_id: str, *, privileged: bool) -> BoardStroke:
+        stroke = next((s for s in self._state.board.strokes if s.id == stroke_id), None)
+        if stroke is None:
+            raise NotFound(f"no mark {stroke_id} on the board")
+        if stroke.author_id != author_id and not privileged:
+            raise Forbidden("only the host changes someone else's drawing")
+        return stroke
+
+    def board(self) -> tuple[BoardView, dict[str, str]]:
+        """The board and the names of everyone who drew on it, for the agent to look at."""
+        names = {pid: p.name for pid, p in self._state.participants.items()}
+        return self._state.board, names
 
     async def _require_picture(self, attachment_id: str) -> None:
         if attachment_id not in self._state.attachments:
