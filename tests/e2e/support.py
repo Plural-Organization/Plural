@@ -66,8 +66,9 @@ class Watcher:
 
 
 class RelayServer:
-    def __init__(self, port: int | None = None) -> None:
+    def __init__(self, port: int | None = None, teams: Path | None = None) -> None:
         self.port = port or free_port()
+        self._teams = teams
         self._server: uvicorn.Server | None = None
         self._task: asyncio.Task[None] | None = None
 
@@ -81,7 +82,12 @@ class RelayServer:
 
     async def start(self) -> None:
         server = uvicorn.Server(
-            uvicorn.Config(create_app(), host="127.0.0.1", port=self.port, log_level="warning")
+            uvicorn.Config(
+                create_app(teams=self._teams),
+                host="127.0.0.1",
+                port=self.port,
+                log_level="warning",
+            )
         )
         self._task = asyncio.create_task(server.serve())
         self._server = server

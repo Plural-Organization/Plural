@@ -17,6 +17,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from plural import __version__
+from plural.cli.team import team_app
 from plural.host.bootstrap import Host, build_host
 from plural.host.config import HostSettings
 from plural.host.control import MAX_LINE_BYTES, Control, read_lines
@@ -30,6 +31,7 @@ from plural.storage.sessions import delete_session, list_sessions, read_session,
 from plural.storage.sqlite_store import SqliteEventStore
 
 app = typer.Typer(name="plural-host", no_args_is_help=True, add_completion=False)
+app.add_typer(team_app, name="team")
 console = Console()
 DEFAULT_LIMITS = RelayLimits()
 
@@ -212,6 +214,13 @@ def relay(
             min=1, help="Guests one address may bring.", envvar="PLURAL_RELAY_GUESTS_PER_PEER"
         ),
     ] = DEFAULT_LIMITS.max_guests_per_peer,
+    teams: Annotated[
+        Path | None,
+        typer.Option(
+            help="SQLite file for the team directory. Without it the relay serves no teams.",
+            envvar="PLURAL_RELAY_TEAMS",
+        ),
+    ] = None,
 ) -> None:
     limits = RelayLimits(
         max_rooms=max_rooms,
@@ -219,7 +228,7 @@ def relay(
         max_guests_per_peer=guests_per_peer,
     )
     uvicorn.run(
-        create_app(limits, proxy_hops=proxy_hops),
+        create_app(limits, proxy_hops=proxy_hops, teams=teams),
         host=bind,
         port=port,
         log_level="info",

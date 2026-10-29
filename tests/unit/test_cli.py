@@ -182,10 +182,12 @@ def test_relay_listens_on_the_port_the_platform_assigns(monkeypatch: pytest.Monk
 
 
 def test_relay_limits_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
-    seen: list[tuple[RelayLimits | None, int]] = []
+    seen: list[tuple[RelayLimits | None, int, Path | None]] = []
 
-    def fake_create_app(limits: RelayLimits | None = None, *, proxy_hops: int = 0) -> object:
-        seen.append((limits, proxy_hops))
+    def fake_create_app(
+        limits: RelayLimits | None = None, *, proxy_hops: int = 0, teams: Path | None = None
+    ) -> object:
+        seen.append((limits, proxy_hops, teams))
         return object()
 
     def fake_run(_app: object, **_options: object) -> None:
@@ -197,5 +199,12 @@ def test_relay_limits_come_from_the_environment(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setenv("PLURAL_RELAY_ROOMS_PER_PEER", "2")
     monkeypatch.setenv("PLURAL_RELAY_GUESTS_PER_PEER", "9")
     monkeypatch.setenv("PLURAL_RELAY_PROXY_HOPS", "1")
+    monkeypatch.setenv("PLURAL_RELAY_TEAMS", "/data/teams.db")
     assert runner.invoke(app, ["relay"]).exit_code == 0
-    assert seen == [(RelayLimits(max_rooms=7, max_rooms_per_peer=2, max_guests_per_peer=9), 1)]
+    assert seen == [
+        (
+            RelayLimits(max_rooms=7, max_rooms_per_peer=2, max_guests_per_peer=9),
+            1,
+            Path("/data/teams.db"),
+        )
+    ]
