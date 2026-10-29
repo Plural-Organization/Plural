@@ -1,10 +1,8 @@
 import type { BoardShape } from "@plural/client";
 
-// Points are measured in board widths on both axes: the board fills the panel, and a taller screen
-// shows more of it below instead of stretching it. It runs MAX_DEPTH widths down.
-export const MAX_DEPTH = 4;
-// A picture for the agent is at least this tall, in widths, so a sketch near the top is not a strip.
-const IMAGE_DEPTH = 1.25;
+// Points are measured in board widths on both axes; one width is what a side panel shows across at
+// 100%. The board is an endless canvas within REACH widths of its origin in every direction.
+export const REACH = 20;
 export const DECIMALS = 1e4;
 // Stroke widths are in thousandths of the board width.
 export const WIDTH_UNIT = 1000;
@@ -170,9 +168,16 @@ export function rounded(points: number[]): number[] {
 }
 
 // The whole board as a PNG, the way the agent receives it.
-export async function boardImage(lines: Line[], pictures?: Pictures, width = 1600): Promise<Blob> {
-  const deepest = Math.max(0, ...lines.flatMap((line) => line.points.filter((_, index) => index % 2 === 1)));
-  const height = Math.round(width * Math.min(MAX_DEPTH, Math.max(IMAGE_DEPTH, deepest + 0.08)));
+export async function boardImage(lines: Line[], pictures?: Pictures, longest = 1600): Promise<Blob> {
+  // The picture frames what is drawn, with a margin, its longer side `longest` pixels.
+  const boxes = lines.filter((line) => line.kind !== "erase").map(bounds);
+  const margin = 0.04;
+  const [left, top, right, bottom] = boxes.length
+    ? [Math.min(...boxes.map((box) => box[0])) - margin, Math.min(...boxes.map((box) => box[1])) - margin, Math.max(...boxes.map((box) => box[2])) + margin, Math.max(...boxes.map((box) => box[3])) + margin]
+    : [0, 0, 1, 0.625];
+  const scale = longest / Math.max(right - left, bottom - top, 0.1);
+  const width = Math.max(1, Math.round((right - left) * scale));
+  const height = Math.max(1, Math.round((bottom - top) * scale));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
@@ -182,7 +187,8 @@ export async function boardImage(lines: Line[], pictures?: Pictures, width = 160
   marks.width = width;
   marks.height = height;
   const ink = marks.getContext("2d")!;
-  lines.forEach((line) => drawLine(ink, line, width, pictures));
+  ink.translate(-left * scale, -top * scale);
+  lines.forEach((line) => drawLine(ink, line, scale, pictures));
   context.fillStyle = BACKGROUND;
   context.fillRect(0, 0, width, height);
   context.drawImage(marks, 0, 0);
@@ -266,5 +272,5 @@ export function picks(line: Line, x: number, y: number, reach: number): boolean 
 
 // The points of a mark moved by (dx, dy).
 export function shifted(points: number[], dx: number, dy: number): number[] {
-  return points.map((value, index) => (index % 2 === 0 ? Math.min(1, Math.max(0, value + dx)) : Math.min(MAX_DEPTH, Math.max(0, value + dy))));
+  return points.map((value, index) => Math.min(REACH, Math.max(-REACH, value + (index % 2 === 0 ? dx : dy))));
 }

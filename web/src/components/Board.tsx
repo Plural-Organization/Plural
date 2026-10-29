@@ -7,8 +7,8 @@ import {
   drawLine,
   eraserWidth,
   hasCorners,
-  MAX_DEPTH,
   picks,
+  REACH,
   rounded,
   sameLine,
   shifted,
@@ -34,20 +34,17 @@ const MIN_SHAPE = 0.01;
 const PENDING_MS = 6000;
 // Deleting sends one mark at a time, spaced under the relay's rate limit.
 const DELETE_MS = 110;
-// Below the lowest mark the board keeps this much room, in widths, to draw on; the panel scrolls.
-const ROOM_BELOW = 0.35;
 // How close to a mark or a handle a click counts, in pixels.
 const REACH_PX = 8;
 // A new picture takes this share of the board's width.
 const PICTURE_WIDTH = 0.4;
 const PICTURE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"];
-// The board zooms between half and three times the panel's width.
-const MIN_ZOOM = 0.5;
-const MAX_ZOOM = 3;
+// The camera zooms from a tenth to four times the panel's width per board width.
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 4;
 const ZOOM_STEP = 1.25;
-// A canvas stays within what browsers draw reliably: 8192 pixels a side and 40 million in all.
-const MAX_SIDE_PX = 8192;
-const MAX_AREA_PX = 40_000_000;
+// The dot grid keeps its dots at least this far apart on screen, in pixels, at any zoom.
+const GRID_PX = 16;
 
 const ICONS: Record<Tool, string> = {
   select: "M5 3l14 8-6 2-3 6L5 3z",
@@ -155,6 +152,7 @@ export function Board(props: BoardProps) {
   const base = useRef<HTMLCanvasElement | null>(null);
   const drawing = useRef<Line | null>(null);
   const drag = useRef<Drag | null>(null);
+  const panning = useRef<{ clientX: number; clientY: number; x: number; y: number } | null>(null);
   const trails = useRef(new Map<string, number[]>());
   const deleting = useRef(new Set<string>());
   const deleteQueue = useRef<string[]>([]);
@@ -186,18 +184,20 @@ export function Board(props: BoardProps) {
   const byId = (id: string | null) => shown.find((stroke) => stroke.id === id) ?? null;
   const editable = (stroke: BoardStroke) => stroke.author_id === meId || isHost;
 
-  // The board spans the panel's width and runs as deep as its lowest mark needs, the panel scrolling.
-  const deepest = Math.max(0, ...shown.flatMap((stroke) => stroke.points.filter((_, index) => index % 2 === 1)));
-  const [zoom, setZoom] = useState(1);
-  const zoomAnchor = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-  const boardWidth = view.width * zoom;
-  const size = { width: boardWidth, height: Math.min(boardWidth * MAX_DEPTH, Math.max(view.height, (deepest + ROOM_BELOW) * boardWidth)) };
-  const scale = size.width;
-  // Sharp on a retina screen, but never a canvas too large for the browser when zoomed in far.
-  const pixelRatio = () =>
-    Math.max(0.5, Math.min(window.devicePixelRatio || 1, 2, MAX_SIDE_PX / Math.max(1, size.width), MAX_SIDE_PX / Math.max(1, size.height), Math.sqrt(MAX_AREA_PX / Math.max(1, size.width * size.height))));
+  // A camera over an endless board, as in Miro: (x, y) is the board point at the view's top left,
+  // and at zoom 1 one board width spans the panel. Panning and zooming move the camera, never the marks.
+  const [camera, setCamera] = useState({ x: -0.04, y: -0.04, zoom: 1 });
+  const zoom = camera.zoom;
+  const size = view;
+  const scale = view.width * zoom;
+  const pixelRatio = () => Math.min(window.devicePixelRatio || 1, 2);
+  const clampCamera = (x: number, y: number, z: number) => ({
+    x: Math.min(REACH, Math.max(-REACH - view.width / (view.width * z), x)),
+    y: Math.min(REACH, Math.max(-REACH - view.height / (view.width * z), y)),
+    zoom: z,
+  });
 
-  // Zooming keeps the point under the pointer (or the middle of the view) where it was.
+  // Zooming keeps the board point under the pointer (or the middle of the view) where it is on screen.
   const zoomTo = (next: number, at?: { clientX: number; clientY: number }) => {
     const element = room.current;
     const target = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
@@ -205,20 +205,29 @@ export function Board(props: BoardProps) {
       return;
     }
     const box = element.getBoundingClientRect();
-    const left = at ? at.clientX - box.left : element.clientWidth / 2;
-    const top = at ? at.clientY - box.top : element.clientHeight / 2;
-    zoomAnchor.current = { x: (element.scrollLeft + left) / scale, y: (element.scrollTop + top) / scale, left, top };
-    setZoom(target);
+    const left = at ? at.clientX - box.left : box.width / 2;
+    const top = at ? at.clientY - box.top : box.height / 2;
+    const pointX = camera.x + left / scale;
+    const pointY = camera.y + top / scale;
+    const nextScale = view.width * target;
+    setCamera(clampCamera(pointX - left / nextScale, pointY - top / nextScale, target));
   };
-  useLayoutEffect(() => {
-    const element = room.current;
-    const anchor = zoomAnchor.current;
-    if (element && anchor) {
-      element.scrollLeft = anchor.x * scale - anchor.left;
-      element.scrollTop = anchor.y * scale - anchor.top;
-      zoomAnchor.current = null;
+  const panBy = (dx: number, dy: number) => setCamera((current) => clampCamera(current.x + dx / scale, current.y + dy / scale, current.zoom));
+
+  // Shows every mark at once, or the start of the board when it is empty.
+  const fitAll = () => {
+    const boxes = shown.filter((stroke) => stroke.kind !== "erase").map(bounds);
+    if (boxes.length === 0 || view.width === 0) {
+      setCamera({ x: -0.04, y: -0.04, zoom: 1 });
+      return;
     }
-  }, [zoom]);
+    const [left, top, right, bottom] = [Math.min(...boxes.map((b) => b[0])), Math.min(...boxes.map((b) => b[1])), Math.max(...boxes.map((b) => b[2])), Math.max(...boxes.map((b) => b[3]))];
+    const margin = 0.08;
+    const fitScale = Math.min(view.width / (right - left + margin * 2), view.height / (bottom - top + margin * 2));
+    const target = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, fitScale / view.width));
+    const nextScale = view.width * target;
+    setCamera(clampCamera((left + right) / 2 - view.width / nextScale / 2, (top + bottom) / 2 - view.height / nextScale / 2, target));
+  };
   const reach = scale > 0 ? REACH_PX / scale : 0.01;
   const picture: Pictures = (id) => {
     const image = images.current.get(id);
@@ -335,10 +344,10 @@ export function Board(props: BoardProps) {
     layer.width = Math.round(size.width * ratio);
     layer.height = Math.round(size.height * ratio);
     const context = layer.getContext("2d")!;
-    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.setTransform(ratio, 0, 0, ratio, -camera.x * scale * ratio, -camera.y * scale * ratio);
     shown.filter((stroke) => !hidden.has(stroke.id) && stroke.id !== moving?.id).forEach((stroke) => drawLine(context, stroke, scale, picture));
     setBaseVersion((value) => value + 1);
-  }, [strokes, size.width, size.height, hidden, movedKey, moving?.id, loaded]);
+  }, [strokes, size.width, size.height, hidden, movedKey, moving?.id, loaded, camera.x, camera.y, camera.zoom]);
 
   useEffect(() => {
     const element = canvas.current;
@@ -355,7 +364,7 @@ export function Board(props: BoardProps) {
     context.setTransform(1, 0, 0, 1, 0, 0);
     context.clearRect(0, 0, element.width, element.height);
     context.drawImage(layer, 0, 0);
-    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.setTransform(ratio, 0, 0, ratio, -camera.x * scale * ratio, -camera.y * scale * ratio);
     pending.forEach((item) => drawLine(context, item.line, scale, picture));
     const active = moving ? byId(moving.id) : null;
     if (active && moving) {
@@ -393,13 +402,15 @@ export function Board(props: BoardProps) {
 
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
 
+  // The board point under the pointer.
   const at = (event: { clientX: number; clientY: number }) => {
     const rect = canvas.current!.getBoundingClientRect();
     return {
-      x: Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width)),
-      y: Math.min(MAX_DEPTH, Math.max(0, (event.clientY - rect.top) / rect.width)),
+      x: Math.min(REACH, Math.max(-REACH, camera.x + (event.clientX - rect.left) / scale)),
+      y: Math.min(REACH, Math.max(-REACH, camera.y + (event.clientY - rect.top) / scale)),
     };
   };
+  const onScreen = (x: number, y: number) => ({ left: (x - camera.x) * scale, top: (y - camera.y) * scale });
 
   // The cursor goes out at most every CURSOR_MS, always ending on its latest position.
   const flush = () => {
@@ -493,19 +504,31 @@ export function Board(props: BoardProps) {
       return;
     }
     images.current.set(id, probe);
-    const element = room.current;
-    const middle = element && scale > 0 ? (element.scrollTop + view.height / 2) / scale : 0.4;
+    const middleX = scale > 0 ? camera.x + view.width / scale / 2 : 0.5;
+    const middle = scale > 0 ? camera.y + view.height / scale / 2 : 0.4;
     const wide = Math.min(PICTURE_WIDTH, 0.6 / Math.max(ratio, 0.01));
     const tall = wide * ratio;
-    const left = (1 - wide) / 2;
-    const top = Math.max(0.02, Math.min(MAX_DEPTH - tall, middle - tall / 2));
+    const left = Math.min(REACH - wide, Math.max(-REACH, middleX - wide / 2));
+    const top = Math.min(REACH - tall, Math.max(-REACH, middle - tall / 2));
     place({ kind: "image", image: id, color: "#ffffff", width: 2, points: [left, top, left + wide, top + tall] });
     setTool("select");
   };
 
+  // Drags the board itself: anyone may look around, viewers too.
+  const startPan = (event: PointerEvent<HTMLCanvasElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    panning.current = { clientX: event.clientX, clientY: event.clientY, x: camera.x, y: camera.y };
+    setPointerStyle("grabbing");
+  };
+
   const down = (event: PointerEvent<HTMLCanvasElement>) => {
     event.currentTarget.closest("aside")?.focus({ preventScroll: true });
-    if (!canDraw || event.button !== 0) {
+    if (event.button === 1 || (event.button === 0 && (space.current || !canDraw))) {
+      event.preventDefault();
+      startPan(event);
+      return;
+    }
+    if (event.button !== 0) {
       return;
     }
     const { x, y } = at(event);
@@ -518,6 +541,9 @@ export function Board(props: BoardProps) {
         event.currentTarget.setPointerCapture(event.pointerId);
         drag.current = { id: target.id, handle: handle >= 0 ? handle : null, from: { x, y }, points: [...target.points] };
         setPointerStyle(handle >= 0 ? handleCursor(target, handle) : "grabbing");
+      } else {
+        // An empty spot drags the board, as in Miro.
+        startPan(event);
       }
       return;
     }
@@ -544,6 +570,11 @@ export function Board(props: BoardProps) {
   };
 
   const move = (event: PointerEvent<HTMLCanvasElement>) => {
+    const pan = panning.current;
+    if (pan) {
+      setCamera(clampCamera(pan.x - (event.clientX - pan.clientX) / scale, pan.y - (event.clientY - pan.clientY) / scale, zoom));
+      return;
+    }
     const { x, y } = at(event);
     const dragged = drag.current;
     if (!dragged && tool === "select" && canDraw) {
@@ -580,6 +611,11 @@ export function Board(props: BoardProps) {
   };
 
   const up = (event: PointerEvent<HTMLCanvasElement>) => {
+    if (panning.current) {
+      panning.current = null;
+      setPointerStyle(space.current || tool === "select" ? "grab" : undefined);
+      return;
+    }
     sweeping.current = false;
     const dragged = drag.current;
     drag.current = null;
@@ -636,23 +672,57 @@ export function Board(props: BoardProps) {
     return () => window.removeEventListener("keydown", key);
   }, [canDraw]);
 
-  // Ctrl or Cmd with the wheel, and a pinch on a trackpad, zoom; a plain wheel scrolls.
+  // As in Miro: Ctrl or Cmd with the wheel, or a pinch, zooms around the pointer; two fingers or the
+  // wheel pan, Shift turning the wheel sideways.
   const latestZoom = useRef(zoomTo);
   latestZoom.current = zoomTo;
+  const latestPan = useRef(panBy);
+  latestPan.current = panBy;
   useEffect(() => {
     const element = room.current;
     if (!element) {
       return;
     }
     const wheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const lines = event.deltaMode === 1 ? 16 : 1;
       if (event.ctrlKey || event.metaKey) {
-        event.preventDefault();
-        latestZoom.current(zoom * Math.exp(-event.deltaY * 0.01), event);
+        // A pinch sends small steps; a mouse wheel notch is large, so one notch zooms by at most a third.
+        const step = Math.max(-60, Math.min(60, event.deltaY * lines));
+        latestZoom.current(zoom * Math.exp(-step * 0.005), event);
+      } else if (event.shiftKey && event.deltaX === 0) {
+        latestPan.current(event.deltaY * lines, 0);
+      } else {
+        latestPan.current(event.deltaX * lines, event.deltaY * lines);
       }
     };
     element.addEventListener("wheel", wheel, { passive: false });
     return () => element.removeEventListener("wheel", wheel);
   }, [zoom]);
+
+  // Holding Space turns the pointer into a hand that drags the board, as in Miro and Figma.
+  const space = useRef(false);
+  useEffect(() => {
+    const press = (event: KeyboardEvent) => {
+      const typingHere = event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]") !== null;
+      if (event.code === "Space" && !typingHere) {
+        if (event.type === "keydown") {
+          event.preventDefault();
+        }
+        const down = event.type === "keydown";
+        if (space.current !== down) {
+          space.current = down;
+          setPointerStyle(down ? "grab" : undefined);
+        }
+      }
+    };
+    window.addEventListener("keydown", press);
+    window.addEventListener("keyup", press);
+    return () => {
+      window.removeEventListener("keydown", press);
+      window.removeEventListener("keyup", press);
+    };
+  }, []);
 
   const toAgent = () =>
     void boardImage([...shown.filter((stroke) => !hidden.has(stroke.id)), ...pending.map((item) => item.line)], picture)
@@ -799,6 +869,9 @@ export function Board(props: BoardProps) {
           <button type="button" onClick={() => zoomTo(zoom * ZOOM_STEP)} disabled={zoom >= MAX_ZOOM} aria-label="Zoom in" title="Zoom in (Ctrl or Cmd and the wheel)">
             +
           </button>
+          <button type="button" onClick={fitAll} title="Show everything on the board">
+            fit
+          </button>
         </div>
         <button
           className="button small ghost"
@@ -823,16 +896,32 @@ export function Board(props: BoardProps) {
         }}
         onDrop={drop}
       >
-        <div className={styles.stage} style={{ width: size.width, height: size.height }}>
+        <div
+          className={styles.stage}
+          style={(() => {
+            // The dots move and scale with the board; they thin out when zoomed far out.
+            let step = 0.025 * scale;
+            while (step > 0 && step < GRID_PX) {
+              step *= 4;
+            }
+            return {
+              width: size.width,
+              height: size.height,
+              backgroundSize: `${step}px ${step}px`,
+              backgroundPosition: `${-((camera.x * scale) % step)}px ${-((camera.y * scale) % step)}px`,
+            };
+          })()}
+        >
           <canvas
             ref={canvas}
             className={cx(styles.canvas, canDraw && (tool === "text" ? styles.texting : tool === "select" ? styles.selecting : styles.drawable))}
-            style={{ width: size.width, height: size.height, cursor: tool === "select" ? pointerStyle : undefined }}
+            style={{ width: size.width, height: size.height, cursor: panning.current ? "grabbing" : space.current || tool === "select" ? pointerStyle : undefined }}
             onPointerDown={down}
             onPointerMove={move}
             onPointerUp={up}
             onPointerCancel={up}
-            onPointerLeave={() => (drawing.current || drag.current ? undefined : share(null, true))}
+            onPointerLeave={() => (drawing.current || drag.current || panning.current ? undefined : share(null, true))}
+            onAuxClick={(event) => event.preventDefault()}
           />
           {typing ? (
             <textarea
@@ -841,7 +930,7 @@ export function Board(props: BoardProps) {
               value={typing.value}
               rows={1}
               placeholder="type, enter to place"
-              style={{ left: typing.x * scale, top: typing.y * scale, color, fontSize: textSize(width, scale) }}
+              style={{ ...onScreen(typing.x, typing.y), color, fontSize: textSize(width, scale) }}
               onChange={(event) => setTyping({ ...typing, value: event.target.value })}
               onBlur={commitText}
               onKeyDown={(event) => {
@@ -857,7 +946,7 @@ export function Board(props: BoardProps) {
             />
           ) : null}
           {pointers.map(({ id, name, cursor: where }) => (
-            <div key={id} className={styles.pointer} style={{ left: where.x * scale, top: where.y * scale, "--who": colorFor(id) } as CSSProperties} aria-hidden="true">
+            <div key={id} className={styles.pointer} style={{ ...onScreen(where.x, where.y), "--who": colorFor(id) } as CSSProperties} aria-hidden="true">
               <svg width="16" height="18" viewBox="0 0 16 18">
                 <path d="M1 1 L1 15 L5 11 L8 17 L10.5 16 L7.5 10 L13 10 Z" />
               </svg>

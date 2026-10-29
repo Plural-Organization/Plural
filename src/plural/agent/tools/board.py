@@ -4,16 +4,25 @@ from pydantic import Field
 
 from plural.agent.tools.base import Tool, ToolArgs, ToolCtx, ToolResult, ToolSpec, TypedTool
 from plural.protocol.commands import BoardDraw, BoardErase, BoardMove, BoardOpen
-from plural.protocol.models import BOARD_TEXT_CHARS, BoardShape, BoardStroke, BoardView, ToolRisk
+from plural.protocol.models import (
+    BOARD_REACH,
+    BOARD_TEXT_CHARS,
+    BoardShape,
+    BoardStroke,
+    BoardView,
+    ToolRisk,
+)
 
 # The name the agent's marks carry on the shared board.
 AGENT_AUTHOR: Final = "agent"
 MAX_MARKS: Final = 60
 
 COORDINATES = (
-    "The board is the room's shared drawing surface. A point is (x, y) in board widths: x runs "
-    "from 0 at the left to 1 at the right, y from 0 at the top downwards, up to 4; a square "
-    "needs the same span on both axes. A screen usually shows y up to about 1.2."
+    "The board is the room's shared drawing surface, an endless canvas people pan and zoom. "
+    "A point is (x, y) in board widths, x to the right and y downwards, each from -20 to 20; "
+    "a square needs the same span on both axes. At 100% a person sees about x 0 to 1 and "
+    "y 0 to 1.2 from the origin, so draw there first and keep a sketch near what is already on "
+    "the board."
 )
 COLORS = (
     "#ecebe7 white, #b9b4ff violet, #9fd8ff blue, #8fdca6 green, "
@@ -175,10 +184,10 @@ class BoardDrawTool(TypedTool[BoardDrawArgs]):
 class BoardMoveArgs(ToolArgs):
     id: str = Field(description="The mark's id from board_view")
     dx: float = Field(
-        default=0, ge=-4, le=4, description="Shift right by this much, in board widths"
+        default=0, ge=-40, le=40, description="Shift right by this much, in board widths"
     )
     dy: float = Field(
-        default=0, ge=-4, le=4, description="Shift down by this much, in board widths"
+        default=0, ge=-40, le=40, description="Shift down by this much, in board widths"
     )
     points: list[float] | None = Field(
         default=None,
@@ -212,9 +221,9 @@ class BoardMoveTool(TypedTool[BoardMoveArgs]):
             points = tuple(args.points)
         else:
             points = tuple(
-                min(1.0, max(0.0, value + args.dx))
-                if index % 2 == 0
-                else min(4.0, max(0.0, value + args.dy))
+                min(
+                    BOARD_REACH, max(-BOARD_REACH, value + (args.dx if index % 2 == 0 else args.dy))
+                )
                 for index, value in enumerate(stroke.points)
             )
         try:
