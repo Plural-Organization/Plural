@@ -185,13 +185,13 @@
           "default": null
         },
         "x": {
-          "maximum": 4,
-          "minimum": 0,
+          "maximum": 20,
+          "minimum": -20,
           "type": "number"
         },
         "y": {
-          "maximum": 4,
-          "minimum": 0,
+          "maximum": 20,
+          "minimum": -20,
           "type": "number"
         }
       },
@@ -225,8 +225,8 @@
         },
         "points": {
           "items": {
-            "maximum": 4,
-            "minimum": 0,
+            "maximum": 20,
+            "minimum": -20,
             "type": "number"
           },
           "maxItems": 4000,
@@ -285,8 +285,8 @@
       "properties": {
         "points": {
           "items": {
-            "maximum": 4,
-            "minimum": 0,
+            "maximum": 20,
+            "minimum": -20,
             "type": "number"
           },
           "maxItems": 4000,
