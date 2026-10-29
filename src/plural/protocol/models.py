@@ -286,9 +286,12 @@ BOARD_TOTAL_POINTS: Final = 200_000
 # Four decimals place a point within a tenth of a pixel on a 1000 px board.
 BOARD_DECIMALS: Final = 4
 
-# A point on the shared board, measured in board widths on both axes, so a taller screen shows more
-# of the board below instead of stretching it; the board runs four widths down.
-Unit = Annotated[float, Field(ge=0, le=4)]
+# The board reaches this far from its origin in every direction, in board widths: wide enough to
+# pan around like an endless canvas, small enough to keep a mark's numbers short.
+BOARD_REACH: Final = 20
+# A point on the shared board, measured in board widths on both axes; one width is about what a
+# side panel shows across at 100%, and x and y may run negative.
+Unit = Annotated[float, Field(ge=-BOARD_REACH, le=BOARD_REACH)]
 Color = Annotated[str, Field(pattern=r"^#[0-9a-fA-F]{6}$")]
 
 
