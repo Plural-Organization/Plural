@@ -22,6 +22,7 @@ import {
   type Tab,
 } from "../settingsModel";
 import { THEME_NAMES, theme, type ThemeName } from "../theme";
+import type { UpdateState } from "../update";
 
 export const DIALOG_WIDTH = 72;
 
@@ -63,6 +64,8 @@ export interface DialogProps {
   admission?: "approve" | "open";
   onAdmission?: (mode: "approve" | "open") => void;
   onCopyReply: () => void;
+  update?: UpdateState | null;
+  onUpdate?: () => void;
   onClose: () => void;
 }
 
@@ -93,6 +96,7 @@ export function SettingsDialog(props: DialogProps) {
     role: live.current.role,
     canConfigure: live.current.control !== null && live.current.role === "host",
     oauthLoggedIn: hasOAuth(),
+    update: live.current.update,
   });
   const rows = (): Row[] => rowsFor(local.current.tab, state());
   const set = (patch: Partial<Local>): void => {
@@ -259,7 +263,9 @@ export function SettingsDialog(props: DialogProps) {
         live.current.onSettings({ ...live.current.settings, theme: row.id.slice("theme:".length) as ThemeName });
         break;
       case "action":
-        if (row.id === "test" || row.id === "save") {
+        if (row.id === "update") {
+          live.current.onUpdate?.();
+        } else if (row.id === "test" || row.id === "save") {
           void run(row.id);
         } else if (row.id === "oauth-login") {
           const attempt = beginOAuth();

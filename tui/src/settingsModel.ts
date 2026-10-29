@@ -2,6 +2,7 @@ import type { Role } from "@plural/client";
 import type { Keys } from "./credentials";
 import { PRESETS, presetOf, type AgentChoice, type PresetId } from "./presets";
 import type { Settings } from "./settings";
+import type { UpdateState } from "./update";
 import { relayProblem, type ShareMode } from "./share";
 import { THEMES, THEME_NAMES } from "./theme";
 
@@ -36,6 +37,26 @@ export interface ModelState {
   role: Role | undefined;
   canConfigure: boolean;
   oauthLoggedIn?: boolean;
+  update?: UpdateState | null;
+}
+
+export function updateRows(update: UpdateState | null | undefined): Row[] {
+  if (!update) {
+    return [];
+  }
+  const hint = {
+    ready: "install it now, then start plural again",
+    installing: "downloading and installing, this takes a moment",
+    installed: "installed, quit and start plural again to use it",
+    failed: `the installer exited with code ${update.phase === "failed" ? update.code : 0}, press enter to try again or run plural update`,
+  }[update.phase];
+  const label = {
+    ready: `● update ready · ${update.version}`,
+    installing: `↻ updating to ${update.version}…`,
+    installed: `✓ ${update.version} installed · restart plural`,
+    failed: `✕ update to ${update.version} failed`,
+  }[update.phase];
+  return [{ id: "update", kind: "action", label, value: "", hint, enabled: update.phase === "ready" || update.phase === "failed" }];
 }
 
 export function maskKey(key: string): string {
@@ -281,6 +302,10 @@ export function appearanceRows(state: ModelState): Row[] {
 }
 
 export function rowsFor(tab: Tab, state: ModelState): Row[] {
+  return [...updateRows(state.update), ...tabRows(tab, state)];
+}
+
+function tabRows(tab: Tab, state: ModelState): Row[] {
   switch (tab) {
     case "model":
       return modelRows(state);

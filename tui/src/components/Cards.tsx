@@ -8,6 +8,7 @@ import { highlightLines } from "../lib/highlight";
 import { bodyLines, displayName, kindOf, lastLine, metaOf, oneLine } from "../lib/tools";
 import { truncate } from "../lib/wrap";
 import { colorFor, theme } from "../theme";
+import { collapseText } from "@plural/client";
 import { Picture } from "./Splash";
 import { Spinner, useElapsed } from "./Spinner";
 
@@ -123,12 +124,23 @@ export function ChatCard({ item }: { item: Extract<FeedItem, { kind: "chat" }> }
   );
 }
 
-export function AssistantCard({ item, syntax }: { item: Extract<FeedItem, { kind: "assistant" }>; syntax: SyntaxStyle }) {
+const REPLY_LINES = 40;
+
+interface AssistantProps {
+  item: Extract<FeedItem, { kind: "assistant" }>;
+  syntax: SyntaxStyle;
+  expanded: boolean;
+  onToggle: () => void;
+}
+
+export function AssistantCard({ item, syntax, expanded, onToggle }: AssistantProps) {
   const renderer = useRenderer();
   const renderNode = useMemo(() => codeBlockRenderer(renderer), [renderer]);
   if (item.streaming && item.text.trim() === "") {
     return null;
   }
+  const long = !item.streaming && item.text.split("\n").length > REPLY_LINES;
+  const view = long && !expanded ? collapseText(item.text, REPLY_LINES) : { text: item.text, hidden: 0 };
   return (
     <box flexDirection="column" marginBottom={1}>
       <text>
@@ -137,8 +149,13 @@ export function AssistantCard({ item, syntax }: { item: Extract<FeedItem, { kind
         </span>
       </text>
       <box paddingLeft={2}>
-        <markdown content={item.text} syntaxStyle={syntax} streaming={item.streaming} renderNode={renderNode} tableOptions={table()} />
+        <markdown content={view.text} syntaxStyle={syntax} streaming={item.streaming} renderNode={renderNode} tableOptions={table()} />
       </box>
+      {long ? (
+        <box paddingLeft={2} onMouseDown={() => onToggle()}>
+          <text fg={theme.accent}>{expanded ? "▴ show less" : `▾ ${view.hidden} more lines · click or ctrl+o to expand`}</text>
+        </box>
+      ) : null}
     </box>
   );
 }
@@ -185,12 +202,19 @@ function DiffView({ diff, path }: { diff: string; path: string }) {
   );
 }
 
-function Body({ item }: { item: Extract<FeedItem, { kind: "tool" }> }) {
+function Body({ item, onCopy }: { item: Extract<FeedItem, { kind: "tool" }>; onCopy: (text: string) => void }) {
   const kind = kindOf(item.call.name);
   const failed = item.status === "failed";
   const running = item.status === "running";
   if (item.diff !== null && !running && (kind === "edit" || kind === "write")) {
-    return <DiffView diff={item.diff} path={item.call.subject} />;
+    return (
+      <box flexDirection="column">
+        <DiffView diff={item.diff} path={item.call.subject} />
+        <box alignSelf="flex-end" onMouseDown={() => onCopy(item.diff ?? "")}>
+          <text fg={theme.dim}>copy</text>
+        </box>
+      </box>
+    );
   }
   const lines = running ? bodyLines(item.live).slice(-LIVE_LINES) : bodyLines(item.output);
   const trimmed = running ? { shown: lines.join("\n"), more: 0 } : trimLines(lines, EXPANDED_LINES);
@@ -205,6 +229,11 @@ function Body({ item }: { item: Extract<FeedItem, { kind: "tool" }> }) {
         <text fg={theme.dim}>{running ? "waiting for output…" : "no output"}</text>
       )}
       {trimmed.more > 0 ? <text fg={theme.dim}>… +{trimmed.more} more lines</text> : null}
+      {!running && lines.length > 0 ? (
+        <box alignSelf="flex-end" onMouseDown={() => onCopy(`${kind === "bash" ? `$ ${item.call.subject}\n` : ""}${lines.join("\n")}`)}>
+          <text fg={theme.dim}>copy</text>
+        </box>
+      ) : null}
     </box>
   );
 }
@@ -213,10 +242,11 @@ interface ToolCardProps {
   item: Extract<FeedItem, { kind: "tool" }>;
   expanded: boolean;
   onToggle: () => void;
+  onCopy: (text: string) => void;
   width: number;
 }
 
-export function ToolCard({ item, expanded, onToggle, width }: ToolCardProps) {
+export function ToolCard({ item, expanded, onToggle, onCopy, width }: ToolCardProps) {
   const running = item.status === "running";
   const failed = item.status === "failed";
   const elapsed = useElapsed(running);
@@ -243,7 +273,7 @@ export function ToolCard({ item, expanded, onToggle, width }: ToolCardProps) {
       </box>
       {expanded ? (
         <box flexDirection="column" marginLeft={2} paddingLeft={1} border={["left"]} borderColor={theme.line}>
-          <Body item={item} />
+          <Body item={item} onCopy={onCopy} />
         </box>
       ) : null}
     </box>
@@ -267,9 +297,10 @@ interface ViewProps {
   expanded: boolean;
   queued?: Queued;
   onToggle: (id: string) => void;
+  onCopy: (text: string) => void;
 }
 
-export function FeedItemView({ item, syntax, width, expanded, queued = null, onToggle }: ViewProps) {
+export function FeedItemView({ item, syntax, width, expanded, queued = null, onToggle, onCopy }: ViewProps) {
   switch (item.kind) {
     case "banner":
       return <Banner item={item} />;
@@ -278,9 +309,9 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, onT
     case "chat":
       return <ChatCard item={item} />;
     case "assistant":
-      return <AssistantCard item={item} syntax={syntax} />;
+      return <AssistantCard item={item} syntax={syntax} expanded={expanded} onToggle={() => onToggle(item.id)} />;
     case "tool":
-      return <ToolCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} width={width} />;
+      return <ToolCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} width={width} />;
     case "notice":
       return <NoticeCard item={item} />;
   }

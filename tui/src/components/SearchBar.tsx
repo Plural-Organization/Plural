@@ -5,12 +5,13 @@ interface SearchBarProps {
   query: string;
   count: number;
   position: number;
+  preview: string;
   onQuery: (query: string) => void;
   onStep: (direction: 1 | -1) => void;
   onClose: () => void;
 }
 
-export function SearchBar({ query, count, position, onQuery, onStep, onClose }: SearchBarProps) {
+export function SearchBar({ query, count, position, preview, onQuery, onStep, onClose }: SearchBarProps) {
   useKeyboard((key) => {
     if (key.name === "escape" || (key.ctrl && (key.name === "f" || key.name === "c"))) {
       key.preventDefault();
@@ -34,13 +35,16 @@ export function SearchBar({ query, count, position, onQuery, onStep, onClose }: 
         focused
         flexGrow={1}
         value={query}
-        placeholder="text, command, path or file name"
+        placeholder="text, command, path · is:failed is:prompt by:name"
         placeholderColor={theme.dim}
         textColor={theme.text}
         backgroundColor={theme.panel}
         focusedBackgroundColor={theme.panel}
         onInput={onQuery}
       />
+      <text fg={theme.dim} wrapMode="none">
+        {preview}{"  "}
+      </text>
       <text fg={count === 0 && query.trim() !== "" ? theme.warn : theme.text}>{result}</text>
       <text fg={theme.dim}>{"  ↵ older · ⇧↵ newer · esc close"}</text>
     </box>

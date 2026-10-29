@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs, UsageError } from "../src/options";
-import { compareVersions, isInstalledBinary, latestVersion, runInstaller, runUpdate, skewNote, type Installer } from "../src/update";
+import { compareVersions, isInstalledBinary, latestVersion, runInstaller, runUpdate, skewNote, Updater, type Installer, type UpdateState } from "../src/update";
 
 class Capture {
   text = "";
@@ -150,5 +150,68 @@ describe("the command line", () => {
     expect(parseArgs(["update"])).toEqual({ kind: "update", check: false });
     expect(parseArgs(["update", "--check"])).toEqual({ kind: "update", check: true });
     expect(() => parseArgs(["update", "--now"])).toThrow(UsageError);
+  });
+});
+
+describe("the update offer", () => {
+  const binary = "/home/me/.local/bin/plural";
+
+  function watch(updater: Updater): UpdateState[] {
+    const seen: UpdateState[] = [];
+    updater.subscribe((state) => state && seen.push(state));
+    return seen;
+  }
+
+  test("a newer release is offered and an equal or older one is not", async () => {
+    const newer = new Updater({ current: "0.2.4", execPath: binary, fetcher: release("v0.2.5") });
+    await newer.check();
+    expect(newer.state).toEqual({ phase: "ready", version: "0.2.5" });
+    const same = new Updater({ current: "0.2.5", execPath: binary, fetcher: release("v0.2.5") });
+    await same.check();
+    expect(same.state).toBeNull();
+  });
+
+  test("a failed look-up offers nothing", async () => {
+    const offline = new Updater({ current: "0.2.4", execPath: binary, fetcher: release("v0.2.5", 500) });
+    await offline.check();
+    expect(offline.state).toBeNull();
+  });
+
+  test("a copy that runs from source is not offered an update it cannot install", async () => {
+    const source = new Updater({ current: "0.2.4", execPath: "/usr/bin/node", fetcher: release("v0.3.0") });
+    await source.check();
+    expect(source.state).toBeNull();
+  });
+
+  test("installing pins the version and the folder of the running program", async () => {
+    const calls: Record<string, string>[] = [];
+    const install: Installer = async (environment) => {
+      calls.push(environment);
+      return 0;
+    };
+    const updater = new Updater({ current: "0.2.4", execPath: binary, fetcher: release("v0.2.5"), install });
+    await updater.check();
+    const seen = watch(updater);
+    await updater.install();
+    expect(calls).toEqual([{ PLURAL_VERSION: "0.2.5", PLURAL_INSTALL_DIR: "/home/me/.local/bin" }]);
+    expect(seen.map((state) => state.phase)).toEqual(["installing", "installed"]);
+  });
+
+  test("a failed install can be tried again and nothing runs twice at once", async () => {
+    let code = 3;
+    let runs = 0;
+    const install: Installer = async () => {
+      runs += 1;
+      return code;
+    };
+    const updater = new Updater({ current: "0.2.4", execPath: binary, fetcher: release("v0.2.5"), install });
+    await updater.check();
+    await updater.install();
+    expect(updater.state).toEqual({ phase: "failed", version: "0.2.5", code: 3 });
+    code = 0;
+    await updater.install();
+    expect(updater.state?.phase).toBe("installed");
+    await updater.install();
+    expect(runs).toBe(2);
   });
 });

@@ -50,12 +50,12 @@ export function skewNote(client: string, host: string): string | null {
 
 export type Installer = (environment: Record<string, string>) => Promise<number>;
 
-export function runInstaller(url: string = INSTALLER_URL): Installer {
+export function runInstaller(url: string = INSTALLER_URL, stdio: "inherit" | "ignore" = "inherit"): Installer {
   return (environment) =>
     new Promise((resolve) => {
       const fetchAndRun = 'script="$(mktemp)" && curl -fsSL "$PLURAL_INSTALLER" -o "$script" && sh "$script"; code=$?; rm -f "$script"; exit $code';
       const child = spawn("sh", ["-c", fetchAndRun], {
-        stdio: "inherit",
+        stdio,
         env: { ...process.env, ...environment, PLURAL_INSTALLER: url },
       });
       child.on("error", () => resolve(127));
@@ -101,4 +101,65 @@ export async function runUpdate(options: { check: boolean }, deps: UpdateDeps): 
   }
   out.write(`plural ${latest} is installed. Start plural again to use it\n`);
   return 0;
+}
+
+export type UpdateState =
+  | { phase: "ready"; version: string }
+  | { phase: "installing"; version: string }
+  | { phase: "installed"; version: string }
+  | { phase: "failed"; version: string; code: number };
+
+export interface UpdaterDeps {
+  current: string;
+  execPath: string;
+  fetcher?: typeof fetch;
+  install?: Installer;
+}
+
+export class Updater {
+  private current: UpdateState | null = null;
+  private readonly listeners = new Set<(state: UpdateState | null) => void>();
+
+  constructor(private readonly deps: UpdaterDeps) {}
+
+  get state(): UpdateState | null {
+    return this.current;
+  }
+
+  subscribe(listener: (state: UpdateState | null) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  private set(state: UpdateState): void {
+    this.current = state;
+    this.listeners.forEach((listener) => listener(state));
+  }
+
+  async check(): Promise<void> {
+    if (!isInstalledBinary(this.deps.execPath) || process.env.PLURAL_NO_UPDATE_CHECK) {
+      return;
+    }
+    try {
+      const latest = await latestVersion(this.deps.fetcher);
+      if (compareVersions(latest, this.deps.current) > 0) {
+        this.set({ phase: "ready", version: latest });
+      }
+    } catch {
+      return;
+    }
+  }
+
+  async install(): Promise<void> {
+    const state = this.current;
+    if (state === null || (state.phase !== "ready" && state.phase !== "failed")) {
+      return;
+    }
+    this.set({ phase: "installing", version: state.version });
+    const code = await (this.deps.install ?? runInstaller(INSTALLER_URL, "ignore"))({
+      PLURAL_VERSION: state.version,
+      PLURAL_INSTALL_DIR: dirname(this.deps.execPath),
+    });
+    this.set(code === 0 ? { phase: "installed", version: state.version } : { phase: "failed", version: state.version, code });
+  }
 }

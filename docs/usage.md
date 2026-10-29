@@ -36,6 +36,8 @@ plural update --check   # only say whether there is one
 
 `plural update` looks up the latest release on GitHub and runs the same installer as the first install, pinned to that version: it upgrades the host (`plural-host`) and replaces the `plural` program next to the one you ran, with the same progress, resume and checksum check. A download that was cut off continues where it stopped when you run it again. It does nothing when you are up to date. A copy that runs from source or from a package manager cannot replace itself and says so.
 
+You do not have to leave plural for it. When plural starts it asks GitHub for the latest release, and if there is a newer one, `● update <version>` appears next to the gear and as the first row of the settings (`F2`). Press `enter` on it to install; the row turns into `✓ installed · restart plural` when it is done. Set `PLURAL_NO_UPDATE_CHECK=1` to skip the look-up. Copies that run from source or from a package manager never see the offer.
+
 ## Resume a session
 
 Every session you host is kept in `~/.plural/sessions` with its folder, its title and the whole conversation.
@@ -167,6 +169,8 @@ The conversation is on the left. The panel on the right shows who is in the room
 
 The line above the input says who will see what you type: `→ agent` (the whole room sees the prompt), `→ room` after `/team` and `→ @name` for a private message, where the agent does not see it. If a message does not reach the host, the text comes back into the input with the reason, and `↑` recalls it even if you started typing something else.
 
+When you scroll up, a line above the input counts what arrived meanwhile (`↓ 3 new · ✉ 1` with the chat messages), and a click on it or `end` takes you back down. A reply longer than 40 lines is folded; click it or press `ctrl+o` to open. Code blocks and tool output have a `copy` button. The terminal title shows `⚠ waiting for you`, `● working` or `✓ done`, and a run longer than 15 seconds rings the bell when it ends.
+
 `ctrl+f` searches the conversation for text, commands, file paths, tool output and diffs, newest match first, and marks every match in the margin.
 
 Each tool call is one line with what it did and a short result: the lines a command printed, its exit code if it failed, or `+added −removed` for an edit. A running command shows its latest line next to the spinner. Click a line, or press `ctrl+o` for all of them, to see the command with its output or a numbered diff.
@@ -260,7 +264,9 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | `shift+tab` | Cycle the permission mode (host) |
 | `esc` | Interrupt the run (host) |
 | `pgup`, `pgdn`, mouse wheel | Scroll the conversation |
-| `ctrl+f` | Search the conversation; `enter` goes to an older match, `shift+enter` to a newer one, `esc` closes |
+| `ctrl+f` | Search the conversation; `enter` goes to an older match, `shift+enter` to a newer one, `esc` closes. Words must all match; `is:failed`, `is:prompt`, `is:tool`, `is:chat`, `is:reply` and `by:name` narrow it down |
+| `end` | Jump to the latest message (when the input is empty) |
+| `alt+↑`, `alt+↓` | Previous or next prompt |
 | `ctrl+o` | Expand or collapse tool details |
 | `ctrl+b` | Show or hide the side panel |
 | `ctrl+y` | Copy the last reply |
