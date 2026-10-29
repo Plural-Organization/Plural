@@ -30,6 +30,7 @@ class MemberClaims(Model):
 class MemberView(Model):
     id: str
     name: MemberName
+    key: str
     role: TeamRole
     joined_at: datetime
 

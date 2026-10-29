@@ -1,9 +1,11 @@
 import asyncio
+import json
 import os
 import secrets
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import cast
 
 from plural.agent.agents import AgentLibrary
 from plural.agent.context import ContextBuilder, Environment
@@ -37,6 +39,7 @@ from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook, RoomLink
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.providers import (
+    ConfigError,
     build_provider,
     provider_secrets,
     resolve_api_key,
@@ -45,6 +48,8 @@ from plural.host.publisher import Publisher
 from plural.host.repo import git_branch
 from plural.host.routing import build_helper
 from plural.host.system import SystemClock, UlidGenerator
+from plural.host.team import DirectoryClient, TeamStore
+from plural.host.team_admission import TeamAdmission
 from plural.host.transport.base import HostTransport
 from plural.host.transport.direct import DirectTransport
 from plural.host.transport.relay_link import RelayLink
@@ -218,6 +223,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         token_ttl_s=settings.token_ttl_s,
     )
     host = Participant(id=HOST_PARTICIPANT_ID, name=settings.host_name, role=Role.HOST)
+    team = await _team_admission(settings, store, clock) if settings.team else None
     agent_run = AgentRun(loop, inbox)
     actor = SessionActor(
         inbox=inbox,
@@ -254,6 +260,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         join_timeout_s=settings.join_timeout_s,
         max_pending_joins=settings.max_pending_joins,
         max_participants=settings.max_participants,
+        team=team,
     )
     await actor.start()
     transport: HostTransport = (
@@ -275,6 +282,31 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         host_link=f"{room_url}?token={host_token}",
         mcp=mcp,
         web_search=web_search,
+    )
+
+
+async def _team_admission(
+    settings: HostSettings, store: SqliteEventStore, clock: SystemClock
+) -> TeamAdmission:
+    team_store = TeamStore(settings.state_dir)
+    profile = await asyncio.to_thread(team_store.load)
+    if profile is None:
+        raise ConfigError("this session is for a team, but you are not in one")
+    directory = DirectoryClient(team_store, profile)
+    banned: list[str] = []
+    try:
+        stored: object = json.loads(await store.meta("team_banned") or "[]")
+    except ValueError:
+        stored = None
+    if isinstance(stored, list):
+        banned = [str(entry) for entry in cast("list[object]", stored) if isinstance(entry, str)]
+    return TeamAdmission(
+        team_id=profile.team_id,
+        team_key=profile.team_key,
+        members=directory.members,
+        clock=clock,
+        banned=banned,
+        roster_ttl_s=settings.team_roster_ttl_s,
     )
 
 

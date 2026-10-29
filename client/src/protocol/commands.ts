@@ -108,6 +108,7 @@ export interface SessionHello {
   join?: string | null;
   name?: string | null;
   since?: number | null;
+  team?: TeamProof | null;
   token?: string | null;
   type?: "session.hello";
 }
@@ -118,6 +119,16 @@ export interface SessionHello {
 export interface ClientInfo {
   kind: string;
   version: string;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "TeamProof".
+ */
+export interface TeamProof {
+  certificate: string;
+  nonce: string;
+  proof: string;
+  ts: number;
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

@@ -13,6 +13,7 @@ from cryptography.hazmat.primitives.serialization import (
     load_pem_private_key,
 )
 
+from plural.protocol.commands import TeamProof
 from plural.protocol.team import MemberClaims
 from plural.security.keys import load_or_create_host_key
 from plural.security.tokens import b64decode, b64encode
@@ -166,3 +167,22 @@ def verify_request(
 ) -> bool:
     message = request_message(method, path, body, signed.timestamp, signed.nonce)
     return verify_signature(claims.key, message, signed.signature)
+
+
+def join_message(room: str, timestamp: int, nonce: str) -> bytes:
+    return f"plural-team-join\n{room}\n{timestamp}\n{nonce}".encode()
+
+
+def build_team_proof(
+    identity: Identity, certificate: str, room: str, *, timestamp: int, nonce: str
+) -> TeamProof:
+    return TeamProof(
+        certificate=certificate,
+        ts=timestamp,
+        nonce=nonce,
+        proof=identity.sign(join_message(room, timestamp, nonce)),
+    )
+
+
+def verify_team_proof(proof: TeamProof, claims: MemberClaims, room: str) -> bool:
+    return verify_signature(claims.key, join_message(room, proof.ts, proof.nonce), proof.proof)

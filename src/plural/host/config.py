@@ -25,6 +25,7 @@ class HostSettings(BaseSettings):
     public_url: str | None = None
     relay_url: str | None = None
     team: bool = False
+    team_roster_ttl_s: float = Field(default=30, gt=0)
     provider: (
         Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"] | None
     ) = None

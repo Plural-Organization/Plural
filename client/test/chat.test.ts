@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { emptyState, mentionable, mentionsIn, mentionsMe, parseChat, routeOf, SlashError, type SessionState } from "../src";
+import { emptyState, findPerson, mentionable, mentionsIn, mentionsMe, parseChat, routeOf, SlashError, type SessionState } from "../src";
 
 function room(): SessionState {
   const state = emptyState();
@@ -123,5 +123,21 @@ describe("who will see what I am typing", () => {
 
   test("other slash commands are not prompts", () => {
     expect(routeOf("/compact", room(), "p_me")).toMatchObject({ kind: "command", label: "/compact" });
+  });
+});
+
+describe("finding a person by name", () => {
+  test("is by the whole label, ignoring case and a leading @", () => {
+    const people = mentionable(room(), "p_me");
+    expect(findPerson("alia", people)?.id).toBe("p_alia");
+    expect(findPerson("@ANN LEE", people)?.id).toBe("p_ann");
+    expect(findPerson("Bek #bek2", people)?.id).toBe("p_bek2");
+  });
+
+  test("is nobody for a part of a name or nothing", () => {
+    const people = mentionable(room(), "p_me");
+    expect(findPerson("al", people)).toBeNull();
+    expect(findPerson("  ", people)).toBeNull();
+    expect(findPerson("@", people)).toBeNull();
   });
 });

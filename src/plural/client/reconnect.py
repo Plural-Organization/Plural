@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import Final, Self
 from urllib.parse import parse_qs, urlsplit, urlunsplit
@@ -10,7 +10,7 @@ from websockets.exceptions import WebSocketException
 from plural.client.connection import CommandRejected, Wire
 from plural.client.projection import Projection
 from plural.protocol.codec import ProtocolError, decode_event, decode_record
-from plural.protocol.commands import ClientInfo, Command, SessionHello
+from plural.protocol.commands import ClientInfo, Command, SessionHello, TeamProof
 from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo
 from plural.protocol.events import Event, JoinRefused, SessionSnapshot, SessionWelcome
 
@@ -46,8 +46,16 @@ class JoinLink:
 
 
 class SessionClient:
-    def __init__(self, link: JoinLink, *, name: str, client: ClientInfo) -> None:
+    def __init__(
+        self,
+        link: JoinLink,
+        *,
+        name: str,
+        client: ClientInfo,
+        team: Callable[[str], TeamProof] | None = None,
+    ) -> None:
         self.projection = Projection()
+        self._team = team
         self._link = link
         self._name = name
         self._client = client
@@ -87,6 +95,7 @@ class SessionClient:
             name=self._name,
             invite=None if self._token else self._link.invite,
             join=None if self._token else self._link.join,
+            team=self._team(self._link.room) if self._team and not self._token else None,
             token=self._token,
             since=self.projection.state.last_seq if self.projection.ready else None,
         )
