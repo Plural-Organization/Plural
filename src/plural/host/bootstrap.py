@@ -160,7 +160,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     mcp.start()
     registry = ApprovalRegistry()
     gate = HostPolicyGate(
-        policy=Policy(),
+        policy=Policy(guest_run_tokens=settings.guest_run_tokens),
         registry=registry,
         inbox=inbox,
         ids=ids,

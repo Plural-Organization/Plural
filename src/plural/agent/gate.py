@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from plural.protocol.models import Provenance, ToolCallView
+from plural.protocol.models import Provenance, ToolCallView, Usage
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,3 +16,5 @@ class PolicyGate(Protocol):
     async def check(
         self, call: ToolCallView, *, subject: str, provenance: Provenance
     ) -> GateResult: ...
+
+    def turn_limit(self, *, usage: Usage, provenance: Provenance) -> str | None: ...

@@ -13,13 +13,16 @@ from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.registry import builtin_tools
 from plural.core.provenance import direct, from_proposal
 from plural.host.system import UlidGenerator
-from plural.protocol.models import Actor, ActorKind, Provenance, Role, ToolCallView
+from plural.protocol.models import Actor, ActorKind, Provenance, Role, ToolCallView, Usage
 
 
 class StubGate:
-    def __init__(self, *, allowed: bool = True, block: bool = False) -> None:
+    def __init__(
+        self, *, allowed: bool = True, block: bool = False, limit: str | None = None
+    ) -> None:
         self.allowed = allowed
         self.block = block
+        self.limit = limit
         self.runs = 0
         self.seen: list[tuple[str, Provenance]] = []
 
@@ -33,6 +36,9 @@ class StubGate:
         if self.block:
             await asyncio.Event().wait()
         return GateResult(allowed=self.allowed, reason="stub")
+
+    def turn_limit(self, *, usage: Usage, provenance: Provenance) -> str | None:
+        return self.limit
 
 
 def turn(text: str, *, guest: bool = False) -> UserTurn:

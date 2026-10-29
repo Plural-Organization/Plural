@@ -26,6 +26,7 @@ class ToolResult:
     content: str
     is_error: bool = False
     diff: str | None = None
+    terminate: bool = False
 
 
 class FileLocks:

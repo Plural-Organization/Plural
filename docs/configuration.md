@@ -25,6 +25,7 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 | `PLURAL_COMPACT_AT` | `0.75` | Fraction of the window at which the conversation is summarized |
 | `PLURAL_APPROVAL_TIMEOUT_S` | `120` | Seconds before an approval expires |
 | `PLURAL_REJECTION_LIMIT` | `2` | Rejections of one kind of action per run before the agent stops asking the host |
+| `PLURAL_GUEST_RUN_TOKENS` | none | Token budget for a run that includes a guest's prompt. Input, cache writes and output count; cache reads do not. The run ends after the turn that reaches it |
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24 hours |
 | `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |
 | `PLURAL_TYPING_TTL_S` | `6` | Seconds after which a typing indicator lapses without a refresh |

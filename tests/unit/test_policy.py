@@ -3,10 +3,17 @@ import string
 from hypothesis import given
 from hypothesis import strategies as st
 
-from plural.core.policy.engine import PLAN_MODE, Policy, ToolInvocation, evaluate
+from plural.core.policy.engine import (
+    GUEST_BUDGET,
+    PLAN_MODE,
+    Policy,
+    ToolInvocation,
+    evaluate,
+    run_limit,
+)
 from plural.core.policy.rules import PolicyAction, Rule, RuleSet
 from plural.core.provenance import direct, from_proposal
-from plural.protocol.models import PermissionMode, Role, ToolRisk
+from plural.protocol.models import PermissionMode, Role, ToolRisk, Usage
 
 HOST = direct("p_host", Role.HOST)
 GUEST = from_proposal("p_alia", Role.PARTICIPANT)
@@ -102,3 +109,16 @@ def test_plan_mode_only_lets_reads_and_allowed_commands_through() -> None:
         decision = evaluate(policy, denied, HOST)
         assert decision.action is PolicyAction.DENY
         assert decision.reason == PLAN_MODE
+
+
+def test_guest_run_budget() -> None:
+    policy = Policy(guest_run_tokens=1000)
+    spent = Usage(input_tokens=600, output_tokens=300, cache_write_tokens=100)
+    assert run_limit(policy, spent, GUEST) == GUEST_BUDGET
+    assert run_limit(policy, spent, HOST) is None
+    assert run_limit(Policy(), spent, GUEST) is None
+
+
+def test_cache_reads_do_not_count_against_the_budget() -> None:
+    policy = Policy(guest_run_tokens=1000)
+    assert run_limit(policy, Usage(input_tokens=10, cache_read_tokens=50_000), GUEST) is None

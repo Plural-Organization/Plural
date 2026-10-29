@@ -3,13 +3,14 @@ from typing import Final, Self
 
 from plural.core.policy.rules import DEFAULT_RULES, RuleSet
 from plural.core.provenance import is_guest_originated
-from plural.protocol.models import Model, PermissionMode, PolicyAction, Provenance, ToolRisk
+from plural.protocol.models import Model, PermissionMode, PolicyAction, Provenance, ToolRisk, Usage
 
 COMPOUND_SHELL: Final = re.compile(r"[;&|`$<>()\n]")
 PLAN_MODE: Final = (
     "plan mode is on, so nothing may change yet. Keep researching with read-only tools, then "
     "reply with a concrete plan and wait for the host to approve it"
 )
+GUEST_BUDGET: Final = "the token budget for a run started by a guest is used up"
 UNLOCKED: Final[dict[PermissionMode, frozenset[ToolRisk]]] = {
     PermissionMode.ACCEPT_EDITS: frozenset({ToolRisk.WRITE}),
     PermissionMode.AUTO: frozenset({ToolRisk.WRITE, ToolRisk.EXEC}),
@@ -34,6 +35,7 @@ class Policy(Model):
     guest_taint: frozenset[ToolRisk] = frozenset({ToolRisk.WRITE, ToolRisk.EXEC})
     default: PolicyAction = PolicyAction.ASK
     mode: PermissionMode = PermissionMode.DEFAULT
+    guest_run_tokens: int | None = None
 
     def with_session(self, session: RuleSet) -> Self:
         return self.model_copy(update={"session": session})
@@ -65,6 +67,14 @@ def evaluate(policy: Policy, invocation: ToolInvocation, provenance: Provenance)
             action, reason = PolicyAction.ASK, "compound shell command"
     suggested = suggest_patterns(invocation) if action is PolicyAction.ASK else ()
     return Decision(action=action, reason=reason, suggested_patterns=suggested)
+
+
+def run_limit(policy: Policy, usage: Usage, provenance: Provenance) -> str | None:
+    if policy.guest_run_tokens is None or not is_guest_originated(provenance):
+        return None
+    # Cache reads cost a fraction of fresh input, so they do not count against the budget.
+    billed = usage.input_tokens + usage.cache_write_tokens + usage.output_tokens
+    return GUEST_BUDGET if billed >= policy.guest_run_tokens else None
 
 
 def _changes_things(invocation: ToolInvocation, action: PolicyAction) -> bool:
