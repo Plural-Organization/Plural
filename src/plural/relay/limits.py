@@ -19,6 +19,14 @@ class RelayLimits:
     connect_burst: int = 20
 
 
+def peer_of(forwarded: str | None, client: str | None, proxy_hops: int) -> str:
+    if proxy_hops > 0 and forwarded:
+        hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
+        if len(hops) >= proxy_hops:
+            return hops[-proxy_hops]
+    return client or "unknown"
+
+
 class TokenBucket:
     def __init__(
         self, rate: float, burst: int, clock: Callable[[], float] = time.monotonic
@@ -91,3 +99,21 @@ class PeerGate:
 
 
 _PRUNE_ABOVE = 1024
+
+
+class Throttle:
+    def __init__(
+        self, rate: float, burst: int, clock: Callable[[], float] = time.monotonic
+    ) -> None:
+        self._rate = rate
+        self._burst = burst
+        self._clock = clock
+        self._buckets: dict[str, TokenBucket] = {}
+
+    def allow(self, peer: str) -> bool:
+        if len(self._buckets) >= _PRUNE_ABOVE:
+            self._buckets = {key: value for key, value in self._buckets.items() if not value.full()}
+        bucket = self._buckets.get(peer)
+        if bucket is None:
+            bucket = self._buckets[peer] = TokenBucket(self._rate, self._burst, self._clock)
+        return bucket.take()

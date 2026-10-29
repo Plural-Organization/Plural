@@ -70,6 +70,16 @@ A relay that anyone can reach needs limits, so it has them:
 
 Behind a proxy every client looks like the proxy. Tell the relay how many proxies are in front of it with `PLURAL_RELAY_PROXY_HOPS` (the images set it to 1, which is right for Caddy, Railway and Render) and it takes the client address from the `X-Forwarded-For` header. Use 0 when the relay is reached directly. If the relay log shows the same `peer=` for different people, raise the number of hops, or raise the limits with `PLURAL_RELAY_MAX_ROOMS`, `PLURAL_RELAY_ROOMS_PER_PEER` and `PLURAL_RELAY_GUESTS_PER_PEER`.
 
+### Teams
+
+A relay can also keep a team directory: who is in which team and the invite codes. Start it with a file for the data:
+
+```bash
+plural-host relay --teams /data/teams.db      # or PLURAL_RELAY_TEAMS=/data/teams.db
+```
+
+Without it the relay serves no teams. The file holds each team's signing key, so keep it private (plural creates it readable by its owner only) and back it up; losing it means the teams have to be created again. Prompts, replies and files never go to the directory. Anyone who can reach the relay can create a team, at most 3 per address per 10 minutes and 500 in all, so put the relay behind a network rule if it should serve only you. In a container, mount a volume for the file.
+
 ### Railway
 
 Create a service from this repository and set the variable `RAILWAY_DOCKERFILE_PATH=deploy/relay.Dockerfile`, or point the service's config file at [`deploy/railway/relay.json`](../deploy/railway/relay.json). Generate a domain for it. Railway terminates TLS, so the relay is at `wss://<name>.up.railway.app`. The relay listens on the `PORT` Railway gives it and answers `/healthz`. Set `PLURAL_RELAY_BIND` to change the address it binds, the images set it to `0.0.0.0`.

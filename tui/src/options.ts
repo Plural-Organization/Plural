@@ -28,7 +28,7 @@ export type Parsed =
   | { kind: "join"; link: string | null; displayName: string | null }
   | { kind: "session"; options: SessionOptions };
 
-const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm"]);
+const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm", "team"]);
 
 const HOST_VALUES: Record<string, string> = {
   "--workspace": "--workspace",

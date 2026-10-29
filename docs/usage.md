@@ -125,6 +125,25 @@ Participants and the host can write; viewers can read the team chat but cannot w
 
 A private message is private from the other guests, not from the host: it is stored in the host's log, `plural-host export` includes it, and it travels through the relay unencrypted. Do not use it for anything you would not say with the host and the relay operator listening.
 
+## Teams
+
+A team is a group of people who run their own plural, each with their own agent and key, and trust each other enough to see who is around. This part only forms the team; seeing and opening each other's sessions comes next.
+
+```bash
+plural team create Backend --relay wss://relay.example.com --as vlad
+plural team join tm-7f3k9-xq2m4 --relay wss://relay.example.com --as alia
+plural team members
+plural team invite          # a new code, owner only
+plural team kick alia       # owner only
+plural team leave
+plural team disband         # owner only, deletes the team for everyone
+plural team status
+```
+
+`create` prints an invite code that works once and for an hour; give it to a teammate, who runs `join` with the same relay. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
+
+You are identified by a key that plural creates once in `~/.plural/identity.pem`. Joining gives you a certificate signed for the team, valid for 30 days and renewed by itself. Removing a member stops their access at once. One person is in one team at a time.
+
 ## Prompt modes
 
 | Mode | What happens to a participant's prompt |

@@ -7,5 +7,6 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 RUN uv sync --frozen --no-dev
 USER plural
+RUN mkdir -p /data && chown plural /data
 EXPOSE 8787
 CMD ["plural-host", "relay"]

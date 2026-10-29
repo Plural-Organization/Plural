@@ -10,7 +10,7 @@ from pydantic import ValidationError
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from plural.protocol.relay import RELAY_MESSAGES, RelayClosed, RelayFrame, RelayOpen
-from plural.relay.limits import PeerGate, RelayLimits, TokenBucket
+from plural.relay.limits import PeerGate, RelayLimits, TokenBucket, peer_of
 from plural.security.tokens import TokenVerifier
 
 CLOSE_BAD_OPEN = 4400
@@ -99,12 +99,11 @@ class Rooms:
                 del self._rooms[room_id]
 
     def _peer(self, socket: WebSocket) -> str:
-        forwarded = socket.headers.get("x-forwarded-for")
-        if self._proxy_hops > 0 and forwarded:
-            hops = [hop.strip() for hop in forwarded.split(",") if hop.strip()]
-            if len(hops) >= self._proxy_hops:
-                return hops[-self._proxy_hops]
-        return socket.client.host if socket.client else "unknown"
+        return peer_of(
+            socket.headers.get("x-forwarded-for"),
+            socket.client.host if socket.client else None,
+            self._proxy_hops,
+        )
 
     async def serve_host(self, socket: WebSocket, room_id: str) -> None:
         await socket.accept()
