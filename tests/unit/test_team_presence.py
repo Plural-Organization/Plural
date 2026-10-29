@@ -149,7 +149,7 @@ def test_a_team_session_needs_a_team_and_an_address(tmp_path: Path) -> None:
             team_name="Backend",
             team_key="k",
             certificate="c",
-            member=MemberView(id="m_a", name="alia", role=TeamRole.MEMBER, joined_at=NOW),
+            member=MemberView(id="m_a", name="alia", key="k", role=TeamRole.MEMBER, joined_at=NOW),
         )
     )
     ensure_ready(reachable, store)

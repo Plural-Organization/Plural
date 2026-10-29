@@ -3,7 +3,7 @@ import { createPrivateKey } from "node:crypto";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { authorization, fetchSessions, httpBase, loadTeam, requestMessage, TeamWatcher, type SessionCard, type Team } from "../src/team";
+import { authorization, fetchSessions, httpBase, joinMessage, loadTeam, pickTeamSession, requestMessage, TeamWatcher, teamProof, type SessionCard, type Team } from "../src/team";
 
 const PEM = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f\n-----END PRIVATE KEY-----\n";
 
@@ -97,5 +97,37 @@ describe("the list of sessions", () => {
     expect(watcher.view.sessions).toHaveLength(1);
     expect(watcher.view.error).toBe("connection refused");
     expect(seen).toEqual([null, "connection refused"]);
+  });
+});
+
+describe("joining a teammate's session", () => {
+  test("the proof is signed exactly the way the Python host checks it", () => {
+    const proof = teamProof(team(), "r_live", 1700000000, "abcd1234");
+    expect(proof).toEqual({
+      certificate: "CERT",
+      ts: 1700000000,
+      nonce: "abcd1234",
+      proof: "mHYo8HAbgHlS5k5-EAduf6NrVHU9CgbOuTP877VgattI1MmwMx4NFCPqEvWheSV6pY_fV4CZNO86JbO3yz_NDw",
+    });
+    expect(joinMessage("r_live", 1700000000, "abcd1234")).toBe("plural-team-join\nr_live\n1700000000\nabcd1234");
+  });
+
+  const sessions = [card("alia", "r_a1"), { ...card("alia", "r_a2"), repo: "web" }, card("bek", "r_b"), card("vlad", "r_v")];
+
+  test("@name finds the person's session, whatever the case", () => {
+    expect(pickTeamSession(sessions, "m_vlad", "@BEK").room).toBe("r_b");
+    expect(pickTeamSession(sessions, "m_vlad", "bek").room).toBe("r_b");
+  });
+
+  test("a person with several sessions needs the repository said", () => {
+    expect(() => pickTeamSession(sessions, "m_vlad", "@alia")).toThrow("@alia:api, @alia:web");
+    expect(pickTeamSession(sessions, "m_vlad", "@alia:web").room).toBe("r_a2");
+    expect(() => pickTeamSession(sessions, "m_vlad", "@alia:nope")).toThrow("api, web");
+  });
+
+  test("nobody sharing, your own session and an empty name are told apart", () => {
+    expect(() => pickTeamSession(sessions, "m_vlad", "@cleo")).toThrow("not sharing a session");
+    expect(() => pickTeamSession(sessions, "m_vlad", "@vlad")).toThrow("your own session");
+    expect(() => pickTeamSession(sessions, "m_vlad", "@")).toThrow("usage");
   });
 });

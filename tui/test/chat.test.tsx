@@ -169,3 +169,22 @@ test("what I wrote myself never rings", async () => {
   expect(written.mock.calls.filter(([chunk]) => chunk === "\u0007")).toHaveLength(0);
   written.mockRestore();
 });
+
+test("/kick removes the named person and says so; an unknown name changes nothing", async () => {
+  const fake = room();
+  const setup = await mount(fake);
+  await say(setup, "/kick bek");
+  await frame(setup, "Bek was removed from the session");
+  expect(fake.commands).toEqual([{ type: "participant.revoke", participant_id: "p_bek" }]);
+  await say(setup, "/kick nobody");
+  await frame(setup, "usage: /kick <name>");
+  expect(fake.commands).toHaveLength(1);
+});
+
+test("a guest cannot kick anyone", async () => {
+  const fake = room("participant");
+  const setup = await mount(fake);
+  await say(setup, "/kick bek");
+  await frame(setup, "/kick is for the host");
+  expect(fake.commands).toEqual([]);
+});

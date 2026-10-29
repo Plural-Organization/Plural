@@ -990,6 +990,17 @@
           ],
           "default": null
         },
+        "team": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TeamProof"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "token": {
           "anyOf": [
             {
@@ -1074,6 +1085,36 @@
       },
       "required": [
         "query"
+      ],
+      "type": "object"
+    },
+    "TeamProof": {
+      "properties": {
+        "certificate": {
+          "maxLength": 2048,
+          "minLength": 1,
+          "type": "string"
+        },
+        "nonce": {
+          "maxLength": 64,
+          "minLength": 8,
+          "type": "string"
+        },
+        "proof": {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        "ts": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "certificate",
+        "ts",
+        "nonce",
+        "proof"
       ],
       "type": "object"
     },

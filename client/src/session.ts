@@ -2,7 +2,7 @@ import { withDefaults } from "./reduce";
 import { decodeEvent, decodeRecord, ProtocolError } from "./decode";
 import type { JoinLink } from "./link";
 import { Projection } from "./projection";
-import type { ClientInfo, Command, Envelope, ErrorCode, Event } from "./protocol";
+import type { ClientInfo, Command, Envelope, ErrorCode, Event, TeamProof } from "./protocol";
 import { CommandRejected, ConnectionClosed, Wire } from "./wire";
 
 const INITIAL_DELAY_MS = 250;
@@ -15,6 +15,7 @@ export interface SessionOptions {
   name: string;
   client: ClientInfo;
   onWelcome?: (welcome: { room: string; token: string }) => void;
+  team?: (room: string) => TeamProof;
 }
 
 export interface Session {
@@ -114,6 +115,7 @@ export class SessionClient implements Session {
       name: this.options.name,
       invite: this.token === null ? this.link.invite : null,
       join: this.token === null ? this.link.join : null,
+      team: this.token === null && this.options.team ? this.options.team(this.link.room) : null,
       token: this.token,
       since: this.projection.ready ? this.projection.state.last_seq : null,
     };

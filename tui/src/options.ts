@@ -141,7 +141,7 @@ function join(args: string[]): Parsed {
     } else if (link === null) {
       link = arg;
     } else {
-      throw new UsageError("usage: plural join <link> [--name <name>]");
+      throw new UsageError("usage: plural join <link|@name> [--name <name>]");
     }
   }
   return { kind: "join", link, displayName };

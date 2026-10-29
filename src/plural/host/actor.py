@@ -2,6 +2,7 @@ import asyncio
 import base64
 import binascii
 import hashlib
+import json
 from collections.abc import Coroutine, Sequence
 from dataclasses import dataclass
 from pathlib import PurePath
@@ -53,6 +54,11 @@ from plural.host.inbox import (
 from plural.host.invites import InviteBook, RoomLink
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.publisher import Publisher
+from plural.host.team_admission import (
+    TeamAdmission,
+    member_id_of,
+    participant_id_of,
+)
 from plural.host.transport.base import Connection
 from plural.protocol.codec import ProtocolError, decode_command
 from plural.protocol.commands import (
@@ -95,6 +101,7 @@ from plural.protocol.commands import (
     SkillsInstall,
     SkillsRemove,
     SkillsSearch,
+    TeamProof,
     TypingSet,
 )
 from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo
@@ -231,7 +238,9 @@ class SessionActor:
         join_timeout_s: float = 120.0,
         max_pending_joins: int = 5,
         max_participants: int = 20,
+        team: TeamAdmission | None = None,
     ) -> None:
+        self._team = team
         self._inbox = inbox
         self._store = store
         self._publisher = publisher
@@ -555,16 +564,38 @@ class SessionActor:
                     ParticipantRevoked(participant_id=command.participant_id),
                     actor_id=participant.id,
                 )
+                await self._ban_team_member(command.participant_id)
                 self._publisher.disconnect(command.participant_id, "access revoked")
             case FileAttach():
                 await self._attach(participant, command)
 
     async def _hello(self, connection: Connection, hello: SessionHello) -> None:
-        admission = self._gateway.admit(hello, self._state)
+        if hello.team is not None:
+            admission = await self._admit_team(hello.team)
+        else:
+            admission = self._gateway.admit(hello, self._state)
+            if isinstance(admission, Admission):
+                await self._recheck_team(admission.participant)
         if isinstance(admission, NeedsApproval):
             await self._knock(connection, admission)
             return
         await self._welcome(connection, admission, since=hello.since)
+
+    async def _admit_team(self, proof: TeamProof) -> Admission:
+        if self._team is None:
+            raise Forbidden("this session is not shared with a team")
+        member = await self._team.admit(proof, self._publisher.room)
+        participant = Participant(
+            id=participant_id_of(member.id), name=member.name, role=Role.VIEWER
+        )
+        return Admission(participant, self._gateway.issue(participant))
+
+    async def _recheck_team(self, participant: Participant) -> None:
+        member = member_id_of(participant.id)
+        if member is None:
+            return
+        if self._team is None or not await self._team.still_member(member):
+            raise Unauthorized("access revoked")
 
     async def _welcome(
         self, connection: Connection, admission: Admission, *, since: int | None
@@ -1196,6 +1227,13 @@ class SessionActor:
             else:
                 parts.append(f"[image {meta.name}, no longer available]")
         return "\n\n".join(parts), tuple(pictures)
+
+    async def _ban_team_member(self, participant_id: str) -> None:
+        member = member_id_of(participant_id)
+        if member is None or self._team is None:
+            return
+        self._team.ban(member)
+        await self._store.set_meta("team_banned", json.dumps(self._team.banned))
 
     def _require_guest(self, participant_id: str) -> None:
         target = self._state.participants.get(participant_id)

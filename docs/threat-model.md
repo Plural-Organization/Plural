@@ -25,6 +25,10 @@
 | a member shows a card under someone else's name, or takes over their room | the directory writes the owner of a card from the member's certificate, never from the card, and refuses a room that already belongs to another member (`relay/presence.py`) |
 | a member floods the directory with cards | a card frame is at most 8 KB, a member can show 5 sessions, and a card not renewed within a minute is dropped (`relay/team_routes.py`, `relay/presence.py`) |
 | a removed member keeps showing sessions | removal drops their cards at once and the next frame on their open connection closes it (`relay/directory.py`) |
+| a stranger walks into a team session with a copied certificate | the join carries a signature made with the member's key over the room, a timestamp and a nonce; a certificate of another team, an expired one, a wrong room, a stale timestamp and a repeated nonce are all refused (`host/team_admission.py`) |
+| someone the team removed keeps a seat in a session | the host checks the team roster before admitting a team member and again whenever a team member reconnects with a token; the roster is cached for 30 seconds, a failed refresh is forgiven for 5 minutes and then the host refuses (`host/team_admission.py`, `host/actor.py`) |
+| a kicked team member comes back with their certificate | `/kick` bans the member for the rest of the session and the ban is stored with the session (`host/actor.py`) |
+| a team member in a session that is not shared with the team | only a host started with `--team` takes a team join; any other host refuses it (`host/actor.py`) |
 | a stolen member certificate | the certificate alone is useless without the member's private key, it expires, and removing the member revokes it |
 | a compromised directory adds a member | the new member can at most become a viewer of sessions that admit team viewers; writing always needs the host to approve `access.request` |
 | a viewer reads what the owner did not share | sessions are private and unpublished by default; the card holds no prompts, replies or file contents, only names, repository, status and changed paths |

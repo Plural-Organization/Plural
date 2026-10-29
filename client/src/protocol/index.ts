@@ -5,6 +5,7 @@ export type {
   ApprovalDecision,
   ClientInfo,
   ProposalDecision,
+  TeamProof,
 } from "./commands";
 export type {
   ApprovalRequested,

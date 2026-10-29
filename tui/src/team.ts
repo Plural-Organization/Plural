@@ -1,4 +1,5 @@
 import { createHash, createPrivateKey, randomBytes, sign, type KeyObject } from "node:crypto";
+import type { TeamProof } from "@plural/client";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -60,6 +61,42 @@ export function httpBase(relay: string): string {
 
 export function requestMessage(method: string, path: string, body: Uint8Array, timestamp: number, nonce: string): string {
   return `${method.toUpperCase()}\n${path}\n${timestamp}\n${nonce}\n${createHash("sha256").update(body).digest("hex")}`;
+}
+
+export function joinMessage(room: string, timestamp: number, nonce: string): string {
+  return `plural-team-join\n${room}\n${timestamp}\n${nonce}`;
+}
+
+export function teamProof(team: Team, room: string, timestamp = Math.floor(Date.now() / 1000), nonce = randomBytes(8).toString("hex")): TeamProof {
+  return {
+    certificate: team.profile.certificate,
+    ts: timestamp,
+    nonce,
+    proof: sign(null, Buffer.from(joinMessage(room, timestamp, nonce)), team.key).toString("base64url"),
+  };
+}
+
+export function pickTeamSession(sessions: SessionCard[], me: string, spec: string): SessionCard {
+  const [rawName = "", repo] = spec.replace(/^@/, "").split(":");
+  const name = rawName.toLowerCase();
+  if (name === "") {
+    throw new Error("usage: plural join @name[:repo]");
+  }
+  const theirs = sessions.filter((card) => card.owner.toLowerCase() === name);
+  if (theirs.length === 0) {
+    throw new Error(`${rawName} is not sharing a session right now. plural ls shows who is`);
+  }
+  if (theirs.every((card) => card.owner_id === me)) {
+    throw new Error("that is your own session");
+  }
+  const chosen = repo === undefined ? theirs : theirs.filter((card) => card.repo.toLowerCase() === repo.toLowerCase());
+  if (chosen.length === 0) {
+    throw new Error(`${rawName} has no session in ${repo}: ${theirs.map((card) => card.repo).join(", ")}`);
+  }
+  if (chosen.length > 1) {
+    throw new Error(`${rawName} shares ${chosen.length} sessions, say which: ${chosen.map((card) => `@${card.owner}:${card.repo}`).join(", ")}`);
+  }
+  return chosen[0] as SessionCard;
 }
 
 export function authorization(team: Team, method: string, path: string, body: Uint8Array = new Uint8Array(), timestamp = Math.floor(Date.now() / 1000), nonce = randomBytes(8).toString("hex")): string {
