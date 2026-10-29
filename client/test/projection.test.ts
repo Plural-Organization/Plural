@@ -62,7 +62,7 @@ test("selections follow the events and end when someone leaves", () => {
 
 test("the board keeps strokes, erases one and clears", () => {
   const projection = new Projection();
-  const stroke = { id: "st_1", author_id: "p_alia", kind: "pen" as const, text: null, color: "#ffffff", width: 2, points: [0.1, 0.1, 0.2, 0.2] as [number, number, ...number[]] };
+  const stroke = { id: "st_1", author_id: "p_alia", kind: "pen" as const, text: null, image: null, color: "#ffffff", width: 2, points: [0.1, 0.1, 0.2, 0.2] as [number, number, ...number[]] };
   const record = (seq: number, event: EventRecord["event"]): EventRecord => ({ seq, id: `e${seq}`, ts: "2026-10-28T12:00:00Z", actor_id: null, event });
   projection.apply(record(1, { type: "board.opened", open: true, by: "p_alia" }));
   projection.apply(record(2, { type: "board.stroked", stroke }));

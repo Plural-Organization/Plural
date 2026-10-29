@@ -157,6 +157,21 @@ class BoardStroked(EventBase):
     stroke: BoardStroke
 
 
+class BoardMoved(EventBase):
+    type: Literal["board.moved"] = "board.moved"
+    stroke_id: str
+    points: tuple[float, ...]
+
+
+class AttachmentData(TransientEvent):
+    """The picture of a board image, sent only to the person who asked for it."""
+
+    type: Literal["attachment.data"] = "attachment.data"
+    attachment_id: str
+    media_type: str
+    content_b64: str
+
+
 class BoardErased(EventBase):
     type: Literal["board.erased"] = "board.erased"
     stroke_id: str
@@ -376,6 +391,8 @@ Event = Annotated[
     | ParticipantCursor
     | BoardOpened
     | BoardStroked
+    | BoardMoved
+    | AttachmentData
     | BoardErased
     | BoardCleared
     | ChatPosted

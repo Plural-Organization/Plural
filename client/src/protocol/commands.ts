@@ -44,7 +44,7 @@ export type PolicyAction = "allow" | "ask" | "deny";
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "BoardShape".
  */
-export type BoardShape = "pen" | "line" | "arrow" | "rect" | "ellipse" | "text";
+export type BoardShape = "pen" | "line" | "arrow" | "rect" | "ellipse" | "text" | "image" | "erase";
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "Delivery".
@@ -89,6 +89,8 @@ export interface CommandsSchema {
     | CursorSet
     | BoardOpen
     | BoardDraw
+    | BoardMove
+    | AttachmentFetch
     | BoardErase
     | BoardClear
     | QueueCancel
@@ -407,7 +409,8 @@ export interface BoardOpen {
  */
 export interface BoardDraw {
   color: string;
-  kind?: "pen" | "line" | "arrow" | "rect" | "ellipse" | "text";
+  image?: string | null;
+  kind?: "pen" | "line" | "arrow" | "rect" | "ellipse" | "text" | "image" | "erase";
   /**
    * @minItems 2
    * @maxItems 4000
@@ -416,6 +419,31 @@ export interface BoardDraw {
   text?: string | null;
   type?: "board.draw";
   width: number;
+}
+/**
+ * Moves or resizes a mark: its points, the same kind and count as before.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BoardMove".
+ */
+export interface BoardMove {
+  /**
+   * @minItems 2
+   * @maxItems 4000
+   */
+  points: [number, number, ...number[]];
+  stroke_id: string;
+  type?: "board.move";
+}
+/**
+ * Asks for the picture of an image on the board; only those are handed out.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "AttachmentFetch".
+ */
+export interface AttachmentFetch {
+  attachment_id: string;
+  type?: "attachment.fetch";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

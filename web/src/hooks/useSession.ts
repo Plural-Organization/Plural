@@ -31,10 +31,13 @@ export interface SessionView {
   feed: Feed;
   connection: ConnectionStatus;
   invite: Invite | null;
+  // Pictures on the board, as object URLs, by attachment id.
+  pictures: Record<string, string>;
 }
 
 export interface Session extends SessionView {
   send: (command: Command) => void;
+  fetchPicture: (attachmentId: string) => void;
   // Presence that may fail quietly: a host from an older release does not know it.
   sendPresence: (command: Command) => boolean;
   notify: (tone: Tone, text: string) => void;
@@ -43,7 +46,8 @@ export interface Session extends SessionView {
 }
 
 export class SessionStore {
-  private view: SessionView = { projection: new Projection(), feed: emptyFeed(), connection: "connecting", invite: null };
+  private view: SessionView = { projection: new Projection(), feed: emptyFeed(), connection: "connecting", invite: null, pictures: {} };
+  private readonly asked = new Set<string>();
   private readonly listeners = new Set<() => void>();
   private client: SessionClient | null = null;
   private token: string | null;
@@ -90,6 +94,12 @@ export class SessionStore {
             } else if (event.type === "join.requested" || event.type === "approval.requested" || event.type === "proposal.created") {
               alertNotice("A request needs your attention");
             }
+          }
+          if (event.type === "attachment.data") {
+            const bytes = Uint8Array.from(atob(event.content_b64), (char) => char.charCodeAt(0));
+            const url = URL.createObjectURL(new Blob([bytes], { type: event.media_type }));
+            this.update({ pictures: { ...this.view.pictures, [event.attachment_id]: url } });
+            continue;
           }
           if (event.type === "invite.created") {
             this.update({ invite: { link: event.link, role: event.role, expiresAt: event.expires_at, reusable: event.reusable } });
@@ -143,6 +153,15 @@ export class SessionStore {
     return true;
   };
 
+  // Each picture is asked for once; a failed ask may be retried after a reconnect.
+  readonly fetchPicture = (attachmentId: string): void => {
+    if (this.client === null || this.asked.has(attachmentId) || this.view.pictures[attachmentId] || this.view.connection !== "online") {
+      return;
+    }
+    this.asked.add(attachmentId);
+    this.client.send({ type: "attachment.fetch", attachment_id: attachmentId }).catch(() => this.asked.delete(attachmentId));
+  };
+
   readonly notify = (tone: Tone, text: string): void => this.update({ feed: withNotice(this.view.feed, tone, text) });
 
   readonly clearInvite = (): void => this.update({ invite: null });
@@ -166,7 +185,7 @@ export function useSession(link: JoinLink, name: string, onFatal: (reason: strin
   const [store] = useState(() => new SessionStore(link, name, onFatal));
   const view = useSyncExternalStore(store.subscribe, store.snapshot);
   useEffect(() => store.start(), [store]);
-  return { ...view, send: store.send, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, close: store.close };
+  return { ...view, send: store.send, fetchPicture: store.fetchPicture, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, close: store.close };
 }
 
 function messageOf(error: unknown): string {

@@ -58,9 +58,11 @@ from plural.protocol.commands import (
     AgentsCreate,
     AgentsRemove,
     ApprovalRespond,
+    AttachmentFetch,
     BoardClear,
     BoardDraw,
     BoardErase,
+    BoardMove,
     BoardOpen,
     ChatSend,
     Command,
@@ -99,8 +101,10 @@ from plural.protocol.events import (
     AgentsChanged,
     ApprovalRequested,
     AttachmentAdded,
+    AttachmentData,
     BoardCleared,
     BoardErased,
+    BoardMoved,
     BoardOpened,
     BoardStroked,
     ContextCompacted,
@@ -173,6 +177,16 @@ PLAN_NOTE = (
     "[plan mode: research only. Read the code, do not change files or run commands that change "
     "anything. End with a concrete step-by-step plan; the host approves it before you start]"
 )
+
+
+def _check_points(kind: BoardShape, points: tuple[float, ...]) -> None:
+    """A pen or an eraser needs whole points, a text one point, a shape or an image two corners."""
+    if len(points) % 2 != 0:
+        raise Invalid("a stroke needs x and y for every point")
+    if kind is BoardShape.TEXT and len(points) != 2:
+        raise Invalid("a text needs one point")
+    if kind not in (BoardShape.PEN, BoardShape.ERASE, BoardShape.TEXT) and len(points) != 4:
+        raise Invalid("a shape needs its two corners")
 
 
 @dataclass(slots=True)
@@ -462,25 +476,53 @@ class SessionActor:
                         BoardOpened(open=command.open, by=participant.id), actor_id=participant.id
                     )
             case BoardDraw():
-                if len(command.points) % 2 != 0:
-                    raise Invalid("a stroke needs x and y for every point")
-                if command.kind is BoardShape.TEXT:
-                    if not command.text or len(command.points) != 2:
-                        raise Invalid("a text needs its words and one point")
-                elif command.text is not None:
-                    raise Invalid("only a text carries words")
-                elif command.kind is not BoardShape.PEN and len(command.points) != 4:
-                    raise Invalid("a shape needs its two corners")
+                _check_points(command.kind, command.points)
+                if (command.kind is BoardShape.TEXT) != bool(command.text):
+                    raise Invalid("a text needs its words, and only a text carries words")
+                if (command.kind is BoardShape.IMAGE) != (command.image is not None):
+                    raise Invalid("an image needs its attachment, and only an image has one")
+                if command.image is not None:
+                    await self._require_picture(command.image)
                 stroke = BoardStroke(
                     id=self._ids.new("st_"),
                     author_id=participant.id,
                     kind=command.kind,
                     text=command.text,
+                    image=command.image,
                     color=command.color,
                     width=command.width,
                     points=tuple(round(point, BOARD_DECIMALS) for point in command.points),
                 )
                 await self._emit(BoardStroked(stroke=stroke), actor_id=participant.id)
+            case BoardMove():
+                stroke = next(
+                    (s for s in self._state.board.strokes if s.id == command.stroke_id), None
+                )
+                if stroke is None:
+                    raise NotFound("no such stroke on the board")
+                if stroke.author_id != participant.id and participant.role is not Role.HOST:
+                    raise Forbidden("only the host moves someone else's drawing")
+                _check_points(stroke.kind, command.points)
+                if stroke.kind not in (BoardShape.PEN, BoardShape.ERASE) and len(
+                    command.points
+                ) != len(stroke.points):
+                    raise Invalid("a move keeps the mark's points")
+                points = tuple(round(point, BOARD_DECIMALS) for point in command.points)
+                await self._emit(
+                    BoardMoved(stroke_id=stroke.id, points=points), actor_id=participant.id
+                )
+            case AttachmentFetch():
+                if not any(s.image == command.attachment_id for s in self._state.board.strokes):
+                    raise NotFound("no such picture on the board")
+                data = await self._vault.read(command.attachment_id)
+                self._publisher.deliver(
+                    connection,
+                    AttachmentData(
+                        attachment_id=command.attachment_id,
+                        media_type=image_type(data) or "application/octet-stream",
+                        content_b64=base64.b64encode(data).decode(),
+                    ),
+                )
             case BoardErase():
                 stroke = next(
                     (s for s in self._state.board.strokes if s.id == command.stroke_id), None
@@ -735,6 +777,12 @@ class SessionActor:
         await self._emit(
             ParticipantSelected(participant_id=participant_id, selection=command.selection)
         )
+
+    async def _require_picture(self, attachment_id: str) -> None:
+        if attachment_id not in self._state.attachments:
+            raise NotFound("no such attachment")
+        if image_type(await self._vault.read(attachment_id)) is None:
+            raise Invalid("only a picture goes on the board as an image")
 
     async def _set_cursor(self, participant_id: str, command: CursorSet) -> None:
         if command.cursor is None:

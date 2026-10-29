@@ -93,6 +93,11 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return { ...state, board: { ...state.board, open: event.open } };
     case "board.stroked":
       return { ...state, board: { ...state.board, strokes: withinBudget([...state.board.strokes, event.stroke].slice(-BOARD_STROKES_LIMIT)) } };
+    case "board.moved":
+      return {
+        ...state,
+        board: { ...state.board, strokes: state.board.strokes.map((stroke) => (stroke.id === event.stroke_id ? { ...stroke, points: event.points as typeof stroke.points } : stroke)) },
+      };
     case "board.erased":
       return { ...state, board: { ...state.board, strokes: state.board.strokes.filter((stroke) => stroke.id !== event.stroke_id) } };
     case "board.cleared":

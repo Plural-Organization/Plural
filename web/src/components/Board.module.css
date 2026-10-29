@@ -16,7 +16,8 @@
 .canvas { position: absolute; inset: 0; touch-action: none; }
 .drawable { cursor: crosshair; }
 .texting { cursor: text; }
-.rubbing { cursor: none; }
+.selecting { cursor: default; }
+.board:focus { outline: none; }
 .typing { position: absolute; z-index: 2; min-width: 120px; background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px dashed var(--muted); border-radius: 4px; padding: 0 4px; font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; font-weight: 500; line-height: 1.25; resize: none; outline: none; field-sizing: content; }
 .pointer { position: absolute; pointer-events: none; transition: left 60ms linear, top 60ms linear; }
 .pointer svg { display: block; fill: var(--who); stroke: var(--bg); stroke-width: 1.2; }

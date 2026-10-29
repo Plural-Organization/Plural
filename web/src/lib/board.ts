@@ -13,14 +13,24 @@ export const MAX_POINTS = 4000;
 export const COLORS = ["#ecebe7", "#b9b4ff", "#9fd8ff", "#8fdca6", "#ecc47e", "#ff9a9a", "#ff9fc4"];
 export const WIDTHS = [2, 4, 9];
 export const BACKGROUND = "#16171a";
-export const TOOLS: { kind: BoardShape; label: string }[] = [
+export type Tool = "select" | "pen" | "line" | "arrow" | "rect" | "ellipse" | "text" | "eraser" | "delete";
+
+export const TOOLS: { kind: Tool; label: string }[] = [
+  { kind: "select", label: "select, move and resize" },
   { kind: "pen", label: "pen" },
   { kind: "line", label: "line" },
   { kind: "arrow", label: "arrow" },
   { kind: "rect", label: "box" },
   { kind: "ellipse", label: "circle" },
   { kind: "text", label: "text" },
+  { kind: "eraser", label: "eraser" },
+  { kind: "delete", label: "delete a whole mark" },
 ];
+
+// Marks drawn between two corners, which the select tool resizes by those corners.
+export function hasCorners(kind: BoardShape | undefined): boolean {
+  return kind === "image" || kind === "rect" || kind === "ellipse" || kind === "line" || kind === "arrow";
+}
 
 export interface Line {
   kind?: BoardShape;
@@ -28,6 +38,15 @@ export interface Line {
   width: number;
   points: number[];
   text?: string | null;
+  image?: string | null;
+}
+
+// Finds the loaded picture of an image mark by its attachment id.
+export type Pictures = (attachmentId: string) => CanvasImageSource | undefined;
+
+// The eraser wipes a wider path than the pen draws.
+export function eraserWidth(width: number): number {
+  return Math.min(40, width * 4 + 4);
 }
 
 // Text grows with the pen width so the three widths read as small, medium and large.
@@ -54,9 +73,29 @@ function pen(context: CanvasRenderingContext2D, points: number[], scale: number)
 }
 
 // Draws one mark: a pen line through its points with soft curves, a shape between two corners, or a text.
-export function drawLine(context: CanvasRenderingContext2D, line: Line, scale: number): void {
+export function drawLine(context: CanvasRenderingContext2D, line: Line, scale: number, pictures?: Pictures): void {
   const points = line.points;
   if (points.length < 2) {
+    return;
+  }
+  const kind = line.kind ?? "pen";
+  if (kind === "erase") {
+    context.save();
+    context.globalCompositeOperation = "destination-out";
+    drawLine(context, { ...line, kind: "pen", color: "#000000" }, scale);
+    context.restore();
+    return;
+  }
+  if (kind === "image") {
+    const [x0, y0, x1, y1] = [points[0]! * scale, points[1]! * scale, points[2]! * scale, points[3]! * scale];
+    const picture = line.image ? pictures?.(line.image) : undefined;
+    const [left, top, width, height] = [Math.min(x0, x1), Math.min(y0, y1), Math.abs(x1 - x0), Math.abs(y1 - y0)];
+    if (picture) {
+      context.drawImage(picture, left, top, width, height);
+    } else {
+      context.fillStyle = "rgba(236, 235, 231, 0.06)";
+      context.fillRect(left, top, width, height);
+    }
     return;
   }
   context.strokeStyle = line.color;
@@ -64,7 +103,6 @@ export function drawLine(context: CanvasRenderingContext2D, line: Line, scale: n
   context.lineWidth = (line.width * scale) / WIDTH_UNIT;
   context.lineCap = "round";
   context.lineJoin = "round";
-  const kind = line.kind ?? "pen";
   if (kind === "text") {
     const size = textSize(line.width, scale);
     context.font = `500 ${size}px "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif`;
@@ -119,6 +157,7 @@ export function sameLine(a: Line, b: Line): boolean {
   return (
     (a.kind ?? "pen") === (b.kind ?? "pen") &&
     (a.text ?? null) === (b.text ?? null) &&
+    (a.image ?? null) === (b.image ?? null) &&
     a.color === b.color &&
     a.width === b.width &&
     a.points.length === b.points.length &&
@@ -131,16 +170,22 @@ export function rounded(points: number[]): number[] {
 }
 
 // The whole board as a PNG, the way the agent receives it.
-export async function boardImage(lines: Line[], width = 1600): Promise<Blob> {
+export async function boardImage(lines: Line[], pictures?: Pictures, width = 1600): Promise<Blob> {
   const deepest = Math.max(0, ...lines.flatMap((line) => line.points.filter((_, index) => index % 2 === 1)));
   const height = Math.round(width * Math.min(MAX_DEPTH, Math.max(IMAGE_DEPTH, deepest + 0.08)));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d")!;
+  // Marks go on a layer of their own first, so the eraser wipes ink and not the background under it.
+  const marks = document.createElement("canvas");
+  marks.width = width;
+  marks.height = height;
+  const ink = marks.getContext("2d")!;
+  lines.forEach((line) => drawLine(ink, line, width, pictures));
   context.fillStyle = BACKGROUND;
   context.fillRect(0, 0, width, height);
-  lines.forEach((line) => drawLine(context, line, width));
+  context.drawImage(marks, 0, 0);
   return new Promise((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("the board could not be saved"))), "image/png"));
 }
 
@@ -194,4 +239,32 @@ export function touches(line: Line, x: number, y: number, reach: number): boolea
     }
   }
   return false;
+}
+
+// The box a mark covers, in board widths: left, top, right, bottom.
+export function bounds(line: Line): [number, number, number, number] {
+  if ((line.kind ?? "pen") === "text") {
+    const size = textSize(line.width, 1);
+    const rows = (line.text ?? "").split("\n");
+    const [left, top] = line.points as [number, number];
+    return [left, top, left + Math.max(...rows.map((row) => row.length)) * size * 0.56, top + rows.length * size * 1.25];
+  }
+  const xs = line.points.filter((_, index) => index % 2 === 0);
+  const ys = line.points.filter((_, index) => index % 2 === 1);
+  return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+}
+
+// Whether a click at (x, y) picks the mark: inside a box or an image, or near a line.
+export function picks(line: Line, x: number, y: number, reach: number): boolean {
+  const kind = line.kind ?? "pen";
+  if (kind === "image" || kind === "text" || kind === "rect" || kind === "ellipse") {
+    const [left, top, right, bottom] = bounds(line);
+    return x >= left - reach && x <= right + reach && y >= top - reach && y <= bottom + reach;
+  }
+  return kind !== "erase" && touches(line, x, y, reach);
+}
+
+// The points of a mark moved by (dx, dy).
+export function shifted(points: number[], dx: number, dy: number): number[] {
+  return points.map((value, index) => (index % 2 === 0 ? Math.min(1, Math.max(0, value + dx)) : Math.min(MAX_DEPTH, Math.max(0, value + dy))));
 }

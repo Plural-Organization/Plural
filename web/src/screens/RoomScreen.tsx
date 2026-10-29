@@ -22,6 +22,7 @@ import { useTyping } from "../hooks/useTyping";
 import { activity } from "../lib/activity";
 import { canvasDocs } from "../lib/canvas";
 import { copyText } from "../lib/clipboard";
+import { upload } from "../lib/upload";
 import { cx } from "../lib/cx";
 import styles from "./RoomScreen.module.css";
 
@@ -262,6 +263,10 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
           meId={projection.meId}
           canDraw={canDraw}
           isHost={isHost}
+          pictures={session.pictures}
+          fetchPicture={session.fetchPicture}
+          uploadPicture={(file, name) => upload(file, name, projection, send)}
+          onNotice={(text) => session.notify("warn", text)}
           send={send}
           sendPresence={sendPresence}
           onSendToAgent={(image) => {

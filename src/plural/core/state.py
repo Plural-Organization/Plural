@@ -9,6 +9,7 @@ from plural.protocol.events import (
     AttachmentAdded,
     BoardCleared,
     BoardErased,
+    BoardMoved,
     BoardOpened,
     BoardStroked,
     ChatPosted,
@@ -156,6 +157,14 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             )
         case BoardStroked(stroke=stroke):
             strokes = _within_budget((*state.board.strokes, stroke)[-BOARD_STROKES_LIMIT:])
+            return state.model_copy(
+                update={"board": state.board.model_copy(update={"strokes": strokes})}
+            )
+        case BoardMoved(stroke_id=stroke_id, points=points):
+            strokes = tuple(
+                stroke.model_copy(update={"points": points}) if stroke.id == stroke_id else stroke
+                for stroke in state.board.strokes
+            )
             return state.model_copy(
                 update={"board": state.board.model_copy(update={"strokes": strokes})}
             )

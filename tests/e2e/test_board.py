@@ -1,3 +1,6 @@
+import base64
+import hashlib
+
 import pytest
 
 from plural.client.connection import CommandRejected
@@ -36,6 +39,11 @@ async def test_opening_the_board_shows_it_to_everyone_each_time(session: Session
 async def test_shapes_and_text_keep_what_they_need(session: Session) -> None:
     owner = await session.owner()
     guest = await session.guest("Alia")
+    wipe = BoardDraw(
+        kind=BoardShape.ERASE, color="#ffffff", width=9, points=(0.1, 0.1, 0.2, 0.2, 0.3, 0.1)
+    )
+    await guest.client.send(wipe)
+    assert (await owner.next(BoardStroked)).stroke.kind is BoardShape.ERASE
     box = BoardDraw(kind=BoardShape.RECT, color="#ffffff", width=2, points=(0.1, 0.1, 0.4, 0.3))
     await guest.client.send(box)
     assert (await owner.next(BoardStroked)).stroke.kind is BoardShape.RECT
@@ -142,3 +150,86 @@ async def test_anyone_who_draws_clears_their_own_marks(session: Session) -> None
     cleared = await owner.next(BoardCleared)
     assert cleared.author_id == alia.client.projection.me_id
     assert [s.id for s in owner.client.projection.state.board.strokes] == [kept.id]
+
+
+PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 32
+
+
+async def _picture(client: Session, name: str, data: bytes = PNG) -> str:
+    from plural.protocol.commands import FileAttach
+    from plural.protocol.events import AttachmentAdded
+
+    owner = await client.owner()
+    content = base64.b64encode(data).decode()
+    await owner.client.send(
+        FileAttach(name=name, content_b64=content, sha256=hashlib.sha256(data).hexdigest())
+    )
+    return (await owner.next(AttachmentAdded)).attachment.id
+
+
+async def test_a_picture_goes_on_the_board_moves_and_is_handed_out(session: Session) -> None:
+    from plural.protocol.commands import AttachmentFetch, BoardMove
+    from plural.protocol.events import AttachmentData, BoardMoved
+
+    owner = await session.owner()
+    guest = await session.guest("Alia")
+    picture = await _picture(session, "sketch.png")
+    await owner.client.send(
+        BoardDraw(
+            kind=BoardShape.IMAGE,
+            image=picture,
+            color="#ffffff",
+            width=2,
+            points=(0.1, 0.1, 0.5, 0.4),
+        )
+    )
+    stroke = (await guest.next(BoardStroked)).stroke
+    assert (stroke.kind, stroke.image) == (BoardShape.IMAGE, picture)
+
+    await owner.client.send(BoardMove(stroke_id=stroke.id, points=(0.2, 0.2, 0.8, 0.6)))
+    assert (await guest.next(BoardMoved)).points == (0.2, 0.2, 0.8, 0.6)
+
+    await guest.client.send(AttachmentFetch(attachment_id=picture))
+    data = await guest.next(AttachmentData)
+    assert (data.media_type, base64.b64decode(data.content_b64)) == ("image/png", PNG)
+
+
+async def test_only_pictures_on_the_board_are_handed_out_or_drawn(session: Session) -> None:
+    from plural.protocol.commands import AttachmentFetch
+
+    owner = await session.owner()
+    guest = await session.guest("Alia")
+    private = await _picture(session, "secret.png")
+    with pytest.raises(CommandRejected) as rejected:
+        await guest.client.send(AttachmentFetch(attachment_id=private))
+    assert rejected.value.error.code is ErrorCode.NOT_FOUND
+    notes = await _picture(session, "notes.txt", b"plain words")
+    with pytest.raises(CommandRejected) as rejected:
+        await owner.client.send(
+            BoardDraw(
+                kind=BoardShape.IMAGE,
+                image=notes,
+                color="#ffffff",
+                width=2,
+                points=(0.1, 0.1, 0.5, 0.4),
+            )
+        )
+    assert rejected.value.error.code is ErrorCode.INVALID
+
+
+async def test_only_the_author_or_the_host_moves_a_mark(session: Session) -> None:
+    from plural.protocol.commands import BoardMove
+
+    owner = await session.owner()
+    alia = await session.guest("Alia")
+    bek = await session.guest("Bek")
+    await alia.client.send(
+        BoardDraw(kind=BoardShape.RECT, color="#ffffff", width=2, points=(0.1, 0.1, 0.2, 0.2))
+    )
+    stroke = (await owner.next(BoardStroked)).stroke
+    with pytest.raises(CommandRejected) as rejected:
+        await bek.client.send(BoardMove(stroke_id=stroke.id, points=(0.3, 0.3, 0.4, 0.4)))
+    assert rejected.value.error.code is ErrorCode.FORBIDDEN
+    with pytest.raises(CommandRejected) as rejected:
+        await alia.client.send(BoardMove(stroke_id=stroke.id, points=(0.3, 0.3)))
+    assert rejected.value.error.code is ErrorCode.INVALID
