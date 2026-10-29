@@ -34,8 +34,8 @@ from plural.host.actor import SessionActor
 from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.attachments import AttachmentVault
-from plural.host.briefing import BriefingService
 from plural.host.board_desk import InboxDesk
+from plural.host.briefing import BriefingService
 from plural.host.config import HostSettings
 from plural.host.conflicts import ConflictBoard
 from plural.host.gateway import Gateway
