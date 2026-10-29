@@ -2,6 +2,7 @@ import hashlib
 from datetime import datetime
 from pathlib import Path
 from typing import NamedTuple, Self
+from urllib.parse import urlsplit
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
@@ -169,20 +170,37 @@ def verify_request(
     return verify_signature(claims.key, message, signed.signature)
 
 
-def join_message(room: str, timestamp: int, nonce: str) -> bytes:
-    return f"plural-team-join\n{room}\n{timestamp}\n{nonce}".encode()
+def join_message(url: str, room: str, timestamp: int, nonce: str) -> bytes:
+    return f"plural-team-join\n{url}\n{room}\n{timestamp}\n{nonce}".encode()
+
+
+def normalize_url(url: str) -> str:
+    parts = urlsplit(url.strip())
+    port = parts.port
+    default = {"ws": 80, "wss": 443, "http": 80, "https": 443}.get(parts.scheme)
+    host = (parts.hostname or "").lower()
+    netloc = host if port is None or port == default else f"{host}:{port}"
+    return f"{parts.scheme.lower()}://{netloc}{parts.path.rstrip('/')}"
 
 
 def build_team_proof(
-    identity: Identity, certificate: str, room: str, *, timestamp: int, nonce: str
+    identity: Identity,
+    certificate: str,
+    url: str,
+    room: str,
+    *,
+    timestamp: int,
+    nonce: str,
 ) -> TeamProof:
     return TeamProof(
         certificate=certificate,
+        url=url,
         ts=timestamp,
         nonce=nonce,
-        proof=identity.sign(join_message(room, timestamp, nonce)),
+        proof=identity.sign(join_message(url, room, timestamp, nonce)),
     )
 
 
 def verify_team_proof(proof: TeamProof, claims: MemberClaims, room: str) -> bool:
-    return verify_signature(claims.key, join_message(room, proof.ts, proof.nonce), proof.proof)
+    message = join_message(proof.url, room, proof.ts, proof.nonce)
+    return verify_signature(claims.key, message, proof.proof)

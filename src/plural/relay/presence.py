@@ -50,17 +50,20 @@ class Presence:
         for key in [key for key, entry in self._entries.items() if entry.holder is holder]:
             del self._entries[key]
 
-    def sessions(self, team: str, now: datetime) -> tuple[SessionCard, ...]:
+    def _ordered(self, team: str) -> list[SessionCard]:
         self._sweep()
         cards = [entry.card for (owner, _), entry in self._entries.items() if owner == team]
-        ordered = sorted(cards, key=lambda card: (card.owner.lower(), card.room))
+        return sorted(cards, key=lambda card: (card.owner.lower(), card.room))
+
+    def sessions(self, team: str, now: datetime) -> tuple[SessionCard, ...]:
+        ordered = self._ordered(team)
         return tuple(
             card.model_copy(update={"conflicts": conflicts_for(card, ordered, now)})
             for card in ordered
         )
 
     def peers_of(self, team: str, room: str, now: datetime) -> tuple[Peer, ...]:
-        cards = self.sessions(team, now)
+        cards = self._ordered(team)
         mine = next((card for card in cards if card.room == room), None)
         return () if mine is None else peers_for(mine, cards, now)
 

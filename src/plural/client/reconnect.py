@@ -52,7 +52,7 @@ class SessionClient:
         *,
         name: str,
         client: ClientInfo,
-        team: Callable[[str], TeamProof] | None = None,
+        team: Callable[[str, str], TeamProof] | None = None,
     ) -> None:
         self.projection = Projection()
         self._team = team
@@ -95,7 +95,9 @@ class SessionClient:
             name=self._name,
             invite=None if self._token else self._link.invite,
             join=None if self._token else self._link.join,
-            team=self._team(self._link.room) if self._team and not self._token else None,
+            team=self._team(self._link.room, self._link.url)
+            if self._team and not self._token
+            else None,
             token=self._token,
             since=self.projection.state.last_seq if self.projection.ready else None,
         )

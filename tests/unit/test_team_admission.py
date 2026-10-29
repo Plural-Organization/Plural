@@ -16,6 +16,7 @@ from plural.security.identity import CertSigner, Identity, build_team_proof
 
 START = datetime(2026, 10, 29, 12, 0, tzinfo=UTC)
 ROOM = "r_live"
+URL = "wss://relay.example/r_live"
 
 
 class Clock:
@@ -51,6 +52,7 @@ class Setup:
             team_id="t_1",
             team_key=self.signer.public_b64,
             members=self.roster,
+            urls=(URL,),
             clock=self.clock,
         )
 
@@ -93,12 +95,14 @@ class Setup:
         certificate: str,
         *,
         room: str = ROOM,
+        url: str = URL,
         nonce: str = "nonce-0001",
         skew: int = 0,
     ):
         return build_team_proof(
             identity,
             certificate,
+            url,
             room,
             timestamp=int(self.clock.now().timestamp()) + skew,
             nonce=nonce,
@@ -167,6 +171,35 @@ async def test_a_proof_for_another_room_is_refused(setup: Setup) -> None:
     alia = setup.member("alia")
     proof = setup.proof(alia, setup.certificate(alia, "alia"), room="r_other")
     await refused(setup.admission.admit(proof, ROOM), Unauthorized, "this key")
+
+
+async def test_a_proof_made_for_another_address_is_refused(setup: Setup) -> None:
+    alia = setup.member("alia")
+    certificate = setup.certificate(alia, "alia")
+    for other in (
+        "wss://evil.example/r_live",
+        "wss://relay.example/r_other",
+        "ws://relay.example/r_live",
+    ):
+        await refused(
+            setup.admission.admit(setup.proof(alia, certificate, url=other), ROOM),
+            Unauthorized,
+            "another address",
+        )
+
+
+async def test_the_same_address_written_another_way_is_accepted(setup: Setup) -> None:
+    alia = setup.member("alia")
+    certificate = setup.certificate(alia, "alia")
+    for index, spelled in enumerate(
+        (
+            "WSS://Relay.Example/r_live",
+            "wss://relay.example:443/r_live",
+            "wss://relay.example/r_live/",
+        )
+    ):
+        proof = setup.proof(alia, certificate, url=spelled, nonce=f"nonce-000{index}")
+        assert (await setup.admission.admit(proof, ROOM)).name == "alia"
 
 
 async def test_a_stale_or_future_proof_is_refused(setup: Setup) -> None:

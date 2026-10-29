@@ -37,10 +37,11 @@ def prover(member: Member):
     assert profile is not None
     identity = member.store.identity()
 
-    def make(room: str) -> TeamProof:
+    def make(room: str, url: str) -> TeamProof:
         return build_team_proof(
             identity,
             profile.certificate,
+            url,
             room,
             timestamp=int(time.time()),
             nonce=secrets.token_hex(8),
@@ -169,8 +170,13 @@ async def test_a_stolen_certificate_without_its_key_is_refused(
         JoinLink.parse(f"{relay.url}/{ROOM}"),
         name="alia",
         client=CLIENT,
-        team=lambda room: build_team_proof(
-            thief, profile.certificate, room, timestamp=int(time.time()), nonce=secrets.token_hex(8)
+        team=lambda room, url: build_team_proof(
+            thief,
+            profile.certificate,
+            url,
+            room,
+            timestamp=int(time.time()),
+            nonce=secrets.token_hex(8),
         ),
     )
     host, serving = await hosting(relay, vlad, tmp_path)
@@ -269,3 +275,57 @@ async def test_a_team_member_the_host_let_write_keeps_the_right_when_they_come_b
             await second.stop()
     finally:
         await stop(host, serving, owner, first)
+
+
+async def test_a_proof_a_member_made_for_another_server_cannot_be_replayed_here(
+    relay: RelayServer, tmp_path: Path
+) -> None:
+    vlad, alia = await two_members(relay, tmp_path)
+    profile = alia.store.load()
+    assert profile is not None
+    identity = alia.store.identity()
+    captured: list[TeamProof] = []
+
+    def sign_for_the_attacker(room: str, url: str) -> TeamProof:
+        proof = build_team_proof(
+            identity,
+            profile.certificate,
+            "wss://attacker.example/" + room,
+            room,
+            timestamp=int(time.time()),
+            nonce=secrets.token_hex(8),
+        )
+        captured.append(proof)
+        return proof
+
+    host, serving = await hosting(relay, vlad, tmp_path)
+    try:
+        client = SessionClient(
+            JoinLink.parse(f"{relay.url}/{ROOM}"),
+            name="alia",
+            client=CLIENT,
+            team=lambda room, url: captured[0] if captured else sign_for_the_attacker(room, url),
+        )
+        assert await refusal(client) is ErrorCode.UNAUTHORIZED
+    finally:
+        await stop(host, serving)
+
+
+async def test_a_member_removed_from_the_team_is_cut_off_while_connected(
+    relay: RelayServer, tmp_path: Path
+) -> None:
+    from plural.protocol.events import ParticipantRevoked
+
+    vlad, alia = await two_members(relay, tmp_path)
+    host, serving = await hosting(relay, vlad, tmp_path, ttl=0.2)
+    owner = Watcher(SessionClient(JoinLink.parse(host.host_link), name="vlad", client=CLIENT))
+    watcher = Watcher(visit(relay, alia))
+    try:
+        await watcher.next(SessionSnapshot)
+        alia_id = watcher.client.projection.me_id
+        await (await vlad.client()).remove("alia")
+        revoked = await owner.next(ParticipantRevoked, timeout=10)
+        assert revoked.participant_id == alia_id
+        assert alia_id not in host.actor.state.participants
+    finally:
+        await stop(host, serving, owner, watcher)

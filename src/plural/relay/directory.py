@@ -231,6 +231,10 @@ class TeamDirectory:
         try:
             claims = CertVerifier(team["public_key"]).verify(signed.certificate, now=now)
         except InvalidCertificate as error:
+            if "expired" in str(error):
+                raise DirectoryError(
+                    401, "your team certificate has expired, ask the owner for a new invite"
+                ) from error
             raise denied from error
         if claims.team != team_id or not await self._is_member(team_id, claims):
             raise denied

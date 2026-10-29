@@ -69,6 +69,11 @@ class SkillsUpdated:
 
 
 @dataclass(frozen=True, slots=True)
+class TeamSweep:
+    pass
+
+
+@dataclass(frozen=True, slots=True)
 class BriefingReady:
     request: BriefingRequestView
     text: str
@@ -95,6 +100,7 @@ InboxMessage = (
     | SkillsUpdated
     | McpUpdated
     | BriefingReady
+    | TeamSweep
     | SkillsReply
 )
 

@@ -27,6 +27,7 @@ from plural.security.identity import authorization
 log = structlog.get_logger(__name__)
 
 HEARTBEAT_S = 10.0
+REFRESH_S = 3600.0
 POLL_S = 2.0
 REPO_REFRESH_S = 30.0
 RETRY_MIN_S = 2.0
@@ -155,7 +156,12 @@ class TeamPresence:
             log.info("team.presence_connected", team=profile.team_name)
             last: str | None = None
             sent_at = float("-inf")
+            refreshed = self._clock()
             while True:
+                if self._clock() - refreshed >= REFRESH_S:
+                    refreshed = self._clock()
+                    if (await client.refresh()).certificate != profile.certificate:
+                        return
                 card = await self._card()
                 text = PresenceCard(card=card).model_dump_json()
                 if text != last or self._clock() - sent_at >= HEARTBEAT_S:

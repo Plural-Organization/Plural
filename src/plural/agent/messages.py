@@ -56,6 +56,34 @@ class ToolResultTurn(Model):
 Message = UserTurn | AssistantTurn | ToolResultTurn | SummaryTurn | NotesTurn
 
 
+def _last_tool_round(items: list[Message]) -> int | None:
+    for index in range(len(items) - 1, -1, -1):
+        turn = items[index]
+        if isinstance(turn, AssistantTurn) and turn.tool_calls:
+            return index
+    return None
+
+
+def settled(messages: Iterable[Message]) -> list[Message]:
+    """The conversation without a tool round that is still waiting for its results."""
+    items = list(messages)
+    while items:
+        last = items[-1]
+        if isinstance(last, AssistantTurn) and last.tool_calls:
+            items.pop()
+            continue
+        if isinstance(last, ToolResultTurn):
+            owner = _last_tool_round(items)
+            turn = items[owner] if owner is not None else None
+            if owner is not None and isinstance(turn, AssistantTurn):
+                answered = {m.call_id for m in items[owner + 1 :] if isinstance(m, ToolResultTurn)}
+                if not {call.id for call in turn.tool_calls} <= answered:
+                    del items[owner:]
+                    continue
+        break
+    return items
+
+
 def attribute(turn: UserTurn) -> str:
     if turn.provenance.origin is Origin.PROPOSAL:
         return f"[{turn.author.name}, proposal approved by host]\n{turn.text}"

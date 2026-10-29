@@ -140,3 +140,48 @@ def test_the_prompt_asks_for_the_parts_a_colleague_needs_and_quotes_the_question
     update = briefing_prompt(None, "Goal: fix login")
     assert "<earlier>\nGoal: fix login\n</earlier>" in update
     assert "Write only what changed" in update
+
+
+async def test_a_briefing_asked_in_the_middle_of_a_tool_round_leaves_the_open_round_out(
+    tmp_path: Path,
+) -> None:
+    from plural.agent.messages import AssistantTurn, ToolResultTurn
+    from plural.agent.providers.base import ToolCallRequest
+
+    provider = FakeProvider([reply("<briefing>x</briefing>")])
+    loop = make_loop(tmp_path, provider, StubGate())
+    calls = (
+        ToolCallRequest(id="c1", name="ls", args={}),
+        ToolCallRequest(id="c2", name="ls", args={}),
+    )
+    loop.restore(
+        [
+            turn("look around"),
+            AssistantTurn(text="first", tool_calls=(calls[0],)),
+            ToolResultTurn(call_id="c1", name="ls", content="a.txt"),
+            AssistantTurn(text="second", tool_calls=calls),
+            ToolResultTurn(call_id="c1", name="ls", content="a.txt"),
+        ]
+    )
+
+    await loop.brief("write it", cancel=asyncio.Event())
+
+    sent = provider.requests[0].messages
+    assert [message.role for message in sent] == ["user", "assistant", "tool", "user"]
+    assert all(message.content != "second" for message in sent)
+
+
+def test_a_conversation_with_every_result_in_is_left_whole() -> None:
+    from plural.agent.messages import AssistantTurn, ToolResultTurn, settled
+    from plural.agent.providers.base import ToolCallRequest
+
+    call = ToolCallRequest(id="c1", name="ls", args={})
+    whole = [
+        turn("go"),
+        AssistantTurn(text="a", tool_calls=(call,)),
+        ToolResultTurn(call_id="c1", name="ls", content="x"),
+        AssistantTurn(text="done"),
+    ]
+    assert settled(whole) == whole
+    assert settled(whole[:2]) == whole[:1]
+    assert settled([]) == []

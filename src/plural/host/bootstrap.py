@@ -227,7 +227,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         token_ttl_s=settings.token_ttl_s,
     )
     host = Participant(id=HOST_PARTICIPANT_ID, name=settings.host_name, role=Role.HOST)
-    team = await _team_admission(settings, store, clock) if settings.team else None
+    team = await _team_admission(settings, store, clock, room) if settings.team else None
     board = ConflictBoard(workspace.root) if settings.team else None
     agent_run = AgentRun(loop, inbox)
     redactor = Redactor.from_environment(
@@ -278,6 +278,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         conflicts=board,
         briefing=briefing,
         ledger=ledger,
+        team_sweep_s=settings.team_roster_ttl_s,
     )
     await actor.start()
     transport: HostTransport = (
@@ -304,7 +305,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
 
 
 async def _team_admission(
-    settings: HostSettings, store: SqliteEventStore, clock: SystemClock
+    settings: HostSettings, store: SqliteEventStore, clock: SystemClock, room: str
 ) -> TeamAdmission:
     team_store = TeamStore(settings.state_dir)
     profile = await asyncio.to_thread(team_store.load)
@@ -322,6 +323,7 @@ async def _team_admission(
         team_id=profile.team_id,
         team_key=profile.team_key,
         members=directory.members,
+        urls=(settings.room_url(room),),
         clock=clock,
         banned=banned,
         roster_ttl_s=settings.team_roster_ttl_s,

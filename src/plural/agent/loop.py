@@ -35,6 +35,7 @@ from plural.agent.messages import (
     SummaryTurn,
     ToolResultTurn,
     UserTurn,
+    settled,
     to_llm,
 )
 from plural.agent.providers.base import (
@@ -437,11 +438,12 @@ class AgentLoop:
 
     async def brief(self, instruction: str, *, cancel: asyncio.Event) -> str:
         """Write a briefing of the conversation, outside any run, without changing it."""
-        if not self._conversation:
+        history = settled(self._conversation)
+        if not history:
             return ""
         request = LlmRequest(
             system=self._context.system(),
-            messages=(*to_llm(self._conversation), LlmMessage(role="user", content=instruction)),
+            messages=(*to_llm(history), LlmMessage(role="user", content=instruction)),
             tools=self._tools.schemas(),
         )
         for provider in (self._helper, self._provider):

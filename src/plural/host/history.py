@@ -35,6 +35,7 @@ def replay(
     attached: set[str] = set()
     run_prompt: UserTurn | None = None
     assistant_at: int | None = None
+    notes: list[NotesTurn] = []
     for record in records:
         match record.event:
             case PromptAccepted(prompt_id=prompt_id, author_id=author_id, provenance=provenance):
@@ -48,6 +49,8 @@ def replay(
                 )
             case RunStarted(prompt_id=prompt_id):
                 _settle(messages)
+                messages.extend(notes)
+                notes.clear()
                 run_prompt = prompts.get(prompt_id)
                 if run_prompt is not None:
                     messages.append(run_prompt)
@@ -80,7 +83,8 @@ def replay(
                     )
                 )
             case BriefingImported(item=item, text=text):
-                messages.append(NotesTurn(source=item.source, text=text))
+                turn = NotesTurn(source=item.source, text=text)
+                (notes if run_prompt is not None else messages).append(turn)
             case ContextCompacted(summary=summary):
                 messages = [SummaryTurn(text=summary)]
                 if run_prompt is not None:
@@ -94,6 +98,7 @@ def replay(
                 pass
     _settle(messages)
     _order_results(messages)
+    messages.extend(notes)
     return [
         message
         for message in messages

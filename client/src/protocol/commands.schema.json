@@ -423,8 +423,7 @@
           "default": null
         },
         "source": {
-          "maxLength": 80,
-          "minLength": 1,
+          "pattern": "^\\w[\\w .@#-]{0,79}$",
           "type": "string"
         },
         "text": {
@@ -1266,10 +1265,16 @@
         "ts": {
           "minimum": 0,
           "type": "integer"
+        },
+        "url": {
+          "maxLength": 300,
+          "minLength": 8,
+          "type": "string"
         }
       },
       "required": [
         "certificate",
+        "url",
         "ts",
         "nonce",
         "proof"

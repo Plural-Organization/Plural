@@ -333,3 +333,19 @@ async def test_a_failed_request_does_not_undo_a_parallel_one(directory: TeamDire
         TeamJoin(code=first.invite or "", name="Bek", key=person().public_b64)
     )
     assert again.member.name == "Bek"
+
+
+async def test_an_expired_certificate_is_told_apart_from_a_forged_one(
+    directory: TeamDirectory, clock: Clock
+) -> None:
+    owner = person()
+    grant = await founded(directory, owner)
+    clock.advance(days=31)
+    message = await refused(signed(directory, owner, grant, clock, "GET", "members"), 401)
+    assert "has expired" in message
+    other = person()
+    forged = grant.model_copy(update={"certificate": grant.certificate[:-4] + "AAAA"})
+    message = await refused(
+        signed(directory, other, forged, clock, "GET", "members", nonce="n9"), 401
+    )
+    assert "not a member" in message

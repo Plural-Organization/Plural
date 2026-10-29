@@ -36,6 +36,7 @@ class ClientInfo(Model):
 
 class TeamProof(Model):
     certificate: str = Field(min_length=1, max_length=2048)
+    url: str = Field(min_length=8, max_length=300)
     ts: int = Field(ge=0)
     nonce: str = Field(min_length=8, max_length=64)
     proof: str = Field(min_length=1, max_length=200)
@@ -135,7 +136,7 @@ class BriefingSharingSet(Model):
 
 class BriefingImport(Model):
     type: Literal["briefing.import"] = "briefing.import"
-    source: str = Field(min_length=1, max_length=80)
+    source: str = Field(pattern=r"^\w[\w .@#-]{0,79}$")
     as_of_seq: int | None = Field(default=None, ge=0)
     text: str = Field(min_length=1, max_length=MAX_BRIEFING_CHARS)
 

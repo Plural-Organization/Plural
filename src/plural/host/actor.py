@@ -52,6 +52,7 @@ from plural.host.inbox import (
     Reconfigure,
     SkillsReply,
     SkillsUpdated,
+    TeamSweep,
     TypingExpired,
 )
 from plural.host.invites import InviteBook, RoomLink
@@ -259,7 +260,9 @@ class SessionActor:
         conflicts: ConflictBoard | None = None,
         briefing: BriefingService | None = None,
         ledger: ChangeLedger | None = None,
+        team_sweep_s: float = 30.0,
     ) -> None:
+        self._team_sweep_s = team_sweep_s
         self._briefing = briefing
         self._ledger = ledger
         self._briefing_at: dict[str, datetime] = {}
@@ -366,12 +369,34 @@ class SessionActor:
         await self._sync_agents()
 
     async def run(self) -> None:
+        sweeper = asyncio.create_task(self._sweep_team_loop()) if self._team else None
+        try:
+            while True:
+                message = await self._inbox.get()
+                try:
+                    await self._handle(message)
+                except Exception:
+                    log.exception("actor.message_failed", message=type(message).__name__)
+        finally:
+            if sweeper is not None:
+                sweeper.cancel()
+
+    async def _sweep_team_loop(self) -> None:
         while True:
-            message = await self._inbox.get()
-            try:
-                await self._handle(message)
-            except Exception:
-                log.exception("actor.message_failed", message=type(message).__name__)
+            await asyncio.sleep(self._team_sweep_s)
+            self._inbox.put(TeamSweep())
+
+    async def _sweep_team(self) -> None:
+        if self._team is None:
+            return
+        for person in list(self._state.participants.values()):
+            member = member_id_of(person.id)
+            if member is None or not person.connected:
+                continue
+            if await self._team.still_member(member):
+                continue
+            await self._emit(ParticipantRevoked(participant_id=person.id))
+            self._publisher.disconnect(person.id, "you are no longer in the team")
 
     async def _handle(self, message: InboxMessage) -> None:
         match message:
@@ -390,6 +415,8 @@ class SessionActor:
                 self._timers[approval.id] = asyncio.get_running_loop().call_later(
                     delay, self._inbox.put, ApprovalExpired(approval.id)
                 )
+            case TeamSweep():
+                await self._sweep_team()
             case BriefingReady(request=ask, text=text, as_of_seq=as_of, error=error):
                 await self._emit(
                     BriefingDelivered(

@@ -140,6 +140,7 @@ export interface TeamProof {
   nonce: string;
   proof: string;
   ts: number;
+  url: string;
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
