@@ -47,6 +47,7 @@ export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }
 }
 
 export const pinId = (id: string): string => `user-${id}`;
+export const feedId = (id: string): string => `feed-${id}`;
 
 export function PinnedPrompt({ item, width, onJump }: { item: Extract<FeedItem, { kind: "user" }>; width: number; onJump: () => void }) {
   const color = colorFor(item.participantId);

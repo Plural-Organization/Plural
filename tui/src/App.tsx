@@ -6,11 +6,13 @@ import {
   label,
   mentionable,
   mentionsMe,
+  findInFeed,
   nextPermissionMode,
   parseChat,
   parseSlash,
-
+  routeOf,
   SlashError,
+  stepMatch,
   status,
   type Command,
   type ConnectionStatus,
@@ -18,8 +20,9 @@ import {
   type Session,
 } from "@plural/client";
 import { COMMANDS } from "./commands";
-import { FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
-import { Composer } from "./components/Composer";
+import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
+import { Composer, type Delivery } from "./components/Composer";
+import { SearchBar } from "./components/SearchBar";
 import { Inbox, inboxItems, type InboxItem } from "./components/Inbox";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { Splash } from "./components/Splash";
@@ -62,7 +65,7 @@ export interface AppProps {
   onQuit: () => void;
 }
 
-type Focus = "composer" | "inbox";
+type Focus = "composer" | "inbox" | "search";
 
 const GUARD_MS = 400;
 const MIN_WIDTH_FOR_PANEL = 90;
@@ -70,6 +73,8 @@ const TYPING_REFRESH_MS = 3000;
 const TYPING_IDLE_MS = 2500;
 const PLAN_APPROVED = "The host approved the plan. Implement it now.";
 const UPLOAD_WAIT_MS = 10_000;
+const DELIVERED_MS = 1500;
+const FAILED_MS = 8000;
 
 interface PastedImage {
   name: string;
@@ -135,6 +140,10 @@ export function App({
   }
   const [tray, setTrayState] = useState<Tray | null>(null);
   const [pinned, setPinned] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [found, setFound] = useState<string | null>(null);
+  const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const deliveryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [images, setImages] = useState<PastedImage[]>([]);
   const pastes = useRef(0);
   const trayRef = useRef<Tray | null>(null);
@@ -260,6 +269,38 @@ export function App({
     () => new Map(state.queue.map((entry) => [entry.prompt_id, entry.delivery === "follow_up" ? ("follow_up" as const) : ("steer" as const)])),
     [state.queue],
   );
+  const searching = focus === "search";
+  const hits = useMemo(() => (searching ? findInFeed(feed.items, query).reverse() : []), [feed.items, query, searching]);
+  const hitSet = useMemo(() => new Set(hits), [hits]);
+  const hitIndex = Math.max(0, found === null ? 0 : hits.indexOf(found));
+  const current = hits[hitIndex] ?? null;
+
+  const reveal = (id: string | null): void => {
+    setFound(id);
+    const box = scroll.current;
+    const card = id === null ? undefined : box?.findDescendantById(feedId(id));
+    if (box && card) {
+      box.scrollBy(card.y - box.y - 1);
+    }
+  };
+
+  const search = (next: string): void => {
+    setQuery(next);
+    const first = findInFeed(feedRef.current.items, next).at(-1) ?? null;
+    reveal(first);
+  };
+
+  const step = (direction: 1 | -1): void => {
+    if (hits.length > 0) {
+      reveal(hits[stepMatch(hits.length, hitIndex, direction)] ?? null);
+    }
+  };
+
+  const closeSearch = (): void => {
+    setFound(null);
+    setFocus("composer");
+  };
+
   const typers = [...projection.typing]
     .filter((id) => id !== projection.meId)
     .map((id) => state.participants[id])
@@ -362,6 +403,36 @@ export function App({
         notify("danger", text);
       }
     });
+  };
+
+  const fade = (ms: number): void => {
+    if (deliveryTimer.current !== null) {
+      clearTimeout(deliveryTimer.current);
+    }
+    deliveryTimer.current = setTimeout(() => setDelivery(null), ms);
+  };
+
+  const deliver = (command: Command, text: string, retry?: () => void): void => {
+    if (deliveryTimer.current !== null) {
+      clearTimeout(deliveryTimer.current);
+    }
+    setDelivery({ state: "sending" });
+    client.send(command).then(
+      () => {
+        setDelivery((current) => (current?.state === "failed" ? current : { state: "sent" }));
+        fade(DELIVERED_MS);
+      },
+      (error: unknown) => {
+        const reason = error instanceof Error ? error.message : String(error);
+        const restored = !dirty.current;
+        if (restored) {
+          retry?.();
+          setSeed({ text, key: Date.now() });
+        }
+        setDelivery({ state: "failed", reason, restored });
+        fade(FAILED_MS);
+      },
+    );
   };
 
   const show = (title: string, rows: Row[], tone: "accent" | "warn" | "danger" = "accent"): void => setTray({ kind: "text", title, tone, rows });
@@ -793,14 +864,15 @@ export function App({
     setPlanReady(false);
     scroll.current?.scrollTo(Number.MAX_SAFE_INTEGER);
     if (editing) {
-      send({ type: "proposal.decide", proposal_id: editing, decision: "approve", edited_text: text });
+      const proposal = editing;
+      deliver({ type: "proposal.decide", proposal_id: proposal, decision: "approve", edited_text: text }, text, () => setEditing(proposal));
       setEditing(null);
       return;
     }
     try {
       const chat = parseChat(text, projection.state, projection.meId);
       if (chat !== null) {
-        send(chat.command);
+        deliver(chat.command, text);
         return;
       }
     } catch (error) {
@@ -862,7 +934,7 @@ export function App({
       return;
     }
     if (images.length === 0) {
-      send({ type: "prompt.submit", text, delivery: "now" });
+      deliver({ type: "prompt.submit", text, delivery: "now" }, text);
       return;
     }
     const pending = images;
@@ -874,7 +946,7 @@ export function App({
         notify("danger", "the image did not reach the host; try sending again");
         return;
       }
-      send({ type: "prompt.submit", text: text || "(image)", delivery: "now", attachments: ids });
+      deliver({ type: "prompt.submit", text: text || "(image)", delivery: "now", attachments: ids }, text, () => setImages(pending));
     });
   };
 
@@ -885,6 +957,11 @@ export function App({
     if (key.name === "f2") {
       key.preventDefault();
       setDialog(true);
+      return;
+    }
+    if (key.ctrl && key.name === "f") {
+      key.preventDefault();
+      setFocus("search");
       return;
     }
     if (key.ctrl && key.name === "o") {
@@ -1020,21 +1097,36 @@ export function App({
           stickyScroll
           stickyStart="bottom"
           flexGrow={1}
-          paddingX={2}
+          paddingLeft={1}
+          paddingRight={2}
           paddingTop={1}
           scrollbarOptions={{ showArrows: false, trackOptions: { foregroundColor: theme.line, backgroundColor: theme.bg } }}
         >
-          {feed.items.map((item) => (
-            <FeedItemView
-              key={`${item.id}:${settings.theme}`}
-              item={item}
-              syntax={syntax}
-              width={width - (showPanel ? SIDEBAR_WIDTH : 0) - 8}
-              expanded={allOpen || opened.has(item.id)}
-              queued={queuedIds.get(item.id) ?? null}
-              onToggle={toggle}
-            />
-          ))}
+          {feed.items.map((item) => {
+            const active = item.id === current;
+            const marked = active || hitSet.has(item.id);
+            return (
+              <box
+                key={`${item.id}:${settings.theme}`}
+                id={feedId(item.id)}
+                flexDirection="column"
+                flexShrink={0}
+                paddingLeft={marked ? 0 : 1}
+                border={marked ? ["left"] : false}
+                borderStyle={active ? "heavy" : "single"}
+                borderColor={active ? theme.warn : theme.line}
+              >
+                <FeedItemView
+                  item={item}
+                  syntax={syntax}
+                  width={width - (showPanel ? SIDEBAR_WIDTH : 0) - 9}
+                  expanded={allOpen || opened.has(item.id)}
+                  queued={queuedIds.get(item.id) ?? null}
+                  onToggle={toggle}
+                />
+              </box>
+            );
+          })}
         </scrollbox>
         {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} /> : null}
         {projection.compacting ? (
@@ -1050,6 +1142,9 @@ export function App({
             </text>
           </box>
         ) : null}
+        {searching ? (
+          <SearchBar query={query} count={hits.length} position={hitIndex} onQuery={search} onStep={step} onClose={closeSearch} />
+        ) : null}
         <Composer
           focused={focus === "composer" && !dialog}
           disabled={disabled}
@@ -1060,6 +1155,8 @@ export function App({
           people={mentionable(state, projection.meId)}
           seed={seed}
           label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
+          route={asking || editing || disabled ? () => null : (text) => routeOf(text, state, projection.meId)}
+          delivery={delivery}
           onSubmit={submit}
           images={images.map((image) => image.name)}
           onPasteImage={() => void pasteFromClipboard()}

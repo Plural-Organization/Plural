@@ -165,6 +165,10 @@ The agent can search the catalog on its own and suggest a skill. It can install 
 
 The conversation is on the left. The panel on the right shows who is in the room and who is typing, what needs the host, the prompt queue and the state of the agent. `ctrl+b` hides it, and it hides itself on narrow terminals.
 
+The line above the input says who will see what you type: `→ agent` (the whole room sees the prompt), `→ room` after `/team` and `→ @name` for a private message, where the agent does not see it. If a message does not reach the host, the text comes back into the input with the reason, and `↑` recalls it even if you started typing something else.
+
+`ctrl+f` searches the conversation for text, commands, file paths, tool output and diffs, newest match first, and marks every match in the margin.
+
 Each tool call is one line with what it did and a short result: the lines a command printed, its exit code if it failed, or `+added −removed` for an edit. A running command shows its latest line next to the spinner. Click a line, or press `ctrl+o` for all of them, to see the command with its output or a numbered diff.
 
 ### Approvals and proposals (host)
@@ -256,6 +260,7 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | `shift+tab` | Cycle the permission mode (host) |
 | `esc` | Interrupt the run (host) |
 | `pgup`, `pgdn`, mouse wheel | Scroll the conversation |
+| `ctrl+f` | Search the conversation; `enter` goes to an older match, `shift+enter` to a newer one, `esc` closes |
 | `ctrl+o` | Expand or collapse tool details |
 | `ctrl+b` | Show or hide the side panel |
 | `ctrl+y` | Copy the last reply |

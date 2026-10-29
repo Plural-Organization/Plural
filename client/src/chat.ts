@@ -118,3 +118,38 @@ export function mentionsMe(
   }
   return entry.to === meId || entry.mentions.includes(meId);
 }
+
+export interface Route {
+  kind: "agent" | "room" | "person" | "command";
+  label: string;
+  note: string;
+  blocked: boolean;
+}
+
+export function routeOf(text: string, state: SessionState, meId: string | null): Route {
+  if (text.startsWith("/")) {
+    const space = text.search(/\s/);
+    const name = text.slice(1, space === -1 ? undefined : space);
+    if ((TEAM_COMMANDS as readonly string[]).includes(name)) {
+      return { kind: "room", label: "room", note: "everyone sees it, the agent does not", blocked: false };
+    }
+    return { kind: "command", label: `/${name}`, note: "a command, not a prompt", blocked: false };
+  }
+  if (text.startsWith("@")) {
+    const person = matchMention(text.slice(1), mentionable(state, meId));
+    if (person !== null) {
+      if (person.role === "viewer") {
+        return { kind: "person", label: `@${person.label}`, note: "watches the session, cannot get private messages", blocked: true };
+      }
+      return {
+        kind: "person",
+        label: `@${person.label}`,
+        note: `private, the agent does not see it${person.connected ? "" : " · offline, reads it when back"}`,
+        blocked: false,
+      };
+    }
+  }
+  const me = meId === null ? undefined : state.participants[meId];
+  const reviewed = me?.role === "participant" && state.prompt_mode === "review";
+  return { kind: "agent", label: "agent", note: reviewed ? "the host approves it first" : "everyone in the room sees it", blocked: false };
+}

@@ -10,6 +10,7 @@ const KEYS: [string, string][] = [
   ["shift+tab", "cycle permissions: ask · accept edits · plan · auto"],
   ["esc", "close this panel, or interrupt the run"],
   ["pgup / pgdn", "scroll the conversation"],
+  ["ctrl+f", "search the conversation: text, commands, paths"],
   ["ctrl+o", "expand or collapse tool details"],
   ["ctrl+b", "show or hide the side panel"],
   ["ctrl+y", "copy the last reply"],

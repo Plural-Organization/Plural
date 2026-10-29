@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { emptyState, mentionable, mentionsIn, mentionsMe, parseChat, SlashError, type SessionState } from "../src";
+import { emptyState, mentionable, mentionsIn, mentionsMe, parseChat, routeOf, SlashError, type SessionState } from "../src";
 
 function room(): SessionState {
   const state = emptyState();
@@ -88,5 +88,40 @@ describe("who is addressed", () => {
     expect(mentionsMe({ author_id: "p_alia", to: null, mentions: [] }, "p_me")).toBe(false);
     expect(mentionsMe({ author_id: "p_me", to: "p_alia", mentions: ["p_me"] }, "p_me")).toBe(false);
     expect(mentionsMe({ author_id: "p_alia", to: "p_me", mentions: [] }, null)).toBe(false);
+  });
+});
+
+describe("who will see what I am typing", () => {
+  test("plain text goes to the agent and the room sees it", () => {
+    expect(routeOf("fix the tests", room(), "p_me")).toMatchObject({ kind: "agent", label: "agent", note: "everyone in the room sees it" });
+  });
+
+  test("a participant in review mode is told the host approves it", () => {
+    const state = { ...room(), prompt_mode: "review" as const };
+    expect(routeOf("fix the tests", state, "p_alia").note).toBe("the host approves it first");
+    expect(routeOf("fix the tests", state, "p_me").note).toBe("everyone in the room sees it");
+  });
+
+  test("/team goes to the room and the agent does not see it", () => {
+    expect(routeOf("/team standup", room(), "p_me")).toMatchObject({ kind: "room", label: "room" });
+    expect(routeOf("/chat", room(), "p_me").kind).toBe("room");
+  });
+
+  test("@name goes to one person, and says when they are away", () => {
+    expect(routeOf("@alia hi", room(), "p_me")).toMatchObject({ kind: "person", label: "@Alia", blocked: false });
+    expect(routeOf("@Bek #bek1 hi", room(), "p_me").note).toContain("offline");
+  });
+
+  test("a watcher cannot get a private message and the route says so", () => {
+    expect(routeOf("@cleo hi", room(), "p_me")).toMatchObject({ kind: "person", blocked: true });
+  });
+
+  test("an unknown @name and a half-typed one go to the agent", () => {
+    expect(routeOf("@nobody hi", room(), "p_me").kind).toBe("agent");
+    expect(routeOf("@", room(), "p_me").kind).toBe("agent");
+  });
+
+  test("other slash commands are not prompts", () => {
+    expect(routeOf("/compact", room(), "p_me")).toMatchObject({ kind: "command", label: "/compact" });
   });
 });
