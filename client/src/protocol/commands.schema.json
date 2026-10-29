@@ -120,7 +120,12 @@
       "type": "object"
     },
     "BoardClear": {
+      "description": "Clears the board; with mine, only the sender's own marks, which anyone who draws may do.",
       "properties": {
+        "mine": {
+          "default": false,
+          "type": "boolean"
+        },
         "type": {
           "const": "board.clear",
           "default": "board.clear",

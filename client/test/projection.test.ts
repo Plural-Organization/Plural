@@ -70,7 +70,7 @@ test("the board keeps strokes, erases one and clears", () => {
   projection.apply(record(4, { type: "board.erased", stroke_id: "st_1" }));
   expect(projection.state.board.open).toBe(true);
   expect(projection.state.board.strokes.map((item) => item.id)).toEqual(["st_2"]);
-  projection.apply(record(5, { type: "board.cleared", by: "p_host" }));
+  projection.apply(record(5, { type: "board.cleared", by: "p_host", author_id: null }));
   expect(projection.state.board.strokes).toEqual([]);
   projection.observe({ type: "participant.cursor", participant_id: "p_alia", cursor: { x: 0.5, y: 0.5, ink: false, color: null, width: null } });
   expect(projection.cursors.get("p_alia")?.x).toBe(0.5);

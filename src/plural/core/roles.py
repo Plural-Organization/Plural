@@ -86,7 +86,7 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         BoardOpen: CONTRIBUTORS,
         BoardDraw: CONTRIBUTORS,
         BoardErase: CONTRIBUTORS,
-        BoardClear: HOST_ONLY,
+        BoardClear: CONTRIBUTORS,
         QueueCancel: CONTRIBUTORS,
     }
 )

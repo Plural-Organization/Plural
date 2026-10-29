@@ -461,10 +461,13 @@ export interface BoardErased {
   type: "board.erased";
 }
 /**
+ * The board lost every mark, or only the marks of author_id when it is set.
+ *
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "BoardCleared".
  */
 export interface BoardCleared {
+  author_id: string | null;
   by: string;
   type: "board.cleared";
 }

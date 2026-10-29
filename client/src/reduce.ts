@@ -96,7 +96,10 @@ function apply(state: SessionState, record: EventRecord): SessionState {
     case "board.erased":
       return { ...state, board: { ...state.board, strokes: state.board.strokes.filter((stroke) => stroke.id !== event.stroke_id) } };
     case "board.cleared":
-      return { ...state, board: { ...state.board, strokes: [] } };
+      return {
+        ...state,
+        board: { ...state.board, strokes: event.author_id ? state.board.strokes.filter((stroke) => stroke.author_id !== event.author_id) : [] },
+      };
     case "agent.changed":
       return { ...state, agent: event.agent, fast_agent: event.fast };
     case "session.prompt_mode_changed":

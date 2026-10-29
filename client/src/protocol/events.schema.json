@@ -246,7 +246,19 @@
       "type": "object"
     },
     "BoardCleared": {
+      "description": "The board lost every mark, or only the marks of author_id when it is set.",
       "properties": {
+        "author_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "by": {
           "type": "string"
         },
@@ -258,7 +270,8 @@
       },
       "required": [
         "type",
-        "by"
+        "by",
+        "author_id"
       ],
       "type": "object"
     },

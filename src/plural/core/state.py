@@ -164,9 +164,14 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             return state.model_copy(
                 update={"board": state.board.model_copy(update={"strokes": strokes})}
             )
-        case BoardCleared():
+        case BoardCleared(author_id=author_id):
+            kept = (
+                ()
+                if author_id is None
+                else tuple(s for s in state.board.strokes if s.author_id != author_id)
+            )
             return state.model_copy(
-                update={"board": state.board.model_copy(update={"strokes": ()})}
+                update={"board": state.board.model_copy(update={"strokes": kept})}
             )
         case PromptDequeued(prompt_id=prompt_id):
             kept = tuple(entry for entry in state.queue if entry.prompt_id != prompt_id)

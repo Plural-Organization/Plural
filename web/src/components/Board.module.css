@@ -11,14 +11,16 @@
 .width { width: 24px; height: 24px; border-radius: 6px; border: 1px solid transparent; background: none; display: grid; place-items: center; cursor: pointer; padding: 0; }
 .width span { border-radius: 50%; display: block; }
 .width.picked { border-color: var(--line); background: var(--raise); }
-.room { position: relative; min-height: 0; overflow: hidden; }
-.stage { position: relative; width: 100%; background: #16171a radial-gradient(circle, color-mix(in srgb, var(--fg) 9%, transparent) 1px, transparent 1.2px) 0 0 / 22px 22px; }
+.room { position: relative; min-height: 0; overflow-x: hidden; overflow-y: auto; background: var(--bg); }
+.stage { position: relative; margin: 0 auto; background: #16171a radial-gradient(circle, color-mix(in srgb, var(--fg) 9%, transparent) 1px, transparent 1.2px) 0 0 / 22px 22px; }
 .canvas { position: absolute; inset: 0; touch-action: none; }
 .drawable { cursor: crosshair; }
 .texting { cursor: text; }
+.rubbing { cursor: none; }
 .typing { position: absolute; z-index: 2; min-width: 120px; background: color-mix(in srgb, var(--bg) 70%, transparent); border: 1px dashed var(--muted); border-radius: 4px; padding: 0 4px; font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif; font-weight: 500; line-height: 1.25; resize: none; outline: none; field-sizing: content; }
 .pointer { position: absolute; pointer-events: none; transition: left 60ms linear, top 60ms linear; }
 .pointer svg { display: block; fill: var(--who); stroke: var(--bg); stroke-width: 1.2; }
 .pointer span { position: absolute; left: 12px; top: 14px; font: 600 11px/1.5 var(--font-text); color: var(--bg); background: var(--who); border-radius: 4px; padding: 0 6px; white-space: nowrap; }
+.full { position: fixed; inset: 49px 0 0 0; z-index: 6; border-left: 0; }
 @media (max-width: 980px) { .board { position: fixed; inset: 49px 0 0 0; z-index: 6; border-left: 0; } }
 @media (prefers-reduced-motion: reduce) { .pointer { transition: none; } }

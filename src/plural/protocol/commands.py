@@ -223,7 +223,10 @@ class BoardErase(Model):
 
 
 class BoardClear(Model):
+    """Clears the board; with mine, only the sender's own marks, which anyone who draws may do."""
+
     type: Literal["board.clear"] = "board.clear"
+    mine: bool = False
 
 
 class QueueCancel(Model):

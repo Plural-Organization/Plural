@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import type { BoardCursor, BoardShape, BoardStroke, Command } from "@plural/client";
-import { boardImage, COLORS, drawLine, MAX_DEPTH, rounded, sameLine, textSize, thin, TOOLS, WIDTHS, type Line } from "../lib/board";
+import { boardImage, COLORS, drawLine, MAX_DEPTH, rounded, sameLine, textSize, thin, TOOLS, touches, WIDTHS, type Line } from "../lib/board";
 import { colorFor } from "../lib/colors";
 import { cx } from "../lib/cx";
 import styles from "./Board.module.css";
@@ -13,6 +13,14 @@ const MIN_STEP = 0.0015;
 const MIN_SHAPE = 0.01;
 // A stroke the host has not confirmed by then was refused or changed on the way, so its copy goes.
 const PENDING_MS = 6000;
+// The eraser reaches this far around the pointer, in board widths.
+const ERASER = 0.012;
+// Erasing sends one stroke at a time, spaced under the relay's rate limit.
+const ERASE_MS = 110;
+// Below the lowest mark the board keeps this much room, in widths, to draw on; the panel scrolls.
+const ROOM_BELOW = 0.35;
+
+type Tool = BoardShape | "eraser";
 
 const ICONS: Record<BoardShape, string> = {
   pen: "M4 20l4-1L19 8l-3-3L5 16l-1 4z",
@@ -22,6 +30,16 @@ const ICONS: Record<BoardShape, string> = {
   ellipse: "M12 5c4.4 0 8 3.1 8 7s-3.6 7-8 7-8-3.1-8-7 3.6-7 8-7z",
   text: "M5 6V5h14v1M12 5v14M9 19h6",
 };
+
+const ERASER_ICON = "M16 3l5 5-10 10H6l-3-3L16 3zM6 18h14";
+
+export function FullIcon({ full }: { full: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={full ? "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" : "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"} />
+    </svg>
+  );
+}
 
 export interface Pointer {
   id: string;
@@ -39,6 +57,8 @@ interface BoardProps {
   sendPresence: (command: Command) => boolean;
   onSendToAgent: (image: Blob) => void;
   onClose: () => void;
+  full: boolean;
+  onToggleFull: () => void;
 }
 
 interface Pending {
@@ -46,7 +66,7 @@ interface Pending {
   at: number;
 }
 
-export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPresence, onSendToAgent, onClose }: BoardProps) {
+export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPresence, onSendToAgent, onClose, full, onToggleFull }: BoardProps) {
   const room = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const base = useRef<HTMLCanvasElement | null>(null);
@@ -59,13 +79,20 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [color, setColor] = useState(COLORS[1]!);
   const [width, setWidth] = useState(WIDTHS[1]!);
-  const [tool, setTool] = useState<BoardShape>("pen");
+  const [tool, setTool] = useState<Tool>("pen");
+  const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const eraseQueue = useRef<string[]>([]);
+  const rubbing = useRef(false);
+  const hover = useRef<{ x: number; y: number } | null>(null);
   const [typing, setTyping] = useState<{ x: number; y: number; value: string } | null>(null);
   const [pending, setPending] = useState<Pending[]>([]);
-  const [size, setSize] = useState({ width: 0, height: 0 });
+  const [view, setView] = useState({ width: 0, height: 0 });
   const [frame, setFrame] = useState(0);
   const [baseVersion, setBaseVersion] = useState(0);
   const redraw = () => setFrame((value) => value + 1);
+  // The board spans the panel's width and runs as deep as its lowest mark needs, the panel scrolling.
+  const deepest = Math.max(0, ...strokes.flatMap((stroke) => stroke.points.filter((_, index) => index % 2 === 1)));
+  const size = { width: view.width, height: Math.min(view.width * MAX_DEPTH, Math.max(view.height, (deepest + ROOM_BELOW) * view.width)) };
   const scale = size.width;
 
   // The board fills the panel; its height in widths depends on the screen, never past MAX_DEPTH.
@@ -76,7 +103,7 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
     }
     const fit = () => {
       const box = element.getBoundingClientRect();
-      setSize({ width: box.width, height: Math.min(box.height, box.width * MAX_DEPTH) });
+      setView({ width: element.clientWidth, height: box.height });
     };
     const observer = new ResizeObserver(fit);
     observer.observe(element);
@@ -88,7 +115,31 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
   useEffect(() => {
     setPending((current) => current.filter((item) => !strokes.some((stroke) => stroke.author_id === meId && sameLine(stroke, item.line))));
     erasing.current.forEach((id) => strokes.some((stroke) => stroke.id === id) || erasing.current.delete(id));
+    setHidden((current) => (current.size === 0 ? current : new Set([...current].filter((id) => strokes.some((stroke) => stroke.id === id)))));
   }, [strokes, meId]);
+
+  // Erased strokes leave one by one; one the host keeps after a while comes back into view.
+  useEffect(() => {
+    const tick = setInterval(() => {
+      const next = eraseQueue.current.shift();
+      if (next !== undefined) {
+        send({ type: "board.erase", stroke_id: next });
+        const sent = next;
+        setTimeout(() => {
+          erasing.current.delete(sent);
+          setHidden((current) => {
+            if (!current.has(sent)) {
+              return current;
+            }
+            const kept = new Set(current);
+            kept.delete(sent);
+            return kept;
+          });
+        }, PENDING_MS);
+      }
+    }, ERASE_MS);
+    return () => clearInterval(tick);
+  }, [send]);
   useEffect(() => {
     if (pending.length === 0) {
       return;
@@ -128,9 +179,9 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
     layer.height = Math.round(size.height * ratio);
     const context = layer.getContext("2d")!;
     context.setTransform(ratio, 0, 0, ratio, 0, 0);
-    strokes.forEach((stroke) => drawLine(context, stroke, scale));
+    strokes.filter((stroke) => !hidden.has(stroke.id)).forEach((stroke) => drawLine(context, stroke, scale));
     setBaseVersion((value) => value + 1);
-  }, [strokes, size]);
+  }, [strokes, size.width, size.height, hidden]);
 
   useEffect(() => {
     const element = canvas.current;
@@ -158,7 +209,14 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
     if (drawing.current) {
       drawLine(context, drawing.current, scale);
     }
-  }, [baseVersion, pending, frame]);
+    if (tool === "eraser" && hover.current) {
+      context.beginPath();
+      context.arc(hover.current.x * scale, hover.current.y * scale, ERASER * scale, 0, Math.PI * 2);
+      context.strokeStyle = "rgba(236, 235, 231, 0.7)";
+      context.lineWidth = 1;
+      context.stroke();
+    }
+  }, [baseVersion, pending, frame, tool]);
 
   useEffect(() => () => void (timer.current && clearTimeout(timer.current)), []);
 
@@ -220,11 +278,32 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
     setTyping((open) => (open === current ? null : open));
   };
 
+  // Anyone erases their own marks; the host erases anyone's.
+  const rub = (x: number, y: number) => {
+    const hits = strokes.filter(
+      (stroke) => (stroke.author_id === meId || isHost) && !hidden.has(stroke.id) && !erasing.current.has(stroke.id) && touches(stroke, x, y, ERASER),
+    );
+    if (hits.length === 0) {
+      return;
+    }
+    hits.forEach((stroke) => {
+      erasing.current.add(stroke.id);
+      eraseQueue.current.push(stroke.id);
+    });
+    setHidden((current) => new Set([...current, ...hits.map((stroke) => stroke.id)]));
+  };
+
   const down = (event: PointerEvent<HTMLCanvasElement>) => {
     if (!canDraw || event.button !== 0) {
       return;
     }
     const { x, y } = at(event);
+    if (tool === "eraser") {
+      event.currentTarget.setPointerCapture(event.pointerId);
+      rubbing.current = true;
+      rub(x, y);
+      return;
+    }
     if (tool === "text") {
       event.preventDefault();
       commitText();
@@ -239,6 +318,15 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
 
   const move = (event: PointerEvent<HTMLCanvasElement>) => {
     const { x, y } = at(event);
+    if (tool === "eraser") {
+      hover.current = { x, y };
+      if (rubbing.current) {
+        rub(x, y);
+      }
+      redraw();
+      share(cursor(x, y, false));
+      return;
+    }
     const line = drawing.current;
     if (line && line.kind !== "pen") {
       line.points[2] = x;
@@ -255,6 +343,7 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
   };
 
   const up = (event: PointerEvent<HTMLCanvasElement>) => {
+    rubbing.current = false;
     const line = drawing.current;
     drawing.current = null;
     if (!line) {
@@ -270,7 +359,7 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
     redraw();
   };
 
-  const mine = strokes.filter((stroke) => stroke.author_id === meId && !erasing.current.has(stroke.id));
+  const mine = strokes.filter((stroke) => stroke.author_id === meId && !erasing.current.has(stroke.id) && !hidden.has(stroke.id));
   const undo = () => {
     const last = mine.at(-1);
     if (last) {
@@ -286,13 +375,13 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
       .catch(() => undefined);
 
   return (
-    <aside className={styles.board} aria-label="Board">
+    <aside className={cx(styles.board, full && styles.full)} aria-label="Board">
       <header className={styles.bar}>
         <span className={styles.title}>board</span>
         {canDraw ? (
           <>
             <div className={styles.tools} role="radiogroup" aria-label="Tool">
-              {TOOLS.map((item) => (
+              {[...TOOLS, { kind: "eraser" as const, label: "eraser" }].map((item) => (
                 <button
                   key={item.kind}
                   type="button"
@@ -304,7 +393,7 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
                   onClick={() => setTool(item.kind)}
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d={ICONS[item.kind]} />
+                    <path d={item.kind === "eraser" ? ERASER_ICON : ICONS[item.kind]} />
                   </svg>
                 </button>
               ))}
@@ -347,8 +436,12 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
         )}
         <span className="grow" />
         {isHost ? (
-          <button className="button small ghost" type="button" onClick={() => send({ type: "board.clear" })} disabled={strokes.length === 0}>
-            clear
+          <button className="button small ghost" type="button" onClick={() => send({ type: "board.clear", mine: false })} disabled={strokes.length === 0}>
+            clear all
+          </button>
+        ) : canDraw ? (
+          <button className="button small ghost" type="button" onClick={() => send({ type: "board.clear", mine: true })} disabled={mine.length === 0}>
+            clear mine
           </button>
         ) : null}
         {canDraw ? (
@@ -361,21 +454,36 @@ export function Board({ strokes, pointers, meId, canDraw, isHost, send, sendPres
             </button>
           </>
         ) : null}
+        <button
+          className="button small ghost"
+          type="button"
+          onClick={onToggleFull}
+          aria-label={full ? "Back to half the screen" : "Full screen"}
+          title={full ? "Back to half the screen" : "Full screen"}
+        >
+          <FullIcon full={full} />
+        </button>
         <button className="button small ghost" type="button" onClick={onClose} aria-label="Hide the board" title="Hide the board for you">
           ✕
         </button>
       </header>
       <div ref={room} className={styles.room}>
-        <div className={styles.stage} style={{ height: size.height }}>
+        <div className={styles.stage} style={{ width: size.width, height: size.height }}>
           <canvas
             ref={canvas}
-            className={cx(styles.canvas, canDraw && (tool === "text" ? styles.texting : styles.drawable))}
+            className={cx(styles.canvas, canDraw && (tool === "text" ? styles.texting : tool === "eraser" ? styles.rubbing : styles.drawable))}
             style={{ width: size.width, height: size.height }}
             onPointerDown={down}
             onPointerMove={move}
             onPointerUp={up}
             onPointerCancel={up}
-            onPointerLeave={() => (drawing.current ? undefined : share(null, true))}
+            onPointerLeave={() => {
+              hover.current = null;
+              redraw();
+              if (!drawing.current) {
+                share(null, true);
+              }
+            }}
           />
           {typing ? (
             <textarea

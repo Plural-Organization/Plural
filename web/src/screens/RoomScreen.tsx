@@ -79,6 +79,8 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   };
   const canDraw = me !== undefined && me.role !== "viewer";
   const [boardShown, setBoardShown] = useState(false);
+  // The board or the canvas may take the whole screen; the toggle brings it back to half.
+  const [wide, setWide] = useState(false);
   const showBoard = () => {
     setBoardShown(true);
     setCanvasId(null);
@@ -268,9 +270,11 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
             document.getElementById("composer")?.focus();
           }}
           onClose={() => setBoardShown(false)}
+          full={wide}
+          onToggleFull={() => setWide((value) => !value)}
         />
       ) : doc ? (
-        <Canvas doc={doc} docs={docs} selectors={selectors} onPick={setCanvasId} onClose={() => setCanvasId(null)} />
+        <Canvas doc={doc} docs={docs} selectors={selectors} full={wide} onToggleFull={() => setWide((value) => !value)} onPick={setCanvasId} onClose={() => setCanvasId(null)} />
       ) : (
         <Sidebar
           projection={projection}

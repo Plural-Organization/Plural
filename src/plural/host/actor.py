@@ -491,8 +491,13 @@ class SessionActor:
                     raise Forbidden("only the host erases someone else's drawing")
                 await self._emit(BoardErased(stroke_id=stroke.id), actor_id=participant.id)
             case BoardClear():
-                if self._state.board.strokes:
-                    await self._emit(BoardCleared(by=participant.id), actor_id=participant.id)
+                if not command.mine and participant.role is not Role.HOST:
+                    raise Forbidden("only the host clears the whole board")
+                author = participant.id if command.mine else None
+                if any(author in (None, s.author_id) for s in self._state.board.strokes):
+                    await self._emit(
+                        BoardCleared(by=participant.id, author_id=author), actor_id=participant.id
+                    )
             case QueueCancel():
                 await self._cancel_queued(participant, command)
             case PolicyAdd():

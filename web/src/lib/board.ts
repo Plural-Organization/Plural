@@ -143,3 +143,55 @@ export async function boardImage(lines: Line[], width = 1600): Promise<Blob> {
   lines.forEach((line) => drawLine(context, line, width));
   return new Promise((resolve, reject) => canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("the board could not be saved"))), "image/png"));
 }
+
+function toSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const length = dx * dx + dy * dy;
+  const t = length === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / length));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+// The outline of a mark as a polyline in board widths, the way the eraser sees it.
+function outline(line: Line): number[] {
+  const [x0, y0, x1, y1] = line.points as [number, number, number, number];
+  switch (line.kind ?? "pen") {
+    case "rect":
+      return [x0, y0, x1, y0, x1, y1, x0, y1, x0, y0];
+    case "ellipse": {
+      const points: number[] = [];
+      for (let step = 0; step <= 48; step++) {
+        const angle = (step / 48) * Math.PI * 2;
+        points.push((x0 + x1) / 2 + (Math.abs(x1 - x0) / 2) * Math.cos(angle), (y0 + y1) / 2 + (Math.abs(y1 - y0) / 2) * Math.sin(angle));
+      }
+      return points;
+    }
+    case "line":
+    case "arrow":
+      return [x0, y0, x1, y1];
+    default:
+      return line.points;
+  }
+}
+
+// Whether the eraser at (x, y), with the given reach in board widths, touches the mark.
+export function touches(line: Line, x: number, y: number, reach: number): boolean {
+  if ((line.kind ?? "pen") === "text") {
+    const size = textSize(line.width, 1);
+    const rows = (line.text ?? "").split("\n");
+    const width = Math.max(...rows.map((row) => row.length)) * size * 0.56;
+    const [left, top] = line.points as [number, number];
+    return x >= left - reach && x <= left + width + reach && y >= top - reach && y <= top + rows.length * size * 1.25 + reach;
+  }
+  const points = outline(line);
+  const near = reach + line.width / WIDTH_UNIT / 2;
+  if (points.length === 2) {
+    return Math.hypot(x - points[0]!, y - points[1]!) <= near;
+  }
+  for (let index = 0; index + 3 < points.length; index += 2) {
+    if (toSegment(x, y, points[index]!, points[index + 1]!, points[index + 2]!, points[index + 3]!) <= near) {
+      return true;
+    }
+  }
+  return false;
+}

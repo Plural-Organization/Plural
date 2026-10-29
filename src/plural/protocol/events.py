@@ -163,8 +163,11 @@ class BoardErased(EventBase):
 
 
 class BoardCleared(EventBase):
+    """The board lost every mark, or only the marks of author_id when it is set."""
+
     type: Literal["board.cleared"] = "board.cleared"
     by: str
+    author_id: str | None = None
 
 
 class ChatPosted(EventBase):

@@ -426,10 +426,13 @@ export interface BoardErase {
   type?: "board.erase";
 }
 /**
+ * Clears the board; with mine, only the sender's own marks, which anyone who draws may do.
+ *
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "BoardClear".
  */
 export interface BoardClear {
+  mine?: boolean;
   type?: "board.clear";
 }
 /**

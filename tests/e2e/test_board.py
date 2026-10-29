@@ -128,3 +128,17 @@ async def test_points_are_rounded_to_keep_the_log_small(session: Session) -> Non
         BoardDraw(color="#ffffff", width=2, points=(0.123456789, 0.5, 0.987654321, 0.25))
     )
     assert (await owner.next(BoardStroked)).stroke.points == (0.1235, 0.5, 0.9877, 0.25)
+
+
+async def test_anyone_who_draws_clears_their_own_marks(session: Session) -> None:
+    owner = await session.owner()
+    alia = await session.guest("Alia")
+    bek = await session.guest("Bek")
+    await alia.client.send(LINE)
+    await owner.next(BoardStroked)
+    await bek.client.send(LINE)
+    kept = (await owner.next(BoardStroked)).stroke
+    await alia.client.send(BoardClear(mine=True))
+    cleared = await owner.next(BoardCleared)
+    assert cleared.author_id == alia.client.projection.me_id
+    assert [s.id for s in owner.client.projection.state.board.strokes] == [kept.id]
