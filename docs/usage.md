@@ -153,12 +153,14 @@ plural ls --json
 
 A session is private unless you start it with `--team`. A team session needs an address others can reach, so it uses the team relay, `--relay`, `--public-url` or a tunnel; plural says so and stops if there is none. The team sees your name, the repository and branch, the title, whether the agent is working or waiting for you, and how many people watch. It does not see prompts, replies or files. The card goes away when you quit, or about a minute after your machine drops off.
 
-The side panel has a TEAM section with the same list, refreshed every few seconds: `●` working, `◆` waiting for its host, `○` idle.
+The side panel has a SPACES section: your own session first, then the team's, refreshed every few seconds: `●` working, `◆` waiting for its host, `○` idle, with who, repository and branch, and `👁 2` when two people watch.
+
+**Click a teammate to open their session** in the main area. You see all of it, live, as a viewer, and your own session keeps running in the background: a click on `you` takes you back, `alt+←` and `alt+→` move between spaces, `ctrl+w` closes the one you are in. What you type goes to the session you are looking at. If your own agent needs you while you are away, its row turns `◆ waiting`, the bell rings and the terminal title says so.
 
 ### Watching a teammate
 
 ```bash
-plural join @alia            # opens alia's shared session, you can read
+plural join @alia            # opens alia's shared session, you can read (or click her in the panel)
 plural join @alia:web        # when alia shares more than one, say the repository
 ```
 

@@ -39,7 +39,7 @@ import { Compacting, ModeLine, Working } from "./components/Working";
 import { helpRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
-import type { TeamView, TeamWatcher } from "./team";
+import type { SpaceRow, Summary } from "./spaces";
 import { explain } from "./failure";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
@@ -67,7 +67,15 @@ export interface AppProps {
   initialPrompt?: string | null;
   alerts?: Alerts;
   updater?: Updater;
-  team?: TeamWatcher;
+  active?: boolean;
+  viewing?: string | null;
+  spaces?: SpaceRow[];
+  teamName?: string | null;
+  teamError?: string | null;
+  onOpenSpace?: (id: string) => void;
+  onCycleSpace?: (direction: 1 | -1) => void;
+  onClose?: () => void;
+  onSummary?: (summary: Summary) => void;
   splash?: boolean;
   onQuit: () => void;
 }
@@ -104,7 +112,15 @@ export function App({
   initialPrompt = null,
   alerts,
   updater,
-  team,
+  active = true,
+  viewing = null,
+  spaces,
+  teamName = null,
+  teamError = null,
+  onOpenSpace,
+  onCycleSpace,
+  onClose,
+  onSummary,
   splash = false,
   onQuit,
 }: AppProps) {
@@ -155,8 +171,6 @@ export function App({
   const [delivery, setDelivery] = useState<Delivery | null>(null);
   const [update, setUpdate] = useState<UpdateState | null>(updater?.state ?? null);
   useEffect(() => updater?.subscribe(setUpdate), [updater]);
-  const [teamView, setTeamView] = useState<TeamView | null>(team?.view ?? null);
-  useEffect(() => team?.subscribe(setTeamView), [team]);
   const [behind, setBehind] = useState({ away: false, fresh: 0, chat: 0 });
   const anchor = useRef(0);
   const [finished, setFinished] = useState(false);
@@ -395,14 +409,21 @@ export function App({
   useEffect(() => onCodeCopy((text) => copy(text, "Copied", `${text.length} characters`)), []);
 
   const phase = isHost && items.length > 0 ? "waiting" : running ? "running" : finished ? "done" : "idle";
+  useEffect(() => onSummary?.({ phase }), [phase]);
+
   useEffect(() => {
-    const marks = { waiting: "⚠ waiting for you", running: "● working", done: "✓ done", idle: "" };
-    try {
-      renderer.setTerminalTitle(phase === "idle" ? "plural" : `plural · ${marks[phase]}`);
-    } catch {
-      return;
+    if (!active) {
+      setDialog(false);
+      setFocus((current) => (current === "search" ? "composer" : current));
+      setFound(null);
     }
-  }, [phase]);
+  }, [active]);
+
+  useEffect(() => {
+    if (initialSettings) {
+      setSettings(initialSettings);
+    }
+  }, [initialSettings]);
 
   useEffect(() => {
     if (running) {
@@ -1037,7 +1058,17 @@ export function App({
   };
 
   useKeyboard((key) => {
-    if (dialog || intro) {
+    if (!active || dialog || intro) {
+      return;
+    }
+    if (key.meta && (key.name === "left" || key.name === "right") && onCycleSpace) {
+      key.preventDefault();
+      onCycleSpace(key.name === "left" ? -1 : 1);
+      return;
+    }
+    if (key.ctrl && key.name === "w" && viewing !== null && onClose) {
+      key.preventDefault();
+      onClose();
       return;
     }
     if (key.name === "f2") {
@@ -1126,7 +1157,7 @@ export function App({
 
   useSelectionHandler((selection) => {
     const text = selection.getSelectedText();
-    if (!text || !settings.copyOnSelect) {
+    if (!active || !text || !settings.copyOnSelect) {
       return;
     }
     if (copying.current) {
@@ -1175,9 +1206,17 @@ export function App({
   }
 
   return (
-    <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg}>
+    <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg} visible={active}>
       <box flexDirection="column" flexGrow={1} minWidth={0}>
         <TopBar room={room} state={state} update={update} onSettings={() => setDialog(true)} />
+        {viewing !== null ? (
+          <box flexShrink={0} height={1} paddingX={2} backgroundColor={theme.panel}>
+            <text fg={theme.info} wrapMode="none">
+              viewing {viewing}
+              <span fg={theme.dim}> · alt+←/→ switch · ctrl+w closes</span>
+            </text>
+          </box>
+        ) : null}
         {pinnedItem ? (
           <PinnedPrompt
             item={pinnedItem}
@@ -1255,7 +1294,7 @@ export function App({
           <SearchBar query={query} count={hits.length} position={hitIndex} preview={matched} onQuery={search} onStep={step} onClose={closeSearch} />
         ) : null}
         <Composer
-          focused={focus === "composer" && !dialog}
+          focused={active && focus === "composer" && !dialog}
           disabled={disabled}
           placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
           remember={!asking?.secret}
@@ -1329,7 +1368,7 @@ export function App({
           onClose={closeSettings}
         />
       ) : null}
-      {showPanel ? <Sidebar projection={projection} room={room} team={teamView} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} /> : null}
+      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} /> : null}
     </box>
   );
 }

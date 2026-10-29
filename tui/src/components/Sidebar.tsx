@@ -2,7 +2,7 @@ import { label, PERMISSION_LABELS, type Participant, type Projection } from "@pl
 import { useState, type ReactNode } from "react";
 import { colorFor, theme } from "../theme";
 import { truncate } from "../lib/wrap";
-import type { TeamView } from "../team";
+import type { SpaceRow } from "../spaces";
 import type { InboxItem } from "./Inbox";
 import { Spinner, useElapsed } from "./Spinner";
 import { ContextMeterView } from "./StatusBar";
@@ -38,30 +38,29 @@ function ParticipantRow({ participant, name, me, typing }: { participant: Partic
 
 const STATUS_MARK = { running: "●", waiting: "◆", idle: "○" } as const;
 
-function TeamSection({ view }: { view: TeamView }) {
-  const shown = view.sessions.slice(0, 6);
+function SpacesSection({ rows, name, error, onOpen }: { rows: SpaceRow[]; name: string; error: string | null; onOpen?: (id: string) => void }) {
   return (
-    <Section title={`team · ${truncate(view.name, 14)}`} count={view.sessions.length}>
-      {shown.map((card) => {
-        const color = card.status === "running" ? theme.ok : card.status === "waiting" ? theme.warn : theme.dim;
+    <Section title={`spaces · ${truncate(name, 12)}`} count={rows.length}>
+      {rows.slice(0, 8).map((row) => {
+        const color = row.offline ? theme.line : row.status === "running" ? theme.ok : row.status === "waiting" ? theme.warn : theme.dim;
         return (
-          <box key={card.room} flexDirection="column">
+          <box key={row.id} flexDirection="column" backgroundColor={row.active ? theme.bg : undefined} onMouseDown={() => onOpen?.(row.id)}>
             <text>
-              <span fg={color}>{STATUS_MARK[card.status]} </span>
-              <span fg={colorFor(card.owner_id)}>{truncate(card.owner, 14)}</span>
-              <span fg={theme.dim}>{card.owner_id === view.me ? " (you)" : ""}</span>
-              <span fg={color}>{card.status === "idle" ? "" : `  ${card.status}`}</span>
-              <span fg={theme.dim}>{card.viewers > 0 ? `  👁 ${card.viewers}` : ""}</span>
+              <span fg={color}>{STATUS_MARK[row.status]} </span>
+              <span fg={row.active ? theme.accent : row.mine ? theme.text : colorFor(row.title)}>
+                <b>{truncate(row.title, 14)}</b>
+              </span>
+              <span fg={color}>{row.status === "idle" ? "" : `  ${row.status}`}</span>
+              <span fg={theme.dim}>{row.viewers > 0 ? `  👁 ${row.viewers}` : ""}</span>
             </text>
-            <text fg={theme.dim}>  {truncate(card.branch ? `${card.repo} · ${card.branch}` : card.repo, SIDEBAR_WIDTH - 8)}</text>
+            <text fg={row.active ? theme.info : theme.dim}>  {truncate(row.detail, SIDEBAR_WIDTH - 8)}</text>
           </box>
         );
       })}
-      {view.sessions.length > shown.length ? <text fg={theme.dim}>  +{view.sessions.length - shown.length} more</text> : null}
-      {view.sessions.length === 0 && view.error === null ? <text fg={theme.dim}>nobody shares a session</text> : null}
-      {view.error !== null ? (
+      {rows.length > 8 ? <text fg={theme.dim}>  +{rows.length - 8} more</text> : null}
+      {error !== null ? (
         <text fg={theme.warn} wrapMode="word">
-          team offline: {view.error}
+          team offline: {error}
         </text>
       ) : null}
     </Section>
@@ -69,7 +68,10 @@ function TeamSection({ view }: { view: TeamView }) {
 }
 
 interface SidebarProps {
-  team?: TeamView | null;
+  spaces?: SpaceRow[];
+  teamName?: string | null;
+  teamError?: string | null;
+  onOpenSpace?: (id: string) => void;
   onSettings: () => void;
   projection: Projection;
   room: string;
@@ -78,7 +80,7 @@ interface SidebarProps {
   status: string;
 }
 
-export function Sidebar({ projection, room, inbox, running, status, team, onSettings }: SidebarProps) {
+export function Sidebar({ projection, room, inbox, running, status, spaces, teamName, teamError, onOpenSpace, onSettings }: SidebarProps) {
   const state = projection.state;
   const [hover, setHover] = useState(false);
   const elapsed = useElapsed(running);
@@ -108,7 +110,7 @@ export function Sidebar({ projection, room, inbox, running, status, team, onSett
           />
         ))}
       </Section>
-      {team ? <TeamSection view={team} /> : null}
+      {spaces && spaces.length > 0 && teamName ? <SpacesSection rows={spaces} name={teamName} error={teamError ?? null} onOpen={onOpenSpace} /> : null}
       {inbox.length > 0 ? (
         <Section title="needs you" count={inbox.length}>
           {inbox.slice(0, 4).map((item) =>

@@ -4,7 +4,8 @@ import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { parseLink, SessionClient } from "@plural/client";
 import pkg from "../package.json" with { type: "json" };
-import { App } from "./App";
+import { basename } from "node:path";
+import { Shell } from "./Shell";
 import { loadKeys, saveKeys } from "./credentials";
 import { toConfig } from "./presets";
 import { loadSettings, saveSettings } from "./settings";
@@ -308,33 +309,44 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   progress.done();
   const quit = new Promise<void>((resolve) => {
     createRoot(renderer).render(
-      <App
-        client={client}
-        room={target.room}
-        version={pkg.version}
-        guestLink={target.guestLink}
-        settings={settings}
-        onSettings={saveSettings}
-        control={control}
-        keys={keys}
-        onKeys={(preset, key, remember) => {
-          const stored = loadKeys();
-          if (remember && key !== "") {
-            stored[preset] = key;
-          } else {
-            delete stored[preset];
-          }
-          saveKeys(stored);
-        }}
-        startupNote={startupNote}
-        startup={target.joined ? [] : startup}
-        initialPrompt={options.prompt}
-        alerts={alerts}
-        updater={updater}
-        team={watcher}
-        splash
-        onQuit={() => {
-          resolve();
+      <Shell
+        team={team}
+        watcher={watcher}
+        home={basename(process.cwd())}
+        connect={(card, member) =>
+          new SessionClient(parseLink((card.endpoints[0] as { url: string }).url), {
+            name,
+            client: { kind: "tui", version: pkg.version },
+            team: (room) => teamProof(member, room),
+          })
+        }
+        app={{
+          client,
+          room: target.room,
+          version: pkg.version,
+          guestLink: target.guestLink,
+          settings,
+          onSettings: saveSettings,
+          control,
+          keys,
+          onKeys: (preset, key, remember) => {
+            const stored = loadKeys();
+            if (remember && key !== "") {
+              stored[preset] = key;
+            } else {
+              delete stored[preset];
+            }
+            saveKeys(stored);
+          },
+          startupNote,
+          startup: target.joined ? [] : startup,
+          initialPrompt: options.prompt,
+          alerts,
+          updater,
+          splash: true,
+          onQuit: () => {
+            resolve();
+          },
         }}
       />,
     );
