@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from plural.agent.providers.base import (
+    LlmImage,
     LlmMessage,
     LlmRequest,
     ProviderActivity,
@@ -135,3 +136,28 @@ async def test_a_long_tool_call_from_claude_code_counts_as_activity(tmp_path: Pa
     assert text == "Writing it."
     assert len(activity) > 100
     assert {event.source for event in activity} == {"input_json_delta"}
+
+
+async def test_claude_code_receives_the_conversation_images(tmp_path: Path) -> None:
+    cli = fake_cli(tmp_path, {"structured_output": {"text": "red", "tool_calls": []}})
+    provider = ClaudeCodeProvider(model="claude-sonnet-5-5", workspace=tmp_path, cli=str(cli))
+    red = LlmImage(media_type="image/png", data="cmVk")
+    request = LlmRequest(
+        system="",
+        messages=(
+            LlmMessage(role="user", content="what color?", images=(red,)),
+            LlmMessage(role="assistant", content="red"),
+            LlmMessage(role="user", content="and now?"),
+        ),
+    )
+    [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    sent = json.loads((tmp_path / "request.json").read_text())
+    assert sent["argv"][sent["argv"].index("--input-format") + 1] == "stream-json"
+    line = json.loads(sent["prompt"])
+    assert line["type"] == "user"
+    text, label, image = line["message"]["content"]
+    conversation = json.loads(text["text"].split("\n", 1)[1])
+    assert conversation["messages"][0]["images"] == ["image 1"]
+    assert "images" not in conversation["messages"][2]
+    assert label == {"type": "text", "text": "[image 1]"}
+    assert image["source"] == {"type": "base64", "media_type": "image/png", "data": "cmVk"}

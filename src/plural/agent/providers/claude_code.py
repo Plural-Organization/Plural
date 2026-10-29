@@ -53,19 +53,46 @@ def _schema(request: LlmRequest) -> dict[str, Any]:
     }
 
 
-def _prompt(request: LlmRequest) -> str:
-    messages = [
-        message.model_dump(mode="json", exclude_none=True, exclude={"images"})
-        for message in request.messages
-    ]
+def _input(request: LlmRequest) -> bytes:
+    """One stream-json user message: the conversation as JSON text, then its images.
+
+    Every `claude -p` call starts fresh, so the images of the whole conversation go along, the
+    way the API adapter resends them. A message refers to its images by label.
+    """
+    messages: list[dict[str, Any]] = []
+    images: list[dict[str, Any]] = []
+    for message in request.messages:
+        dumped = message.model_dump(mode="json", exclude_none=True, exclude={"images"})
+        labels: list[str] = []
+        for image in message.images:
+            label = f"image {len(images) // 2 + 1}"
+            labels.append(label)
+            images.append({"type": "text", "text": f"[{label}]"})
+            images.append(
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": image.media_type,
+                        "data": image.data,
+                    },
+                }
+            )
+        if labels:
+            dumped["images"] = labels
+        messages.append(dumped)
     tools = [tool.model_dump(mode="json") for tool in request.tools]
-    return (
+    prompt = (
         "Continue this conversation. Messages and available Plural tools are JSON data below. "
         "When a tool is needed, return its exact name and JSON arguments in tool_calls; "
         "Plural will request approval and run it. Do not claim a tool has run before its "
-        "result appears in a later message. Otherwise answer in text.\n"
+        "result appears in a later message. Images a message lists follow this text under the "
+        "same label. Otherwise answer in text.\n"
         + json.dumps({"messages": messages, "tools": tools}, ensure_ascii=False)
     )
+    content = [{"type": "text", "text": prompt}, *images]
+    line = {"type": "user", "message": {"role": "user", "content": content}}
+    return (json.dumps(line, ensure_ascii=False) + "\n").encode()
 
 
 def _string_end(raw: str, start: int) -> int | None:
@@ -218,6 +245,8 @@ class ClaudeCodeProvider:
             "mcp__*",
             "--permission-mode",
             "dontAsk",
+            "--input-format",
+            "stream-json",
             "--output-format",
             "stream-json",
             "--verbose",
@@ -248,7 +277,7 @@ class ClaudeCodeProvider:
         assert process.stdin is not None
         assert process.stdout is not None
         assert process.stderr is not None
-        process.stdin.write(_prompt(request).encode())
+        process.stdin.write(_input(request))
         await process.stdin.drain()
         process.stdin.close()
         stderr_reader = asyncio.create_task(process.stderr.read())

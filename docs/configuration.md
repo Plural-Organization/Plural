@@ -34,7 +34,7 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 | `PLURAL_GUEST_RUN_TOKENS` | none | Token budget for a run that includes a guest's prompt. Input, cache writes and output count; cache reads do not. The run ends after the turn that reaches it |
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24 hours |
 | `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |
-| `PLURAL_MAX_IMAGE_BYTES` | `2500000` | Largest image a participant may attach, at most `2900000` so it fits a 4 MB message. The terminal client scales pasted images to 1568 px first. Claude Code, Codex CLI and models without vision do not see images |
+| `PLURAL_MAX_IMAGE_BYTES` | `2500000` | Largest image a participant may attach, at most `2900000` so it fits a 4 MB message. The terminal client scales pasted images to 1568 px first. Claude Code and Codex CLI receive them too; an OpenAI-compatible model without vision does not see them |
 | `PLURAL_TYPING_TTL_S` | `6` | Seconds after which a typing indicator lapses without a refresh |
 | `PLURAL_WEB_SEARCH` | `true` | Give the agent `web_search`: Pydantic AI's `WebSearchTool`, run by the session provider's own search engine. Works with an Anthropic or OpenAI API key and with Claude OAuth; there is no search with Claude Code, Codex CLI or a custom `PLURAL_BASE_URL`. Each search waits for approval like other tools |
 | `PLURAL_WEB_SEARCH_MODEL` | session model | Model that runs the search, written as `provider:model` like Pydantic AI, for example `anthropic:claude-haiku-4-5` to search cheaply. It applies only while the session uses that provider (`anthropic` covers Claude OAuth too) |
