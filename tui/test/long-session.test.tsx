@@ -163,3 +163,41 @@ test("search says when nothing matches and esc brings the box back", async () =>
   await settle();
   expect(fake.commands.at(-1)).toEqual({ type: "prompt.submit", text: "hi", delivery: "now" });
 });
+
+function reply(fake: FakeSession, id: string, text: string): void {
+  fake.emit({ type: "message.started", run_id: "r", message_id: id });
+  fake.emit({ type: "message.delta", message_id: id, text, thinking: false });
+  fake.emit({ type: "message.ended", run_id: "r", message_id: id, text, thinking: "" });
+}
+
+test("a very long reply is folded and ctrl+o opens it", async () => {
+  const fake = room(new FakeSession());
+  const setup = await mount(fake);
+  reply(fake, "m1", Array.from({ length: 80 }, (_, index) => `line ${index + 1}`).join("\n\n"));
+  const folded = await frame(setup, "more lines");
+  expect(folded).not.toContain("line 80");
+  await setup.mockInput.pressKey("o", { ctrl: true });
+  await frame(setup, "show less");
+});
+
+test("scrolled away from the end, a note counts what arrived and end brings you back", async () => {
+  const fake = room(new FakeSession());
+  const setup = await mount(fake);
+  for (let index = 0; index < 60; index += 1) {
+    chat(fake, `a${index}`, `old message ${index}`);
+  }
+  await frame(setup, "old message 59");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  for (let index = 0; index < 6; index += 1) {
+    await setup.mockMouse.scroll(40, 15, "up");
+  }
+  chat(fake, "n1", "fresh one");
+  chat(fake, "n2", "fresh two");
+  const away = await frame(setup, "2 new");
+  expect(away).toContain("✉ 2");
+  await setup.mockInput.pressKey("\u001B[F");
+  await frame(setup, "fresh two");
+  await settle();
+  await setup.renderOnce();
+  expect(setup.captureCharFrame()).not.toContain("2 new");
+});

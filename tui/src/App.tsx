@@ -7,6 +7,7 @@ import {
   mentionable,
   mentionsMe,
   findInFeed,
+  matchPreview,
   nextPermissionMode,
   parseChat,
   parseSlash,
@@ -21,6 +22,7 @@ import {
 } from "@plural/client";
 import { COMMANDS } from "./commands";
 import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
+import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
 import { SearchBar } from "./components/SearchBar";
 import { Inbox, inboxItems, type InboxItem } from "./components/Inbox";
@@ -73,6 +75,7 @@ const TYPING_REFRESH_MS = 3000;
 const TYPING_IDLE_MS = 2500;
 const PLAN_APPROVED = "The host approved the plan. Implement it now.";
 const UPLOAD_WAIT_MS = 10_000;
+const LONG_RUN_MS = 15_000;
 const DELIVERED_MS = 1500;
 const FAILED_MS = 8000;
 
@@ -143,6 +146,10 @@ export function App({
   const [query, setQuery] = useState("");
   const [found, setFound] = useState<string | null>(null);
   const [delivery, setDelivery] = useState<Delivery | null>(null);
+  const [behind, setBehind] = useState({ away: false, fresh: 0, chat: 0 });
+  const anchor = useRef(0);
+  const [finished, setFinished] = useState(false);
+  const runStart = useRef<number | null>(null);
   const deliveryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [images, setImages] = useState<PastedImage[]>([]);
   const pastes = useRef(0);
@@ -275,6 +282,9 @@ export function App({
   const hitIndex = Math.max(0, found === null ? 0 : hits.indexOf(found));
   const current = hits[hitIndex] ?? null;
 
+  const matchedItem = current === null ? undefined : feed.items.find((item) => item.id === current);
+  const matched = matchedItem ? matchPreview(matchedItem, query, Math.max(20, width - 60)) : "";
+
   const reveal = (id: string | null): void => {
     setFound(id);
     const box = scroll.current;
@@ -337,10 +347,65 @@ export function App({
         }
       }
       setPinned((current) => (current === above ? current : above));
+      const entries = feedRef.current.items;
+      const atBottom = box.scrollTop + box.viewport.height >= box.scrollHeight - 1;
+      if (atBottom) {
+        anchor.current = entries.length;
+      }
+      const fresh = entries.slice(anchor.current);
+      const next = { away: !atBottom, fresh: fresh.length, chat: fresh.filter((entry) => entry.kind === "chat" && !entry.mine).length };
+      setBehind((current) => (current.away === next.away && current.fresh === next.fresh && current.chat === next.chat ? current : next));
     }, 100);
     return () => clearInterval(timer);
   }, []);
   const pinnedItem = pinned ? feed.items.find((item): item is Extract<typeof item, { kind: "user" }> => item.kind === "user" && item.id === pinned) : undefined;
+
+  const latest = (): void => {
+    scroll.current?.scrollTo(Number.MAX_SAFE_INTEGER);
+  };
+
+  const jumpPrompt = (direction: 1 | -1): void => {
+    const box = scroll.current;
+    if (!box) {
+      return;
+    }
+    const cards = feedRef.current.items
+      .filter((item) => item.kind === "user")
+      .map((item) => box.findDescendantById(feedId(item.id)))
+      .filter((card) => card !== undefined);
+    const target = direction === -1 ? cards.filter((card) => card.y < box.y).at(-1) : cards.find((card) => card.y > box.y + 1);
+    if (target) {
+      box.scrollBy(target.y - box.y - 1);
+    } else if (direction === 1) {
+      latest();
+    }
+  };
+
+  useEffect(() => onCodeCopy((text) => copy(text, "Copied", `${text.length} characters`)), []);
+
+  const phase = isHost && items.length > 0 ? "waiting" : running ? "running" : finished ? "done" : "idle";
+  useEffect(() => {
+    const marks = { waiting: "⚠ waiting for you", running: "● working", done: "✓ done", idle: "" };
+    try {
+      renderer.setTerminalTitle(phase === "idle" ? "plural" : `plural · ${marks[phase]}`);
+    } catch {
+      return;
+    }
+  }, [phase]);
+
+  useEffect(() => {
+    if (running) {
+      runStart.current = Date.now();
+      setFinished(false);
+    } else if (runStart.current !== null) {
+      const long = Date.now() - runStart.current >= LONG_RUN_MS;
+      runStart.current = null;
+      setFinished(true);
+      if (long && settings.bell) {
+        sound.ring();
+      }
+    }
+  }, [running]);
 
   const seenInbox = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
@@ -959,6 +1024,19 @@ export function App({
       setDialog(true);
       return;
     }
+    if (finished) {
+      setFinished(false);
+    }
+    if (key.name === "end" && !dirty.current) {
+      key.preventDefault();
+      latest();
+      return;
+    }
+    if (key.meta && (key.name === "up" || key.name === "down")) {
+      key.preventDefault();
+      jumpPrompt(key.name === "up" ? -1 : 1);
+      return;
+    }
     if (key.ctrl && key.name === "f") {
       key.preventDefault();
       setFocus("search");
@@ -1123,11 +1201,21 @@ export function App({
                   expanded={allOpen || opened.has(item.id)}
                   queued={queuedIds.get(item.id) ?? null}
                   onToggle={toggle}
+                  onCopy={(text) => copy(text, "Copied", `${text.length} characters`)}
                 />
               </box>
             );
           })}
         </scrollbox>
+        {behind.away ? (
+          <box flexShrink={0} height={1} paddingX={2} onMouseDown={latest}>
+            <text fg={theme.accent}>
+              ↓ {behind.fresh > 0 ? `${behind.fresh} new` : "latest"}
+              {behind.chat > 0 ? ` · ✉ ${behind.chat}` : ""}
+              <span fg={theme.dim}>  click or end to jump down · alt+↑/↓ between prompts</span>
+            </text>
+          </box>
+        ) : null}
         {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} /> : null}
         {projection.compacting ? (
           <Compacting tokens={projection.compacting.tokens} />
@@ -1143,7 +1231,7 @@ export function App({
           </box>
         ) : null}
         {searching ? (
-          <SearchBar query={query} count={hits.length} position={hitIndex} onQuery={search} onStep={step} onClose={closeSearch} />
+          <SearchBar query={query} count={hits.length} position={hitIndex} preview={matched} onQuery={search} onStep={step} onClose={closeSearch} />
         ) : null}
         <Composer
           focused={focus === "composer" && !dialog}
