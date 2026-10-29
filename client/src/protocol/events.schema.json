@@ -2175,6 +2175,13 @@
         },
         "status": {
           "$ref": "#/$defs/PluginStatus"
+        },
+        "tools": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "required": [
@@ -2182,6 +2189,7 @@
         "path",
         "status",
         "commands",
+        "tools",
         "error"
       ],
       "type": "object"

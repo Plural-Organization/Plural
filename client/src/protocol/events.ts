@@ -895,6 +895,7 @@ export interface PluginView {
   name: string;
   path: string;
   status: PluginStatus;
+  tools: string[];
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema

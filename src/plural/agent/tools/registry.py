@@ -72,6 +72,10 @@ class ToolRegistry:
     def add_source(self, source: ToolSource, *, exposure: Exposure = Exposure.CORE) -> None:
         self._sources.append((source, exposure))
 
+    def registered(self) -> frozenset[str]:
+        """Names of the tools registered directly, not the ones sources provide."""
+        return frozenset(self._tools)
+
     def pin(self, names: Iterable[str]) -> None:
         """Declare these tools, or every tool of these groups, as if they were core."""
         self._pinned = frozenset(names)

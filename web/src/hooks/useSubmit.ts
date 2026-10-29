@@ -157,7 +157,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
       if (parsed.type === "show.plugins") {
         const lines = state.plugins.map(
           (plugin) =>
-            `  ${plugin.status === "loaded" ? "✓" : "✕"} ${plugin.name}  ${plugin.status === "loaded" ? plugin.commands.map((command) => `/${command}`).join(" ") || "no commands" : (plugin.error ?? "failed to load")}`,
+            `  ${plugin.status === "loaded" ? "✓" : "✕"} ${plugin.name}  ${plugin.status === "loaded" ? [...plugin.commands.map((command) => `/${command}`), ...(plugin.tools ?? []).map((tool) => `${tool}()`)].join(" ") || "no commands or tools" : (plugin.error ?? "failed to load")}`,
         );
         notify("accent", lines.length > 0 ? ["plugins", ...lines].join("\n") : "no plugins yet: the host creates one with /plugins new <name>");
         return;

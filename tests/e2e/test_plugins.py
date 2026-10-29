@@ -2,18 +2,27 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.providers.fake import FakeProvider, reply
+from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
-from plural.protocol.commands import CommandRun, PluginsCreate, PluginsReload
+from plural.protocol.commands import (
+    ApprovalRespond,
+    CommandRun,
+    PluginsCreate,
+    PluginsReload,
+    PromptSubmit,
+)
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.events import (
+    ApprovalRequested,
     CommandInvoked,
     CommandReplied,
     PluginsChanged,
     PromptAccepted,
     RunEnded,
+    ToolEnded,
+    ToolsLoaded,
 )
-from plural.protocol.models import PluginStatus, Role
+from plural.protocol.models import ApprovalDecision, PluginStatus, Role
 from tests.e2e.support import running_session
 
 PLUGIN = """
@@ -121,3 +130,38 @@ async def test_the_host_creates_and_reloads_plugins(tmp_path: Path) -> None:
         reloaded = await owner.next(PluginsChanged)
         assert reloaded.plugins[0].error == "RuntimeError: oops"
         assert reloaded.commands == ()
+
+
+TOOL = """
+def setup(plural):
+    @plural.tool("ticket", description="Look up a ticket by key", parameters={"key": "Key"})
+    async def ticket(args, ctx):
+        return f"{args['key']} is open"
+"""
+
+
+async def test_the_agent_calls_a_plugin_tool_after_the_host_approves(tmp_path: Path) -> None:
+    install(tmp_path, "tickets", TOOL)
+    provider = FakeProvider(
+        [
+            use_tool("tool_search", query="look up ticket"),
+            use_tool("ticket", key="PLR-7"),
+            reply("done"),
+        ]
+    )
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        owner = await session.owner()
+        assert owner.client.projection.state.plugins[0].tools == ("ticket",)
+        await owner.client.send(PromptSubmit(text="what about PLR-7?"))
+        loaded = await owner.next(ToolsLoaded)
+        assert "ticket" in loaded.tools
+        approval = await owner.next(ApprovalRequested)
+        assert approval.approval.call.name == "ticket"
+        await owner.client.send(
+            ApprovalRespond(approval_id=approval.approval.id, decision=ApprovalDecision.ONCE)
+        )
+        ended = await owner.next(ToolEnded)
+        assert (ended.ok, ended.output) == (True, "PLR-7 is open")
+        await owner.next(RunEnded)
+        assert "ticket" not in [tool.name for tool in provider.requests[0].tools]
+        assert "ticket" in [tool.name for tool in provider.requests[1].tools]
