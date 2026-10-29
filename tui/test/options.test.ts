@@ -18,9 +18,13 @@ describe("commands", () => {
   });
 
   test("the host's own commands go straight through", () => {
-    for (const name of ["relay", "doctor", "export", "sessions", "rm", "team"]) {
+    for (const name of ["relay", "doctor", "export", "sessions", "rm", "team", "ls"]) {
       expect(parseArgs([name, "--json"])).toEqual({ kind: "passthrough", args: [name, "--json"] });
     }
+  });
+
+  test("--team goes on to the host", () => {
+    expect(parseArgs(["--team"])).toMatchObject({ kind: "session", options: { hostArgs: ["--team"] } });
   });
 
   test("join takes a link and a display name", () => {

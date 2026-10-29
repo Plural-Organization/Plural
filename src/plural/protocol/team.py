@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field
 
@@ -69,3 +69,44 @@ class MemberList(Model):
 
 class Renewed(Model):
     certificate: str
+
+
+class SessionStatus(StrEnum):
+    IDLE = "idle"
+    RUNNING = "running"
+    WAITING = "waiting"
+
+
+class EndpointKind(StrEnum):
+    RELAY = "relay"
+    DIRECT = "direct"
+
+
+class Endpoint(Model):
+    kind: EndpointKind
+    url: str = Field(min_length=8, max_length=300, pattern=r"^(wss?|https?)://\S+$")
+
+
+class CardDraft(Model):
+    room: str = Field(min_length=1, max_length=64)
+    repo: str = Field(min_length=1, max_length=80)
+    branch: str | None = Field(default=None, max_length=120)
+    title: str | None = Field(default=None, max_length=80)
+    status: SessionStatus
+    viewers: int = Field(default=0, ge=0, le=1000)
+    endpoints: tuple[Endpoint, ...] = Field(min_length=1, max_length=4)
+
+
+class SessionCard(CardDraft):
+    owner: MemberName
+    owner_id: str
+    updated_at: datetime
+
+
+class SessionList(Model):
+    sessions: tuple[SessionCard, ...]
+
+
+class PresenceCard(Model):
+    type: Literal["card"] = "card"
+    card: CardDraft

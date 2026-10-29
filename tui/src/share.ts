@@ -18,7 +18,7 @@ export interface ShareLaunch {
   note: string | null;
 }
 
-const ADDRESS_FLAGS = ["--relay", "--public-url", "--bind"];
+export const ADDRESS_FLAGS = ["--relay", "--public-url", "--bind"];
 
 export function relayProblem(value: string): string | null {
   let url: URL;

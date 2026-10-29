@@ -42,6 +42,7 @@ from plural.host.providers import (
     resolve_api_key,
 )
 from plural.host.publisher import Publisher
+from plural.host.repo import git_branch
 from plural.host.routing import build_helper
 from plural.host.system import SystemClock, UlidGenerator
 from plural.host.transport.base import HostTransport
@@ -173,7 +174,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     environment = Environment(
         workspace=workspace.root,
         today=clock.now().astimezone().date(),
-        git_branch=await _git_branch(workspace),
+        git_branch=await git_branch(workspace.root),
     )
     agents = AgentLibrary(project=workspace.root, home=Path.home())
     await asyncio.to_thread(agents.refresh)
@@ -275,32 +276,6 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         mcp=mcp,
         web_search=web_search,
     )
-
-
-async def _git_branch(workspace: Workspace) -> str | None:
-    try:
-        process = await asyncio.create_subprocess_exec(
-            "git",
-            "-C",
-            str(workspace.root),
-            "rev-parse",
-            "--abbrev-ref",
-            "HEAD",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.DEVNULL,
-        )
-    except OSError:
-        return None
-    try:
-        output, _ = await asyncio.wait_for(process.communicate(), 5)
-    except TimeoutError:
-        process.kill()
-        await process.wait()
-        return None
-    branch = output.decode(errors="replace").strip()
-    if process.returncode != 0 or not branch:
-        return None
-    return "detached HEAD" if branch == "HEAD" else branch
 
 
 async def _project_notes(workspace: Workspace) -> str | None:

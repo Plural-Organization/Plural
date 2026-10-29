@@ -10,7 +10,7 @@ import { toConfig } from "./presets";
 import { loadSettings, saveSettings } from "./settings";
 import { freePort, HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
 import { startProgress } from "./lib/progress";
-import { lanAddress, shareLaunch } from "./share";
+import { ADDRESS_FLAGS, lanAddress, shareLaunch } from "./share";
 import { planAgent } from "./agent";
 import { Alerts } from "./alerts";
 import { fixDashes } from "./args";
@@ -20,6 +20,7 @@ import { pickSession } from "./picker";
 import { composePrompt, readStdin, runPrint } from "./print";
 import { startupCommands } from "./startup";
 import { runUpdate, skewNote, Updater } from "./update";
+import { loadTeam, TeamWatcher } from "./team";
 import { listSessions, resolveSession, type SessionInfo } from "./sessions";
 import { parseTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
 
@@ -133,7 +134,14 @@ async function start(options: SessionOptions, joinLink: string | null, name: str
   const named = [...plain, "--name", name];
   const portFlag = plain.indexOf("--port");
   const port = (portFlag === -1 ? 0 : Number(plain[portFlag + 1])) || (await freePort());
+  const sharing = plain.includes("--team") ? loadTeam() : null;
+  if (plain.includes("--team") && sharing === null) {
+    throw new UsageError("you are not in a team: plural team create or plural team join");
+  }
   let launch = shareLaunch(loadSettings(), named, port, lanAddress());
+  if (sharing !== null && kind === null && !plain.some((flag) => ADDRESS_FLAGS.includes(flag))) {
+    launch = { args: [...named, "--relay", sharing.profile.relay], note: `showing this session to ${sharing.profile.team_name}` };
+  }
   let tunnel: Tunnel | null = null;
   if (kind !== null) {
     progress.step(`opening a ${kind} tunnel…`);
@@ -242,6 +250,9 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
     fail(error instanceof Error ? error.message : String(error));
   }
 
+  const team = loadTeam();
+  const watcher = team === null ? undefined : new TeamWatcher(team);
+  watcher?.start();
   const keys = loadKeys();
   const control = host?.control ?? null;
   const skew = host === null ? null : skewNote(pkg.version, host.version);
@@ -290,6 +301,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
         initialPrompt={options.prompt}
         alerts={alerts}
         updater={updater}
+        team={watcher}
         splash
         onQuit={() => {
           resolve();
@@ -300,6 +312,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
     process.on("SIGINT", () => resolve());
   });
   await quit;
+  watcher?.stop();
   renderer.destroy();
   await host?.stop();
   await tunnel?.stop();

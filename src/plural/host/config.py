@@ -24,6 +24,7 @@ class HostSettings(BaseSettings):
     port: int = 7777
     public_url: str | None = None
     relay_url: str | None = None
+    team: bool = False
     provider: (
         Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"] | None
     ) = None

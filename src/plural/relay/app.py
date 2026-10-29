@@ -11,6 +11,7 @@ from starlette.websockets import WebSocket
 
 from plural.relay.directory import TeamDirectory, TeamLimits
 from plural.relay.limits import RelayLimits
+from plural.relay.presence import Presence
 from plural.relay.rooms import Rooms
 from plural.relay.team_routes import team_routes
 
@@ -44,7 +45,7 @@ def create_app(
         if teams is not None:
             opened = await TeamDirectory.open(teams, limits=team_limits)
             directory.append(opened)
-            app.router.routes[:0] = team_routes(opened, proxy_hops=proxy_hops)
+            app.router.routes[:0] = team_routes(opened, Presence(), proxy_hops=proxy_hops)
         try:
             yield
         finally:

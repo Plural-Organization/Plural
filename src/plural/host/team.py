@@ -18,6 +18,7 @@ from plural.protocol.team import (
     MemberList,
     MemberView,
     Renewed,
+    SessionList,
     TeamCreate,
     TeamGrant,
     TeamJoin,
@@ -143,6 +144,13 @@ class DirectoryClient:
 
     async def members(self) -> MemberList:
         return MemberList.model_validate(await self._signed("GET", "members"))
+
+    async def sessions(self) -> SessionList:
+        return SessionList.model_validate(await self._signed("GET", "sessions"))
+
+    async def refresh(self) -> TeamProfile:
+        await self._renew_if_due()
+        return self.profile
 
     async def invite(self) -> Invite:
         return Invite.model_validate(await self._signed("POST", "invites"))

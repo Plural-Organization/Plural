@@ -244,6 +244,9 @@ class TeamDirectory:
         self._seen[key] = now
         return claims
 
+    async def still_valid(self, claims: MemberClaims) -> bool:
+        return claims.exp > self._clock() and await self._is_member(claims.team, claims)
+
     async def members(self, claims: MemberClaims) -> MemberList:
         async with self._db.execute(
             "SELECT name FROM teams WHERE id = ?", (claims.team,)
