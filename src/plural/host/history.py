@@ -1,8 +1,16 @@
 from collections.abc import Iterable, Mapping
 
-from plural.agent.messages import AssistantTurn, Message, SummaryTurn, ToolResultTurn, UserTurn
+from plural.agent.messages import (
+    AssistantTurn,
+    Message,
+    NotesTurn,
+    SummaryTurn,
+    ToolResultTurn,
+    UserTurn,
+)
 from plural.agent.providers.base import ToolCallRequest
 from plural.protocol.events import (
+    BriefingImported,
     ContextCompacted,
     EventRecord,
     MessageEnded,
@@ -71,6 +79,8 @@ def replay(
                         is_error=not ok,
                     )
                 )
+            case BriefingImported(item=item, text=text):
+                messages.append(NotesTurn(source=item.source, text=text))
             case ContextCompacted(summary=summary):
                 messages = [SummaryTurn(text=summary)]
                 if run_prompt is not None:

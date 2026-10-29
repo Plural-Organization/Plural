@@ -29,6 +29,9 @@ export function useHotkeys({ enabled, first, canAbort, send, onEdit, onFocusInpu
       } else if (first?.kind === "join" && (event.key === "y" || event.key === "v" || event.key === "n")) {
         event.preventDefault();
         send({ type: "join.decide", request_id: first.id, decision: event.key === "y" ? "allow" : event.key === "v" ? "viewer" : "deny" });
+      } else if (first?.kind === "briefing" && (event.key === "y" || event.key === "n")) {
+        event.preventDefault();
+        send({ type: "briefing.decide", request_id: first.id, decision: event.key === "y" ? "allow" : "deny" });
       } else if (first?.kind === "access" && (event.key === "y" || event.key === "n")) {
         event.preventDefault();
         send({ type: "access.decide", participant_id: first.id, decision: event.key === "y" ? "allow" : "deny" });

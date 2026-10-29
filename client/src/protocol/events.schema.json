@@ -630,6 +630,238 @@
       ],
       "type": "object"
     },
+    "BriefingDecision": {
+      "enum": [
+        "granted",
+        "denied"
+      ],
+      "type": "string"
+    },
+    "BriefingDelivered": {
+      "properties": {
+        "as_of_seq": {
+          "default": 0,
+          "type": "integer"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "type": {
+          "const": "briefing.delivered",
+          "default": "briefing.delivered",
+          "type": "string"
+        },
+        "update": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "to",
+        "text",
+        "as_of_seq",
+        "update",
+        "error"
+      ],
+      "type": "object"
+    },
+    "BriefingImportView": {
+      "properties": {
+        "as_of_seq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "chars": {
+          "type": "integer"
+        },
+        "id": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "as_of_seq",
+        "chars",
+        "at"
+      ],
+      "type": "object"
+    },
+    "BriefingImported": {
+      "properties": {
+        "item": {
+          "$ref": "#/$defs/BriefingImportView"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "briefing.imported",
+          "default": "briefing.imported",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "item",
+        "text"
+      ],
+      "type": "object"
+    },
+    "BriefingRequestView": {
+      "properties": {
+        "focus": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "type": "string"
+        },
+        "update": {
+          "default": false,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "id",
+        "participant_id",
+        "name",
+        "focus",
+        "update",
+        "requested_at"
+      ],
+      "type": "object"
+    },
+    "BriefingRequested": {
+      "properties": {
+        "request": {
+          "$ref": "#/$defs/BriefingRequestView"
+        },
+        "type": {
+          "const": "briefing.requested",
+          "default": "briefing.requested",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request"
+      ],
+      "type": "object"
+    },
+    "BriefingResolved": {
+      "properties": {
+        "decided_by": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "decision": {
+          "$ref": "#/$defs/BriefingDecision"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "briefing.resolved",
+          "default": "briefing.resolved",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "request_id",
+        "participant_id",
+        "decision",
+        "decided_by"
+      ],
+      "type": "object"
+    },
+    "BriefingSharing": {
+      "enum": [
+        "off",
+        "ask",
+        "team"
+      ],
+      "type": "string"
+    },
+    "BriefingSharingChanged": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/BriefingSharing"
+        },
+        "type": {
+          "const": "briefing.sharing_changed",
+          "default": "briefing.sharing_changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "mode"
+      ],
+      "type": "object"
+    },
     "ChatEntry": {
       "properties": {
         "author_id": {
@@ -1035,6 +1267,11 @@
               "board.moved": "#/$defs/BoardMoved",
               "board.opened": "#/$defs/BoardOpened",
               "board.stroked": "#/$defs/BoardStroked",
+              "briefing.delivered": "#/$defs/BriefingDelivered",
+              "briefing.imported": "#/$defs/BriefingImported",
+              "briefing.requested": "#/$defs/BriefingRequested",
+              "briefing.resolved": "#/$defs/BriefingResolved",
+              "briefing.sharing_changed": "#/$defs/BriefingSharingChanged",
               "chat.posted": "#/$defs/ChatPosted",
               "context.compacted": "#/$defs/ContextCompacted",
               "context.compacting": "#/$defs/ContextCompacting",
@@ -1121,6 +1358,21 @@
             },
             {
               "$ref": "#/$defs/AccessResolved"
+            },
+            {
+              "$ref": "#/$defs/BriefingRequested"
+            },
+            {
+              "$ref": "#/$defs/BriefingResolved"
+            },
+            {
+              "$ref": "#/$defs/BriefingDelivered"
+            },
+            {
+              "$ref": "#/$defs/BriefingSharingChanged"
+            },
+            {
+              "$ref": "#/$defs/BriefingImported"
             },
             {
               "$ref": "#/$defs/JoinPending"
@@ -2249,6 +2501,23 @@
         "board": {
           "$ref": "#/$defs/BoardView"
         },
+        "briefing_requests": {
+          "additionalProperties": {
+            "$ref": "#/$defs/BriefingRequestView"
+          },
+          "type": "object"
+        },
+        "briefing_sharing": {
+          "$ref": "#/$defs/BriefingSharing",
+          "default": "ask"
+        },
+        "briefings_imported": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/BriefingImportView"
+          },
+          "type": "array"
+        },
         "chat": {
           "default": [],
           "items": {
@@ -2373,6 +2642,9 @@
         "admission",
         "join_requests",
         "access_requests",
+        "briefing_sharing",
+        "briefing_requests",
+        "briefings_imported",
         "participants",
         "proposals",
         "approvals",
@@ -2850,6 +3122,11 @@
           "board.moved": "#/$defs/BoardMoved",
           "board.opened": "#/$defs/BoardOpened",
           "board.stroked": "#/$defs/BoardStroked",
+          "briefing.delivered": "#/$defs/BriefingDelivered",
+          "briefing.imported": "#/$defs/BriefingImported",
+          "briefing.requested": "#/$defs/BriefingRequested",
+          "briefing.resolved": "#/$defs/BriefingResolved",
+          "briefing.sharing_changed": "#/$defs/BriefingSharingChanged",
           "chat.posted": "#/$defs/ChatPosted",
           "context.compacted": "#/$defs/ContextCompacted",
           "context.compacting": "#/$defs/ContextCompacting",
@@ -2936,6 +3213,21 @@
         },
         {
           "$ref": "#/$defs/AccessResolved"
+        },
+        {
+          "$ref": "#/$defs/BriefingRequested"
+        },
+        {
+          "$ref": "#/$defs/BriefingResolved"
+        },
+        {
+          "$ref": "#/$defs/BriefingDelivered"
+        },
+        {
+          "$ref": "#/$defs/BriefingSharingChanged"
+        },
+        {
+          "$ref": "#/$defs/BriefingImported"
         },
         {
           "$ref": "#/$defs/JoinPending"

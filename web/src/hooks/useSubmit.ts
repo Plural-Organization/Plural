@@ -73,6 +73,17 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
         }
         return true;
       }
+      case "brief": {
+        const [verb, mode] = rest;
+        if (isHost && verb === "share" && ["off", "ask", "team"].includes(mode ?? "")) {
+          send({ type: "session.set_briefing_sharing", mode: mode as "off" | "ask" | "team" });
+        } else if (isHost) {
+          notify("accent", `this session shares briefings: ${state.briefing_sharing} (/brief share off|ask|team)`);
+        } else {
+          notify("warn", "ask for a briefing from the terminal client, plural join @name, then /brief");
+        }
+        return true;
+      }
       case "access": {
         const people = mentionable(state, projection.meId);
         const [verb, ...names] = rest;

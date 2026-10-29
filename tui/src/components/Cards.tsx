@@ -70,6 +70,39 @@ export function PinnedPrompt({ item, width, onJump }: { item: Extract<FeedItem, 
   );
 }
 
+const BRIEFING_LINES = 30;
+
+export function BriefingCard({ item, expanded, onToggle, onCopy }: { item: Extract<FeedItem, { kind: "briefing" }>; expanded: boolean; onToggle: () => void; onCopy: (text: string) => void }) {
+  const long = item.text.split("\n").length > BRIEFING_LINES;
+  const view = long && !expanded ? collapseText(item.text, BRIEFING_LINES) : { text: item.text, hidden: 0 };
+  return (
+    <box flexDirection="column" marginY={1} border={["left"]} borderStyle="heavy" borderColor={theme.info} backgroundColor={theme.panel} paddingX={1}>
+      <text>
+        <span fg={theme.info}>
+          <b>✉ briefing from {item.from}</b>
+        </span>
+        <span fg={theme.dim}>
+          {item.update ? " · update" : ""} · as of event {item.asOf}
+        </span>
+      </text>
+      <text fg={theme.text} wrapMode="word">
+        {view.text}
+      </text>
+      {long ? (
+        <box onMouseDown={() => onToggle()}>
+          <text fg={theme.accent}>{expanded ? "▴ show less" : `▾ ${view.hidden} more lines · click or ctrl+o to expand`}</text>
+        </box>
+      ) : null}
+      <box flexDirection="row">
+        <box onMouseDown={() => onCopy(item.text)}>
+          <text fg={theme.accent}>copy</text>
+        </box>
+        <text fg={theme.dim}>  ·  /brief give hands it to your agent  ·  /brief update refreshes it</text>
+      </box>
+    </box>
+  );
+}
+
 export type Queued = "steer" | "follow_up" | null;
 
 export function UserCard({ item, queued }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued }) {
@@ -314,5 +347,7 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, onT
       return <ToolCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} width={width} />;
     case "notice":
       return <NoticeCard item={item} />;
+    case "briefing":
+      return <BriefingCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} />;
   }
 }

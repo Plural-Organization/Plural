@@ -161,6 +161,18 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
           )}
         </article>
       );
+    case "briefing":
+      return (
+        <article className={styles.agent}>
+          <div className={styles.agentName}>
+            briefing from {item.from} · as of event {item.asOf}
+            {item.update ? " · update" : ""}
+          </div>
+          <div data-anchor={item.id}>
+            <Text text={item.text} anchor={item.id} />
+          </div>
+        </article>
+      );
     case "notice":
       if (item.action === "board") {
         return (

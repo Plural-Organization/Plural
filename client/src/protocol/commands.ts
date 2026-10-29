@@ -17,6 +17,11 @@ export type ProposalDecision = "approve" | "reject";
 export type ApprovalDecision = "once" | "always" | "reject" | "block";
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BriefingSharing".
+ */
+export type BriefingSharing = "off" | "ask" | "team";
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "AdmissionMode".
  */
 export type AdmissionMode = "approve" | "open";
@@ -69,6 +74,10 @@ export interface CommandsSchema {
     | JoinDecide
     | AccessRequest
     | AccessDecide
+    | BriefingRequest
+    | BriefingDecide
+    | BriefingSharingSet
+    | BriefingImport
     | LinkRevoke
     | AdmissionSet
     | ParticipantSetRole
@@ -222,6 +231,42 @@ export interface AccessDecide {
   decision: "allow" | "deny";
   participant_id: string;
   type?: "access.decide";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BriefingRequest".
+ */
+export interface BriefingRequest {
+  focus?: string | null;
+  type?: "briefing.request";
+  update?: boolean;
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BriefingDecide".
+ */
+export interface BriefingDecide {
+  decision: "allow" | "deny";
+  request_id: string;
+  type?: "briefing.decide";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BriefingSharingSet".
+ */
+export interface BriefingSharingSet {
+  mode: BriefingSharing;
+  type?: "session.set_briefing_sharing";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "BriefingImport".
+ */
+export interface BriefingImport {
+  as_of_seq?: number | null;
+  source: string;
+  text: string;
+  type?: "briefing.import";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

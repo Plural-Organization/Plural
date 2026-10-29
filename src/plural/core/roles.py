@@ -16,6 +16,10 @@ from plural.protocol.commands import (
     BoardErase,
     BoardMove,
     BoardOpen,
+    BriefingDecide,
+    BriefingImport,
+    BriefingRequest,
+    BriefingSharingSet,
     ChatSend,
     Command,
     ContextCompact,
@@ -52,6 +56,7 @@ from plural.protocol.models import Model, Role
 EVERYONE: Final = frozenset(Role)
 CONTRIBUTORS: Final = frozenset({Role.HOST, Role.PARTICIPANT})
 HOST_ONLY: Final = frozenset({Role.HOST})
+GUESTS: Final = frozenset({Role.PARTICIPANT, Role.VIEWER})
 
 PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
     {
@@ -68,6 +73,10 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         JoinDecide: HOST_ONLY,
         AccessRequest: EVERYONE,
         AccessDecide: HOST_ONLY,
+        BriefingRequest: GUESTS,
+        BriefingDecide: HOST_ONLY,
+        BriefingSharingSet: HOST_ONLY,
+        BriefingImport: HOST_ONLY,
         LinkRevoke: HOST_ONLY,
         AdmissionSet: HOST_ONLY,
         ParticipantSetRole: HOST_ONLY,

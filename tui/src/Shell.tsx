@@ -93,6 +93,7 @@ export function Shell({ app, team, watcher, home, connect }: ShellProps) {
           settings={settings}
           onSettings={change}
           viewing={visit.card.owner}
+          onGiveBriefing={(briefing) => app.client.send({ type: "briefing.import", ...briefing })}
           active={active === visit.id}
           onSummary={summary(visit.id)}
           onClose={() => close(visit.id)}

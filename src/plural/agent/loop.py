@@ -8,7 +8,8 @@ from dataclasses import dataclass, field, replace
 import structlog
 from pydantic import ValidationError
 
-from plural.agent.compaction import SUMMARY_PROMPT, extract_summary
+from plural.agent.briefing import BRIEFING_TAG
+from plural.agent.compaction import SUMMARY_PROMPT, extract_tagged
 from plural.agent.context import ContextBuilder
 from plural.agent.events import (
     AgentEvent,
@@ -30,6 +31,7 @@ from plural.agent.interrupt import Interrupted, TimedOut, interruptible
 from plural.agent.messages import (
     AssistantTurn,
     Message,
+    NotesTurn,
     SummaryTurn,
     ToolResultTurn,
     UserTurn,
@@ -59,13 +61,28 @@ from plural.agent.tools.base import PreparedCall, ToolCtx, ToolError, ToolResult
 from plural.agent.tools.registry import ToolRegistry, UnknownTool
 from plural.core.ports import IdGenerator
 from plural.core.provenance import merge
-from plural.protocol.models import Provenance, RunEndReason, ToolCallView, ToolRisk, Usage
+from plural.protocol.models import (
+    Origin,
+    Provenance,
+    Role,
+    RunEndReason,
+    ToolCallView,
+    ToolRisk,
+    Usage,
+)
 
 log = structlog.get_logger(__name__)
 
 
 class CompactionFailed(Exception):
     pass
+
+
+class BriefingFailed(Exception):
+    pass
+
+
+SHARED = Provenance(initiator_id="shared-context", initiator_role=Role.VIEWER, origin=Origin.DIRECT)
 
 
 @dataclass(frozen=True, slots=True)
@@ -119,6 +136,8 @@ class AgentLoop:
         self._ids = ids
         self._limits = limits or LoopLimits()
         self._conversation: list[Message] = []
+        self._notes: list[NotesTurn] = []
+        self._shared = False
         self._steer: deque[UserTurn] = deque()
         self._follow_up: deque[UserTurn] = deque()
         self._usage = Usage()
@@ -226,8 +245,16 @@ class AgentLoop:
         yield self.fill()
         yield RunEnd(RunEndReason.ABORTED if cancel.is_set() else RunEndReason.STOP, self._usage)
 
+    def mark_shared(self) -> None:
+        self._shared = True
+
+    def add_notes(self, turn: NotesTurn) -> None:
+        self._notes.append(turn)
+        self._shared = True
+
     def restore(self, conversation: Sequence[Message]) -> None:
         self._conversation = list(conversation)
+        self._shared = any(isinstance(message, NotesTurn) for message in conversation)
         self._context_tokens = sum(_estimate_tokens(message) for message in conversation)
 
     def cancel_pending(self, prompt_id: str) -> bool:
@@ -245,7 +272,9 @@ class AgentLoop:
         return pending
 
     async def run(self, prompt: UserTurn, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
-        provenance = prompt.provenance
+        provenance = merge(prompt.provenance, SHARED) if self._shared else prompt.provenance
+        self._conversation.extend(self._notes)
+        self._notes.clear()
         self._conversation.append(prompt)
         self._usage = Usage()
         self.spend("main", "", Usage(), uses=1)
@@ -406,8 +435,39 @@ class AgentLoop:
         self._verify_compaction = True
         return Compacted(summary, before)
 
+    async def brief(self, instruction: str, *, cancel: asyncio.Event) -> str:
+        """Write a briefing of the conversation, outside any run, without changing it."""
+        if not self._conversation:
+            return ""
+        request = LlmRequest(
+            system=self._context.system(),
+            messages=(*to_llm(self._conversation), LlmMessage(role="user", content=instruction)),
+            tools=self._tools.schemas(),
+        )
+        for provider in (self._helper, self._provider):
+            if provider is None:
+                continue
+            try:
+                text = await self._summarize(
+                    request, provider, cancel, tag=BRIEFING_TAG, purpose="briefing"
+                )
+            except CompactionFailed as error:
+                if cancel.is_set() or provider is self._provider:
+                    raise BriefingFailed(str(error)) from error
+                log.warning("agent.helper_briefing_failed", error=str(error))
+                continue
+            self.spend("fast" if provider is self._helper else "main", "briefing", Usage(), uses=1)
+            return text
+        raise BriefingFailed("no model is available")
+
     async def _summarize(
-        self, request: LlmRequest, provider: LLMProvider, cancel: asyncio.Event
+        self,
+        request: LlmRequest,
+        provider: LLMProvider,
+        cancel: asyncio.Event,
+        *,
+        tag: str = "summary",
+        purpose: str = "compact",
     ) -> str:
         text: list[str] = []
         called = False
@@ -420,13 +480,14 @@ class AgentLoop:
                     case ToolCallReady():
                         called = True
                     case UsageReport(usage=delta):
-                        self._usage = self._usage + delta
-                        self.spend(role, "compact", delta)
+                        if purpose == "compact":
+                            self._usage = self._usage + delta
+                        self.spend(role, purpose, delta)
                     case _:
                         pass
         except ProviderError as error:
             raise CompactionFailed(str(error)) from error
-        summary = extract_summary("".join(text))
+        summary = extract_tagged("".join(text), tag)
         if cancel.is_set() or called or not summary:
             raise CompactionFailed("the model did not produce a summary")
         return summary
@@ -687,7 +748,7 @@ def _estimate_tokens(message: Message) -> int:
     match message:
         case UserTurn(text=text, images=images):
             return len(text) // 4 + IMAGE_TOKENS * len(images)
-        case ToolResultTurn(content=text) | SummaryTurn(text=text):
+        case ToolResultTurn(content=text) | SummaryTurn(text=text) | NotesTurn(text=text):
             return len(text) // 4
         case AssistantTurn(text=text, tool_calls=calls):
             return (len(text) + sum(len(_signature(call)) for call in calls)) // 4

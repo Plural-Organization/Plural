@@ -33,11 +33,13 @@ from plural.host.actor import SessionActor
 from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.attachments import AttachmentVault
+from plural.host.briefing import BriefingService
 from plural.host.config import HostSettings
 from plural.host.conflicts import ConflictBoard
 from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook, RoomLink
+from plural.host.ledger import ChangeLedger
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.providers import (
     ConfigError,
@@ -228,6 +230,22 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     team = await _team_admission(settings, store, clock) if settings.team else None
     board = ConflictBoard(workspace.root) if settings.team else None
     agent_run = AgentRun(loop, inbox)
+    redactor = Redactor.from_environment(
+        os.environ,
+        extra=(
+            *provider_secrets(settings, api_key),
+            *(helper.secrets if helper else ()),
+            *mcp.secrets(),
+        ),
+    )
+    ledger = ChangeLedger(workspace.root)
+    briefing = BriefingService(
+        agent=agent_run,
+        ledger=ledger,
+        workspace=workspace.root,
+        owner=settings.host_name,
+        scrub=redactor.redact,
+    )
     actor = SessionActor(
         inbox=inbox,
         store=store,
@@ -239,14 +257,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         approval_registry=registry,
         gate=gate,
         vault=AttachmentVault(state_dir / "attachments" / room),
-        redactor=Redactor.from_environment(
-            os.environ,
-            extra=(
-                *provider_secrets(settings, api_key),
-                *(helper.secrets if helper else ()),
-                *mcp.secrets(),
-            ),
-        ),
+        redactor=redactor,
         ids=ids,
         clock=clock,
         host=host,
@@ -265,6 +276,8 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         max_participants=settings.max_participants,
         team=team,
         conflicts=board,
+        briefing=briefing,
+        ledger=ledger,
     )
     await actor.start()
     transport: HostTransport = (

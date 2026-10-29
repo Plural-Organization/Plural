@@ -77,6 +77,7 @@ export interface AppProps {
   onCycleSpace?: (direction: 1 | -1) => void;
   onClose?: () => void;
   onSummary?: (summary: Summary) => void;
+  onGiveBriefing?: (briefing: { source: string; as_of_seq: number; text: string }) => Promise<void>;
   conflicts?: Conflict[];
   splash?: boolean;
   onQuit: () => void;
@@ -123,6 +124,7 @@ export function App({
   onCycleSpace,
   onClose,
   onSummary,
+  onGiveBriefing,
   conflicts = [],
   splash = false,
   onQuit,
@@ -297,7 +299,7 @@ export function App({
   const running = state.run !== null;
   const items = useMemo(
     (): InboxItem[] => (isHost ? [...inboxItems(state), ...(planReady ? [{ kind: "plan", id: "plan" } as const] : [])] : []),
-    [isHost, state.approvals, state.proposals, state.join_requests, state.access_requests, planReady],
+    [isHost, state.approvals, state.proposals, state.join_requests, state.access_requests, state.briefing_requests, planReady],
   );
   const approvals = Object.keys(state.approvals).length;
   const queuedIds = useMemo(
@@ -950,6 +952,37 @@ export function App({
         }
         return true;
       }
+      case "brief": {
+        const [verb, ...more] = rest;
+        if (isHost) {
+          if (verb === "share" && ["off", "ask", "team"].includes(more[0] ?? "")) {
+            send({ type: "session.set_briefing_sharing", mode: more[0] as "off" | "ask" | "team" });
+          } else {
+            const waiting = Object.values(state.briefing_requests);
+            show("briefings", [
+              [{ text: `this session shares briefings: ${state.briefing_sharing}`, bold: true }, { text: "  (/brief share off|ask|team)", fg: theme.dim }],
+              ...waiting.map((ask): Row => [{ text: ask.name }, { text: ask.focus ? `  ${ask.focus}` : "", fg: theme.dim }]),
+            ]);
+          }
+        } else if (verb === "give") {
+          const last = feedRef.current.items.filter((entry) => entry.kind === "briefing").at(-1);
+          if (last === undefined || last.kind !== "briefing") {
+            warn("brief", "there is no briefing here yet, /brief asks for one");
+          } else if (!onGiveBriefing) {
+            warn("brief", "a briefing goes to your own agent, ask for it from a teammate's session");
+          } else {
+            onGiveBriefing({ source: last.from, as_of_seq: last.asOf, text: last.text }).then(
+              () => notify("ok", `${last.from}'s briefing is in your agent's notes, it reads it at its next prompt. Click “you” to go back`),
+              (error: unknown) => notify("warn", error instanceof Error ? error.message : String(error)),
+            );
+          }
+        } else {
+          const update = verb === "update";
+          const focus = (update ? more : rest).join(" ").trim();
+          send({ type: "briefing.request", focus: focus === "" ? null : focus, update });
+        }
+        return true;
+      }
       case "access": {
         const people = mentionable(state, projection.meId);
         const [verb, ...names] = rest;
@@ -1167,6 +1200,12 @@ export function App({
       const choice = choices[key.name];
       if (choice) {
         send({ type: "join.decide", request_id: item.id, decision: choice });
+      }
+    } else if (item?.kind === "briefing") {
+      if (key.name === "y" || key.name === "return") {
+        send({ type: "briefing.decide", request_id: item.id, decision: "allow" });
+      } else if (key.name === "n" || key.name === "x") {
+        send({ type: "briefing.decide", request_id: item.id, decision: "deny" });
       }
     } else if (item?.kind === "access") {
       if (key.name === "y" || key.name === "return") {

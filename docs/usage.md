@@ -178,6 +178,24 @@ A team session also tells the team which files its agent changed in the last hal
 
 Only edits and writes by the agent count, not commands it runs in the shell, and only files inside the workspace. A session that is not a team session shares nothing.
 
+### Sharing context between agents
+
+Each person's agent has its own model and its own context, so one agent cannot just read the other's conversation. What it can have is a **briefing**: a short, structured account of a teammate's session, written by their agent for yours. It works between any two models, Codex on one side and Gemini on the other.
+
+```
+(in alia's session, opened from the side panel or with plural join @alia)
+/brief                              # a briefing of the whole session
+/brief how was the login fixed?     # one that starts with the answer to your question
+/brief update                       # only what changed since the briefing you already have
+/brief give                         # put the latest one in MY agent's notes
+```
+
+How it goes: you ask, **alia's host agrees** (a card with `y` and `n`, unless she set `/brief share team` for anyone in the room or `/brief share off`), her agent writes it, and it shows up in her session as a card for you only. You read it. Nothing reaches your agent until you type `/brief give`, and then your agent sees it before its next prompt.
+
+A briefing has two parts. The first is facts from alia's host, not from the model: the repository, the branch, the commit, how many files are uncommitted, and every file her agent changed this session with `+added −removed`. The second is the model's account: the goal, what was done and why, what was tried and dropped, the state, what is open, and exact names and commands. It is capped at about 450 words and 20,000 characters, secrets are redacted, and file contents are not pasted. `/brief update` sends the model what you already have and asks only for the difference.
+
+Your agent treats it as notes from a colleague that nobody checked, not as instructions. Because the text came from someone else's session, **once you have given a briefing to your agent, every run of that session asks you before it writes or runs anything**, even in auto mode, until you start a new session. The same briefing is not accepted twice, and it survives a restart. You wait a minute between requests, and one is open at a time.
+
 ### Asking to write
 
 A viewer who wants to take part types `/access` (with a note if they like: `/access I can fix the login test`). The host gets a card, `y` lets them write, `n` says not now, and the viewer is told either way. After a refusal they can ask again in five minutes. Nobody can ask twice at once, and only a few people wait at a time.

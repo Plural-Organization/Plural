@@ -1,6 +1,9 @@
 from plural.protocol.events import (
     AccessRequested,
     AccessResolved,
+    BriefingDelivered,
+    BriefingRequested,
+    BriefingResolved,
     ChatPosted,
     Event,
     EventRecord,
@@ -19,6 +22,12 @@ def visible_to(event: Event, viewer_id: str) -> bool:
         return viewer_id in (HOST_PARTICIPANT_ID, event.request.participant_id)
     if isinstance(event, AccessResolved):
         return viewer_id in (HOST_PARTICIPANT_ID, event.participant_id)
+    if isinstance(event, BriefingRequested):
+        return viewer_id in (HOST_PARTICIPANT_ID, event.request.participant_id)
+    if isinstance(event, BriefingResolved):
+        return viewer_id in (HOST_PARTICIPANT_ID, event.participant_id)
+    if isinstance(event, BriefingDelivered):
+        return viewer_id in (HOST_PARTICIPANT_ID, event.to)
     return True
 
 
@@ -41,4 +50,11 @@ def state_for(state: SessionState, viewer_id: str) -> SessionState:
         own = {key: ask for key, ask in state.access_requests.items() if key == viewer_id}
         if len(own) != len(state.access_requests):
             changes["access_requests"] = own
+        mine = {
+            key: ask
+            for key, ask in state.briefing_requests.items()
+            if ask.participant_id == viewer_id
+        }
+        if len(mine) != len(state.briefing_requests):
+            changes["briefing_requests"] = mine
     return state.model_copy(update=changes) if changes else state

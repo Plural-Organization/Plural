@@ -9,6 +9,7 @@ from plural.protocol.models import (
     ApprovalDecision,
     BoardCursor,
     BoardShape,
+    BriefingSharing,
     Color,
     Delivery,
     Model,
@@ -24,6 +25,7 @@ from plural.protocol.models import (
 
 MAX_PROMPT_CHARS = 32_000
 MAX_CHAT_CHARS = 2_000
+MAX_BRIEFING_CHARS = 20_000
 MAX_MENTIONS = 20
 
 
@@ -112,6 +114,30 @@ class AdmissionSet(Model):
 class AccessRequest(Model):
     type: Literal["access.request"] = "access.request"
     note: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+class BriefingRequest(Model):
+    type: Literal["briefing.request"] = "briefing.request"
+    focus: str | None = Field(default=None, min_length=1, max_length=300)
+    update: bool = False
+
+
+class BriefingDecide(Model):
+    type: Literal["briefing.decide"] = "briefing.decide"
+    request_id: str
+    decision: Literal["allow", "deny"]
+
+
+class BriefingSharingSet(Model):
+    type: Literal["session.set_briefing_sharing"] = "session.set_briefing_sharing"
+    mode: BriefingSharing
+
+
+class BriefingImport(Model):
+    type: Literal["briefing.import"] = "briefing.import"
+    source: str = Field(min_length=1, max_length=80)
+    as_of_seq: int | None = Field(default=None, ge=0)
+    text: str = Field(min_length=1, max_length=MAX_BRIEFING_CHARS)
 
 
 class AccessDecide(Model):
@@ -300,6 +326,10 @@ Command = Annotated[
     | JoinDecide
     | AccessRequest
     | AccessDecide
+    | BriefingRequest
+    | BriefingDecide
+    | BriefingSharingSet
+    | BriefingImport
     | LinkRevoke
     | AdmissionSet
     | ParticipantSetRole

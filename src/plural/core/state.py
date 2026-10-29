@@ -14,6 +14,10 @@ from plural.protocol.events import (
     BoardMoved,
     BoardOpened,
     BoardStroked,
+    BriefingImported,
+    BriefingRequested,
+    BriefingResolved,
+    BriefingSharingChanged,
     ChatPosted,
     ContextCompacted,
     ContextUsage,
@@ -57,6 +61,7 @@ from plural.protocol.models import (
 
 TRANSCRIPT_LIMIT: Final = 200
 CHAT_LIMIT: Final = 200
+IMPORTS_KEPT: Final = 10
 OUTPUT_PREVIEW_CHARS: Final = 2000
 
 
@@ -81,7 +86,8 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
                 update={"participants": {**state.participants, participant.id: participant}}
             )
         case ParticipantLeft(participant_id=participant_id):
-            return _patch_participant(state, participant_id, {"connected": False})
+            left = _patch_participant(state, participant_id, {"connected": False})
+            return _without_briefings(left, participant_id)
         case ParticipantRoleChanged(participant_id=participant_id, role=role):
             patched = _patch_participant(state, participant_id, {"role": role})
             return patched.model_copy(
@@ -92,7 +98,26 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
                 update={
                     "participants": _without(state.participants, participant_id),
                     "access_requests": _without(state.access_requests, participant_id),
+                    "briefing_requests": {
+                        key: ask
+                        for key, ask in state.briefing_requests.items()
+                        if ask.participant_id != participant_id
+                    },
                 }
+            )
+        case BriefingRequested(request=request):
+            return state.model_copy(
+                update={"briefing_requests": {**state.briefing_requests, request.id: request}}
+            )
+        case BriefingResolved(request_id=request_id):
+            return state.model_copy(
+                update={"briefing_requests": _without(state.briefing_requests, request_id)}
+            )
+        case BriefingSharingChanged(mode=mode):
+            return state.model_copy(update={"briefing_sharing": mode})
+        case BriefingImported(item=item):
+            return state.model_copy(
+                update={"briefings_imported": (*state.briefings_imported, item)[-IMPORTS_KEPT:]}
             )
         case AccessRequested(request=request):
             return state.model_copy(
@@ -261,6 +286,19 @@ def _patch_participant(
 
 def _append(state: SessionState, entry: TranscriptEntry) -> SessionState:
     return state.model_copy(update={"transcript": (*state.transcript, entry)[-TRANSCRIPT_LIMIT:]})
+
+
+def _without_briefings(state: SessionState, participant_id: str) -> SessionState:
+    kept = {
+        key: ask
+        for key, ask in state.briefing_requests.items()
+        if ask.participant_id != participant_id
+    }
+    return (
+        state
+        if len(kept) == len(state.briefing_requests)
+        else state.model_copy(update={"briefing_requests": kept})
+    )
 
 
 def _without[V](mapping: dict[str, V], key: str) -> dict[str, V]:

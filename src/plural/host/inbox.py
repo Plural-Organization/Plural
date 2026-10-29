@@ -6,7 +6,7 @@ from plural.agent.providers.base import LLMProvider
 from plural.host.transport.base import Connection
 from plural.protocol.envelope import Envelope
 from plural.protocol.events import SkillsFound
-from plural.protocol.models import ApprovalView
+from plural.protocol.models import ApprovalView, BriefingRequestView
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +69,14 @@ class SkillsUpdated:
 
 
 @dataclass(frozen=True, slots=True)
+class BriefingReady:
+    request: BriefingRequestView
+    text: str
+    as_of_seq: int
+    error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class SkillsReply:
     connection: Connection
     event: SkillsFound | None = None
@@ -86,6 +94,7 @@ InboxMessage = (
     | Reconfigure
     | SkillsUpdated
     | McpUpdated
+    | BriefingReady
     | SkillsReply
 )
 

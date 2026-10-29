@@ -367,6 +367,34 @@ class AccessRequestView(Model):
     requested_at: datetime
 
 
+class BriefingSharing(StrEnum):
+    OFF = "off"
+    ASK = "ask"
+    TEAM = "team"
+
+
+class BriefingDecision(StrEnum):
+    GRANTED = "granted"
+    DENIED = "denied"
+
+
+class BriefingRequestView(Model):
+    id: str
+    participant_id: str
+    name: str
+    focus: str | None = None
+    update: bool = False
+    requested_at: datetime
+
+
+class BriefingImportView(Model):
+    id: str
+    source: str
+    as_of_seq: int | None = None
+    chars: int
+    at: datetime
+
+
 class SessionState(Model):
     last_seq: int = 0
     prompt_mode: PromptMode = PromptMode.OPEN
@@ -376,6 +404,11 @@ class SessionState(Model):
     access_requests: dict[str, AccessRequestView] = Field(
         default_factory=dict[str, AccessRequestView]
     )
+    briefing_sharing: BriefingSharing = BriefingSharing.ASK
+    briefing_requests: dict[str, BriefingRequestView] = Field(
+        default_factory=dict[str, BriefingRequestView]
+    )
+    briefings_imported: tuple[BriefingImportView, ...] = ()
     participants: dict[str, Participant] = Field(default_factory=dict[str, Participant])
     proposals: dict[str, ProposalView] = Field(default_factory=dict[str, ProposalView])
     approvals: dict[str, ApprovalView] = Field(default_factory=dict[str, ApprovalView])

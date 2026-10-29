@@ -13,6 +13,11 @@ from plural.protocol.events import (
     ApprovalRequested,
     ApprovalResolved,
     AttachmentAdded,
+    BriefingDelivered,
+    BriefingImported,
+    BriefingRequested,
+    BriefingResolved,
+    BriefingSharingChanged,
     ChatPosted,
     ContextCompacted,
     Event,
@@ -46,6 +51,10 @@ from plural.protocol.models import (
     ApprovalDecision,
     ApprovalView,
     AttachmentMeta,
+    BriefingDecision,
+    BriefingImportView,
+    BriefingRequestView,
+    BriefingSharing,
     Delivery,
     DequeueReason,
     JoinDecision,
@@ -145,6 +154,49 @@ def _steps() -> list[tuple[str, Event]]:
                 )
             ),
         ),
+        ("record", BriefingSharingChanged(mode=BriefingSharing.TEAM)),
+        (
+            "record",
+            BriefingRequested(
+                request=BriefingRequestView(
+                    id="b_1",
+                    participant_id="p_alia",
+                    name="Alia",
+                    focus="how was the login fixed?",
+                    update=False,
+                    requested_at=START,
+                )
+            ),
+        ),
+        (
+            "record",
+            BriefingResolved(
+                request_id="b_1",
+                participant_id="p_alia",
+                decision=BriefingDecision.GRANTED,
+            ),
+        ),
+        (
+            "record",
+            BriefingDelivered(request_id="b_1", to="p_alia", text="the briefing", as_of_seq=7),
+        ),
+        (
+            "record",
+            BriefingRequested(
+                request=BriefingRequestView(
+                    id="b_2", participant_id="p_alia", name="Alia", requested_at=START
+                )
+            ),
+        ),
+        ("record", ParticipantLeft(participant_id="p_alia")),
+        (
+            "record",
+            BriefingImported(
+                item=BriefingImportView(id="bi_1", source="alia", as_of_seq=7, chars=12, at=START),
+                text="the briefing",
+            ),
+        ),
+        ("record", BriefingSharingChanged(mode=BriefingSharing.OFF)),
         ("record", ParticipantRoleChanged(participant_id="p_bek2222", role=Role.PARTICIPANT)),
         ("record", PromptModeChanged(mode=PromptMode.REVIEW)),
         ("record", AgentChanged(agent="anthropic · claude-opus-5-5")),

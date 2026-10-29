@@ -34,6 +34,17 @@ async def _git(root: Path, *args: str) -> str | None:
     return text if process.returncode == 0 and text else None
 
 
+async def git_head(root: Path) -> str | None:
+    return await _git(root, "rev-parse", "--short", "HEAD")
+
+
+async def git_dirty(root: Path) -> int | None:
+    status = await _git(root, "status", "--porcelain")
+    if status is None:
+        return None
+    return len([line for line in status.splitlines() if line.strip()])
+
+
 async def git_branch(root: Path) -> str | None:
     branch = await _git(root, "rev-parse", "--abbrev-ref", "HEAD")
     if branch is None:

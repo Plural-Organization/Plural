@@ -1,6 +1,7 @@
 import type { Command, ProposalView, SessionState } from "@plural/client";
 import { useNow } from "../../hooks/useNow";
 import { AccessCard } from "./AccessCard";
+import { BriefingAsk } from "./BriefingAsk";
 import { ApprovalCard } from "./ApprovalCard";
 import { JoinCard } from "./JoinCard";
 import type { InboxItem } from "./items";
@@ -27,6 +28,8 @@ export function Inbox({ items, state, send, onEdit }: InboxProps) {
         <JoinCard request={first.request} send={send} />
       ) : first.kind === "access" ? (
         <AccessCard request={first.request} send={send} />
+      ) : first.kind === "briefing" ? (
+        <BriefingAsk request={first.request} send={send} />
       ) : first.kind === "approval" ? (
         <ApprovalCard approval={first.approval} state={state} now={now} send={send} />
       ) : (

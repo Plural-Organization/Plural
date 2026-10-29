@@ -3,6 +3,7 @@ import type { EventRecord, SessionState, TranscriptEntry, UsageLine } from "./pr
 export const TRANSCRIPT_LIMIT = 200;
 export const OUTPUT_PREVIEW_CHARS = 2000;
 export const CHAT_LIMIT = 200;
+export const IMPORTS_KEPT = 10;
 export const BOARD_STROKES_LIMIT = 2000;
 export const BOARD_TOTAL_POINTS = 200_000;
 
@@ -31,6 +32,9 @@ export function emptyState(): SessionState {
     admission: "approve",
     join_requests: {},
     access_requests: {},
+    briefing_sharing: "ask",
+    briefing_requests: {},
+    briefings_imported: [],
     board: { open: false, strokes: [] },
   };
 }
@@ -63,8 +67,10 @@ function apply(state: SessionState, record: EventRecord): SessionState {
         ...state,
         participants: { ...state.participants, [event.participant.id]: event.participant },
       };
-    case "participant.left":
-      return patchParticipant(state, event.participant_id, { connected: false });
+    case "participant.left": {
+      const left = patchParticipant(state, event.participant_id, { connected: false });
+      return { ...left, briefing_requests: withoutAsker(left.briefing_requests, event.participant_id) };
+    }
     case "participant.role_changed": {
       const patched = patchParticipant(state, event.participant_id, { role: event.role });
       return { ...patched, access_requests: without(patched.access_requests, event.participant_id) };
@@ -74,7 +80,16 @@ function apply(state: SessionState, record: EventRecord): SessionState {
         ...state,
         participants: without(state.participants, event.participant_id),
         access_requests: without(state.access_requests, event.participant_id),
+        briefing_requests: withoutAsker(state.briefing_requests, event.participant_id),
       };
+    case "briefing.requested":
+      return { ...state, briefing_requests: { ...state.briefing_requests, [event.request.id]: event.request } };
+    case "briefing.resolved":
+      return { ...state, briefing_requests: without(state.briefing_requests, event.request_id) };
+    case "briefing.sharing_changed":
+      return { ...state, briefing_sharing: event.mode };
+    case "briefing.imported":
+      return { ...state, briefings_imported: [...state.briefings_imported, event.item].slice(-IMPORTS_KEPT) };
     case "access.requested":
       return { ...state, access_requests: { ...state.access_requests, [event.request.participant_id]: event.request } };
     case "access.resolved":
@@ -244,6 +259,10 @@ function patchParticipant(
 
 function append(state: SessionState, entry: TranscriptEntry): SessionState {
   return { ...state, transcript: [...state.transcript, entry].slice(-TRANSCRIPT_LIMIT) };
+}
+
+function withoutAsker<V extends { participant_id: string }>(map: Record<string, V>, participantId: string): Record<string, V> {
+  return Object.fromEntries(Object.entries(map).filter(([, ask]) => ask.participant_id !== participantId));
 }
 
 function without<V>(map: Record<string, V>, key: string): Record<string, V> {

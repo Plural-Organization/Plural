@@ -126,6 +126,11 @@ export function Sidebar({ projection, room, inbox, running, status, spaces, team
                 <text fg={theme.warn}>+ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
                 <text fg={theme.dim}>  wants to join</text>
               </box>
+            ) : item.kind === "briefing" ? (
+              <box key={item.id} flexDirection="column">
+                <text fg={theme.warn}>✉ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
+                <text fg={theme.dim}>  wants a briefing</text>
+              </box>
             ) : item.kind === "access" ? (
               <box key={item.id} flexDirection="column">
                 <text fg={theme.warn}>✎ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
