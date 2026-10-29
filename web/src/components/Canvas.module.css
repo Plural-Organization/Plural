@@ -14,6 +14,8 @@
 .writing .line:last-child::after { content: ""; display: inline-block; width: 7px; height: 14px; background: var(--fg); vertical-align: -2px; animation: pulse 1s steps(1) infinite; }
 @keyframes pulse { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .live::before, .writing .line:last-child::after { animation: none; } }
+.full { position: fixed; inset: 49px 0 0 0; z-index: 6; border-left: 0; }
+.full .doc { max-width: 860px; }
 @media (max-width: 980px) {
   .canvas { position: fixed; inset: 49px 0 0 0; z-index: 6; border-left: 0; }
 }

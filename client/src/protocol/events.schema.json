@@ -218,6 +218,32 @@
       ],
       "type": "object"
     },
+    "AttachmentData": {
+      "description": "The picture of a board image, sent only to the person who asked for it.",
+      "properties": {
+        "attachment_id": {
+          "type": "string"
+        },
+        "content_b64": {
+          "type": "string"
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "type": {
+          "const": "attachment.data",
+          "default": "attachment.data",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "attachment_id",
+        "media_type",
+        "content_b64"
+      ],
+      "type": "object"
+    },
     "AttachmentMeta": {
       "properties": {
         "id": {
@@ -246,7 +272,19 @@
       "type": "object"
     },
     "BoardCleared": {
+      "description": "The board lost every mark, or only the marks of author_id when it is set.",
       "properties": {
+        "author_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "by": {
           "type": "string"
         },
@@ -258,7 +296,8 @@
       },
       "required": [
         "type",
-        "by"
+        "by",
+        "author_id"
       ],
       "type": "object"
     },
@@ -331,6 +370,30 @@
       ],
       "type": "object"
     },
+    "BoardMoved": {
+      "properties": {
+        "points": {
+          "items": {
+            "type": "number"
+          },
+          "type": "array"
+        },
+        "stroke_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "board.moved",
+          "default": "board.moved",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "stroke_id",
+        "points"
+      ],
+      "type": "object"
+    },
     "BoardOpened": {
       "properties": {
         "by": {
@@ -359,12 +422,14 @@
         "arrow",
         "rect",
         "ellipse",
-        "text"
+        "text",
+        "image",
+        "erase"
       ],
       "type": "string"
     },
     "BoardStroke": {
-      "description": "One mark on the shared board; points are x0, y0, x1, y1, \u2026 in board units.\n\nA pen keeps every point, a shape its two corners, a text the point it starts at.",
+      "description": "One mark on the shared board; points are x0, y0, x1, y1, \u2026 in board units.\n\nA pen keeps every point, a shape or an image its two corners, a text the point it starts at.\nAn image names the attachment that holds its picture.",
       "properties": {
         "author_id": {
           "type": "string"
@@ -375,6 +440,17 @@
         },
         "id": {
           "type": "string"
+        },
+        "image": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "kind": {
           "$ref": "#/$defs/BoardShape",
@@ -415,7 +491,8 @@
         "color",
         "width",
         "points",
-        "text"
+        "text",
+        "image"
       ],
       "type": "object"
     },
@@ -853,8 +930,10 @@
               "approval.requested": "#/$defs/ApprovalRequested",
               "approval.resolved": "#/$defs/ApprovalResolved",
               "attachment.added": "#/$defs/AttachmentAdded",
+              "attachment.data": "#/$defs/AttachmentData",
               "board.cleared": "#/$defs/BoardCleared",
               "board.erased": "#/$defs/BoardErased",
+              "board.moved": "#/$defs/BoardMoved",
               "board.opened": "#/$defs/BoardOpened",
               "board.stroked": "#/$defs/BoardStroked",
               "chat.posted": "#/$defs/ChatPosted",
@@ -961,6 +1040,12 @@
             },
             {
               "$ref": "#/$defs/BoardStroked"
+            },
+            {
+              "$ref": "#/$defs/BoardMoved"
+            },
+            {
+              "$ref": "#/$defs/AttachmentData"
             },
             {
               "$ref": "#/$defs/BoardErased"
@@ -2645,8 +2730,10 @@
           "approval.requested": "#/$defs/ApprovalRequested",
           "approval.resolved": "#/$defs/ApprovalResolved",
           "attachment.added": "#/$defs/AttachmentAdded",
+          "attachment.data": "#/$defs/AttachmentData",
           "board.cleared": "#/$defs/BoardCleared",
           "board.erased": "#/$defs/BoardErased",
+          "board.moved": "#/$defs/BoardMoved",
           "board.opened": "#/$defs/BoardOpened",
           "board.stroked": "#/$defs/BoardStroked",
           "chat.posted": "#/$defs/ChatPosted",
@@ -2753,6 +2840,12 @@
         },
         {
           "$ref": "#/$defs/BoardStroked"
+        },
+        {
+          "$ref": "#/$defs/BoardMoved"
+        },
+        {
+          "$ref": "#/$defs/AttachmentData"
         },
         {
           "$ref": "#/$defs/BoardErased"

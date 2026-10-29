@@ -8,9 +8,11 @@ from plural.protocol.commands import (
     AgentsCreate,
     AgentsRemove,
     ApprovalRespond,
+    AttachmentFetch,
     BoardClear,
     BoardDraw,
     BoardErase,
+    BoardMove,
     BoardOpen,
     ChatSend,
     Command,
@@ -86,7 +88,9 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         BoardOpen: CONTRIBUTORS,
         BoardDraw: CONTRIBUTORS,
         BoardErase: CONTRIBUTORS,
-        BoardClear: HOST_ONLY,
+        BoardMove: CONTRIBUTORS,
+        AttachmentFetch: EVERYONE,
+        BoardClear: CONTRIBUTORS,
         QueueCancel: CONTRIBUTORS,
     }
 )

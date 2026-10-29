@@ -212,9 +212,25 @@ class BoardDraw(Model):
     type: Literal["board.draw"] = "board.draw"
     kind: BoardShape = BoardShape.PEN
     text: str | None = Field(default=None, min_length=1, max_length=BOARD_TEXT_CHARS)
+    image: str | None = Field(default=None, max_length=64)
     color: Color
     width: float = Field(ge=0.5, le=40)
     points: tuple[Unit, ...] = Field(min_length=2, max_length=BOARD_POINTS_LIMIT)
+
+
+class BoardMove(Model):
+    """Moves or resizes a mark: its points, the same kind and count as before."""
+
+    type: Literal["board.move"] = "board.move"
+    stroke_id: str
+    points: tuple[Unit, ...] = Field(min_length=2, max_length=BOARD_POINTS_LIMIT)
+
+
+class AttachmentFetch(Model):
+    """Asks for the picture of an image on the board; only those are handed out."""
+
+    type: Literal["attachment.fetch"] = "attachment.fetch"
+    attachment_id: str = Field(max_length=64)
 
 
 class BoardErase(Model):
@@ -223,7 +239,10 @@ class BoardErase(Model):
 
 
 class BoardClear(Model):
+    """Clears the board; with mine, only the sender's own marks, which anyone who draws may do."""
+
     type: Literal["board.clear"] = "board.clear"
+    mine: bool = False
 
 
 class QueueCancel(Model):
@@ -282,6 +301,8 @@ Command = Annotated[
     | CursorSet
     | BoardOpen
     | BoardDraw
+    | BoardMove
+    | AttachmentFetch
     | BoardErase
     | BoardClear
     | QueueCancel

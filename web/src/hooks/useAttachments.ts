@@ -17,7 +17,7 @@ export interface Attachment {
   preview: string | null;
 }
 
-function base64(data: Uint8Array): string {
+export function base64(data: Uint8Array): string {
   let text = "";
   for (let index = 0; index < data.length; index += 0x8000) {
     text += String.fromCharCode(...data.subarray(index, index + 0x8000));

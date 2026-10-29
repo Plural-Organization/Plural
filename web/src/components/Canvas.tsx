@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { copyText } from "../lib/clipboard";
 import { fileName, lineCount, type CanvasDoc } from "../lib/canvas";
 import { cx } from "../lib/cx";
+import { FullIcon } from "./Board";
 import { DiffView } from "./DiffView";
 import { Markdown } from "./feed/Markdown";
 import { SelectionLayer, type Selector } from "./SelectionLayer";
@@ -11,11 +12,13 @@ interface CanvasProps {
   doc: CanvasDoc;
   docs: CanvasDoc[];
   selectors: Selector[];
+  full: boolean;
+  onToggleFull: () => void;
   onPick: (id: string) => void;
   onClose: () => void;
 }
 
-export function Canvas({ doc, docs, selectors, onPick, onClose }: CanvasProps) {
+export function Canvas({ doc, docs, selectors, full, onToggleFull, onPick, onClose }: CanvasProps) {
   const body = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -51,7 +54,7 @@ export function Canvas({ doc, docs, selectors, onPick, onClose }: CanvasProps) {
 
   return (
     <aside
-      className={styles.canvas}
+      className={cx(styles.canvas, full && styles.full)}
       aria-label="Canvas"
       onKeyDown={(event) => {
         // Inside the canvas Esc closes it; elsewhere it still stops the run.
@@ -81,6 +84,15 @@ export function Canvas({ doc, docs, selectors, onPick, onClose }: CanvasProps) {
         </button>
         <button className="button small ghost" type="button" onClick={download}>
           download
+        </button>
+        <button
+          className="button small ghost"
+          type="button"
+          onClick={onToggleFull}
+          aria-label={full ? "Back to half the screen" : "Full screen"}
+          title={full ? "Back to half the screen" : "Full screen"}
+        >
+          <FullIcon full={full} />
         </button>
         <button className="button small ghost" type="button" onClick={onClose} aria-label="Close the canvas">
           ✕

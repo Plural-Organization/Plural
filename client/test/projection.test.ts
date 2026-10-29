@@ -62,7 +62,7 @@ test("selections follow the events and end when someone leaves", () => {
 
 test("the board keeps strokes, erases one and clears", () => {
   const projection = new Projection();
-  const stroke = { id: "st_1", author_id: "p_alia", kind: "pen" as const, text: null, color: "#ffffff", width: 2, points: [0.1, 0.1, 0.2, 0.2] as [number, number, ...number[]] };
+  const stroke = { id: "st_1", author_id: "p_alia", kind: "pen" as const, text: null, image: null, color: "#ffffff", width: 2, points: [0.1, 0.1, 0.2, 0.2] as [number, number, ...number[]] };
   const record = (seq: number, event: EventRecord["event"]): EventRecord => ({ seq, id: `e${seq}`, ts: "2026-10-28T12:00:00Z", actor_id: null, event });
   projection.apply(record(1, { type: "board.opened", open: true, by: "p_alia" }));
   projection.apply(record(2, { type: "board.stroked", stroke }));
@@ -70,7 +70,7 @@ test("the board keeps strokes, erases one and clears", () => {
   projection.apply(record(4, { type: "board.erased", stroke_id: "st_1" }));
   expect(projection.state.board.open).toBe(true);
   expect(projection.state.board.strokes.map((item) => item.id)).toEqual(["st_2"]);
-  projection.apply(record(5, { type: "board.cleared", by: "p_host" }));
+  projection.apply(record(5, { type: "board.cleared", by: "p_host", author_id: null }));
   expect(projection.state.board.strokes).toEqual([]);
   projection.observe({ type: "participant.cursor", participant_id: "p_alia", cursor: { x: 0.5, y: 0.5, ink: false, color: null, width: null } });
   expect(projection.cursors.get("p_alia")?.x).toBe(0.5);

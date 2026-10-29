@@ -107,7 +107,7 @@ export type EntryKind = "prompt" | "assistant" | "tool" | "compaction";
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "BoardShape".
  */
-export type BoardShape = "pen" | "line" | "arrow" | "rect" | "ellipse" | "text";
+export type BoardShape = "pen" | "line" | "arrow" | "rect" | "ellipse" | "text" | "image" | "erase";
 
 export interface EventsSchema {
   envelope: Envelope;
@@ -132,6 +132,8 @@ export interface EventsSchema {
     | ParticipantCursor
     | BoardOpened
     | BoardStroked
+    | BoardMoved
+    | AttachmentData
     | BoardErased
     | BoardCleared
     | ChatPosted
@@ -434,7 +436,8 @@ export interface BoardStroked {
 /**
  * One mark on the shared board; points are x0, y0, x1, y1, … in board units.
  *
- * A pen keeps every point, a shape its two corners, a text the point it starts at.
+ * A pen keeps every point, a shape or an image its two corners, a text the point it starts at.
+ * An image names the attachment that holds its picture.
  *
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "BoardStroke".
@@ -443,7 +446,8 @@ export interface BoardStroke {
   author_id: string;
   color: string;
   id: string;
-  kind: "pen" | "line" | "arrow" | "rect" | "ellipse" | "text";
+  image: string | null;
+  kind: "pen" | "line" | "arrow" | "rect" | "ellipse" | "text" | "image" | "erase";
   /**
    * @minItems 2
    * @maxItems 4000
@@ -454,6 +458,27 @@ export interface BoardStroke {
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "BoardMoved".
+ */
+export interface BoardMoved {
+  points: number[];
+  stroke_id: string;
+  type: "board.moved";
+}
+/**
+ * The picture of a board image, sent only to the person who asked for it.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AttachmentData".
+ */
+export interface AttachmentData {
+  attachment_id: string;
+  content_b64: string;
+  media_type: string;
+  type: "attachment.data";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "BoardErased".
  */
 export interface BoardErased {
@@ -461,10 +486,13 @@ export interface BoardErased {
   type: "board.erased";
 }
 /**
+ * The board lost every mark, or only the marks of author_id when it is set.
+ *
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "BoardCleared".
  */
 export interface BoardCleared {
+  author_id: string | null;
   by: string;
   type: "board.cleared";
 }
@@ -978,6 +1006,8 @@ export interface EventRecord {
     | ParticipantCursor
     | BoardOpened
     | BoardStroked
+    | BoardMoved
+    | AttachmentData
     | BoardErased
     | BoardCleared
     | ChatPosted

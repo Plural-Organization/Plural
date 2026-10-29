@@ -298,6 +298,9 @@ class BoardShape(StrEnum):
     RECT = "rect"
     ELLIPSE = "ellipse"
     TEXT = "text"
+    IMAGE = "image"
+    # Drawn like a pen, it wipes out what lies under it instead of adding ink.
+    ERASE = "erase"
 
 
 BOARD_TEXT_CHARS: Final = 500
@@ -306,7 +309,8 @@ BOARD_TEXT_CHARS: Final = 500
 class BoardStroke(Model):
     """One mark on the shared board; points are x0, y0, x1, y1, … in board units.
 
-    A pen keeps every point, a shape its two corners, a text the point it starts at.
+    A pen keeps every point, a shape or an image its two corners, a text the point it starts at.
+    An image names the attachment that holds its picture.
     """
 
     id: str
@@ -316,6 +320,7 @@ class BoardStroke(Model):
     width: float = Field(ge=0.5, le=40)
     points: tuple[Unit, ...] = Field(min_length=2, max_length=BOARD_POINTS_LIMIT)
     text: str | None = Field(default=None, max_length=BOARD_TEXT_CHARS)
+    image: str | None = None
 
 
 class BoardView(Model):

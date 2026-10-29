@@ -119,8 +119,31 @@
       ],
       "type": "object"
     },
-    "BoardClear": {
+    "AttachmentFetch": {
+      "description": "Asks for the picture of an image on the board; only those are handed out.",
       "properties": {
+        "attachment_id": {
+          "maxLength": 64,
+          "type": "string"
+        },
+        "type": {
+          "const": "attachment.fetch",
+          "default": "attachment.fetch",
+          "type": "string"
+        }
+      },
+      "required": [
+        "attachment_id"
+      ],
+      "type": "object"
+    },
+    "BoardClear": {
+      "description": "Clears the board; with mine, only the sender's own marks, which anyone who draws may do.",
+      "properties": {
+        "mine": {
+          "default": false,
+          "type": "boolean"
+        },
         "type": {
           "const": "board.clear",
           "default": "board.clear",
@@ -184,6 +207,18 @@
           "pattern": "^#[0-9a-fA-F]{6}$",
           "type": "string"
         },
+        "image": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "kind": {
           "$ref": "#/$defs/BoardShape",
           "default": "pen"
@@ -245,6 +280,34 @@
       ],
       "type": "object"
     },
+    "BoardMove": {
+      "description": "Moves or resizes a mark: its points, the same kind and count as before.",
+      "properties": {
+        "points": {
+          "items": {
+            "maximum": 4,
+            "minimum": 0,
+            "type": "number"
+          },
+          "maxItems": 4000,
+          "minItems": 2,
+          "type": "array"
+        },
+        "stroke_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "board.move",
+          "default": "board.move",
+          "type": "string"
+        }
+      },
+      "required": [
+        "stroke_id",
+        "points"
+      ],
+      "type": "object"
+    },
     "BoardOpen": {
       "properties": {
         "open": {
@@ -268,7 +331,9 @@
         "arrow",
         "rect",
         "ellipse",
-        "text"
+        "text",
+        "image",
+        "erase"
       ],
       "type": "string"
     },
@@ -1062,9 +1127,11 @@
           "agents.create": "#/$defs/AgentsCreate",
           "agents.remove": "#/$defs/AgentsRemove",
           "approval.respond": "#/$defs/ApprovalRespond",
+          "attachment.fetch": "#/$defs/AttachmentFetch",
           "board.clear": "#/$defs/BoardClear",
           "board.draw": "#/$defs/BoardDraw",
           "board.erase": "#/$defs/BoardErase",
+          "board.move": "#/$defs/BoardMove",
           "board.open": "#/$defs/BoardOpen",
           "chat.send": "#/$defs/ChatSend",
           "context.compact": "#/$defs/ContextCompact",
@@ -1192,6 +1259,12 @@
         },
         {
           "$ref": "#/$defs/BoardDraw"
+        },
+        {
+          "$ref": "#/$defs/BoardMove"
+        },
+        {
+          "$ref": "#/$defs/AttachmentFetch"
         },
         {
           "$ref": "#/$defs/BoardErase"
