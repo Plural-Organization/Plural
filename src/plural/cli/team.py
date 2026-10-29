@@ -1,5 +1,6 @@
 import asyncio
 import getpass
+import json
 import re
 from collections.abc import Coroutine
 from typing import Annotated, Any
@@ -8,6 +9,7 @@ import typer
 from rich.console import Console
 from rich.markup import escape
 
+from plural.cli.format import ago
 from plural.host.config import HostSettings
 from plural.host.team import (
     DirectoryClient,
@@ -17,7 +19,7 @@ from plural.host.team import (
     create_team,
     join_team,
 )
-from plural.protocol.team import NAME_PATTERN
+from plural.protocol.team import NAME_PATTERN, SessionStatus
 
 team_app = typer.Typer(name="team", no_args_is_help=True, add_completion=False)
 console = Console()
@@ -172,3 +174,36 @@ def status() -> None:
         f"[bold]{escape(profile.team_name)}[/bold] as {escape(profile.member.name)} "
         f"({profile.member.role.value}) on {escape(profile.relay)}"
     )
+
+
+STATUS_COLORS = {
+    SessionStatus.RUNNING: "green",
+    SessionStatus.WAITING: "yellow",
+    SessionStatus.IDLE: "dim",
+}
+
+
+def ls(
+    as_json: Annotated[bool, typer.Option("--json", help="One JSON array, for scripts.")] = False,
+) -> None:
+    store = _store()
+    profile = _joined(store)
+    listing = _run(DirectoryClient(store, profile).sessions())
+    if as_json:
+        typer.echo(json.dumps([json.loads(card.model_dump_json()) for card in listing.sessions]))
+        return
+    if not listing.sessions:
+        console.print(f"Nobody in {escape(profile.team_name)} is sharing a session right now.")
+        return
+    for card in listing.sessions:
+        color = STATUS_COLORS[card.status]
+        where = card.repo + (f" · {card.branch}" if card.branch else "")
+        you = " [dim](you)[/dim]" if card.owner_id == profile.member.id else ""
+        watching = f" · {card.viewers} watching" if card.viewers else ""
+        console.print(
+            f"[bold]{escape(card.owner)}[/bold]{you}  {escape(where)}  "
+            f"[{color}]{card.status.value}[/{color}][dim]{watching} · {ago(card.updated_at)}[/dim]",
+            soft_wrap=True,
+        )
+        if card.title:
+            console.print(f"  [dim]{escape(card.title)}[/dim]", soft_wrap=True)

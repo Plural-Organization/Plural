@@ -4,7 +4,6 @@ import json
 import os
 import sys
 from contextlib import suppress
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
@@ -17,11 +16,14 @@ from rich.panel import Panel
 from rich.table import Table
 
 from plural import __version__
-from plural.cli.team import team_app
+from plural.cli.format import ago
+from plural.cli.team import ls, team_app
 from plural.host.bootstrap import Host, build_host
 from plural.host.config import HostSettings
 from plural.host.control import MAX_LINE_BYTES, Control, read_lines
 from plural.host.providers import ConfigError, build_provider, resolve_api_key
+from plural.host.team import TeamStore
+from plural.host.team_presence import PresenceUnavailable, TeamPresence, ensure_ready
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import AdmissionMode, PromptMode
 from plural.relay.app import create_app
@@ -32,6 +34,7 @@ from plural.storage.sqlite_store import SqliteEventStore
 
 app = typer.Typer(name="plural-host", no_args_is_help=True, add_completion=False)
 app.add_typer(team_app, name="team")
+app.command(name="ls")(ls)
 console = Console()
 DEFAULT_LIMITS = RelayLimits()
 
@@ -56,6 +59,13 @@ def host(
         AdmissionMode | None,
         typer.Option(help="approve: the host lets in whoever uses the room link; open: anyone."),
     ] = None,
+    team: Annotated[
+        bool,
+        typer.Option(
+            "--team",
+            help="Show this session to your team. Needs --relay, --public-url or a tunnel.",
+        ),
+    ] = False,
     machine: Annotated[
         bool,
         typer.Option(
@@ -64,6 +74,7 @@ def host(
     ] = False,
 ) -> None:
     given: dict[str, Any] = {
+        "team": True if team else None,
         "workspace": workspace,
         "bind_host": bind,
         "port": port,
@@ -83,7 +94,7 @@ def host(
     settings = HostSettings(**options)
     try:
         asyncio.run(_host(settings, machine=machine))
-    except ConfigError as error:
+    except (ConfigError, PresenceUnavailable) as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(1) from error
 
@@ -138,6 +149,8 @@ def plain_links(room: str, guest_link: str, host_link: str) -> str:
 
 async def _host(settings: HostSettings, *, machine: bool) -> None:
     _configure_logging(settings.state_dir / "logs" / "host.log" if machine else None)
+    if settings.team:
+        ensure_ready(settings, TeamStore(settings.state_dir))
     plural_host = await build_host(settings)
     room_link = plural_host.room_link.link
     if machine:
@@ -152,12 +165,23 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
         )
     else:
         print(plain_links(plural_host.room, room_link, plural_host.host_link), flush=True)
+    presence = (
+        asyncio.create_task(
+            TeamPresence(plural_host, settings, TeamStore(settings.state_dir)).run()
+        )
+        if settings.team
+        else None
+    )
     try:
         if machine:
             await _serve_until_stdin_closes(plural_host, settings)
         else:
             await plural_host.serve()
     finally:
+        if presence is not None:
+            presence.cancel()
+            with suppress(asyncio.CancelledError):
+                await presence
         await plural_host.close()
 
 
@@ -237,17 +261,6 @@ def relay(
     )
 
 
-def _ago(moment: datetime) -> str:
-    seconds = max(0, int((datetime.now(UTC) - moment).total_seconds()))
-    if seconds < 60:
-        return f"{seconds}s ago"
-    if seconds < 3600:
-        return f"{seconds // 60}m ago"
-    if seconds < 86_400:
-        return f"{seconds // 3600}h ago"
-    return f"{seconds // 86_400}d ago"
-
-
 @app.command()
 def sessions(
     workspace: Annotated[
@@ -266,7 +279,7 @@ def sessions(
     for info in found:
         console.print(
             f"[bold]{escape(info.title)}[/bold]  "
-            f"[dim]{info.prompts} prompts · {_ago(info.updated_at)}[/dim]",
+            f"[dim]{info.prompts} prompts · {ago(info.updated_at)}[/dim]",
             soft_wrap=True,
         )
         console.print(f"  [dim]{info.room}  {escape(info.workspace or '')}[/dim]", soft_wrap=True)
