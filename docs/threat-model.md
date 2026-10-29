@@ -21,6 +21,11 @@
 | a stranger reads who is knocking, or answers for the host | requests, their resolutions and the waiting list go only to the host, and `join.decide` is host only (`core/visibility.py`, `core/roles.py`) |
 | a private message read by another guest | the host delivers a `chat.posted` with a recipient only to its author and its addressee: live events, history, replay and the snapshot are filtered per connection (`core/chat.py`, `host/publisher.py`); the host, its log and the relay can still read it, so it is private from guests only |
 | chat text steering the agent | chat events are not part of the conversation the agent is built from, so no chat text reaches the model (`host/history.py`, tested in `tests/e2e/test_chat.py`) |
+| a stranger lists or opens a team's sessions | the directory answers only a valid member certificate plus a signature over a fresh nonce, and a host checks both against the team key it pinned (ADR 0007) |
+| a stolen member certificate | the certificate alone is useless without the member's private key, it expires, and removing the member revokes it |
+| a compromised directory adds a member | the new member can at most become a viewer of sessions that admit team viewers; writing always needs the host to approve `access.request` |
+| a viewer reads what the owner did not share | sessions are private and unpublished by default; the card holds no prompts, replies or file contents, only names, repository, status and changed paths |
+| context shared between agents steering the other agent | a shared summary reaches the model as untrusted notes, keeps the guest taint and never changes the system prompt (ADR 0003, ADR 0007) |
 | slow/flooding clients | bounded queues, rate limit and size limit on relay |
 
 Out of scope for MVP: E2E encryption (relay sees content), Docker isolation.
