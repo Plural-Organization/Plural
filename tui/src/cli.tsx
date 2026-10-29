@@ -20,7 +20,7 @@ import { pickSession } from "./picker";
 import { composePrompt, readStdin, runPrint } from "./print";
 import { startupCommands } from "./startup";
 import { runUpdate, skewNote, Updater } from "./update";
-import { loadTeam, TeamWatcher } from "./team";
+import { fetchSessions, loadTeam, pickTeamSession, TeamWatcher, teamProof, type Team } from "./team";
 import { listSessions, resolveSession, type SessionInfo } from "./sessions";
 import { parseTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
 
@@ -31,6 +31,7 @@ usage
   plural -r [id|title]        resume a session, pick one when none is named
   plural -c                   continue the latest session of this folder
   plural join <link>          join a session
+  plural join @name           watch a teammate's session (plural ls lists them)
   plural update [--check]     install the latest version
   plural sessions [--json]    list your sessions
   plural rm <id>              delete a session
@@ -68,10 +69,38 @@ interface Target {
   tunnel: Tunnel | null;
   note: string | null;
   joined: boolean;
+  visiting: Team | null;
 }
 
 function rejoin(link: string): Target {
-  return { link, room: parseLink(link).room, guestLink: null, host: null, tunnel: null, note: null, joined: true };
+  return { link, room: parseLink(link).room, guestLink: null, host: null, tunnel: null, note: null, joined: true, visiting: null };
+}
+
+async function visit(spec: string): Promise<Target> {
+  const team = loadTeam();
+  if (team === null) {
+    throw new UsageError("you are not in a team: plural team create or plural team join");
+  }
+  let card;
+  try {
+    card = pickTeamSession(await fetchSessions(team), team.profile.member.id, spec);
+  } catch (error) {
+    throw new UsageError(error instanceof Error ? error.message : String(error));
+  }
+  const endpoint = card.endpoints[0];
+  if (endpoint === undefined) {
+    throw new UsageError(`${card.owner}'s session has no address to join`);
+  }
+  return {
+    link: endpoint.url,
+    room: card.room,
+    guestLink: null,
+    host: null,
+    tunnel: null,
+    note: `watching ${card.owner} · ${card.repo}${card.branch ? ` · ${card.branch}` : ""}. You can read; ask them if you want to write`,
+    joined: false,
+    visiting: team,
+  };
 }
 
 async function resume(options: SessionOptions): Promise<{ hostArgs: string[]; join: string | null }> {
@@ -117,7 +146,7 @@ async function resume(options: SessionOptions): Promise<{ hostArgs: string[]; jo
 
 async function start(options: SessionOptions, joinLink: string | null, name: string): Promise<Target> {
   if (joinLink !== null) {
-    return rejoin(joinLink);
+    return joinLink.startsWith("@") ? await visit(joinLink) : rejoin(joinLink);
   }
   const kind = options.tunnel === null ? null : parseTunnelKind(options.tunnel);
   if (options.tunnel !== null && kind === null) {
@@ -154,7 +183,7 @@ async function start(options: SessionOptions, joinLink: string | null, name: str
   progress.step("starting the host…");
   try {
     const host = await startLocalHost(launch.args);
-    return { link: host.hostLink, room: host.room, guestLink: host.guestLink, host, tunnel, note: launch.note, joined: false };
+    return { link: host.hostLink, room: host.room, guestLink: host.guestLink, host, tunnel, note: launch.note, joined: false, visiting: null };
   } catch (error) {
     await tunnel?.stop();
     throw error;
@@ -271,6 +300,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   const client = new SessionClient(parsed, {
     name,
     client: { kind: "tui", version: pkg.version },
+    team: target.visiting === null ? undefined : (room) => teamProof(target.visiting as Team, room),
     onWelcome: target.joined ? ({ room, token }) => rememberJoined({ room, url: parsed.url, token, name }) : undefined,
   });
   progress.step("opening the session…");
@@ -342,7 +372,7 @@ async function main(): Promise<void> {
     child.on("exit", (code) => process.exit(code ?? 0));
   } else if (parsed.kind === "join") {
     if (parsed.link === null) {
-      fail("usage: plural join <link> [--name <name>], or plural -r to go back to a room you were in");
+      fail("usage: plural join <link|@name> [--name <name>], or plural -r to go back to a room you were in");
     }
     await run(emptyOptions(), parsed.link, parsed.displayName ?? userInfo().username);
   } else {

@@ -155,6 +155,17 @@ A session is private unless you start it with `--team`. A team session needs an 
 
 The side panel has a TEAM section with the same list, refreshed every few seconds: `●` working, `◆` waiting for its host, `○` idle.
 
+### Watching a teammate
+
+```bash
+plural join @alia            # opens alia's shared session, you can read
+plural join @alia:web        # when alia shares more than one, say the repository
+```
+
+You come in as a viewer: you see the whole conversation and what the agent does, you cannot prompt or answer approvals. Nobody has to let you in, because the team already vouches for you, and your name is the one in the team. The host sees you in the list of participants and in the team card (`👁 1`), and can remove you with `/kick alia`. A host that removed you keeps you out for the rest of that session even though you are still in the team. A host asks the team again whenever you come back, so someone removed from the team loses their seat within about half a minute.
+
+If the host's relay is not the one the team uses, nothing changes for you: the card carries the address to connect to.
+
 You are identified by a key that plural creates once in `~/.plural/identity.pem`. Joining gives you a certificate signed for the team, valid for 30 days and renewed by itself. Removing a member stops their access at once. One person is in one team at a time.
 
 ## Prompt modes

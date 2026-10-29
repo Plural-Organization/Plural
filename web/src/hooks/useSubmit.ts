@@ -1,4 +1,4 @@
-import { label, lastReply, parseChat, parseSlash, ruleLine, SlashError, type ProposalView } from "@plural/client";
+import { findPerson, label, lastReply, mentionable, parseChat, parseSlash, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
 import { commandName, helpText, isHostOnly } from "../lib/commands";
 import type { Session } from "./useSession";
@@ -70,6 +70,16 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
           notify("warn", state.queue.length === 0 ? "the queue is empty" : "usage: /cancel <number from the queue>");
         } else {
           send({ type: "queue.cancel", prompt_id: entry.prompt_id });
+        }
+        return true;
+      }
+      case "kick": {
+        const person = findPerson(rest.join(" "), mentionable(state, projection.meId));
+        if (person === null) {
+          notify("warn", "usage: /kick <name> (see /who)");
+        } else {
+          send({ type: "participant.revoke", participant_id: person.id });
+          notify("dim", `${person.label} was removed from the session`);
         }
         return true;
       }

@@ -13,12 +13,13 @@ from plural.client.reconnect import JoinLink, SessionClient
 from plural.host import team_presence
 from plural.host.bootstrap import build_host
 from plural.host.config import HostSettings
-from plural.host.team import DirectoryClient, TeamError, TeamStore, create_team, join_team
+from plural.host.team import TeamError, TeamStore
 from plural.host.team_presence import TeamPresence, ensure_ready
 from plural.protocol.models import Role
 from plural.protocol.team import CardDraft, Endpoint, EndpointKind, PresenceCard, SessionStatus
 from plural.security.identity import authorization
 from tests.e2e.support import CLIENT, RelayServer, Session, Watcher, free_port
+from tests.e2e.team_support import Member, two_members
 
 
 @pytest.fixture
@@ -27,30 +28,6 @@ async def relay(tmp_path: Path) -> AsyncGenerator[RelayServer]:
     await server.start()
     yield server
     await server.stop()
-
-
-class Member:
-    def __init__(self, root: Path, name: str) -> None:
-        self.name = name
-        self.store = TeamStore(root / name / "data")
-        self.root = root / name
-
-    async def client(self) -> DirectoryClient:
-        profile = self.store.load()
-        assert profile is not None
-        return DirectoryClient(self.store, profile)
-
-
-async def two_members(relay: RelayServer, root: Path) -> tuple[Member, Member]:
-    vlad, alia = Member(root, "vlad"), Member(root, "alia")
-    vlad.store.save(
-        await create_team(relay.url, vlad.store.identity(), team="Backend", member="vlad")
-    )
-    invite = await (await vlad.client()).invite()
-    alia.store.save(
-        await join_team(relay.url, alia.store.identity(), code=invite.code, member="alia")
-    )
-    return vlad, alia
 
 
 def draft(room: str = "r_x", repo: str = "api") -> CardDraft:

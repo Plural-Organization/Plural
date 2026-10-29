@@ -31,6 +31,11 @@ export function mentionable(state: SessionState, meId: string | null): Mentionab
     .sort((a, b) => Number(b.connected) - Number(a.connected) || a.label.localeCompare(b.label));
 }
 
+export function findPerson(name: string, people: Mentionable[]): Mentionable | null {
+  const wanted = name.trim().toLowerCase().replace(/^@/, "");
+  return wanted === "" ? null : (people.find((person) => person.label.toLowerCase() === wanted) ?? null);
+}
+
 export function matchMention(rest: string, people: Mentionable[]): Mentionable | null {
   const lower = rest.toLowerCase();
   let best: Mentionable | null = null;

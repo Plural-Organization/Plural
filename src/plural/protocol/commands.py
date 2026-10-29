@@ -32,12 +32,20 @@ class ClientInfo(Model):
     version: str
 
 
+class TeamProof(Model):
+    certificate: str = Field(min_length=1, max_length=2048)
+    ts: int = Field(ge=0)
+    nonce: str = Field(min_length=8, max_length=64)
+    proof: str = Field(min_length=1, max_length=200)
+
+
 class SessionHello(Model):
     type: Literal["session.hello"] = "session.hello"
     client: ClientInfo
     name: str | None = Field(default=None, min_length=1, max_length=40)
     invite: str | None = None
     join: str | None = None
+    team: TeamProof | None = None
     token: str | None = None
     since: int | None = Field(default=None, ge=0)
 

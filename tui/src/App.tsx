@@ -7,6 +7,7 @@ import {
   mentionable,
   mentionsMe,
   findInFeed,
+  findPerson,
   matchPreview,
   nextPermissionMode,
   parseChat,
@@ -910,6 +911,16 @@ export function App({
           warn("cancel", state.queue.length === 0 ? "the queue is empty" : "usage: /cancel <number from the queue>");
         } else {
           send({ type: "queue.cancel", prompt_id: entry.prompt_id });
+        }
+        return true;
+      }
+      case "kick": {
+        const person = findPerson(rest.join(" "), mentionable(state, projection.meId));
+        if (person === null) {
+          warn("kick", "usage: /kick <name> (see /who)");
+        } else {
+          send({ type: "participant.revoke", participant_id: person.id });
+          notify("dim", `${person.label} was removed from the session`);
         }
         return true;
       }

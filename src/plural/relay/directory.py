@@ -103,6 +103,7 @@ def _view(row: aiosqlite.Row) -> MemberView:
     return MemberView(
         id=row["id"],
         name=row["name"],
+        key=row["key"],
         role=TeamRole(row["role"]),
         joined_at=datetime.fromisoformat(row["joined_at"]),
     )
@@ -253,7 +254,7 @@ class TeamDirectory:
         ) as cursor:
             team = await cursor.fetchone()
         async with self._db.execute(
-            "SELECT id, name, role, joined_at FROM members WHERE team_id = ?"
+            "SELECT id, name, key, role, joined_at FROM members WHERE team_id = ?"
             " ORDER BY (role = 'owner') DESC, joined_at, name",
             (claims.team,),
         ) as cursor:
@@ -276,7 +277,7 @@ class TeamDirectory:
     async def remove(self, claims: MemberClaims, target: str) -> MemberView:
         async with self._writing:
             async with self._db.execute(
-                "SELECT id, name, role, joined_at FROM members WHERE team_id = ?"
+                "SELECT id, name, key, role, joined_at FROM members WHERE team_id = ?"
                 " AND (id = ? OR lower(name) = lower(?))",
                 (claims.team, target, target),
             ) as cursor:
@@ -339,7 +340,7 @@ class TeamDirectory:
     async def _add_member(
         self, team_id: str, name: str, key: str, role: TeamRole, now: datetime
     ) -> MemberView:
-        view = MemberView(id=member_id(key), name=name, role=role, joined_at=now)
+        view = MemberView(id=member_id(key), name=name, key=key, role=role, joined_at=now)
         try:
             await self._db.execute(
                 "INSERT INTO members (team_id, id, name, key, role, joined_at)"
