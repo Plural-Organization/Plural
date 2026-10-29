@@ -1370,6 +1370,7 @@
               "tool.ended": "#/$defs/ToolEnded",
               "tool.output": "#/$defs/ToolOutput",
               "tool.started": "#/$defs/ToolStarted",
+              "tools.loaded": "#/$defs/ToolsLoaded",
               "usage.recorded": "#/$defs/UsageRecorded"
             },
             "propertyName": "type"
@@ -1515,6 +1516,9 @@
             },
             {
               "$ref": "#/$defs/AgentsChanged"
+            },
+            {
+              "$ref": "#/$defs/ToolsLoaded"
             },
             {
               "$ref": "#/$defs/PluginsChanged"
@@ -2726,6 +2730,13 @@
           "default": 0,
           "type": "integer"
         },
+        "loaded_tools": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "mcp": {
           "default": [],
           "items": {
@@ -2838,6 +2849,7 @@
         "mcp",
         "usage",
         "agents",
+        "loaded_tools",
         "plugins",
         "commands",
         "queue",
@@ -3143,6 +3155,26 @@
       ],
       "type": "object"
     },
+    "ToolsLoaded": {
+      "properties": {
+        "tools": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "tools.loaded",
+          "default": "tools.loaded",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "tools"
+      ],
+      "type": "object"
+    },
     "TranscriptEntry": {
       "properties": {
         "author_id": {
@@ -3355,6 +3387,7 @@
           "tool.ended": "#/$defs/ToolEnded",
           "tool.output": "#/$defs/ToolOutput",
           "tool.started": "#/$defs/ToolStarted",
+          "tools.loaded": "#/$defs/ToolsLoaded",
           "usage.recorded": "#/$defs/UsageRecorded"
         },
         "propertyName": "type"
@@ -3500,6 +3533,9 @@
         },
         {
           "$ref": "#/$defs/AgentsChanged"
+        },
+        {
+          "$ref": "#/$defs/ToolsLoaded"
         },
         {
           "$ref": "#/$defs/PluginsChanged"

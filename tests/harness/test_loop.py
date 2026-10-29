@@ -9,7 +9,7 @@ from tests.doubles import ScriptedProvider, StallingProvider
 from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.context import ContextBuilder
-from plural.agent.events import AgentEvent, MessageEnd, RunEnd, ToolEnd, ToolStart
+from plural.agent.events import AgentEvent, MessageEnd, RunEnd, ToolEnd, ToolsLoaded, ToolStart
 from plural.agent.gate import GateResult
 from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.messages import AssistantTurn, ToolResultTurn, attribute
@@ -32,6 +32,7 @@ from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
+from plural.agent.tools.discovery import ToolSearchTool
 from plural.agent.tools.registry import ToolRegistry, builtin_tools
 from plural.host.system import UlidGenerator
 from plural.protocol.models import (
@@ -534,3 +535,14 @@ async def test_a_run_keeps_its_tool_list(tmp_path: Path) -> None:
     await collect(loop, turn("next"))
     names = [[schema.name for schema in request.tools] for request in provider.requests]
     assert names == [["install"], ["install"], ["install", "handoff"]]
+
+
+async def test_tools_found_mid_run_are_declared_from_the_next_call(tmp_path: Path) -> None:
+    provider = FakeProvider([use_tool("tool_search", query="fetch a web page"), reply("done")])
+    tools = builtin_tools()
+    tools.register(ToolSearchTool(tools))
+    events = await collect(loop_with(tmp_path, provider, tools), turn("go"))
+    first, second = ([schema.name for schema in r.tools] for r in provider.requests)
+    assert "web_fetch" not in first
+    assert "web_fetch" in second
+    assert ToolsLoaded(("web_fetch",)) in events

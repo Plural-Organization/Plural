@@ -443,6 +443,7 @@ class SessionState(Model):
     mcp: tuple[McpServerView, ...] = ()
     usage: tuple[UsageLine, ...] = ()
     agents: tuple[AgentView, ...] = ()
+    loaded_tools: tuple[str, ...] = ()
     plugins: tuple[PluginView, ...] = ()
     commands: tuple[PluginCommandView, ...] = ()
     queue: tuple[QueuedPrompt, ...] = ()

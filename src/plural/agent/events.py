@@ -59,6 +59,11 @@ class ContextFill:
 
 
 @dataclass(frozen=True, slots=True)
+class ToolsLoaded:
+    names: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class Delivered:
     prompt_ids: tuple[str, ...]
 
@@ -91,5 +96,6 @@ AgentEvent = (
     | Compacted
     | ContextFill
     | Delivered
+    | ToolsLoaded
     | RunEnd
 )

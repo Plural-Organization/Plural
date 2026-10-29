@@ -59,7 +59,9 @@ async def test_the_host_connects_a_server_and_its_tools_ask_first(tmp_path: Path
         assert ended.ok
         assert ended.output == "echo: hello"
         await owner.next(RunEnded)
-        assert any(tool.name == "mcp__echo__echo" for tool in provider.requests[0].tools)
+        # MCP tools are deferred: calling one by name loads it for the next request.
+        assert all(tool.name != "mcp__echo__echo" for tool in provider.requests[0].tools)
+        assert any(tool.name == "mcp__echo__echo" for tool in provider.requests[1].tools)
 
         await owner.client.send(McpToggle(name="echo", enabled=False))
         for _ in range(100):
