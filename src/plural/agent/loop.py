@@ -23,6 +23,7 @@ from plural.agent.events import (
     Spend,
     ToolEnd,
     ToolOutput,
+    ToolsLoaded,
     ToolStart,
 )
 from plural.agent.gate import PolicyGate
@@ -254,6 +255,10 @@ class AgentLoop:
         self._notes.append(turn)
         self._shared = True
 
+    def load_tools(self, names: Sequence[str]) -> None:
+        """Declare deferred tools loaded in an earlier session, before the next run."""
+        self._tools.load(names)
+
     def restore(self, conversation: Sequence[Message]) -> None:
         self._conversation = list(conversation)
         self._shared = any(isinstance(message, NotesTurn) for message in conversation)
@@ -282,6 +287,7 @@ class AgentLoop:
         self.spend("main", "", Usage(), uses=1)
         self._gate.begin_run()
         self._prompt = (self._context.system(), self._tools.schemas())
+        revision = self._tools.revision
         self._compaction_failed = False
         self._verify_compaction = False
         recovering = False
@@ -382,6 +388,14 @@ class AgentLoop:
                     if cancel.is_set():
                         yield RunEnd(RunEndReason.ABORTED, self._usage)
                         return
+                if self._tools.revision != revision:
+                    # Tools loaded this turn are declared from the next model call on.
+                    revision = self._tools.revision
+                    known = {schema.name for schema in self._prompt[1]}
+                    schemas = self._tools.schemas()
+                    self._prompt = (self._prompt[0], schemas)
+                    if fresh := tuple(s.name for s in schemas if s.name not in known):
+                        yield ToolsLoaded(fresh)
                 # Tools that all ask to terminate hand the turn back without another model call.
                 has_tool_calls = bool(ended) and not all(result.terminate for result in ended)
                 if (has_tool_calls or self._steer or self._follow_up) and (

@@ -26,7 +26,8 @@ from plural.agent.skills import SkillLibrary
 from plural.agent.tools.agent import AgentTool
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.board import board_tools
-from plural.agent.tools.registry import builtin_tools
+from plural.agent.tools.discovery import ToolSearchTool
+from plural.agent.tools.registry import Exposure, builtin_tools
 from plural.agent.tools.search import Searcher, WebSearchSlot
 from plural.agent.tools.skills import skill_tools
 from plural.core.policy.engine import Policy
@@ -157,9 +158,10 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     agent = provider or build_provider(settings, api_key)
     web_search = WebSearchSlot()
     web_search.use(build_web_search(settings, api_key, agent))
-    tools.add_source(web_search)
+    tools.add_source(web_search, exposure=Exposure.DEFERRED)
     for tool in skill_tools(skills, lambda: inbox.put(SkillsUpdated())):
-        tools.register(tool)
+        # The skills prompt tells the model to load an installed skill, so `skill` stays core.
+        tools.register(tool, exposure=Exposure.CORE if tool.name == "skill" else Exposure.DEFERRED)
     mcp = McpHub(
         workspace=workspace.root,
         home=Path.home(),
@@ -171,7 +173,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
             else None
         ),
     )
-    tools.add_source(mcp)
+    tools.add_source(mcp, exposure=Exposure.DEFERRED)
     mcp.start()
     plugins = PluginHost(state_dir / "plugins", workspace=workspace.root)
     registry = ApprovalRegistry()
@@ -192,10 +194,12 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     agents = AgentLibrary(project=workspace.root, home=Path.home())
     await asyncio.to_thread(agents.refresh)
     delegate = AgentTool(library=agents, tools=tools, gate=gate, environment=environment, ids=ids)
-    tools.register(delegate)
+    tools.register(delegate, exposure=Exposure.DEFERRED)
     desk = InboxDesk(inbox)
     for tool in board_tools(desk):
-        tools.register(tool)
+        tools.register(tool, exposure=Exposure.DEFERRED)
+    tools.register(ToolSearchTool(tools))
+    tools.pin(name.strip() for name in settings.pinned_tools.split(",") if name.strip())
     loop = AgentLoop(
         provider=agent,
         helper=helper.provider if helper else None,

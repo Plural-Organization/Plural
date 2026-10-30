@@ -178,6 +178,7 @@ from plural.protocol.events import (
     SkillsFound,
     ToolEnded,
     ToolOutput,
+    ToolsLoaded,
     ToolStarted,
     UsageRecorded,
 )
@@ -332,6 +333,7 @@ class SessionActor:
         self._sync_policy()
         if conversation := await self._history(records):
             self._agent.restore(conversation)
+        self._agent.load_tools(self._state.loaded_tools)
         if self._state.briefings_imported:
             self._agent.mark_shared()
         if self._ledger is not None:
@@ -1329,6 +1331,8 @@ class SessionActor:
                 await self._emit(
                     MessageEnded(run_id=run_id, message_id=message_id, text=text, thinking=thinking)
                 )
+            case agent.ToolsLoaded(names=names):
+                await self._emit(ToolsLoaded(tools=names))
             case agent.Delivered(prompt_ids=prompt_ids):
                 for prompt_id in prompt_ids:
                     await self._emit(

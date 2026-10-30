@@ -78,9 +78,8 @@ async def test_explore_runs_on_the_fast_model_and_reports_back(tmp_path: Path) -
     assert child_request.system.startswith("You are explore")
     assert child_request.messages[0].content.endswith("where is alpha?")
     child_tools = {tool.name for tool in child_request.tools}
-    assert child_tools == {"read", "grep", "glob", "ls", "web_search", "web_fetch"} & {
-        tool.name for tool in main.requests[0].tools
-    }
+    # A sub-agent sees every tool of its spec that exists, deferred or not.
+    assert child_tools == {"read", "grep", "glob", "ls", "web_fetch"}
     assert not child_tools & {"agent", "write", "bash"}
     assert "# Sub-agents" in main.requests[0].system
 

@@ -68,6 +68,9 @@ class AgentRun:
     def request_compaction(self) -> None:
         self._loop.request_compaction()
 
+    def load_tools(self, names: Sequence[str]) -> None:
+        self._loop.load_tools(names)
+
     def restore(self, conversation: Sequence[Message]) -> None:
         self._loop.restore(conversation)
 

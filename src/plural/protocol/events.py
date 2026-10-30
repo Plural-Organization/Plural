@@ -333,6 +333,11 @@ class McpChanged(EventBase):
     servers: tuple[McpServerView, ...]
 
 
+class ToolsLoaded(EventBase):
+    type: Literal["tools.loaded"] = "tools.loaded"
+    tools: tuple[str, ...]
+
+
 class PluginsChanged(EventBase):
     type: Literal["plugins.changed"] = "plugins.changed"
     plugins: tuple[PluginView, ...]
@@ -493,6 +498,7 @@ Event = Annotated[
     | McpChanged
     | UsageRecorded
     | AgentsChanged
+    | ToolsLoaded
     | PluginsChanged
     | CommandInvoked
     | CommandReplied

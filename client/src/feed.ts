@@ -166,6 +166,8 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
       ].filter(Boolean);
       return parts.length > 0 ? note("accent", `skills: ${parts.join(" · ")}`) : feed;
     }
+    case "tools.loaded":
+      return note("dim", `the agent loaded ${event.tools.join(", ")}`);
     case "plugins.changed": {
       const failed = event.plugins.filter((plugin) => plugin.status === "failed");
       return failed.length > 0

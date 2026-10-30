@@ -179,6 +179,7 @@ export interface EventsSchema {
     | McpChanged
     | UsageRecorded
     | AgentsChanged
+    | ToolsLoaded
     | PluginsChanged
     | CommandInvoked
     | CommandReplied
@@ -858,6 +859,14 @@ export interface AgentView {
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ToolsLoaded".
+ */
+export interface ToolsLoaded {
+  tools: string[];
+  type: "tools.loaded";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "PluginsChanged".
  */
 export interface PluginsChanged {
@@ -1081,6 +1090,7 @@ export interface SessionState {
     [k: string]: JoinRequestView;
   };
   last_seq: number;
+  loaded_tools: string[];
   mcp: McpServerView[];
   participants: {
     [k: string]: Participant;
@@ -1226,6 +1236,7 @@ export interface EventRecord {
     | McpChanged
     | UsageRecorded
     | AgentsChanged
+    | ToolsLoaded
     | PluginsChanged
     | CommandInvoked
     | CommandReplied
