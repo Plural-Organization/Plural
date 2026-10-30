@@ -52,7 +52,12 @@ describe("the installer pins both parts to one release", () => {
 
   test("the host is refreshed from the index so a stale cache cannot keep an old one", async () => {
     const text = await Bun.file(SCRIPT).text();
-    expect(text).toContain('uv tool install --force --refresh --python 3.12 "$package"');
+    expect(text).toContain('uv tool install --force --refresh "$package"');
+  });
+
+  test("the host runs on any Python the machine has, so uv does not fetch one it does not need", async () => {
+    const text = await Bun.file(SCRIPT).text();
+    expect(text).not.toContain("--python 3.12");
   });
 });
 
@@ -71,5 +76,47 @@ describe("a host that does not know the command", () => {
       if (saved === undefined) delete process.env["PLURAL_HOST_CMD"];
       else process.env["PLURAL_HOST_CMD"] = saved;
     }
+  });
+});
+
+async function extrasFor(env: Record<string, string>, tools: string): Promise<string> {
+  const child = Bun.spawn(["sh", "-c", `PLURAL_INSTALL_SOURCE_ONLY=1 . "${SCRIPT}"; host_extras`], {
+    env: { ...(process.env as Record<string, string>), PLURAL_PROVIDER: "", PLURAL_EXTRAS: "", PATH: `${tools}:${process.env["PATH"]}`, ...env },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  const out = (await new Response(child.stdout).text()).trim();
+  await child.exited;
+  return out;
+}
+
+describe("the optional model SDKs", () => {
+  const tools = mkdtempSync(join(tmpdir(), "plural-uv-"));
+  // A uv that points at a host environment whose python imports only what the file `sdks` lists.
+  const environment = join(tools, "env", "plural-agent", "bin");
+  Bun.spawnSync(["mkdir", "-p", environment]);
+  writeFileSync(join(tools, "sdks"), "");
+  writeFileSync(join(environment, "python"), `#!/bin/sh\ngrep -qx "\${2#import }" "${join(tools, "sdks")}"\n`);
+  chmodSync(join(environment, "python"), 0o755);
+  writeFileSync(join(tools, "uv"), `#!/bin/sh\necho "${join(tools, "env")}"\n`);
+  chmodSync(join(tools, "uv"), 0o755);
+
+  test("a plain install takes none, so it stays small", async () => {
+    expect(await extrasFor({}, tools)).toBe("");
+  });
+
+  test("the provider the user named, or PLURAL_EXTRAS, picks the SDKs", async () => {
+    expect(await extrasFor({ PLURAL_PROVIDER: "anthropic" }, tools)).toBe("anthropic");
+    expect(await extrasFor({ PLURAL_PROVIDER: "anthropic_oauth" }, tools)).toBe("anthropic");
+    expect(await extrasFor({ PLURAL_PROVIDER: "openai" }, tools)).toBe("openai");
+    expect(await extrasFor({ PLURAL_PROVIDER: "claude_code" }, tools)).toBe("");
+    expect(await extrasFor({ PLURAL_EXTRAS: "anthropic,openai" }, tools)).toBe("anthropic,openai");
+  });
+
+  test("an update keeps the SDKs the installed host already has", async () => {
+    writeFileSync(join(tools, "sdks"), "openai\n");
+    expect(await extrasFor({}, tools)).toBe("openai");
+    expect(await extrasFor({ PLURAL_PROVIDER: "anthropic" }, tools)).toBe("anthropic,openai");
+    writeFileSync(join(tools, "sdks"), "");
   });
 });

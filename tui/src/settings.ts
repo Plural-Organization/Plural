@@ -20,6 +20,8 @@ export interface Settings {
   announceTyping: boolean;
   rememberKey: boolean;
   setupSeen: boolean;
+  /** The first-run offer of the optional model SDKs was answered or skipped. */
+  extrasSeen: boolean;
   share: ShareMode;
   relayUrl: string;
   agent: AgentChoice;
@@ -36,6 +38,7 @@ export const DEFAULT_SETTINGS: Settings = {
   announceTyping: true,
   rememberKey: true,
   setupSeen: false,
+  extrasSeen: false,
   share: "local",
   relayUrl: "",
   agent: DEFAULT_CHOICE,
@@ -61,7 +64,7 @@ export function settingsPath(environment: Record<string, string | undefined> = p
 
 export function parseSettings(raw: unknown): Settings {
   const value = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
-  const flag = (key: "panel" | "copyOnSelect" | "bell" | "mentionBell" | "joinBell" | "announceTyping" | "rememberKey" | "setupSeen"): boolean =>
+  const flag = (key: "panel" | "copyOnSelect" | "bell" | "mentionBell" | "joinBell" | "announceTyping" | "rememberKey" | "setupSeen" | "extrasSeen"): boolean =>
     typeof value[key] === "boolean" ? (value[key] as boolean) : DEFAULT_SETTINGS[key];
   const agent = parseChoice(value["agent"]);
   const rawChoices = typeof value["agentChoices"] === "object" && value["agentChoices"] !== null
@@ -82,6 +85,7 @@ export function parseSettings(raw: unknown): Settings {
     announceTyping: flag("announceTyping"),
     rememberKey: flag("rememberKey"),
     setupSeen: flag("setupSeen"),
+    extrasSeen: flag("extrasSeen"),
     share: isShareMode(value["share"]) ? value["share"] : DEFAULT_SETTINGS.share,
     relayUrl: typeof value["relayUrl"] === "string" ? value["relayUrl"] : DEFAULT_SETTINGS.relayUrl,
     agent,

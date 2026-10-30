@@ -37,7 +37,7 @@
 curl -fsSL https://raw.githubusercontent.com/Plural-Organization/Plural/main/install.sh | sh
 ```
 
-macos and linux, arm64 and x64. windows through wsl. the script installs [uv](https://docs.astral.sh/uv/), the host (`plural-host`) and the `plural` client, and checks the download. the model sdks are optional so the install stays small: for the Anthropic or OpenAI api add them once with `uv tool install --force 'plural-agent[anthropic]'` (or `[openai]`), or install with `PLURAL_PROVIDER=anthropic` (or `PLURAL_EXTRAS=anthropic,openai`) set. Claude Code and Codex CLI need neither.
+macos and linux, arm64 and x64. windows through wsl. the script installs [uv](https://docs.astral.sh/uv/), the host (`plural-host`) and the `plural` client, and checks the download. the model sdks are optional so the install stays small. the first time you start plural it offers to install the Anthropic and OpenAI sdks (skip it and pick a provider later in settings, `F2`, and it offers again). to add one without the window use `uv tool install --force 'plural-agent[anthropic]'` (or `[openai]`), or install with `PLURAL_PROVIDER=anthropic` (or `PLURAL_EXTRAS=anthropic,openai`) set. Claude Code and Codex CLI need neither.
 
 ## quick start
 

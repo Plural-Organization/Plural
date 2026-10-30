@@ -3,6 +3,7 @@ import { useKeyboard, usePaste } from "@opentui/react";
 import { useReducer, useRef } from "react";
 import type { Role } from "@plural/client";
 import type { AgentControl } from "../control";
+import { missingFor, type ExtraStatus } from "../extras";
 import { beginOAuth, clearOAuth, exchangeCode, hasOAuth, openOAuth, saveOAuth, type OAuthAttempt } from "../anthropicOAuth";
 import type { Keys } from "../credentials";
 import { presetOf, problemWith, toConfig, type AgentChoice, type PresetId } from "../presets";
@@ -64,6 +65,8 @@ export interface DialogProps {
   admission?: "approve" | "open";
   onAdmission?: (mode: "approve" | "open") => void;
   onCopyReply: () => void;
+  /** The chosen provider needs an SDK the host does not have yet: the app offers to install it. */
+  onNeedExtra?: (extra: ExtraStatus) => void;
   update?: UpdateState | null;
   onUpdate?: () => void;
   onClose: () => void;
@@ -117,6 +120,11 @@ export function SettingsDialog(props: DialogProps) {
       return;
     }
     if (control === null || local.current.busy) {
+      return;
+    }
+    const needed = missingFor(presetOf(choice.preset));
+    if (needed !== null && live.current.onNeedExtra) {
+      live.current.onNeedExtra(needed);
       return;
     }
     set({ busy: true, status: { tone: "info", text: kind === "test" ? "testing the connection…" : "switching the agent…" } });

@@ -1,3 +1,4 @@
+import type { ExtraStatus } from "./extras";
 import type { AgentConfig, Preset } from "./presets";
 
 export interface ControlResult {
@@ -6,6 +7,7 @@ export interface ControlResult {
   message?: string;
   error?: string;
   presets?: Preset[];
+  extras?: ExtraStatus[];
 }
 
 export interface AgentControl {
@@ -13,9 +15,15 @@ export interface AgentControl {
   test(config: AgentConfig): Promise<ControlResult>;
   /** The host's provider catalog, which the client renders and keeps no copy of. */
   catalog(): Promise<Preset[]>;
+  /** Which optional model SDKs the host has; empty when it does not say. */
+  extras(): Promise<ExtraStatus[]>;
+  /** Install one of them into the host's environment; this can take minutes on a slow network. */
+  install(extra: string): Promise<ControlResult>;
 }
 
 export const CONTROL_TIMEOUT_MS = 60_000;
+/** A little over the host's own install limit, so the host's answer is the one the user sees. */
+export const INSTALL_TIMEOUT_MS = 11 * 60_000;
 
 export class ControlLink implements AgentControl {
   private counter = 0;
@@ -53,19 +61,33 @@ export class ControlLink implements AgentControl {
     return result.ok ? (result.presets ?? []) : [];
   }
 
-  private request(type: "configure" | "test" | "catalog", config: AgentConfig | null): Promise<ControlResult> {
+  async extras(): Promise<ExtraStatus[]> {
+    const result = await this.request("catalog", null);
+    return result.ok ? (result.extras ?? []) : [];
+  }
+
+  install(extra: string): Promise<ControlResult> {
+    return this.request("install", null, { extra }, INSTALL_TIMEOUT_MS);
+  }
+
+  private request(
+    type: "configure" | "test" | "catalog" | "install",
+    config: AgentConfig | null,
+    more: Record<string, string> = {},
+    timeout: number = CONTROL_TIMEOUT_MS,
+  ): Promise<ControlResult> {
     this.counter += 1;
     const id = `k${this.counter}`;
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         resolve({ ok: false, error: "the host did not answer in time" });
-      }, CONTROL_TIMEOUT_MS);
+      }, timeout);
       this.pending.set(id, (result) => {
         clearTimeout(timer);
         resolve(result);
       });
-      if (!this.write(`${JSON.stringify(config === null ? { id, type } : { id, type, config })}\n`)) {
+      if (!this.write(`${JSON.stringify(config === null ? { id, type, ...more } : { id, type, config, ...more })}\n`)) {
         this.pending.delete(id);
         clearTimeout(timer);
         resolve({ ok: false, error: "the host is not reachable" });
@@ -95,6 +117,7 @@ export class ControlLink implements AgentControl {
       ...(typeof message["message"] === "string" ? { message: message["message"] } : {}),
       ...(typeof message["error"] === "string" ? { error: message["error"] } : {}),
       ...(Array.isArray(message["presets"]) ? { presets: message["presets"] as Preset[] } : {}),
+      ...(Array.isArray(message["extras"]) ? { extras: message["extras"] as ExtraStatus[] } : {}),
     });
   }
 }

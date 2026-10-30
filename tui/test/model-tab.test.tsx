@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
 import { App } from "../src/App";
 import type { AgentControl, ControlResult } from "../src/control";
+import type { ExtraStatus } from "../src/extras";
 import type { AgentConfig, Preset, PresetId } from "../src/presets";
 import { TEST_CATALOG } from "./support/catalog";
 import { DEFAULT_SETTINGS, type Settings } from "../src/settings";
@@ -29,6 +30,14 @@ class FakeControl implements AgentControl {
 
   async catalog(): Promise<Preset[]> {
     return TEST_CATALOG;
+  }
+
+  async extras(): Promise<ExtraStatus[]> {
+    return [];
+  }
+
+  async install(): Promise<ControlResult> {
+    return { ok: true };
   }
 }
 
