@@ -6,7 +6,7 @@ from typing import Final
 from pydantic import Field
 
 from plural.agent.tools.base import ToolArgs, ToolCtx, ToolError, ToolResult, ToolSpec, TypedTool
-from plural.agent.tools.glob import WALK_LIMIT
+from plural.agent.tools.core.glob import WALK_LIMIT
 from plural.agent.tools.truncation import truncate_head
 from plural.protocol.models import ToolRisk
 

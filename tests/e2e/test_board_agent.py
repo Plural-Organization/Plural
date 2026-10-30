@@ -3,7 +3,7 @@ from pathlib import Path
 from pydantic import JsonValue
 
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
-from plural.agent.tools.board import AGENT_AUTHOR, describe
+from plural.agent.tools.extra.board import AGENT_AUTHOR, describe
 from plural.protocol.commands import BoardDraw, PromptSubmit
 from plural.protocol.events import (
     BoardErased,

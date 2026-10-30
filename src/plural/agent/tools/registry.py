@@ -5,14 +5,15 @@ from typing import Protocol
 
 from plural.agent.providers.base import ToolCallRequest, ToolSchema
 from plural.agent.tools.base import PreparedCall, Tool
-from plural.agent.tools.bash import BashTool
-from plural.agent.tools.edit import EditTool, MultiEditTool
-from plural.agent.tools.glob import GlobTool
-from plural.agent.tools.grep import GrepTool
-from plural.agent.tools.ls import LsTool
-from plural.agent.tools.read import ReadTool
-from plural.agent.tools.web import WebFetchTool
-from plural.agent.tools.write import WriteTool
+from plural.agent.tools.core.bash import BashTool
+from plural.agent.tools.core.edit import EditTool
+from plural.agent.tools.core.glob import GlobTool
+from plural.agent.tools.core.grep import GrepTool
+from plural.agent.tools.core.ls import LsTool
+from plural.agent.tools.core.read import ReadTool
+from plural.agent.tools.core.write import WriteTool
+from plural.agent.tools.extra.multi_edit import MultiEditTool
+from plural.agent.tools.extra.web import WebFetchTool
 
 
 class UnknownTool(LookupError):

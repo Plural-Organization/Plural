@@ -104,7 +104,7 @@ describe("App", () => {
       { type: "skills.search", query: "react" },
       { type: "skills.install", package: "vercel-labs/agent-skills@vercel-react-native-skills", scope: "global" },
     ]);
-    fake.emit({ type: "skills.changed", skills: [{ name: "vercel-react-native-skills", description: "React Native.", scope: "global" }], added: ["vercel-react-native-skills"], removed: [] });
+    fake.emit({ type: "skills.changed", skills: [{ name: "vercel-react-native-skills", description: "React Native.", scope: "global", builtin: false }], added: ["vercel-react-native-skills"], removed: [] });
     await frame(setup, "✓ vercel-react-native-skills installed");
     await setup.mockInput.typeText("/skills");
     await setup.mockInput.pressEnter();

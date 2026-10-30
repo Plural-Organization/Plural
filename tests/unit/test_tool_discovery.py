@@ -8,7 +8,7 @@ from plural.agent.providers.base import ToolCallRequest, ToolSchema
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
-from plural.agent.tools.discovery import ToolSearchTool, rank, tokenize
+from plural.agent.tools.core.discovery import ToolSearchTool, rank, tokenize
 from plural.agent.tools.registry import Exposure, ToolRegistry, UnknownTool, builtin_tools
 from plural.protocol.models import ToolRisk
 

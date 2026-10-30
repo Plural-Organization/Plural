@@ -32,7 +32,7 @@ from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
-from plural.agent.tools.discovery import ToolSearchTool
+from plural.agent.tools.core.discovery import ToolSearchTool
 from plural.agent.tools.registry import ToolRegistry, builtin_tools
 from plural.host.system import UlidGenerator
 from plural.protocol.models import (

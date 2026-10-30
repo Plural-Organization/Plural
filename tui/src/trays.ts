@@ -58,7 +58,9 @@ export function skillRows(projection: Projection, width: number): Row[] {
   return [
     ...skills.map((skill): Row => [
       { text: skill.name.padEnd(name + 2), fg: theme.text, bold: true },
-      { text: skill.scope === "global" ? "global  " : "project ", fg: skill.scope === "global" ? theme.info : theme.ok },
+      skill.builtin
+        ? { text: "built-in", fg: theme.dim }
+        : { text: skill.scope === "global" ? "global  " : "project ", fg: skill.scope === "global" ? theme.info : theme.ok },
       { text: skill.description.length > room ? `${skill.description.slice(0, room - 1)}…` : skill.description, fg: theme.dim },
     ]),
     [""],

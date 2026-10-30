@@ -301,6 +301,7 @@ export interface SkillsChanged {
  * via the `definition` "SkillView".
  */
 export interface SkillView {
+  builtin: boolean;
   description: string;
   name: string;
   scope: SkillScope;

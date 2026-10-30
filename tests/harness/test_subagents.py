@@ -12,8 +12,8 @@ from plural.agent.providers.base import LlmEvent, Stop, ToolCallReady, ToolCallR
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
-from plural.agent.tools.agent import AgentTool
 from plural.agent.tools.base import ToolCtx
+from plural.agent.tools.extra.agent import AgentTool
 from plural.agent.tools.registry import builtin_tools
 from plural.host.system import UlidGenerator
 from plural.protocol.models import Provenance, Role, SkillScope, ToolCallView, ToolRisk
