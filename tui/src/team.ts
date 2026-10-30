@@ -1,8 +1,8 @@
 import { createHash, createPrivateKey, randomBytes, sign, type KeyObject } from "node:crypto";
 import type { TeamProof } from "@plural/client";
 import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { dataDir } from "./paths";
 
 export type SessionStatus = "idle" | "running" | "waiting";
 
@@ -42,10 +42,6 @@ export interface TeamProfile {
 export interface Team {
   profile: TeamProfile;
   key: KeyObject;
-}
-
-export function dataDir(environment: Record<string, string | undefined> = process.env): string {
-  return environment["PLURAL_DATA_DIR"] ?? join(homedir(), ".plural");
 }
 
 export function loadTeam(directory: string = dataDir()): Team | null {
@@ -140,6 +136,7 @@ export class TeamWatcher {
   private current: TeamView;
   private readonly listeners = new Set<(view: TeamView) => void>();
   private timer: ReturnType<typeof setInterval> | null = null;
+  private refreshing = false;
 
   constructor(
     private readonly team: Team,
@@ -174,10 +171,16 @@ export class TeamWatcher {
   }
 
   async refresh(): Promise<void> {
+    if (this.refreshing) {
+      return;
+    }
+    this.refreshing = true;
     try {
       this.set({ ...this.current, sessions: await fetchSessions(this.team, this.fetcher), error: null });
     } catch (error) {
       this.set({ ...this.current, error: error instanceof Error ? error.message : String(error) });
+    } finally {
+      this.refreshing = false;
     }
   }
 

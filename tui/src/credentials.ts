@@ -1,11 +1,11 @@
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { dataDir } from "./paths";
 
 export type Keys = Record<string, string>;
 
 export function credentialsPath(environment: Record<string, string | undefined> = process.env): string {
-  return join(environment["PLURAL_DATA_DIR"] ?? join(homedir(), ".plural"), "credentials.json");
+  return join(dataDir(environment), "credentials.json");
 }
 
 export function parseKeys(raw: unknown): Keys {

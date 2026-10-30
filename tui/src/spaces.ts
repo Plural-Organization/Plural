@@ -27,7 +27,10 @@ export interface SpaceRow {
 export const OWN = "own";
 
 function statusOf(phase: Phase | undefined, fallback: SessionStatus): SessionStatus {
-  return phase === "waiting" || phase === "running" ? phase : phase === undefined ? fallback : "idle";
+  if (phase === undefined) {
+    return fallback;
+  }
+  return phase === "waiting" || phase === "running" ? phase : "idle";
 }
 
 function where(card: SessionCard): string {

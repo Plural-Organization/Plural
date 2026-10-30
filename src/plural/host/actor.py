@@ -1496,7 +1496,7 @@ class SessionActor:
             log.exception("actor.briefing_failed")
             self._inbox.put(BriefingReady(ask, "", as_of, "could not write the briefing"))
         else:
-            self._inbox.put(BriefingReady(ask, written.text, as_of))
+            self._inbox.put(BriefingReady(ask, written, as_of))
 
     async def _import_briefing(self, host: Participant, command: BriefingImport) -> None:
         if any(

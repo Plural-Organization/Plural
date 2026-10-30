@@ -26,6 +26,10 @@ class InvalidCertificate(Exception):
     pass
 
 
+class ExpiredCertificate(InvalidCertificate):
+    pass
+
+
 class InvalidRequest(Exception):
     pass
 
@@ -116,7 +120,7 @@ class CertVerifier:
         except ValueError as error:
             raise InvalidCertificate("malformed certificate") from error
         if claims.exp <= now:
-            raise InvalidCertificate("certificate expired")
+            raise ExpiredCertificate("certificate expired")
         return claims
 
 
