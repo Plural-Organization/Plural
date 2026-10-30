@@ -144,15 +144,15 @@ plural team status
 
 ### A team on your own machine, behind a tunnel
 
-With no server at hand, one command starts the relay with a team directory, opens a tunnel to it and creates the team on the tunnel's address:
+With no server at hand, one command starts the relay with a team directory, opens a tunnel to it, creates the team on the tunnel's address and opens a session in that team:
 
 ```bash
 plural team create Backend --tunnel ngrok        # or cloudflared
 ```
 
-It prints the invite code and keeps running in that window; leave it open and start your session in another terminal with `plural --team`. Ctrl+C stops the relay and the tunnel. The directory file is `~/.plural/teams.db`.
+The banner of the session shows two links: the room link (`plural join "…"`, for someone you want in this session) and the team link (`plural team join <code> --relay <address>`, for someone who should join the team; one use, valid for an hour, `plural team invite` makes another). Quit the session and the relay and the tunnel stop with it. The directory file is `~/.plural/teams.db`.
 
-Your machine is the directory, so while this window is closed nobody can join or see the team's cards; sessions that are already open go on. A free ngrok address and a cloudflared quick tunnel change on every start, and the team is bound to the relay's address, so after a restart everyone has to join again. For a team that stays, run the relay on a server or behind a fixed domain and use `--relay`. `--tunnel` and `--relay` cannot be combined.
+Your machine is the directory, so while that session is closed nobody can join or see the team's cards; sessions that are already open go on. A free ngrok address and a cloudflared quick tunnel change on every start, and the team is bound to the relay's address, so after a restart everyone has to join again. For a team that stays, run the relay on a server or behind a fixed domain and use `--relay`. `--tunnel` and `--relay` cannot be combined.
 
 ### Showing your session to the team
 

@@ -66,6 +66,29 @@ describe("App", () => {
     expect(text).toContain("vlad (host)");
   });
 
+  test("the banner shows the room link and, for a team host, the team link next to it", async () => {
+    const setup = await testRender(
+      <App
+        client={session()}
+        room="r_1"
+        version="0.2.0"
+        guestLink="wss://calm.example.dev/r_1?invite=x"
+        teamLink="plural team join tm-abcde-fghj2 --relay wss://calm.example.dev"
+        onQuit={() => undefined}
+      />,
+      { width: 160, height: 36 },
+    );
+    open.push(setup);
+    const text = await frame(setup, "team link:");
+    expect(text).toContain('room link: plural join "wss://calm.example.dev/r_1?invite=x"');
+    expect(text).toContain("plural team join tm-abcde-fghj2 --relay wss://calm.example.dev");
+  });
+
+  test("a session that is not a team host has no team link", async () => {
+    const text = await frame(await mount(session()), "room link:");
+    expect(text).not.toContain("team link:");
+  });
+
   test("the splash draws the logo, then opens the session once it is joined", async () => {
     const setup = await testRender(
       <App client={session()} room="r_1" version="0.2.0" guestLink={null} splash onQuit={() => undefined} />,

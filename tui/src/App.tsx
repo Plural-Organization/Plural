@@ -58,6 +58,7 @@ export interface AppProps {
   room: string;
   version: string;
   guestLink: string | null;
+  teamLink?: string | null;
   settings?: Settings;
   onSettings?: (settings: Settings) => void;
   control?: AgentControl | null;
@@ -105,6 +106,7 @@ export function App({
   room,
   version,
   guestLink,
+  teamLink = null,
   settings: initialSettings,
   onSettings,
   control = null,
@@ -150,7 +152,7 @@ export function App({
       return next;
     });
   const { width, height } = useTerminalDimensions();
-  const initial = useMemo(() => withBanner(emptyFeed(), { kind: "banner", id: "banner", room, version, guestLink }), []);
+  const initial = useMemo(() => withBanner(emptyFeed(), { kind: "banner", id: "banner", room, version, guestLink, teamLink }), []);
   const [feed, setFeed] = useState<Feed>(initial);
   const feedRef = useRef(initial);
   const [connection, setConnection] = useState<ConnectionStatus>(client.status);

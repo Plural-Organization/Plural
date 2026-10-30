@@ -41,6 +41,12 @@ export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }
             <span fg={theme.dim}> · you let people in, /invite revoke ends the link</span>
           </text>
         ) : null}
+        {item.teamLink ? (
+          <text fg={theme.dim}>
+            team link: <span fg={theme.info}>{item.teamLink}</span>
+            <span fg={theme.dim}> · one use, for an hour</span>
+          </text>
+        ) : null}
         <text fg={theme.dim}>/help for commands · esc interrupts · ctrl+o tool details · ctrl+c twice quits</text>
       </box>
     </box>

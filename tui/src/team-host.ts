@@ -21,11 +21,6 @@ export interface TeamHostDeps {
   teamsFile: () => string;
 }
 
-export interface TeamHostIo {
-  out: (text: string) => void;
-  signal: AbortSignal;
-}
-
 const STARTUP_MS = 15_000;
 const POLL_MS = 100;
 
@@ -34,7 +29,17 @@ export function relayArgs(port: number, teams: string): string[] {
 }
 
 export function createArgs(request: TeamHostRequest, relay: string): string[] {
-  return ["team", "create", request.name, "--relay", relay, ...(request.member === null ? [] : ["--as", request.member])];
+  return ["team", "create", request.name, "--relay", relay, "--json", ...(request.member === null ? [] : ["--as", request.member])];
+}
+
+export interface TeamHosting {
+  team: string;
+  relay: string;
+  code: string;
+  minutes: number;
+  joinCommand: string;
+  onLost: (listener: (reason: string) => void) => void;
+  stop: () => Promise<void>;
 }
 
 function dataDirectory(): string {
@@ -83,12 +88,17 @@ async function terminate(child: ChildProcess): Promise<void> {
   });
 }
 
-export async function hostTeam(request: TeamHostRequest, io: TeamHostIo, deps: TeamHostDeps = DEFAULT_DEPS): Promise<number> {
+export async function openTeam(
+  request: TeamHostRequest,
+  step: (text: string) => void = () => undefined,
+  deps: TeamHostDeps = DEFAULT_DEPS,
+): Promise<TeamHosting> {
   const kind = parseTunnelKind(request.tunnel);
   if (kind === null) {
     throw new UsageError("--tunnel takes cloudflared or ngrok");
   }
   const port = await deps.freePort();
+  step("starting the team's relay…");
   const relay = deps.run(relayArgs(port, deps.teamsFile()), ["ignore", "ignore", "pipe"]);
   const reap = (): void => {
     relay.kill("SIGTERM");
@@ -99,50 +109,86 @@ export async function hostTeam(request: TeamHostRequest, io: TeamHostIo, deps: T
     errors = (errors + chunk.toString()).slice(-2000);
   });
   let relayLost: string | null = null;
+  const listeners: ((reason: string) => void)[] = [];
+  let reported: string | null = null;
+  const report = (reason: string): void => {
+    reported ??= reason;
+    for (const listener of listeners) {
+      listener(reason);
+    }
+  };
+  relay.on("exit", (code) => {
+    relayLost = `the relay exited with code ${code}\n${errors}`.trim();
+    report(relayLost);
+  });
   let tunnel: Tunnel | null = null;
-  try {
-    const ended = new Promise<string>((resolve) => {
-      relay.on("exit", (code) => {
-        relayLost = `the relay exited with code ${code}\n${errors}`.trim();
-        resolve(relayLost);
-      });
-      io.signal.addEventListener("abort", () => resolve(""));
-    });
-    await untilListening(deps, port, () => relayLost, io.signal);
-    if (io.signal.aborted) {
-      return 0;
-    }
-    tunnel = await deps.startTunnel(kind, port);
-    if (io.signal.aborted) {
-      return 0;
-    }
-    const live = tunnel;
-    const tunnelEnded = new Promise<string>((resolve) => live.onExit(resolve));
-    const created = deps.run(createArgs(request, tunnel.url));
-    const code = await new Promise<number>((resolve) => created.on("exit", (status) => resolve(status ?? 1)));
-    if (code !== 0) {
-      return code;
-    }
-    io.out(
-      `\nThe team's relay runs in this window behind ${kind}. Leave it open, ctrl+c stops it.\n` +
-        `Start your own session in another terminal: plural --team\n`,
-    );
-    const reason = await Promise.race([ended, tunnelEnded.then((text) => `the ${kind} tunnel stopped: ${text}`)]);
-    if (reason !== "") {
-      io.out(`${reason}\n`);
-      return 1;
-    }
-    return 0;
-  } finally {
+  const stop = async (): Promise<void> => {
     process.removeListener("exit", reap);
     await tunnel?.stop();
     await terminate(relay);
+  };
+  try {
+    await untilListening(deps, port, () => relayLost);
+    step(`opening a ${kind} tunnel…`);
+    tunnel = await deps.startTunnel(kind, port);
+    tunnel.onExit((reason) => report(`the ${kind} tunnel stopped (${reason.split("\n")[0]})`));
+    step("creating the team…");
+    const made = await created(deps.run(createArgs(request, tunnel.url), ["ignore", "pipe", "pipe"]));
+    return {
+      team: made.team,
+      relay: tunnel.url,
+      code: made.code,
+      minutes: made.minutes,
+      joinCommand: `plural team join ${made.code} --relay ${tunnel.url}`,
+      onLost: (listener) => {
+        listeners.push(listener);
+        if (reported !== null) {
+          listener(reported);
+        }
+      },
+      stop,
+    };
+  } catch (error) {
+    await stop();
+    throw error;
   }
 }
 
-async function untilListening(deps: TeamHostDeps, port: number, gone: () => string | null, signal: AbortSignal): Promise<void> {
+interface Created {
+  team: string;
+  code: string;
+  minutes: number;
+}
+
+function created(child: ChildProcess): Promise<Created> {
+  return new Promise((resolve, reject) => {
+    let out = "";
+    let err = "";
+    child.stdout?.on("data", (chunk: Buffer) => {
+      out += chunk.toString();
+    });
+    child.stderr?.on("data", (chunk: Buffer) => {
+      err += chunk.toString();
+    });
+    child.on("error", (error) => reject(new HostUnavailable(String(error))));
+    child.on("exit", (status) => {
+      if (status !== 0) {
+        reject(new HostUnavailable(`could not create the team\n${(out + err).trim()}`));
+        return;
+      }
+      try {
+        const printed = JSON.parse(out) as Created;
+        resolve({ team: printed.team, code: printed.code, minutes: printed.minutes });
+      } catch {
+        reject(new HostUnavailable(`could not read the new team\n${(out + err).trim()}`));
+      }
+    });
+  });
+}
+
+async function untilListening(deps: TeamHostDeps, port: number, gone: () => string | null): Promise<void> {
   const deadline = Date.now() + STARTUP_MS;
-  while (Date.now() < deadline && !signal.aborted) {
+  while (Date.now() < deadline) {
     const reason = gone();
     if (reason !== null) {
       throw new HostUnavailable(reason);
@@ -152,7 +198,5 @@ async function untilListening(deps: TeamHostDeps, port: number, gone: () => stri
     }
     await pause(POLL_MS);
   }
-  if (!signal.aborted) {
-    throw new HostUnavailable("the relay did not start in time");
-  }
+  throw new HostUnavailable("the relay did not start in time");
 }

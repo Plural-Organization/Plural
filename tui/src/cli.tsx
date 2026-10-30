@@ -23,7 +23,7 @@ import { startupCommands } from "./startup";
 import { runUpdate, skewNote, Updater } from "./update";
 import { fetchSessions, loadTeam, pickTeamSession, TeamWatcher, teamProof, type Team } from "./team";
 import { listSessions, resolveSession, type SessionInfo } from "./sessions";
-import { hostTeam } from "./team-host";
+import { openTeam, type TeamHosting } from "./team-host";
 import { parseTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
 
 const USAGE = `plural ${pkg.version}
@@ -37,7 +37,7 @@ usage
   plural update [--check]     install the latest version
   plural sessions [--json]    list your sessions
   plural rm <id>              delete a session
-  plural team create <name> --tunnel cloudflared|ngrok  start a team behind a tunnel
+  plural team create <name> --tunnel cloudflared|ngrok  create a team behind a tunnel and open a session in it
   plural relay|doctor|export  run the host's own commands
 
 options
@@ -253,7 +253,7 @@ async function printOnce(options: SessionOptions, name: string): Promise<void> {
   process.exit(code);
 }
 
-async function run(options: SessionOptions, joinLink: string | null, name: string): Promise<void> {
+async function run(options: SessionOptions, joinLink: string | null, name: string, hosting: TeamHosting | null = null): Promise<void> {
   if (options.print) {
     await printOnce(options, name);
     return;
@@ -286,6 +286,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   } catch (error) {
     await host?.stop();
     await tunnel?.stop();
+    await hosting?.stop();
     fail(problem(error));
   }
   tunnel?.onExit((reason) =>
@@ -294,12 +295,16 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
       `the ${options.tunnel} tunnel stopped (${reason.split("\n")[0]}). Links through it no longer work and nobody new can join. Quit and start plural again to get a new address.`,
     ),
   );
+  hosting?.onLost((reason) =>
+    alerts.emit("danger", `${reason.split("\n")[0]}. The team can no longer be reached and nobody new can join. Quit and run plural team create again.`),
+  );
   let parsed;
   try {
     parsed = parseLink(target.link);
   } catch (error) {
     await host?.stop();
     await tunnel?.stop();
+    await hosting?.stop();
     fail(error instanceof Error ? error.message : String(error));
   }
 
@@ -348,6 +353,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
           room: target.room,
           version: pkg.version,
           guestLink: target.guestLink,
+          teamLink: hosting?.joinCommand ?? null,
           settings,
           onSettings: saveSettings,
           control,
@@ -381,6 +387,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   renderer.destroy();
   await host?.stop();
   await tunnel?.stop();
+  await hosting?.stop();
   process.exit(0);
 }
 
@@ -406,14 +413,14 @@ async function main(): Promise<void> {
     const child = runHostCommand(parsed.args);
     child.on("exit", (code) => process.exit(code ?? 0));
   } else if (parsed.kind === "team_host") {
-    const stop = new AbortController();
-    process.once("SIGINT", () => stop.abort());
-    process.once("SIGTERM", () => stop.abort());
+    const name = parsed.member ?? userInfo().username;
+    let hosting: TeamHosting;
     try {
-      process.exit(await hostTeam(parsed, { out: (text) => process.stdout.write(text), signal: stop.signal }));
+      hosting = await openTeam(parsed, (text) => progress.step(text));
     } catch (error) {
       fail(problem(error));
     }
+    await run({ ...emptyOptions(), hostArgs: ["--team"], displayName: name }, null, name, hosting);
   } else if (parsed.kind === "join") {
     if (parsed.link === null) {
       fail("usage: plural join <link|@name> [--name <name>], or plural -r to go back to a room you were in");
