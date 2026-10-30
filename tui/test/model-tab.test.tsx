@@ -122,6 +122,7 @@ describe("Model tab", () => {
     await frame(setup, "now using Anthropic · claude-opus-5-5");
     expect(control.configured).toEqual([
       {
+        preset: "anthropic",
         provider: "anthropic",
         provider_name: "Anthropic",
         model: "claude-opus-5-5",
@@ -168,6 +169,7 @@ describe("Model tab", () => {
     await frame(setup, "connected, answered in 0.8s");
     expect(control.tested).toEqual([
       {
+        preset: "ollama",
         provider: "openai",
         provider_name: "Ollama (local)",
         model: "qwen3:4b",

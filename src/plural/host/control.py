@@ -18,7 +18,7 @@ from plural.agent.providers.base import (
 from plural.agent.providers.cli.codex_cli import CodexCliProvider
 from plural.core.errors import DomainError
 from plural.host.bootstrap import Host, build_web_search
-from plural.host.config import HostSettings
+from plural.host.config import HostSettings, preset_values
 from plural.host.inbox import Reconfigure
 from plural.host.providers import ConfigError, build_provider, provider_secrets, resolve_api_key
 from plural.host.routing import build_helper
@@ -33,7 +33,10 @@ MAX_LINE_BYTES: Final = 64 * 1024
 class AgentConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
-    provider: Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"]
+    preset: str | None = Field(default=None, max_length=64)
+    provider: (
+        Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"] | None
+    ) = None
     provider_name: str | None = Field(default=None, max_length=64)
     model: str | None = None
     base_url: str | None = None
@@ -54,11 +57,21 @@ Reply = Callable[[dict[str, object]], None]
 
 
 def settings_for(base: HostSettings, config: AgentConfig) -> HostSettings:
+    try:
+        catalog = preset_values(
+            config.preset, model=config.model or None, base_url=config.base_url or None
+        )
+    except ValueError as error:
+        raise ConfigError(str(error)) from None
+    provider = catalog.get("provider") or config.provider
+    if provider is None:
+        raise ConfigError("choose a provider")
     return base.model_copy(
         update={
-            "provider": config.provider,
-            "model": config.model or None,
-            "base_url": config.base_url or None,
+            "preset": config.preset,
+            "provider": provider,
+            "model": catalog.get("model") or config.model or None,
+            "base_url": catalog.get("base_url") or config.base_url or None,
             "api_key": config.api_key,
             "context_window": config.context_window or base.context_window,
             "fast_model": config.fast_model
@@ -133,7 +146,7 @@ class Control:
         done: asyncio.Future[None] = asyncio.get_running_loop().create_future()
         label = (
             f"{config.provider_name} · {settings.model or 'default'}"
-            if config.provider_name and config.provider != "fake"
+            if config.provider_name and settings.provider != "fake"
             else settings.agent_label({})
         )
         helper = None if config.fast_model == "off" else build_helper(settings)

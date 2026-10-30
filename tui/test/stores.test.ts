@@ -66,6 +66,7 @@ describe("presets", () => {
 
   test("a choice becomes the host's config", () => {
     expect(toConfig({ preset: "anthropic", model: "", baseUrl: "", contextWindow: "" }, " sk-ant-x ")).toEqual({
+      preset: "anthropic",
       provider: "anthropic",
       provider_name: "Anthropic",
       model: "claude-opus-5-5",
@@ -75,6 +76,7 @@ describe("presets", () => {
       fast_model: "",
     });
     expect(toConfig({ preset: "gemini", model: "gemini-2.5-flash", baseUrl: "ignored", contextWindow: "9" }, "k")).toEqual({
+      preset: "gemini",
       provider: "openai",
       provider_name: "Google Gemini",
       model: "gemini-2.5-flash",
@@ -84,6 +86,7 @@ describe("presets", () => {
       fast_model: "",
     });
     expect(toConfig({ preset: "custom", model: "m", baseUrl: " http://h/v1 ", contextWindow: "2048" }, "")).toEqual({
+      preset: "custom",
       provider: "openai",
       provider_name: "Custom endpoint",
       model: "m",

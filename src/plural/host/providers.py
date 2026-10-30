@@ -23,6 +23,10 @@ class ConfigError(Exception):
 def resolve_api_key(settings: HostSettings, environ: Mapping[str, str]) -> str | None:
     if settings.api_key is not None:
         return settings.api_key.get_secret_value()
+    entry = settings.catalog_entry
+    if entry is not None:
+        # A preset's key lives in its own variable: never send OPENAI_API_KEY to another vendor.
+        return environ.get(entry.key_env) if entry.key_env else None
     variable = KEY_VARIABLES.get(settings.resolved_provider(environ))
     return environ.get(variable) if variable else None
 

@@ -16,6 +16,7 @@ The same checks CI runs:
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run lint-imports
 uv run python scripts/gen_schema.py --check && uv run python scripts/gen_fixtures.py --check
+uv run python scripts/gen_catalog.py --check
 uv run pytest
 
 npm run typecheck --workspace client && npm test --workspace client
@@ -67,6 +68,16 @@ uv run python scripts/gen_fixtures.py
 ```
 
 The fixtures are produced by the Python reducer and replayed by the TypeScript tests, so the two implementations cannot drift apart unnoticed. See [`protocol.md`](protocol.md).
+
+## Provider catalog
+
+The providers the settings screen offers (NVIDIA, Groq, DeepSeek, Ollama and the rest) are defined once, in
+`src/plural/agent/providers/catalog.py`. The host expands a preset into its adapter, endpoint and default
+model; the terminal client renders `tui/src/catalog.json`, which is generated from it:
+
+```bash
+uv run python scripts/gen_catalog.py
+```
 
 ## Releasing
 
