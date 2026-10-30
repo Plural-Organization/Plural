@@ -48,13 +48,15 @@ describe("settings", () => {
     expect(loadSettings(path)).toEqual(chosen);
   });
 
-  test("stored provider choices are validated and old settings still load", () => {
+  test("stored provider choices keep any preset name for the host to check, and old settings still load", () => {
     expect(parseSettings({ agent: { preset: "anthropic_oauth", model: "claude-haiku-4-5" } }).agentChoices).toEqual({});
     expect(parseSettings({ agentChoices: {
       anthropic_oauth: { preset: "demo", model: "claude-haiku-4-5-20251001" },
       unknown: { preset: "unknown", model: "x" },
+      "Bad Name": { preset: "Bad Name", model: "x" },
     } }).agentChoices).toEqual({
       anthropic_oauth: { preset: "anthropic_oauth", model: "claude-haiku-4-5-20251001", baseUrl: "", contextWindow: "" },
+      unknown: { preset: "unknown", model: "x", baseUrl: "", contextWindow: "" },
     });
   });
 

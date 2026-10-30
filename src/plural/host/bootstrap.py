@@ -11,8 +11,8 @@ from plural.agent.agents import AgentLibrary
 from plural.agent.context import ContextBuilder, Environment
 from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.mcp import BROWSER_SERVER, McpHub, browser_spec
-from plural.agent.providers import anthropic_api
-from plural.agent.providers.anthropic_oauth import AnthropicOAuthProvider
+from plural.agent.providers.api.anthropic import adapter as anthropic_api
+from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider
 from plural.agent.providers.base import LLMProvider
 from plural.agent.providers.web_search import (
     anthropic_oauth_search,

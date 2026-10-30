@@ -6,6 +6,7 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 
 | Variable | Default | Description |
 |---|---|---|
+| `PLURAL_PRESET` | none | A provider from the catalog, for example `nvidia`, `groq`, `deepseek`, `openrouter` or `ollama`. It sets the provider, endpoint and default model, and reads the key from the preset's own variable (`NVIDIA_API_KEY`, `GROQ_API_KEY`, …) or `PLURAL_API_KEY`, never another vendor's key. The list is in `src/plural/agent/providers/catalog.py` |
 | `PLURAL_PROVIDER` | by key | `fake`, `anthropic`, `anthropic_oauth`, `claude_code` or `openai`. When unset it follows `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY` or `PLURAL_BASE_URL` with `PLURAL_MODEL`, and falls back to the demo agent |
 | `PLURAL_MODEL` | `claude-opus-5-5` for Anthropic API keys; `claude-haiku-4-5` for Claude OAuth; `claude-sonnet-5-5` for Claude Code | Model id, required for `openai` |
 | `PLURAL_API_KEY` | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Provider API key |
@@ -63,6 +64,8 @@ PLURAL_PROVIDER=claude_code PLURAL_MODEL=claude-sonnet-5-5 plural
 PLURAL_PROVIDER=openai PLURAL_MODEL=gpt-5 OPENAI_API_KEY=sk-… plural
 
 PLURAL_MODEL=qwen3:4b PLURAL_BASE_URL=http://127.0.0.1:11434/v1 PLURAL_CONTEXT_WINDOW=4096 plural
+# NVIDIA NIM from the catalog
+PLURAL_PRESET=nvidia NVIDIA_API_KEY=nvapi-… plural
 ```
 
 Without any of these the host runs a scripted demo agent: any text lists the workspace, and `$ cmd` asks to run `cmd` through `bash`.

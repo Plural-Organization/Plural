@@ -7,12 +7,12 @@ import pkg from "../package.json" with { type: "json" };
 import { basename } from "node:path";
 import { Shell } from "./Shell";
 import { loadKeys, saveKeys } from "./credentials";
-import { toConfig } from "./presets";
+import { setPresets, toConfig } from "./presets";
 import { loadSettings, saveSettings } from "./settings";
 import { freePort, HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
 import { startProgress } from "./lib/progress";
 import { ADDRESS_FLAGS, lanAddress, shareLaunch } from "./share";
-import { planAgent } from "./agent";
+import { agentEnv, planAgent } from "./agent";
 import { Alerts } from "./alerts";
 import { fixDashes } from "./args";
 import { loadJoined, rejoinLink, rememberJoined } from "./joined";
@@ -199,18 +199,14 @@ async function printOnce(options: SessionOptions, name: string): Promise<void> {
   if (prompt === "") {
     fail("-p needs a prompt: plural -p \"your question\", or pipe text into it");
   }
-  let plan;
+  const saved = loadSettings();
   let commands;
   try {
-    plan = planAgent(loadSettings(), loadKeys(), options);
     commands = startupCommands(options);
   } catch (error) {
     fail(problem(error));
   }
-  if (plan.problem !== null) {
-    fail(`${plan.problem}. Run plural once to set a model up, or pass --provider and set its key in the environment`);
-  }
-  Object.assign(process.env, plan.env);
+  Object.assign(process.env, agentEnv(saved, options));
   let target: Target;
   try {
     target = await start(options, null, name);
@@ -218,6 +214,21 @@ async function printOnce(options: SessionOptions, name: string): Promise<void> {
     fail(problem(error));
   }
   const host = target.host;
+  // The catalog lives on the host: ask it before resolving the saved model choice.
+  if (host !== null) {
+    setPresets(await host.control.catalog());
+  }
+  let plan;
+  try {
+    plan = planAgent(saved, loadKeys(), options);
+  } catch (error) {
+    await host?.stop();
+    fail(problem(error));
+  }
+  if (plan.problem !== null) {
+    await host?.stop();
+    fail(`${plan.problem}. Run plural once to set a model up, or pass --provider and set its key in the environment`);
+  }
   const skew = host === null ? null : skewNote(pkg.version, host.version);
   if (skew !== null) {
     process.stderr.write(`warning: ${skew}\n`);
@@ -249,15 +260,13 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   const alerts = new Alerts();
   const updater = new Updater({ current: pkg.version, execPath: process.execPath });
   void updater.check();
-  let plan;
   let startup;
   try {
-    plan = planAgent(settings, loadKeys(), options);
     startup = startupCommands(options);
   } catch (error) {
     fail(problem(error));
   }
-  Object.assign(process.env, plan.env);
+  Object.assign(process.env, agentEnv(settings, options));
   let target: Target;
   try {
     target = await start(options, joinLink, name);
@@ -265,6 +274,18 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
     fail(problem(error));
   }
   const { host, tunnel } = target;
+  // The catalog lives on the host: ask it before resolving the saved model choice.
+  if (host !== null) {
+    setPresets(await host.control.catalog());
+  }
+  let plan;
+  try {
+    plan = planAgent(settings, loadKeys(), options);
+  } catch (error) {
+    await host?.stop();
+    await tunnel?.stop();
+    fail(problem(error));
+  }
   tunnel?.onExit((reason) =>
     alerts.emit(
       "danger",

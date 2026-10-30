@@ -8,8 +8,10 @@ import httpx2
 import openai
 import pytest
 
-from plural.agent.providers.anthropic_api import FALLBACK_BETA, AnthropicProvider
-from plural.agent.providers.anthropic_api import to_messages as anthropic_messages
+from plural.agent.providers.api.anthropic.adapter import FALLBACK_BETA, AnthropicProvider
+from plural.agent.providers.api.anthropic.adapter import to_messages as anthropic_messages
+from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
+from plural.agent.providers.api.openai_compat.adapter import to_messages as openai_messages
 from plural.agent.providers.base import (
     ContextOverflow,
     LlmEvent,
@@ -28,8 +30,6 @@ from plural.agent.providers.base import (
     ToolSchema,
     UsageReport,
 )
-from plural.agent.providers.openai_compat import OpenAIProvider
-from plural.agent.providers.openai_compat import to_messages as openai_messages
 from plural.protocol.models import Usage
 
 type Handler = Callable[[httpx2.Request], httpx2.Response]

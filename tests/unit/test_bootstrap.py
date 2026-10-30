@@ -1,9 +1,9 @@
 import pytest
 from pydantic import SecretStr
 
-from plural.agent.providers.anthropic_api import AnthropicProvider
+from plural.agent.providers.api.anthropic.adapter import AnthropicProvider
+from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
 from plural.agent.providers.fake import DemoProvider
-from plural.agent.providers.openai_compat import OpenAIProvider
 from plural.host.config import HostSettings
 from plural.host.providers import ConfigError, build_provider, resolve_api_key
 

@@ -14,7 +14,7 @@ from urllib.request import Request, urlopen
 from anthropic import AsyncAnthropic
 from pydantic import BaseModel, ConfigDict, Field
 
-from plural.agent.providers.anthropic_api import AnthropicProvider
+from plural.agent.providers.api.anthropic.adapter import AnthropicProvider
 from plural.agent.providers.base import Effort, LlmEvent, LlmRequest, ProviderError
 
 # Same public OAuth client and token endpoint used by pi's Anthropic login.

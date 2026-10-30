@@ -17,7 +17,7 @@ from plural.agent.providers.base import (
     ToolCallReady,
     ToolSchema,
 )
-from plural.agent.providers.claude_code import ClaudeCodeProvider
+from plural.agent.providers.cli.claude_code import ClaudeCodeProvider
 
 
 def fake_cli(tmp_path: Path, response: dict[str, object], *, exit_code: int = 0) -> Path:

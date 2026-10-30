@@ -1,0 +1,651 @@
+import type { Preset } from "../../src/presets";
+
+// A snapshot of the host's catalog (plural.agent.providers.catalog) for tests only:
+// the client itself asks the host for it at start.
+export const TEST_CATALOG: Preset[] = [
+  {
+    "id": "anthropic",
+    "label": "Anthropic",
+    "provider": "anthropic",
+    "baseUrl": "",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "claude-opus-5-5",
+      "claude-sonnet-5-5",
+      "claude-haiku-5-5",
+      "claude-fable-5-1"
+    ],
+    "hint": "Claude models with an Anthropic API key",
+    "connection": "api_key",
+    "keyEnv": [
+      "ANTHROPIC_API_KEY"
+    ]
+  },
+  {
+    "id": "anthropic_oauth",
+    "label": "Claude OAuth",
+    "provider": "anthropic_oauth",
+    "baseUrl": "",
+    "needsKey": false,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "claude-haiku-4-5-20251001",
+      "claude-haiku-5-5",
+      "claude-sonnet-5-5",
+      "claude-opus-5-5",
+      "claude-fable-5-1",
+      "claude-opus-5",
+      "claude-sonnet-5",
+      "claude-fable-5",
+      "claude-opus-4-8",
+      "claude-opus-4-7",
+      "claude-sonnet-4-6",
+      "claude-opus-4-6",
+      "claude-opus-4-5-20251101",
+      "claude-sonnet-4-5-20250929"
+    ],
+    "hint": "Claude model IDs; Test connection checks access for your account",
+    "connection": "oauth",
+    "keyEnv": []
+  },
+  {
+    "id": "claude_code",
+    "label": "Claude Code",
+    "provider": "claude_code",
+    "baseUrl": "",
+    "needsKey": false,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "claude-sonnet-5-5",
+      "claude-opus-5-5",
+      "claude-haiku-5-5",
+      "claude-fable-5-1",
+      "claude-sonnet-5",
+      "claude-opus-5",
+      "claude-fable-5",
+      "claude-opus-4-8",
+      "claude-opus-4-7",
+      "claude-sonnet-4-6",
+      "claude-opus-4-6",
+      "claude-opus-4-5-20251101",
+      "claude-haiku-4-5-20251001",
+      "claude-sonnet-4-5-20250929"
+    ],
+    "hint": "Uses the installed Claude Code CLI; sign in with claude auth login",
+    "connection": "oauth",
+    "keyEnv": []
+  },
+  {
+    "id": "codex_cli",
+    "label": "Codex CLI",
+    "provider": "codex_cli",
+    "baseUrl": "",
+    "needsKey": false,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "gpt-6.1-sol",
+      "gpt-6-astra",
+      "gpt-6-sol",
+      "gpt-6-luna",
+      "gpt-5.6-sol",
+      "gpt-5.5"
+    ],
+    "hint": "Streams replies from Codex CLI and keeps one session for this room",
+    "connection": "oauth",
+    "keyEnv": []
+  },
+  {
+    "id": "openai",
+    "label": "OpenAI",
+    "provider": "openai",
+    "baseUrl": "",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "gpt-5",
+      "gpt-5-mini"
+    ],
+    "hint": "GPT models with an OpenAI API key",
+    "connection": "api_key",
+    "keyEnv": [
+      "OPENAI_API_KEY"
+    ]
+  },
+  {
+    "id": "gemini",
+    "label": "Google Gemini",
+    "provider": "openai",
+    "baseUrl": "https://generativelanguage.googleapis.com/v1beta/openai/",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "gemini-2.5-pro",
+      "gemini-2.5-flash"
+    ],
+    "hint": "Gemini through its OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": [
+      "GEMINI_API_KEY",
+      "GOOGLE_API_KEY"
+    ]
+  },
+  {
+    "id": "openrouter",
+    "label": "OpenRouter",
+    "provider": "openai",
+    "baseUrl": "https://openrouter.ai/api/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "anthropic/claude-sonnet-5-5",
+      "openai/gpt-5"
+    ],
+    "hint": "Many models behind one key",
+    "connection": "api_key",
+    "keyEnv": [
+      "OPENROUTER_API_KEY"
+    ]
+  },
+  {
+    "id": "groq",
+    "label": "Groq",
+    "provider": "openai",
+    "baseUrl": "https://api.groq.com/openai/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "llama-3.3-70b-versatile"
+    ],
+    "hint": "Fast hosted open models",
+    "connection": "api_key",
+    "keyEnv": [
+      "GROQ_API_KEY"
+    ]
+  },
+  {
+    "id": "deepseek",
+    "label": "DeepSeek",
+    "provider": "openai",
+    "baseUrl": "https://api.deepseek.com",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "deepseek-chat",
+      "deepseek-reasoner"
+    ],
+    "hint": "DeepSeek models",
+    "connection": "api_key",
+    "keyEnv": [
+      "DEEPSEEK_API_KEY"
+    ]
+  },
+  {
+    "id": "nvidia",
+    "label": "NVIDIA NIM",
+    "provider": "openai",
+    "baseUrl": "https://integrate.api.nvidia.com/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "meta/llama-3.3-70b-instruct",
+      "deepseek-ai/deepseek-v4-flash",
+      "meta/llama-3.1-70b-instruct"
+    ],
+    "hint": "NVIDIA NIM OpenAI-compatible endpoint; get a key from build.nvidia.com",
+    "connection": "api_key",
+    "keyEnv": [
+      "NVIDIA_API_KEY"
+    ]
+  },
+  {
+    "id": "azure",
+    "label": "Azure OpenAI",
+    "provider": "openai",
+    "baseUrl": "",
+    "needsKey": true,
+    "editableUrl": true,
+    "contextWindow": false,
+    "models": [],
+    "hint": "Enter your Azure resource endpoint and deployment name",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "ollama",
+    "label": "Ollama (local)",
+    "provider": "openai",
+    "baseUrl": "http://127.0.0.1:11434/v1",
+    "needsKey": false,
+    "editableUrl": true,
+    "contextWindow": true,
+    "models": [
+      "qwen3:4b",
+      "qwen2.5-coder:3b"
+    ],
+    "hint": "A model on this machine, no key. Set the window the server really uses",
+    "connection": "local",
+    "keyEnv": []
+  },
+  {
+    "id": "custom",
+    "label": "Custom endpoint",
+    "provider": "openai",
+    "baseUrl": "",
+    "needsKey": false,
+    "editableUrl": true,
+    "contextWindow": true,
+    "models": [],
+    "hint": "Any OpenAI-compatible server",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "amazon_bedrock",
+    "label": "Amazon Bedrock API key",
+    "provider": "openai",
+    "baseUrl": "",
+    "needsKey": true,
+    "editableUrl": true,
+    "contextWindow": false,
+    "models": [
+      "openai.gpt-oss-20b-1:0"
+    ],
+    "hint": "Use a Bedrock API key; enter the region's bedrock-runtime /openai/v1 URL",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "ant_ling",
+    "label": "Ant Ling",
+    "provider": "openai",
+    "baseUrl": "https://api.ant-ling.com/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "Ring-2.6-1T"
+    ],
+    "hint": "OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "baseten",
+    "label": "Baseten",
+    "provider": "openai",
+    "baseUrl": "https://inference.baseten.co/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [],
+    "hint": "OpenAI-compatible endpoint; enter a model ID",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "cerebras",
+    "label": "Cerebras",
+    "provider": "openai",
+    "baseUrl": "https://api.cerebras.ai/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "gpt-oss-120b"
+    ],
+    "hint": "Cerebras OpenAI-compatible API",
+    "connection": "api_key",
+    "keyEnv": [
+      "CEREBRAS_API_KEY"
+    ]
+  },
+  {
+    "id": "cloudflare_workers_ai",
+    "label": "Cloudflare Workers AI",
+    "provider": "openai",
+    "baseUrl": "",
+    "needsKey": true,
+    "editableUrl": true,
+    "contextWindow": false,
+    "models": [],
+    "hint": "Enter the account-scoped OpenAI-compatible endpoint URL",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "fireworks",
+    "label": "Fireworks",
+    "provider": "openai",
+    "baseUrl": "https://api.fireworks.ai/inference/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "accounts/fireworks/models/kimi-k3"
+    ],
+    "hint": "OpenAI-compatible API; model catalog may vary by account",
+    "connection": "api_key",
+    "keyEnv": [
+      "FIREWORKS_API_KEY"
+    ]
+  },
+  {
+    "id": "huggingface",
+    "label": "Hugging Face",
+    "provider": "openai",
+    "baseUrl": "https://router.huggingface.co/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "moonshotai/Kimi-K2.6"
+    ],
+    "hint": "Hugging Face Inference Providers OpenAI-compatible router",
+    "connection": "api_key",
+    "keyEnv": [
+      "HF_TOKEN"
+    ]
+  },
+  {
+    "id": "kimi_coding",
+    "label": "Kimi For Coding",
+    "provider": "openai",
+    "baseUrl": "https://api.kimi.com/coding/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "kimi-for-coding"
+    ],
+    "hint": "Kimi Coding OpenAI-compatible API; subscription OAuth is not configured here",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "mistral",
+    "label": "Mistral",
+    "provider": "openai",
+    "baseUrl": "https://api.mistral.ai/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "devstral-medium-latest"
+    ],
+    "hint": "Mistral chat completions API",
+    "connection": "api_key",
+    "keyEnv": [
+      "MISTRAL_API_KEY"
+    ]
+  },
+  {
+    "id": "minimax",
+    "label": "MiniMax",
+    "provider": "anthropic",
+    "baseUrl": "https://api.minimax.io/anthropic",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "MiniMax-M2.7"
+    ],
+    "hint": "Anthropic-compatible Messages API",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "minimax_cn",
+    "label": "MiniMax China",
+    "provider": "anthropic",
+    "baseUrl": "https://api.minimaxi.com/anthropic",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "MiniMax-M2.7"
+    ],
+    "hint": "Anthropic-compatible Messages API",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "moonshotai",
+    "label": "Moonshot AI",
+    "provider": "openai",
+    "baseUrl": "https://api.moonshot.ai/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "kimi-k2.6"
+    ],
+    "hint": "OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": [
+      "MOONSHOT_API_KEY"
+    ]
+  },
+  {
+    "id": "moonshotai_cn",
+    "label": "Moonshot AI China",
+    "provider": "openai",
+    "baseUrl": "https://api.moonshot.cn/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "kimi-k2.6"
+    ],
+    "hint": "OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": [
+      "MOONSHOT_API_KEY"
+    ]
+  },
+  {
+    "id": "qwen_token_plan",
+    "label": "Qwen Token Plan",
+    "provider": "openai",
+    "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "qwen3-coder-plus"
+    ],
+    "hint": "Qwen Token Plan OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "qwen_token_plan_cn",
+    "label": "Qwen Token Plan China",
+    "provider": "openai",
+    "baseUrl": "https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "qwen3-coder-plus"
+    ],
+    "hint": "Qwen Token Plan OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "qwen_token_plan_individual",
+    "label": "Qwen Token Plan Individual",
+    "provider": "openai",
+    "baseUrl": "https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "qwen3-coder-plus"
+    ],
+    "hint": "Qwen Token Plan OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "together",
+    "label": "Together AI",
+    "provider": "openai",
+    "baseUrl": "https://api.together.ai/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "moonshotai/Kimi-K3"
+    ],
+    "hint": "OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": [
+      "TOGETHER_API_KEY"
+    ]
+  },
+  {
+    "id": "vercel_ai_gateway",
+    "label": "Vercel AI Gateway",
+    "provider": "anthropic",
+    "baseUrl": "https://ai-gateway.vercel.sh",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [],
+    "hint": "Anthropic-compatible Messages API; enter a model route",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "xai",
+    "label": "xAI",
+    "provider": "openai",
+    "baseUrl": "https://api.x.ai/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "grok-4.7"
+    ],
+    "hint": "OpenAI-compatible chat completions endpoint",
+    "connection": "api_key",
+    "keyEnv": [
+      "XAI_API_KEY"
+    ]
+  },
+  {
+    "id": "xiaomi",
+    "label": "Xiaomi MiMo",
+    "provider": "openai",
+    "baseUrl": "https://api.xiaomimimo.com/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "mimo-v2-flash"
+    ],
+    "hint": "OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "xiaomi_token_plan_cn",
+    "label": "Xiaomi Token Plan China",
+    "provider": "openai",
+    "baseUrl": "https://token-plan-cn.xiaomimimo.com/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "mimo-v2-flash"
+    ],
+    "hint": "OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "xiaomi_token_plan_ams",
+    "label": "Xiaomi Token Plan Amsterdam",
+    "provider": "openai",
+    "baseUrl": "https://token-plan-ams.xiaomimimo.com/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "mimo-v2-flash"
+    ],
+    "hint": "OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "xiaomi_token_plan_sgp",
+    "label": "Xiaomi Token Plan Singapore",
+    "provider": "openai",
+    "baseUrl": "https://token-plan-sgp.xiaomimimo.com/v1",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "mimo-v2-flash"
+    ],
+    "hint": "OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "zai",
+    "label": "Z.AI Coding Plan",
+    "provider": "openai",
+    "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "glm-5.3"
+    ],
+    "hint": "Z.AI Coding Plan OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "zai_coding_cn",
+    "label": "Z.AI Coding Plan China",
+    "provider": "openai",
+    "baseUrl": "https://open.bigmodel.cn/api/coding/paas/v4",
+    "needsKey": true,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [
+      "glm-5.3"
+    ],
+    "hint": "Z.AI Coding Plan OpenAI-compatible endpoint",
+    "connection": "api_key",
+    "keyEnv": []
+  },
+  {
+    "id": "demo",
+    "label": "Demo agent",
+    "provider": "fake",
+    "baseUrl": "",
+    "needsKey": false,
+    "editableUrl": false,
+    "contextWindow": false,
+    "models": [],
+    "hint": "A scripted agent that needs nothing, to try the interface",
+    "connection": "local",
+    "keyEnv": []
+  }
+];

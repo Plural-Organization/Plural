@@ -16,7 +16,7 @@ from pydantic_ai.native_tools import WebSearchTool as NativeWebSearch
 from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 
-from plural.agent.providers.anthropic_oauth import AnthropicOAuthProvider
+from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider
 from plural.agent.providers.base import ProviderError
 from plural.agent.providers.fake import FakeProvider
 from plural.agent.providers.web_search import (

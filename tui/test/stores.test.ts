@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ControlLink, type ControlResult } from "../src/control";
 import { credentialsPath, loadKeys, parseKeys, saveKeys } from "../src/credentials";
-import { DEFAULT_CHOICE, PRESETS, presetOf, problemWith, toConfig } from "../src/presets";
+import { DEFAULT_CHOICE, presetOf, presets, problemWith, toConfig } from "../src/presets";
 import { DEFAULT_SETTINGS, loadSettings, parseSettings, saveSettings } from "../src/settings";
 import { friendlyError, maskKey, nextConnection, nextModel, nextPreset, nextPresetInConnection, switchConnection, switchPreset } from "../src/settingsModel";
 
@@ -47,15 +47,16 @@ describe("agent settings", () => {
   test("the chosen provider survives a round trip and bad values fall back", () => {
     const chosen = { ...DEFAULT_SETTINGS, agent: { preset: "ollama" as const, model: "qwen3:4b", baseUrl: "http://x/v1", contextWindow: "4096" } };
     expect(parseSettings(JSON.parse(JSON.stringify(chosen)))).toEqual(chosen);
-    expect(parseSettings({ agent: { preset: "skynet", model: 5 } }).agent).toEqual(DEFAULT_CHOICE);
+    expect(parseSettings({ agent: { preset: "skynet", model: 5 } }).agent).toEqual({ ...DEFAULT_CHOICE, preset: "skynet" });
+    expect(parseSettings({ agent: { preset: 7 } }).agent).toEqual(DEFAULT_CHOICE);
     expect(loadSettings("/definitely/missing/tui.json").agent).toEqual(DEFAULT_CHOICE);
   });
 });
 
 describe("presets", () => {
   test("every preset is well formed", () => {
-    expect(new Set(PRESETS.map((preset) => preset.id)).size).toBe(PRESETS.length);
-    for (const preset of PRESETS) {
+    expect(new Set(presets().map((preset) => preset.id)).size).toBe(presets().length);
+    for (const preset of presets()) {
       expect(preset.label).not.toBe("");
       if (preset.provider === "openai" && !preset.editableUrl && preset.id !== "openai") {
         expect(preset.baseUrl).toStartWith("https://");
@@ -66,6 +67,7 @@ describe("presets", () => {
 
   test("a choice becomes the host's config", () => {
     expect(toConfig({ preset: "anthropic", model: "", baseUrl: "", contextWindow: "" }, " sk-ant-x ")).toEqual({
+      preset: "anthropic",
       provider: "anthropic",
       provider_name: "Anthropic",
       model: "claude-opus-5-5",
@@ -75,6 +77,7 @@ describe("presets", () => {
       fast_model: "",
     });
     expect(toConfig({ preset: "gemini", model: "gemini-2.5-flash", baseUrl: "ignored", contextWindow: "9" }, "k")).toEqual({
+      preset: "gemini",
       provider: "openai",
       provider_name: "Google Gemini",
       model: "gemini-2.5-flash",
@@ -84,6 +87,7 @@ describe("presets", () => {
       fast_model: "",
     });
     expect(toConfig({ preset: "custom", model: "m", baseUrl: " http://h/v1 ", contextWindow: "2048" }, "")).toEqual({
+      preset: "custom",
       provider: "openai",
       provider_name: "Custom endpoint",
       model: "m",

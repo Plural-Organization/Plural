@@ -2,7 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
 import { App } from "../src/App";
 import type { AgentControl, ControlResult } from "../src/control";
-import type { PresetId, AgentConfig } from "../src/presets";
+import type { AgentConfig, Preset, PresetId } from "../src/presets";
+import { TEST_CATALOG } from "./support/catalog";
 import { DEFAULT_SETTINGS, type Settings } from "../src/settings";
 import { ALIA, FakeSession, HOST } from "./support/fake-session";
 
@@ -24,6 +25,10 @@ class FakeControl implements AgentControl {
   async test(config: AgentConfig): Promise<ControlResult> {
     this.tested.push(config);
     return this.nextTest;
+  }
+
+  async catalog(): Promise<Preset[]> {
+    return TEST_CATALOG;
   }
 }
 
@@ -122,6 +127,7 @@ describe("Model tab", () => {
     await frame(setup, "now using Anthropic · claude-opus-5-5");
     expect(control.configured).toEqual([
       {
+        preset: "anthropic",
         provider: "anthropic",
         provider_name: "Anthropic",
         model: "claude-opus-5-5",
@@ -168,6 +174,7 @@ describe("Model tab", () => {
     await frame(setup, "connected, answered in 0.8s");
     expect(control.tested).toEqual([
       {
+        preset: "ollama",
         provider: "openai",
         provider_name: "Ollama (local)",
         model: "qwen3:4b",

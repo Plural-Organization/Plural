@@ -24,7 +24,7 @@ from pydantic_ai.providers.anthropic import AnthropicProvider
 from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
-from plural.agent.providers.anthropic_api import OAUTH_BETA
+from plural.agent.providers.api.anthropic.adapter import OAUTH_BETA
 from plural.agent.providers.base import ProviderError
 from plural.agent.tools.extra.search import Found, SearchFailed, Source
 
