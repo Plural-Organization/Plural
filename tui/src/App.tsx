@@ -60,6 +60,7 @@ export interface AppProps {
   room: string;
   version: string;
   guestLink: string | null;
+  teamLink?: string | null;
   settings?: Settings;
   onSettings?: (settings: Settings) => void;
   control?: AgentControl | null;
@@ -107,6 +108,7 @@ export function App({
   room,
   version,
   guestLink,
+  teamLink = null,
   settings: initialSettings,
   onSettings,
   control = null,
@@ -153,7 +155,7 @@ export function App({
       return next;
     });
   const { width, height } = useTerminalDimensions();
-  const initial = useMemo(() => withBanner(emptyFeed(), { kind: "banner", id: "banner", room, version, guestLink }), []);
+  const initial = useMemo(() => withBanner(emptyFeed(), { kind: "banner", id: "banner", room, version, guestLink, teamLink }), []);
   const [feed, setFeed] = useState<Feed>(initial);
   const feedRef = useRef(initial);
   const [connection, setConnection] = useState<ConnectionStatus>(client.status);
@@ -1502,6 +1504,7 @@ export function App({
           onCopyReply={copyReply}
           onNeedExtra={askForExtra}
           update={update}
+          version={version}
           onUpdate={() => void updater?.install()}
           onClose={closeSettings}
         />
@@ -1510,6 +1513,7 @@ export function App({
         <ExtrasDialog width={width} height={height} control={control} preselect={extrasPrompt.preselect} reason={extrasPrompt.reason} onClose={closeExtras} />
       ) : null}
       {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} /> : null}
+      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} update={update} /> : null}
     </box>
   );
 }

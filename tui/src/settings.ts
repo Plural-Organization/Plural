@@ -1,5 +1,4 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { DEFAULT_CHOICE, type AgentChoice, type PresetId } from "./presets";
 
@@ -9,6 +8,7 @@ function isPresetName(value: unknown): value is PresetId {
 }
 import { isShareMode, type ShareMode } from "./share";
 import { THEME_NAMES, type ThemeName } from "./theme";
+import { dataDir } from "./paths";
 
 export interface Settings {
   theme: ThemeName;
@@ -58,8 +58,7 @@ function parseChoice(raw: unknown): AgentChoice {
 }
 
 export function settingsPath(environment: Record<string, string | undefined> = process.env): string {
-  const base = environment["PLURAL_DATA_DIR"] ?? join(homedir(), ".plural");
-  return join(base, "tui.json");
+  return join(dataDir(environment), "tui.json");
 }
 
 export function parseSettings(raw: unknown): Settings {

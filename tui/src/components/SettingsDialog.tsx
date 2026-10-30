@@ -68,6 +68,7 @@ export interface DialogProps {
   /** The chosen provider needs an SDK the host does not have yet: the app offers to install it. */
   onNeedExtra?: (extra: ExtraStatus) => void;
   update?: UpdateState | null;
+  version?: string;
   onUpdate?: () => void;
   onClose: () => void;
 }
@@ -100,6 +101,7 @@ export function SettingsDialog(props: DialogProps) {
     canConfigure: live.current.control !== null && live.current.role === "host",
     oauthLoggedIn: hasOAuth(),
     update: live.current.update,
+    version: live.current.version,
   });
   const rows = (): Row[] => rowsFor(local.current.tab, state());
   const set = (patch: Partial<Local>): void => {
