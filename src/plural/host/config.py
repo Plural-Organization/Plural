@@ -1,12 +1,13 @@
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from plural.agent.providers.base import Effort
+from plural.agent.providers.catalog import Preset, preset
 from plural.protocol.models import AdmissionMode, PromptMode
 
 
@@ -26,6 +27,7 @@ class HostSettings(BaseSettings):
     relay_url: str | None = None
     team: bool = False
     team_roster_ttl_s: float = Field(default=30, gt=0)
+    preset: str | None = None
     provider: (
         Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"] | None
     ) = None
@@ -41,6 +43,8 @@ class HostSettings(BaseSettings):
     first_token_timeout_s: float = Field(default=120, gt=0)
     idle_timeout_s: float = Field(default=60, gt=0)
     rejection_limit: int = Field(default=2, gt=0)
+    guest_run_tokens: int | None = Field(default=None, gt=0)
+    pinned_tools: str = ""
     context_window: int = Field(default=128_000, gt=0)
     compact_at: float = Field(default=0.75, gt=0, lt=1)
     approval_timeout_s: float = Field(default=120, gt=0)
@@ -65,6 +69,19 @@ class HostSettings(BaseSettings):
     web_search_country: str | None = None
     web_search_timezone: str | None = None
 
+    @model_validator(mode="after")
+    def _use_preset(self) -> Self:
+        for name, value in preset_values(
+            self.preset, model=self.model, base_url=self.base_url
+        ).items():
+            if getattr(self, name) is None:
+                setattr(self, name, value)
+        return self
+
+    @property
+    def catalog_entry(self) -> Preset | None:
+        return preset(self.preset) if self.preset else None
+
     def resolved_provider(
         self, environ: Mapping[str, str] | None = None
     ) -> Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"]:
@@ -78,6 +95,9 @@ class HostSettings(BaseSettings):
         return "fake"
 
     def agent_label(self, environ: Mapping[str, str] | None = None) -> str:
+        entry = self.catalog_entry
+        if entry is not None and entry.adapter != "fake":
+            return f"{entry.label} · {self.model or 'default'}"
         provider = self.resolved_provider(environ)
         if provider == "fake":
             return "demo agent (scripted)"
@@ -98,3 +118,21 @@ class HostSettings(BaseSettings):
     def room_url(self, room: str) -> str:
         base = self.public_url or self.relay_url or f"ws://{self.bind_host}:{self.port}"
         return f"{base.rstrip('/')}/{room}"
+
+
+def preset_values(
+    preset_id: str | None, *, model: str | None, base_url: str | None
+) -> dict[str, str]:
+    """The provider, endpoint and default model a catalog preset stands for."""
+    if preset_id is None:
+        return {}
+    entry = preset(preset_id)
+    if entry is None:
+        raise ValueError(f"unknown preset {preset_id!r}")
+    values = {"provider": entry.adapter}
+    endpoint = (base_url if entry.editable_url else None) or entry.base_url
+    if endpoint:
+        values["base_url"] = endpoint
+    if model or entry.models:
+        values["model"] = model or entry.models[0]
+    return values

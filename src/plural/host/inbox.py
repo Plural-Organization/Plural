@@ -97,6 +97,22 @@ class BoardRequest:
     reply: "asyncio.Future[str]"
 
 
+@dataclass(frozen=True, slots=True)
+class PluginReply:
+    command: str
+    invoker_id: str
+    text: str
+    ok: bool = True
+
+
+@dataclass(frozen=True, slots=True)
+class PluginPrompt:
+    command: str
+    invoker_id: str
+    text: str
+    follow_up: bool = False
+
+
 InboxMessage = (
     Incoming
     | Disconnected
@@ -112,6 +128,8 @@ InboxMessage = (
     | TeamSweep
     | SkillsReply
     | BoardRequest
+    | PluginReply
+    | PluginPrompt
 )
 
 

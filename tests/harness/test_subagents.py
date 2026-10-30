@@ -12,8 +12,8 @@ from plural.agent.providers.base import LlmEvent, Stop, ToolCallReady, ToolCallR
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
-from plural.agent.tools.agent import AgentTool
 from plural.agent.tools.base import ToolCtx
+from plural.agent.tools.extra.agent import AgentTool
 from plural.agent.tools.registry import builtin_tools
 from plural.host.system import UlidGenerator
 from plural.protocol.models import Provenance, Role, SkillScope, ToolCallView, ToolRisk
@@ -78,9 +78,8 @@ async def test_explore_runs_on_the_fast_model_and_reports_back(tmp_path: Path) -
     assert child_request.system.startswith("You are explore")
     assert child_request.messages[0].content.endswith("where is alpha?")
     child_tools = {tool.name for tool in child_request.tools}
-    assert child_tools == {"read", "grep", "glob", "ls", "web_search", "web_fetch"} & {
-        tool.name for tool in main.requests[0].tools
-    }
+    # A sub-agent sees every tool of its spec that exists, deferred or not.
+    assert child_tools == {"read", "grep", "glob", "ls", "web_fetch"}
     assert not child_tools & {"agent", "write", "bash"}
     assert "# Sub-agents" in main.requests[0].system
 

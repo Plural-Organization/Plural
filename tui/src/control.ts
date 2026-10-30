@@ -1,15 +1,18 @@
-import type { AgentConfig } from "./presets";
+import type { AgentConfig, Preset } from "./presets";
 
 export interface ControlResult {
   ok: boolean;
   agent?: string;
   message?: string;
   error?: string;
+  presets?: Preset[];
 }
 
 export interface AgentControl {
   configure(config: AgentConfig): Promise<ControlResult>;
   test(config: AgentConfig): Promise<ControlResult>;
+  /** The host's provider catalog, which the client renders and keeps no copy of. */
+  catalog(): Promise<Preset[]>;
 }
 
 export const CONTROL_TIMEOUT_MS = 60_000;
@@ -45,7 +48,12 @@ export class ControlLink implements AgentControl {
     return this.request("test", config);
   }
 
-  private request(type: "configure" | "test", config: AgentConfig): Promise<ControlResult> {
+  async catalog(): Promise<Preset[]> {
+    const result = await this.request("catalog", null);
+    return result.ok ? (result.presets ?? []) : [];
+  }
+
+  private request(type: "configure" | "test" | "catalog", config: AgentConfig | null): Promise<ControlResult> {
     this.counter += 1;
     const id = `k${this.counter}`;
     return new Promise((resolve) => {
@@ -57,7 +65,7 @@ export class ControlLink implements AgentControl {
         clearTimeout(timer);
         resolve(result);
       });
-      if (!this.write(`${JSON.stringify({ id, type, config })}\n`)) {
+      if (!this.write(`${JSON.stringify(config === null ? { id, type } : { id, type, config })}\n`)) {
         this.pending.delete(id);
         clearTimeout(timer);
         resolve({ ok: false, error: "the host is not reachable" });
@@ -86,6 +94,7 @@ export class ControlLink implements AgentControl {
       ...(typeof message["agent"] === "string" ? { agent: message["agent"] } : {}),
       ...(typeof message["message"] === "string" ? { message: message["message"] } : {}),
       ...(typeof message["error"] === "string" ? { error: message["error"] } : {}),
+      ...(Array.isArray(message["presets"]) ? { presets: message["presets"] as Preset[] } : {}),
     });
   }
 }

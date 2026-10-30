@@ -1,8 +1,7 @@
 import asyncio
-import itertools
 import json
 from collections import deque
-from collections.abc import AsyncGenerator, AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field, replace
 
 import structlog
@@ -24,6 +23,7 @@ from plural.agent.events import (
     Spend,
     ToolEnd,
     ToolOutput,
+    ToolsLoaded,
     ToolStart,
 )
 from plural.agent.gate import PolicyGate
@@ -47,7 +47,6 @@ from plural.agent.providers.base import (
     NativeContent,
     NativeReady,
     ProviderActivity,
-    ProviderBusy,
     ProviderError,
     Stop,
     StopReason,
@@ -55,8 +54,10 @@ from plural.agent.providers.base import (
     ThinkingDelta,
     ToolCallReady,
     ToolCallRequest,
+    ToolSchema,
     UsageReport,
 )
+from plural.agent.providers.resilient import ResilientProvider
 from plural.agent.sandbox.base import SandboxError
 from plural.agent.tools.base import PreparedCall, ToolCtx, ToolError, ToolResult
 from plural.agent.tools.registry import ToolRegistry, UnknownTool
@@ -127,8 +128,6 @@ class AgentLoop:
         limits: LoopLimits | None = None,
         helper: LLMProvider | None = None,
     ) -> None:
-        self._provider = provider
-        self._helper = helper
         self._spending: dict[tuple[str, str], Spend] = {}
         self._tools = tools
         self._gate = gate
@@ -136,6 +135,9 @@ class AgentLoop:
         self._tool_ctx = tool_ctx
         self._ids = ids
         self._limits = limits or LoopLimits()
+        self._provider = self._resilient(provider)
+        self._helper = self._resilient(helper) if helper is not None else None
+        self._prompt: tuple[str, tuple[ToolSchema, ...]] | None = None
         self._conversation: list[Message] = []
         self._notes: list[NotesTurn] = []
         self._shared = False
@@ -164,11 +166,11 @@ class AgentLoop:
 
     @property
     def provider(self) -> LLMProvider:
-        return self._provider
+        return self._provider.inner
 
     @property
     def helper(self) -> LLMProvider | None:
-        return self._helper
+        return self._helper.inner if self._helper is not None else None
 
     @property
     def limits(self) -> LoopLimits:
@@ -195,9 +197,9 @@ class AgentLoop:
         context_window: int | None = None,
         helper: LLMProvider | None = None,
     ) -> None:
-        retired = [self._provider, self._helper]
-        self._provider = provider
-        self._helper = helper
+        retired = [wrapper.inner for wrapper in (self._provider, self._helper) if wrapper]
+        self._provider = self._resilient(provider)
+        self._helper = self._resilient(helper) if helper is not None else None
         for previous in retired:
             close = getattr(previous, "close", None)
             if close is not None and previous not in (provider, helper):
@@ -253,6 +255,10 @@ class AgentLoop:
         self._notes.append(turn)
         self._shared = True
 
+    def load_tools(self, names: Sequence[str]) -> None:
+        """Declare deferred tools loaded in an earlier session, before the next run."""
+        self._tools.load(names)
+
     def restore(self, conversation: Sequence[Message]) -> None:
         self._conversation = list(conversation)
         self._shared = any(isinstance(message, NotesTurn) for message in conversation)
@@ -280,6 +286,8 @@ class AgentLoop:
         self._usage = Usage()
         self.spend("main", "", Usage(), uses=1)
         self._gate.begin_run()
+        self._prompt = (self._context.system(), self._tools.schemas())
+        revision = self._tools.revision
         self._compaction_failed = False
         self._verify_compaction = False
         recovering = False
@@ -360,7 +368,11 @@ class AgentLoop:
                     if turn.stop == "refusal":
                         yield RunEnd(RunEndReason.ERROR, self._usage, "model declined the request")
                         return
+                    if limit := self._gate.turn_limit(usage=self._usage, provenance=provenance):
+                        yield RunEnd(RunEndReason.LIMIT, self._usage, limit)
+                        return
                     continue
+                ended: list[ToolResult] = []
                 for group in self._groups(assistant.tool_calls):
                     for call in group:
                         recent.append(_signature(call))
@@ -370,12 +382,29 @@ class AgentLoop:
                             )
                             return
                     async for event in self._execute_group(group, provenance, cancel):
+                        if isinstance(event, ToolEnd):
+                            ended.append(event.result)
                         yield event
                     if cancel.is_set():
                         yield RunEnd(RunEndReason.ABORTED, self._usage)
                         return
-                queued = self._next_input(has_tool_calls=bool(assistant.tool_calls))
-                if not assistant.tool_calls and not queued:
+                if self._tools.revision != revision:
+                    # Tools loaded this turn are declared from the next model call on.
+                    revision = self._tools.revision
+                    known = {schema.name for schema in self._prompt[1]}
+                    schemas = self._tools.schemas()
+                    self._prompt = (self._prompt[0], schemas)
+                    if fresh := tuple(s.name for s in schemas if s.name not in known):
+                        yield ToolsLoaded(fresh)
+                # Tools that all ask to terminate hand the turn back without another model call.
+                has_tool_calls = bool(ended) and not all(result.terminate for result in ended)
+                if (has_tool_calls or self._steer or self._follow_up) and (
+                    limit := self._gate.turn_limit(usage=self._usage, provenance=provenance)
+                ):
+                    yield RunEnd(RunEndReason.LIMIT, self._usage, limit)
+                    return
+                queued = self._next_input(has_tool_calls=has_tool_calls)
+                if not has_tool_calls and not queued:
                     yield RunEnd(RunEndReason.STOP, self._usage)
                     return
                 if queued:
@@ -385,6 +414,7 @@ class AgentLoop:
                     self._conversation.append(message)
             yield RunEnd(RunEndReason.LIMIT, self._usage, "max turns reached")
         finally:
+            self._prompt = None
             self._settle()
 
     def _threshold(self) -> float:
@@ -411,10 +441,11 @@ class AgentLoop:
 
     async def _compact(self, prompt: UserTurn | None, cancel: asyncio.Event) -> Compacted:
         self._compact_requested = False
+        system, tools = self._prompt_parts()
         request = LlmRequest(
-            system=self._context.system(),
+            system=system,
             messages=(*to_llm(self._conversation), LlmMessage(role="user", content=SUMMARY_PROMPT)),
-            tools=self._tools.schemas(),
+            tools=tools,
         )
         summary = ""
         for provider in (self._helper, self._provider):
@@ -494,62 +525,10 @@ class AgentLoop:
             raise CompactionFailed("the model did not produce a summary")
         return summary
 
-    async def _events(
+    def _events(
         self, request: LlmRequest, cancel: asyncio.Event, provider: LLMProvider | None = None
     ) -> AsyncIterator[LlmEvent]:
-        for attempt in itertools.count():
-            started = False
-            try:
-                async for event in self._attempt(request, cancel, provider or self._provider):
-                    started = True
-                    yield event
-                return
-            except ProviderBusy as error:
-                if started or attempt >= self._limits.retries:
-                    raise
-                delay = self._limits.retry_delay_s * 2**attempt
-                log.warning(
-                    "agent.provider_busy", error=str(error), attempt=attempt + 1, delay=delay
-                )
-                try:
-                    await interruptible(asyncio.sleep(delay), cancel)
-                except Interrupted:
-                    return
-
-    async def _attempt(
-        self, request: LlmRequest, cancel: asyncio.Event, provider: LLMProvider
-    ) -> AsyncIterator[LlmEvent]:
-        stream = provider.stream(request, cancel=cancel).__aiter__()
-        limit = self._limits.first_token_timeout_s
-        event_count = 0
-        last_event_kind: str | None = None
-        try:
-            while True:
-                try:
-                    event = await interruptible(anext(stream), cancel, limit)
-                except StopAsyncIteration:
-                    return
-                except Interrupted:
-                    return
-                except TimedOut:
-                    log.warning(
-                        "agent.provider_timeout",
-                        provider=type(provider).__name__,
-                        timeout_s=limit,
-                        events_received=event_count,
-                        last_event_kind=last_event_kind,
-                    )
-                    raise ProviderError(f"model produced no output for {limit:g}s") from None
-                event_count += 1
-                last_event_kind = event.kind
-                if isinstance(event, ProviderActivity):
-                    last_event_kind = event.source
-                    continue
-                limit = self._limits.idle_timeout_s
-                yield event
-        finally:
-            if isinstance(stream, AsyncGenerator):
-                await stream.aclose()
+        return (provider or self._provider).stream(request, cancel=cancel)
 
     def _next_input(self, *, has_tool_calls: bool) -> list[UserTurn]:
         if self._steer:
@@ -560,11 +539,26 @@ class AgentLoop:
             return [self._follow_up.popleft()]
         return []
 
+    def _resilient(self, provider: LLMProvider) -> ResilientProvider:
+        return ResilientProvider(
+            provider,
+            first_token_timeout_s=self._limits.first_token_timeout_s,
+            idle_timeout_s=self._limits.idle_timeout_s,
+            retries=self._limits.retries,
+            retry_delay_s=self._limits.retry_delay_s,
+        )
+
+    def _prompt_parts(self) -> tuple[str, tuple[ToolSchema, ...]]:
+        # A run keeps the system prompt and tool list it started with, so MCP servers or skills
+        # changing mid-run do not rewrite the request prefix the provider has cached.
+        return self._prompt or (self._context.system(), self._tools.schemas())
+
     def _request(self) -> LlmRequest:
+        system, tools = self._prompt_parts()
         return LlmRequest(
-            system=self._context.system(),
+            system=system,
             messages=to_llm(self._conversation),
-            tools=self._tools.schemas(),
+            tools=tools,
         )
 
     def _groups(self, calls: Sequence[ToolCallRequest]) -> list[list[ToolCallRequest]]:

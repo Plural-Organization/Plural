@@ -100,6 +100,11 @@ export type RunEndReason = "stop" | "aborted" | "error" | "limit";
 export type McpStatus = "connecting" | "ready" | "failed" | "off";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginStatus".
+ */
+export type PluginStatus = "loaded" | "failed";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "ToolRisk".
  */
 export type ToolRisk = "read" | "write" | "exec";
@@ -174,6 +179,10 @@ export interface EventsSchema {
     | McpChanged
     | UsageRecorded
     | AgentsChanged
+    | ToolsLoaded
+    | PluginsChanged
+    | CommandInvoked
+    | CommandReplied
     | ToolStarted
     | ToolOutput
     | ToolEnded
@@ -292,6 +301,7 @@ export interface SkillsChanged {
  * via the `definition` "SkillView".
  */
 export interface SkillView {
+  builtin: boolean;
   description: string;
   name: string;
   scope: SkillScope;
@@ -850,6 +860,67 @@ export interface AgentView {
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ToolsLoaded".
+ */
+export interface ToolsLoaded {
+  tools: string[];
+  type: "tools.loaded";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginsChanged".
+ */
+export interface PluginsChanged {
+  commands: PluginCommandView[];
+  plugins: PluginView[];
+  type: "plugins.changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginCommandView".
+ */
+export interface PluginCommandView {
+  description: string;
+  host_only: boolean;
+  name: string;
+  plugin: string;
+  usage: string;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginView".
+ */
+export interface PluginView {
+  commands: string[];
+  error: string | null;
+  name: string;
+  path: string;
+  status: PluginStatus;
+  tools: string[];
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "CommandInvoked".
+ */
+export interface CommandInvoked {
+  args: string;
+  command: string;
+  invoker_id: string;
+  type: "command.invoked";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "CommandReplied".
+ */
+export interface CommandReplied {
+  command: string;
+  invoker_id: string;
+  ok: boolean;
+  text: string;
+  type: "command.replied";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "ToolStarted".
  */
 export interface ToolStarted {
@@ -1014,17 +1085,20 @@ export interface SessionState {
   briefing_sharing: "off" | "ask" | "team";
   briefings_imported: BriefingImportView[];
   chat: ChatEntry[];
+  commands: PluginCommandView[];
   context: ContextView | null;
   fast_agent: string;
   join_requests: {
     [k: string]: JoinRequestView;
   };
   last_seq: number;
+  loaded_tools: string[];
   mcp: McpServerView[];
   participants: {
     [k: string]: Participant;
   };
   permission_mode: "default" | "accept_edits" | "plan" | "auto";
+  plugins: PluginView[];
   policy: PolicyRuleView[];
   prompt_mode: "open" | "review";
   proposals: {
@@ -1164,6 +1238,10 @@ export interface EventRecord {
     | McpChanged
     | UsageRecorded
     | AgentsChanged
+    | ToolsLoaded
+    | PluginsChanged
+    | CommandInvoked
+    | CommandReplied
     | ToolStarted
     | ToolOutput
     | ToolEnded

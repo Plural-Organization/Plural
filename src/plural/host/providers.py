@@ -2,14 +2,14 @@
 
 from collections.abc import Mapping
 
-from plural.agent.providers import anthropic_api
-from plural.agent.providers.anthropic_api import AnthropicProvider
-from plural.agent.providers.anthropic_oauth import AnthropicOAuthProvider, load_credentials
+from plural.agent.providers.api.anthropic import adapter as anthropic_api
+from plural.agent.providers.api.anthropic.adapter import AnthropicProvider
+from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider, load_credentials
+from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
 from plural.agent.providers.base import LLMProvider
-from plural.agent.providers.claude_code import ClaudeCodeProvider
-from plural.agent.providers.codex_cli import CodexCliProvider
+from plural.agent.providers.cli.claude_code import ClaudeCodeProvider
+from plural.agent.providers.cli.codex_cli import CodexCliProvider
 from plural.agent.providers.fake import DemoProvider
-from plural.agent.providers.openai_compat import OpenAIProvider
 from plural.host.config import HostSettings
 
 KEY_VARIABLES = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
@@ -23,6 +23,10 @@ class ConfigError(Exception):
 def resolve_api_key(settings: HostSettings, environ: Mapping[str, str]) -> str | None:
     if settings.api_key is not None:
         return settings.api_key.get_secret_value()
+    entry = settings.catalog_entry
+    if entry is not None:
+        # A preset's key lives in its own variables: never send OPENAI_API_KEY to another vendor.
+        return next((environ[name] for name in entry.key_env if environ.get(name)), None)
     variable = KEY_VARIABLES.get(settings.resolved_provider(environ))
     return environ.get(variable) if variable else None
 
@@ -35,6 +39,12 @@ def provider_secrets(settings: HostSettings, api_key: str | None) -> tuple[str, 
 
 
 def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
+    entry = settings.catalog_entry
+    if entry is not None and entry.needs_key and not api_key:
+        where = " or ".join((*entry.key_env, "PLURAL_API_KEY"))
+        raise ConfigError(
+            f"{entry.label} needs an API key: set {where}, or enter it in the settings"
+        )
     match settings.resolved_provider():
         case "fake":
             return DemoProvider()

@@ -31,6 +31,7 @@ from plural.protocol.events import (
     ParticipantRevoked,
     ParticipantRoleChanged,
     PermissionModeChanged,
+    PluginsChanged,
     PolicyRuleAdded,
     PolicyRuleRemoved,
     PromptAccepted,
@@ -43,6 +44,7 @@ from plural.protocol.events import (
     RunStarted,
     SkillsChanged,
     ToolEnded,
+    ToolsLoaded,
     ToolStarted,
     UsageRecorded,
 )
@@ -155,6 +157,11 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             return state.model_copy(update={"context": context})
         case SkillsChanged(skills=skills):
             return state.model_copy(update={"skills": skills})
+        case ToolsLoaded(tools=tools):
+            loaded = tuple(dict.fromkeys((*state.loaded_tools, *tools)))
+            return state.model_copy(update={"loaded_tools": loaded})
+        case PluginsChanged(plugins=plugins, commands=commands):
+            return state.model_copy(update={"plugins": plugins, "commands": commands})
         case ProposalCreated(proposal=proposal):
             return state.model_copy(
                 update={"proposals": {**state.proposals, proposal.id: proposal}}

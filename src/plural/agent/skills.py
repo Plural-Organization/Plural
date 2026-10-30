@@ -18,6 +18,7 @@ from plural.security.secrets import is_denied_path
 
 SKILL_FILE: Final = "SKILL.md"
 INSTALL_DIR: Final = (".agents", "skills")
+BUILTIN_DIR: Final = Path(__file__).parent / "builtin_skills"
 SEARCH_DIRS: Final = (INSTALL_DIR, (".claude", "skills"), (".plural", "skills"))
 SEARCH_URL: Final = "https://skills.sh/api/search"
 ARCHIVE_URL: Final = "https://codeload.github.com/{repo}/tar.gz/HEAD"
@@ -57,9 +58,12 @@ class Skill:
     description: str
     path: Path
     scope: SkillScope
+    builtin: bool = False
 
     def view(self) -> SkillView:
-        return SkillView(name=self.name, description=self.description, scope=self.scope)
+        return SkillView(
+            name=self.name, description=self.description, scope=self.scope, builtin=self.builtin
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,7 +111,7 @@ def frontmatter(text: str) -> dict[str, str]:
     return fields
 
 
-def read_skill(directory: Path, scope: SkillScope) -> Skill | None:
+def read_skill(directory: Path, scope: SkillScope, *, builtin: bool = False) -> Skill | None:
     try:
         text = (directory / SKILL_FILE).read_text(encoding="utf-8", errors="replace")
     except OSError:
@@ -119,14 +123,23 @@ def read_skill(directory: Path, scope: SkillScope) -> Skill | None:
     description = " ".join(fields.get("description", "").split())
     if len(description) > MAX_DESCRIPTION:
         description = f"{description[: MAX_DESCRIPTION - 1]}…"
-    return Skill(name=name, description=description, path=directory, scope=scope)
+    return Skill(name=name, description=description, path=directory, scope=scope, builtin=builtin)
 
 
 class SkillLibrary:
-    def __init__(self, *, project: Path, home: Path, fetch: Fetch | None = None) -> None:
+    def __init__(
+        self,
+        *,
+        project: Path,
+        home: Path,
+        fetch: Fetch | None = None,
+        builtin: Path | None = BUILTIN_DIR,
+    ) -> None:
+        # Earlier roots win a name clash, so a project or home skill can replace a built-in one.
         self._roots = (
-            *((project.joinpath(*parts), SkillScope.PROJECT) for parts in SEARCH_DIRS),
-            *((home.joinpath(*parts), SkillScope.GLOBAL) for parts in SEARCH_DIRS),
+            *((project.joinpath(*parts), SkillScope.PROJECT, False) for parts in SEARCH_DIRS),
+            *((home.joinpath(*parts), SkillScope.GLOBAL, False) for parts in SEARCH_DIRS),
+            *(((builtin, SkillScope.GLOBAL, True),) if builtin is not None else ()),
         )
         self._targets = {
             SkillScope.PROJECT: project.joinpath(*INSTALL_DIR),
@@ -216,6 +229,8 @@ class SkillLibrary:
         skill = self.get(name)
         if skill is None:
             raise SkillError(f"no skill named {name}; installed: {self._names()}")
+        if skill.builtin:
+            raise SkillError(f"{name} is built into Plural and cannot be removed")
         if skill.path.parent not in self._targets.values():
             raise SkillError(f"{name} lives in {skill.path.parent}; remove it there by hand")
         await asyncio.to_thread(shutil.rmtree, skill.path)
@@ -227,7 +242,7 @@ class SkillLibrary:
 
     def _scan(self) -> tuple[Skill, ...]:
         found: dict[str, Skill] = {}
-        for root, scope in self._roots:
+        for root, scope, builtin in self._roots:
             try:
                 children = sorted(
                     child
@@ -237,7 +252,7 @@ class SkillLibrary:
             except OSError:
                 continue
             for child in children:
-                skill = read_skill(child, scope)
+                skill = read_skill(child, scope, builtin=builtin)
                 if skill is not None and skill.name not in found:
                     found[skill.name] = skill
         return tuple(found.values())

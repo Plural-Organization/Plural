@@ -1,7 +1,12 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { DEFAULT_CHOICE, isPresetId, type AgentChoice, type PresetId } from "./presets";
+import { DEFAULT_CHOICE, type AgentChoice, type PresetId } from "./presets";
+
+// Saved settings are read before the host answers with its catalog: the host checks the preset.
+function isPresetName(value: unknown): value is PresetId {
+  return typeof value === "string" && /^[a-z0-9_]{1,64}$/.test(value);
+}
 import { isShareMode, type ShareMode } from "./share";
 import { THEME_NAMES, type ThemeName } from "./theme";
 
@@ -41,7 +46,7 @@ function parseChoice(raw: unknown): AgentChoice {
   const value = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
   const text = (field: keyof AgentChoice): string => typeof value[field] === "string" ? value[field] as string : "";
   return {
-    preset: isPresetId(value["preset"]) ? value["preset"] : DEFAULT_CHOICE.preset,
+    preset: isPresetName(value["preset"]) ? value["preset"] : DEFAULT_CHOICE.preset,
     model: text("model"),
     baseUrl: text("baseUrl"),
     contextWindow: text("contextWindow"),
@@ -63,7 +68,7 @@ export function parseSettings(raw: unknown): Settings {
     ? value["agentChoices"] as Record<string, unknown> : {};
   const agentChoices: Settings["agentChoices"] = {};
   for (const [preset, rawChoice] of Object.entries(rawChoices)) {
-    if (isPresetId(preset) && typeof rawChoice === "object" && rawChoice !== null) {
+    if (isPresetName(preset) && typeof rawChoice === "object" && rawChoice !== null) {
       agentChoices[preset] = { ...parseChoice(rawChoice), preset };
     }
   }

@@ -42,6 +42,8 @@ src/plural/
 ├── core/       state reducer, roles, policy engine   (pure)
 ├── security/   tokens, host keys, redaction
 ├── agent/      loop, tools, sandbox, providers
+│   ├── providers/  api/anthropic, api/openai_compat, cli/: each adapter with its presets.py
+│   └── tools/  core/ declared on every request, extra/ loaded with tool_search
 ├── storage/    SQLite event store, migrations, export
 ├── host/       session actor, gateway, transports
 ├── relay/      relay router
@@ -65,6 +67,14 @@ uv run python scripts/gen_fixtures.py
 ```
 
 The fixtures are produced by the Python reducer and replayed by the TypeScript tests, so the two implementations cannot drift apart unnoticed. See [`protocol.md`](protocol.md).
+
+## Provider catalog
+
+The providers the settings screen offers (NVIDIA, Groq, DeepSeek, Ollama and the rest) are defined once, in
+`presets.py` next to the adapter that serves them (`providers/api/openai_compat/presets.py` holds NVIDIA,
+Groq, DeepSeek and the other OpenAI-compatible ones), and `providers/catalog.py` puts them together. The host expands a preset into its adapter,
+endpoint and default model. The terminal client keeps no copy: it asks the host it started for the
+catalog over the control channel (`{"type": "catalog"}`) before it restores the saved model choice.
 
 ## Releasing
 

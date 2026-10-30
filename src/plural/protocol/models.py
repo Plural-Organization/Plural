@@ -69,6 +69,11 @@ class McpStatus(StrEnum):
     OFF = "off"
 
 
+class PluginStatus(StrEnum):
+    LOADED = "loaded"
+    FAILED = "failed"
+
+
 class DequeueReason(StrEnum):
     DELIVERED = "delivered"
     CANCELLED = "cancelled"
@@ -210,6 +215,7 @@ class SkillView(Model):
     name: str
     description: str
     scope: SkillScope
+    builtin: bool = False
 
 
 class SkillHit(Model):
@@ -242,6 +248,23 @@ class UsageLine(Model):
     agent: str = ""
     uses: int = 0
     usage: Usage = Usage()
+
+
+class PluginView(Model):
+    name: str
+    path: str
+    status: PluginStatus
+    commands: tuple[str, ...] = ()
+    tools: tuple[str, ...] = ()
+    error: str | None = None
+
+
+class PluginCommandView(Model):
+    name: str
+    plugin: str
+    description: str
+    usage: str = ""
+    host_only: bool = False
 
 
 class ContextView(Model):
@@ -422,6 +445,9 @@ class SessionState(Model):
     mcp: tuple[McpServerView, ...] = ()
     usage: tuple[UsageLine, ...] = ()
     agents: tuple[AgentView, ...] = ()
+    loaded_tools: tuple[str, ...] = ()
+    plugins: tuple[PluginView, ...] = ()
+    commands: tuple[PluginCommandView, ...] = ()
     queue: tuple[QueuedPrompt, ...] = ()
     agent: str = ""
     fast_agent: str = ""

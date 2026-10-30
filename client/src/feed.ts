@@ -166,6 +166,18 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
       ].filter(Boolean);
       return parts.length > 0 ? note("accent", `skills: ${parts.join(" · ")}`) : feed;
     }
+    case "tools.loaded":
+      return note("dim", `the agent loaded ${event.tools.join(", ")}`);
+    case "plugins.changed": {
+      const failed = event.plugins.filter((plugin) => plugin.status === "failed");
+      return failed.length > 0
+        ? note("warn", failed.map((plugin) => `plugin ${plugin.name} failed: ${plugin.error ?? "unknown error"}`).join("\n"))
+        : feed;
+    }
+    case "command.invoked":
+      return note("dim", `${nameOf(event.invoker_id)} ran /${event.command}${event.args ? ` ${event.args}` : ""}`);
+    case "command.replied":
+      return note(event.ok ? "accent" : "danger", `/${event.command} · ${event.text}`);
     case "prompt.dequeued":
       return event.reason === "cancelled" ? note("dim", "a queued prompt was cancelled") : feed;
     case "proposal.created":

@@ -25,6 +25,7 @@ from plural.protocol.models import (
     RunEndReason,
     ToolCallView,
     ToolRisk,
+    Usage,
 )
 
 AGENT_TOOL: Final = "agent"
@@ -53,6 +54,9 @@ class _SharedGate:
         self, call: ToolCallView, *, subject: str, provenance: Provenance
     ) -> GateResult:
         return await self._gate.check(call, subject=subject, provenance=provenance)
+
+    def turn_limit(self, *, usage: Usage, provenance: Provenance) -> str | None:
+        return self._gate.turn_limit(usage=usage, provenance=provenance)
 
 
 class AgentTool:

@@ -484,7 +484,18 @@ class CodexCliProvider:
                     {
                         "threadId": self._thread_id,
                         "cwd": str(self._workspace),
-                        "input": [{"type": "text", "text": _prompt(request, new_messages)}],
+                        "input": [
+                            {"type": "text", "text": _prompt(request, new_messages)},
+                            # Codex keeps the thread, so only the new messages' images go along.
+                            *(
+                                {
+                                    "type": "image",
+                                    "url": f"data:{image.media_type};base64,{image.data}",
+                                }
+                                for message in new_messages
+                                for image in message.images
+                            ),
+                        ],
                         "model": self._model,
                         "approvalPolicy": "never",
                         "outputSchema": _schema(request),

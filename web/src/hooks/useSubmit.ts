@@ -1,6 +1,6 @@
 import { findPerson, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
-import { commandName, helpText, isHostOnly } from "../lib/commands";
+import { commandName, helpText, isHostOnly, pluginHints } from "../lib/commands";
 import type { Session } from "./useSession";
 
 interface Submit {
@@ -16,12 +16,13 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
   const { projection, feed, send, notify } = session;
   const state = projection.state;
   const isHost = projection.me?.role === "host";
+  const plugins = pluginHints(state.commands);
 
   const local = (text: string): boolean => {
     const [, ...rest] = text.slice(1).split(/\s+/);
     switch (commandName(text)) {
       case "help":
-        notify("accent", helpText(projection.me?.role));
+        notify("accent", helpText(projection.me?.role, plugins));
         return true;
       case "who":
         notify(
@@ -128,7 +129,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
   };
 
   const slash = (text: string) => {
-    if (isHostOnly(text) && !isHost) {
+    if (isHostOnly(text, plugins) && !isHost) {
       notify("warn", `/${commandName(text)} is for the host`);
       return;
     }
@@ -136,7 +137,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
       return;
     }
     try {
-      const parsed = parseSlash(text);
+      const parsed = parseSlash(text, new Set(state.commands.map((command) => command.name)));
       if (parsed === null) {
         return;
       }
@@ -153,6 +154,14 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
         notify("accent", lines.length > 0 ? ["usage", ...lines].join("\n") : "nothing spent yet in this session");
         return;
       }
+      if (parsed.type === "show.plugins") {
+        const lines = state.plugins.map(
+          (plugin) =>
+            `  ${plugin.status === "loaded" ? "✓" : "✕"} ${plugin.name}  ${plugin.status === "loaded" ? [...plugin.commands.map((command) => `/${command}`), ...(plugin.tools ?? []).map((tool) => `${tool}()`)].join(" ") || "no commands or tools" : (plugin.error ?? "failed to load")}`,
+        );
+        notify("accent", lines.length > 0 ? ["plugins", ...lines].join("\n") : "no plugins yet: the host creates one with /plugins new <name>");
+        return;
+      }
       if (parsed.type === "show.mcp") {
         const lines = state.mcp.map(
           (server) =>
@@ -162,7 +171,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
         return;
       }
       if (parsed.type === "show.skills") {
-        const lines = state.skills.map((skill) => `  ${skill.name}${skill.scope === "global" ? " (global)" : ""}  ${skill.description}`);
+        const lines = state.skills.map((skill) => `  ${skill.name}${skill.builtin ? " (built-in)" : skill.scope === "global" ? " (global)" : ""}  ${skill.description}`);
         notify(
           "accent",
           lines.length > 0 ? ["skills", ...lines, "", "/skills search <query> finds more on skills.sh"].join("\n") : "no skills yet: /skills search <query> finds some on skills.sh",

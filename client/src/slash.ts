@@ -8,6 +8,8 @@ export class SlashError extends Error {}
 
 const SKILLS_USAGE = "usage: /skills | /skills search <query> | /skills add <owner/repo@skill> [--global] | /skills rm <name>";
 
+const PLUGINS_USAGE = "usage: /plugins | /plugins new <name> | /plugins reload";
+
 const MCP_USAGE =
   "usage: /mcp | /mcp add <name> <command…|url> [--global] | /mcp on|off|restart|rm <name> | /mcp import";
 
@@ -17,9 +19,11 @@ export type Slash =
   | { type: "show.skills" }
   | { type: "show.mcp" }
   | { type: "show.agents" }
-  | { type: "show.usage" };
+  | { type: "show.usage" }
+  | { type: "show.plugins" };
 
-export function parseSlash(text: string): Slash | null {
+/** `plugins` names the commands the host's plugins provide; they are sent to the host as `command.run`. */
+export function parseSlash(text: string, plugins: ReadonlySet<string> = new Set()): Slash | null {
   if (!text.startsWith("/")) {
     return null;
   }
@@ -52,9 +56,28 @@ export function parseSlash(text: string): Slash | null {
       }
       throw new SlashError("usage: /agents | /agents rm <name>");
     }
+    case "plugins":
+      return pluginsCommand(argument);
     default:
+      if (plugins.has(name)) {
+        return { type: "command.run", name, args: argument };
+      }
       throw new SlashError(`unknown command /${name}`);
   }
+}
+
+function pluginsCommand(argument: string): Slash {
+  if (argument === "") {
+    return { type: "show.plugins" };
+  }
+  if (argument === "reload") {
+    return { type: "plugins.reload" };
+  }
+  const [verb, name, ...extra] = argument.split(/\s+/);
+  if (verb !== "new" || !name || extra.length > 0 || !/^[a-z][a-z0-9_-]*$/.test(name)) {
+    throw new SlashError(PLUGINS_USAGE);
+  }
+  return { type: "plugins.create", name };
 }
 
 function mode(argument: string): Command {

@@ -1,14 +1,15 @@
 import asyncio
 import itertools
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from pathlib import Path
 
 import pytest
+from pydantic import JsonValue
 from tests.doubles import ScriptedProvider, StallingProvider
 from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.context import ContextBuilder
-from plural.agent.events import AgentEvent, MessageEnd, RunEnd, ToolEnd, ToolStart
+from plural.agent.events import AgentEvent, MessageEnd, RunEnd, ToolEnd, ToolsLoaded, ToolStart
 from plural.agent.gate import GateResult
 from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.messages import AssistantTurn, ToolResultTurn, attribute
@@ -25,18 +26,21 @@ from plural.agent.providers.base import (
     TextDelta,
     ToolCallReady,
     ToolCallRequest,
+    ToolSchema,
 )
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
-from plural.agent.tools.base import ToolCtx
-from plural.agent.tools.registry import builtin_tools
+from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
+from plural.agent.tools.core.discovery import ToolSearchTool
+from plural.agent.tools.registry import ToolRegistry, builtin_tools
 from plural.host.system import UlidGenerator
 from plural.protocol.models import (
     Provenance,
     Role,
     RunEndReason,
     ToolCallView,
+    ToolRisk,
 )
 
 
@@ -425,3 +429,120 @@ async def test_an_image_the_model_rejects_is_dropped_so_the_next_run_works(tmp_p
     await collect(loop, turn("and now?"))
     assert all(not message.images for message in provider.requests[1].messages)
     assert "image(s) removed" in provider.requests[1].messages[0].content
+
+
+class Handoff:
+    name = "handoff"
+
+    def schema(self) -> ToolSchema:
+        return ToolSchema(name=self.name, description="Hand the turn back.", parameters={})
+
+    def prepare(self, raw: Mapping[str, JsonValue]) -> PreparedCall:
+        return PreparedCall(name=self.name, risk=ToolRisk.READ, subject="", execute=self._run)
+
+    async def _run(self, ctx: ToolCtx) -> ToolResult:
+        return ToolResult("handed back", terminate=True)
+
+
+class Plugins:
+    def __init__(self) -> None:
+        self.items: list[Tool] = []
+
+    def tools(self) -> list[Tool]:
+        return self.items
+
+
+class Install:
+    name = "install"
+
+    def __init__(self, plugins: Plugins) -> None:
+        self._plugins = plugins
+
+    def schema(self) -> ToolSchema:
+        return ToolSchema(name=self.name, description="Install a plugin.", parameters={})
+
+    def prepare(self, raw: Mapping[str, JsonValue]) -> PreparedCall:
+        return PreparedCall(name=self.name, risk=ToolRisk.READ, subject="", execute=self._run)
+
+    async def _run(self, ctx: ToolCtx) -> ToolResult:
+        self._plugins.items.append(Handoff())
+        return ToolResult("installed")
+
+
+def loop_with(tmp_path: Path, provider: FakeProvider, tools: ToolRegistry) -> AgentLoop:
+    return AgentLoop(
+        provider=provider,
+        tools=tools,
+        gate=StubGate(),
+        context=ContextBuilder(),
+        tool_ctx=ToolCtx(workspace=Workspace.at(tmp_path), backend=LocalBackend()),
+        ids=UlidGenerator(),
+    )
+
+
+async def test_turn_limit_ends_the_run_before_the_next_model_call(tmp_path: Path) -> None:
+    provider = FakeProvider([use_tool("ls", path="."), reply("never asked")])
+    loop = make_loop(tmp_path, provider, StubGate(limit="budget used up"))
+    loop.steer(turn("and then this"))
+    events = await collect(loop, turn("go", guest=True))
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert (last.reason, last.error) == (RunEndReason.LIMIT, "budget used up")
+    assert len(provider.requests) == 1
+    assert [pending.text for pending in loop.drain_pending()] == ["and then this"]
+
+
+async def test_turn_limit_does_not_cut_a_finished_answer(tmp_path: Path) -> None:
+    provider = FakeProvider([reply("done")])
+    events = await collect(make_loop(tmp_path, provider, StubGate(limit="budget")), turn("hi"))
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.STOP
+
+
+async def test_terminating_tools_hand_the_turn_back(tmp_path: Path) -> None:
+    provider = FakeProvider([use_tool("handoff"), reply("never asked")])
+    tools = ToolRegistry()
+    tools.register(Handoff())
+    events = await collect(loop_with(tmp_path, provider, tools), turn("go"))
+    last = events[-1]
+    assert isinstance(last, RunEnd)
+    assert last.reason is RunEndReason.STOP
+    assert len(provider.requests) == 1
+
+
+async def test_a_terminating_tool_beside_a_normal_one_does_not_stop(tmp_path: Path) -> None:
+    calls = (
+        ToolCallReady(call=ToolCallRequest(id="c1", name="handoff", args={})),
+        ToolCallReady(call=ToolCallRequest(id="c2", name="ls", args={"path": "."})),
+        Stop(reason="tool_use"),
+    )
+    provider = FakeProvider([calls, reply("done")])
+    tools = builtin_tools()
+    tools.register(Handoff())
+    await collect(loop_with(tmp_path, provider, tools), turn("go"))
+    assert len(provider.requests) == 2
+
+
+async def test_a_run_keeps_its_tool_list(tmp_path: Path) -> None:
+    provider = FakeProvider([use_tool("install"), reply("done"), reply("again")])
+    plugins = Plugins()
+    tools = ToolRegistry()
+    tools.register(Install(plugins))
+    tools.add_source(plugins)
+    loop = loop_with(tmp_path, provider, tools)
+    await collect(loop, turn("install"))
+    await collect(loop, turn("next"))
+    names = [[schema.name for schema in request.tools] for request in provider.requests]
+    assert names == [["install"], ["install"], ["install", "handoff"]]
+
+
+async def test_tools_found_mid_run_are_declared_from_the_next_call(tmp_path: Path) -> None:
+    provider = FakeProvider([use_tool("tool_search", query="fetch a web page"), reply("done")])
+    tools = builtin_tools()
+    tools.register(ToolSearchTool(tools))
+    events = await collect(loop_with(tmp_path, provider, tools), turn("go"))
+    first, second = ([schema.name for schema in r.tools] for r in provider.requests)
+    assert "web_fetch" not in first
+    assert "web_fetch" in second
+    assert ToolsLoaded(("web_fetch",)) in events

@@ -5,9 +5,9 @@ import pytest
 
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
-from plural.agent.tools import web
 from plural.agent.tools.base import ToolCtx, ToolError
-from plural.agent.tools.web import (
+from plural.agent.tools.extra import web
+from plural.agent.tools.extra.web import (
     WebFetchTool,
     WebResponse,
     ascii_url,

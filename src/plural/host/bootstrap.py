@@ -11,8 +11,8 @@ from plural.agent.agents import AgentLibrary
 from plural.agent.context import ContextBuilder, Environment
 from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.mcp import BROWSER_SERVER, McpHub, browser_spec
-from plural.agent.providers import anthropic_api
-from plural.agent.providers.anthropic_oauth import AnthropicOAuthProvider
+from plural.agent.providers.api.anthropic import adapter as anthropic_api
+from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider
 from plural.agent.providers.base import LLMProvider
 from plural.agent.providers.web_search import (
     anthropic_oauth_search,
@@ -23,12 +23,14 @@ from plural.agent.providers.web_search import (
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.skills import SkillLibrary
-from plural.agent.tools.agent import AgentTool
 from plural.agent.tools.base import ToolCtx
-from plural.agent.tools.board import board_tools
-from plural.agent.tools.registry import builtin_tools
-from plural.agent.tools.search import Searcher, WebSearchSlot
-from plural.agent.tools.skills import skill_tools
+from plural.agent.tools.core.discovery import ToolSearchTool
+from plural.agent.tools.core.skill import SkillTool
+from plural.agent.tools.extra.agent import AgentTool
+from plural.agent.tools.extra.board import board_tools
+from plural.agent.tools.extra.search import Searcher, WebSearchSlot
+from plural.agent.tools.extra.skills import skill_tools
+from plural.agent.tools.registry import Exposure, builtin_tools
 from plural.core.policy.engine import Policy
 from plural.host.actor import SessionActor
 from plural.host.agent_run import AgentRun
@@ -42,6 +44,7 @@ from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook, RoomLink
 from plural.host.ledger import ChangeLedger
+from plural.host.plugins import PluginHost
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.providers import (
     ConfigError,
@@ -156,9 +159,11 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     agent = provider or build_provider(settings, api_key)
     web_search = WebSearchSlot()
     web_search.use(build_web_search(settings, api_key, agent))
-    tools.add_source(web_search)
+    tools.add_source(web_search, exposure=Exposure.DEFERRED)
+    # The skills prompt tells the model to load an installed skill, so `skill` is core.
+    tools.register(SkillTool(skills))
     for tool in skill_tools(skills, lambda: inbox.put(SkillsUpdated())):
-        tools.register(tool)
+        tools.register(tool, exposure=Exposure.DEFERRED)
     mcp = McpHub(
         workspace=workspace.root,
         home=Path.home(),
@@ -170,11 +175,16 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
             else None
         ),
     )
-    tools.add_source(mcp)
+    tools.add_source(mcp, exposure=Exposure.DEFERRED)
     mcp.start()
+    plugins = PluginHost(
+        state_dir / "plugins", workspace=workspace.root, reserved_tools=tools.registered
+    )
+    tools.add_source(plugins.tools_source(Exposure.CORE))
+    tools.add_source(plugins.tools_source(Exposure.DEFERRED), exposure=Exposure.DEFERRED)
     registry = ApprovalRegistry()
     gate = HostPolicyGate(
-        policy=Policy(),
+        policy=Policy(guest_run_tokens=settings.guest_run_tokens),
         registry=registry,
         inbox=inbox,
         ids=ids,
@@ -190,10 +200,12 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     agents = AgentLibrary(project=workspace.root, home=Path.home())
     await asyncio.to_thread(agents.refresh)
     delegate = AgentTool(library=agents, tools=tools, gate=gate, environment=environment, ids=ids)
-    tools.register(delegate)
+    tools.register(delegate, exposure=Exposure.DEFERRED)
     desk = InboxDesk(inbox)
     for tool in board_tools(desk):
-        tools.register(tool)
+        tools.register(tool, exposure=Exposure.DEFERRED)
+    tools.register(ToolSearchTool(tools))
+    tools.pin(name.strip() for name in settings.pinned_tools.split(",") if name.strip())
     loop = AgentLoop(
         provider=agent,
         helper=helper.provider if helper else None,
@@ -273,6 +285,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         skills=skills,
         mcp=mcp,
         agents=agents,
+        plugins=plugins,
         typing_ttl_s=settings.typing_ttl_s,
         agent_label=settings.agent_label(),
         fast_label=helper.label if helper else "",

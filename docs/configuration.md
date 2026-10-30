@@ -6,6 +6,7 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 
 | Variable | Default | Description |
 |---|---|---|
+| `PLURAL_PRESET` | none | A provider from the catalog, for example `nvidia`, `groq`, `deepseek`, `openrouter` or `ollama`. It sets the provider, endpoint and default model, and reads the key from the preset's own variable (`NVIDIA_API_KEY`, `GROQ_API_KEY`, …) or `PLURAL_API_KEY`, never another vendor's key. The list is in `src/plural/agent/providers/catalog.py` |
 | `PLURAL_PROVIDER` | by key | `fake`, `anthropic`, `anthropic_oauth`, `claude_code` or `openai`. When unset it follows `ANTHROPIC_API_KEY`, then `OPENAI_API_KEY` or `PLURAL_BASE_URL` with `PLURAL_MODEL`, and falls back to the demo agent |
 | `PLURAL_MODEL` | `claude-opus-5-5` for Anthropic API keys; `claude-haiku-4-5` for Claude OAuth; `claude-sonnet-5-5` for Claude Code | Model id, required for `openai` |
 | `PLURAL_API_KEY` | `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` | Provider API key |
@@ -31,9 +32,11 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 | `PLURAL_FAST_PROVIDER` | the main provider | Provider for `PLURAL_FAST_MODEL`, for example `openai` to run it on `OPENAI_API_KEY` while the main model is Claude. It shares `PLURAL_BASE_URL` with the main model |
 | `PLURAL_APPROVAL_TIMEOUT_S` | `120` | Seconds before an approval expires |
 | `PLURAL_REJECTION_LIMIT` | `2` | Rejections of one kind of action per run before the agent stops asking the host |
+| `PLURAL_PINNED_TOOLS` | none | Comma-separated tools or groups the agent always sees, for example `browser,board`. Other tools besides read, grep, glob, ls, edit, write, bash and skill are loaded on demand with `tool_search`. A group is an MCP server's name or the word a tool's name starts with |
+| `PLURAL_GUEST_RUN_TOKENS` | none | Token budget for a run that includes a guest's prompt. Input, cache writes and output count; cache reads do not. The run ends after the turn that reaches it |
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24 hours |
 | `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |
-| `PLURAL_MAX_IMAGE_BYTES` | `2500000` | Largest image a participant may attach, at most `2900000` so it fits a 4 MB message. The terminal client scales pasted images to 1568 px first. Claude Code, Codex CLI and models without vision do not see images |
+| `PLURAL_MAX_IMAGE_BYTES` | `2500000` | Largest image a participant may attach, at most `2900000` so it fits a 4 MB message. The terminal client scales pasted images to 1568 px first. Claude Code and Codex CLI receive them too; an OpenAI-compatible model without vision does not see them |
 | `PLURAL_TYPING_TTL_S` | `6` | Seconds after which a typing indicator lapses without a refresh |
 | `PLURAL_WEB_SEARCH` | `true` | Give the agent `web_search`: Pydantic AI's `WebSearchTool`, run by the session provider's own search engine. Works with an Anthropic or OpenAI API key and with Claude OAuth; there is no search with Claude Code, Codex CLI or a custom `PLURAL_BASE_URL`. Each search waits for approval like other tools |
 | `PLURAL_WEB_SEARCH_MODEL` | session model | Model that runs the search, written as `provider:model` like Pydantic AI, for example `anthropic:claude-haiku-4-5` to search cheaply. It applies only while the session uses that provider (`anthropic` covers Claude OAuth too) |
@@ -61,6 +64,8 @@ PLURAL_PROVIDER=claude_code PLURAL_MODEL=claude-sonnet-5-5 plural
 PLURAL_PROVIDER=openai PLURAL_MODEL=gpt-5 OPENAI_API_KEY=sk-… plural
 
 PLURAL_MODEL=qwen3:4b PLURAL_BASE_URL=http://127.0.0.1:11434/v1 PLURAL_CONTEXT_WINDOW=4096 plural
+# NVIDIA NIM from the catalog
+PLURAL_PRESET=nvidia NVIDIA_API_KEY=nvapi-… plural
 ```
 
 Without any of these the host runs a scripted demo agent: any text lists the workspace, and `$ cmd` asks to run `cmd` through `bash`.
