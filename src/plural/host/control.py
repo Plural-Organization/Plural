@@ -15,7 +15,7 @@ from plural.agent.providers.base import (
     Stop,
     TextDelta,
 )
-from plural.agent.providers.codex_cli import CodexCliProvider
+from plural.agent.providers.cli.codex_cli import CodexCliProvider
 from plural.core.errors import DomainError
 from plural.host.bootstrap import Host, build_web_search
 from plural.host.config import HostSettings

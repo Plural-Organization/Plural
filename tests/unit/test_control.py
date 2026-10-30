@@ -47,7 +47,7 @@ def test_providers_are_built_from_a_config_and_missing_pieces_are_named(
         assert command == "claude"
         return "/usr/bin/claude"
 
-    monkeypatch.setattr("plural.agent.providers.claude_code.shutil.which", claude_path)
+    monkeypatch.setattr("plural.agent.providers.cli.claude_code.shutil.which", claude_path)
     provider, settings, key = provider_for(BASE, AgentConfig(provider="fake"))
     assert provider is not None
     assert key is None

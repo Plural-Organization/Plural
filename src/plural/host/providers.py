@@ -2,14 +2,14 @@
 
 from collections.abc import Mapping
 
-from plural.agent.providers import anthropic_api
-from plural.agent.providers.anthropic_api import AnthropicProvider
-from plural.agent.providers.anthropic_oauth import AnthropicOAuthProvider, load_credentials
+from plural.agent.providers.api import anthropic as anthropic_api
+from plural.agent.providers.api.anthropic import AnthropicProvider
+from plural.agent.providers.api.anthropic_oauth import AnthropicOAuthProvider, load_credentials
+from plural.agent.providers.api.openai_compat import OpenAIProvider
 from plural.agent.providers.base import LLMProvider
-from plural.agent.providers.claude_code import ClaudeCodeProvider
-from plural.agent.providers.codex_cli import CodexCliProvider
+from plural.agent.providers.cli.claude_code import ClaudeCodeProvider
+from plural.agent.providers.cli.codex_cli import CodexCliProvider
 from plural.agent.providers.fake import DemoProvider
-from plural.agent.providers.openai_compat import OpenAIProvider
 from plural.host.config import HostSettings
 
 KEY_VARIABLES = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
