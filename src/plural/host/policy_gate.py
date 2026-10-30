@@ -2,7 +2,7 @@ from datetime import timedelta
 from typing import Final
 
 from plural.agent.gate import GateResult
-from plural.core.policy.engine import PLAN_MODE, Policy, ToolInvocation, evaluate
+from plural.core.policy.engine import PLAN_MODE, Policy, ToolInvocation, evaluate, run_limit
 from plural.core.policy.rejections import RejectionLedger
 from plural.core.policy.rules import RuleSet
 from plural.core.ports import Clock, IdGenerator
@@ -15,6 +15,7 @@ from plural.protocol.models import (
     PolicyAction,
     Provenance,
     ToolCallView,
+    Usage,
 )
 
 FINAL: Final = "Do not retry this or an equivalent action; ask the user how to proceed instead"
@@ -52,6 +53,9 @@ class HostPolicyGate:
 
     def begin_run(self) -> None:
         self._rejections.reset()
+
+    def turn_limit(self, *, usage: Usage, provenance: Provenance) -> str | None:
+        return run_limit(self._policy, usage, provenance)
 
     async def check(
         self, call: ToolCallView, *, subject: str, provenance: Provenance

@@ -24,6 +24,7 @@ import { canvasDocs } from "../lib/canvas";
 import { copyText } from "../lib/clipboard";
 import { upload } from "../lib/upload";
 import { cx } from "../lib/cx";
+import { pluginHints } from "../lib/commands";
 import styles from "./RoomScreen.module.css";
 
 interface RoomScreenProps {
@@ -36,6 +37,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   const { projection, feed, connection, invite, send, sendPresence } = session;
   const state = projection.state;
   const me = projection.me;
+  const pluginCommands = useMemo(() => pluginHints(state.commands), [state.commands]);
   const isHost = me?.role === "host";
   const items = useMemo(() => (isHost ? inboxItems(state) : []), [isHost, state.approvals, state.proposals, state.join_requests]);
   const [editing, setEditing] = useState<ProposalView | null>(null);
@@ -243,6 +245,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
           <Composer
             role={me?.role}
             people={mentionable(state, projection.meId)}
+            commands={pluginCommands}
             placeholder={placeholder}
             disabled={null}
             editing={editing}

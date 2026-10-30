@@ -22,6 +22,8 @@ export function emptyState(): SessionState {
     mcp: [],
     usage: [],
     agents: [],
+    plugins: [],
+    commands: [],
     queue: [],
     agent: "",
     fast_agent: "",
@@ -147,6 +149,8 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return { ...state, context: event.context };
     case "skills.changed":
       return { ...state, skills: event.skills };
+    case "plugins.changed":
+      return { ...state, plugins: event.plugins, commands: event.commands };
     case "proposal.created":
       return { ...state, proposals: { ...state.proposals, [event.proposal.id]: event.proposal } };
     case "proposal.approved":

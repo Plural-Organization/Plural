@@ -29,6 +29,7 @@ interface ComposerProps {
   placeholder: string;
   role: Role | undefined;
   people?: Mentionable[];
+  commands?: CommandHint[];
   seed: { text: string; key: number } | null;
   label: string | null;
   route?: (text: string) => Route | null;
@@ -84,7 +85,7 @@ export function Composer(props: ComposerProps) {
   const position = useRef(-1);
   const draft = useRef("");
 
-  const hints = dismissed ? [] : suggest(value, role, props.people ?? []);
+  const hints = dismissed ? [] : suggest(value, role, props.people ?? [], props.commands);
   const selected: CommandHint | undefined = hints[Math.min(choice, Math.max(0, hints.length - 1))];
   const hintWindow = visibleSuggestionWindow(hints, choice);
   const completion = selected ? (selected.insert ?? `/${selected.name} `) : "";

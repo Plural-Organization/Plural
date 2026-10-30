@@ -41,6 +41,7 @@ class HostSettings(BaseSettings):
     first_token_timeout_s: float = Field(default=120, gt=0)
     idle_timeout_s: float = Field(default=60, gt=0)
     rejection_limit: int = Field(default=2, gt=0)
+    guest_run_tokens: int | None = Field(default=None, gt=0)
     context_window: int = Field(default=128_000, gt=0)
     compact_at: float = Field(default=0.75, gt=0, lt=1)
     approval_timeout_s: float = Field(default=120, gt=0)

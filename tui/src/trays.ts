@@ -1,5 +1,5 @@
 import { label, ruleLine, type Projection, type Role } from "@plural/client";
-import { visibleCommands } from "./commands";
+import { visibleCommands, type CommandHint } from "./commands";
 import type { Row } from "./components/Tray";
 import { colorFor, theme } from "./theme";
 
@@ -19,8 +19,8 @@ const KEYS: [string, string][] = [
   ["ctrl+c", "clear the input, twice to quit"],
 ];
 
-export function helpRows(role: Role | undefined): Row[] {
-  const commands = visibleCommands(role);
+export function helpRows(role: Role | undefined, plugins: CommandHint[] = []): Row[] {
+  const commands = visibleCommands(role, plugins);
   const name = Math.max(...commands.map((command) => command.name.length)) + 3;
   const key = Math.max(...KEYS.map(([shortcut]) => shortcut.length)) + 2;
   return [
@@ -63,6 +63,42 @@ export function skillRows(projection: Projection, width: number): Row[] {
     ]),
     [""],
     [{ text: "/skills search <query>", fg: theme.accent }, { text: " finds more · ", fg: theme.dim }, { text: "/skills rm <name>", fg: theme.accent }, { text: " removes one", fg: theme.dim }],
+  ];
+}
+
+export function pluginRows(projection: Projection): Row[] {
+  const plugins = projection.state.plugins;
+  const host = projection.me?.role === "host";
+  if (plugins.length === 0) {
+    return [
+      host
+        ? [{ text: "no plugins yet · ", fg: theme.dim }, { text: "/plugins new <name>", fg: theme.accent }, { text: " creates one in ~/.plural/plugins", fg: theme.dim }]
+        : [{ text: "no plugins yet · the host can add some", fg: theme.dim }],
+    ];
+  }
+  const name = Math.max(...plugins.map((plugin) => plugin.name.length));
+  return [
+    ...plugins.map((plugin): Row => {
+      const loaded = plugin.status === "loaded";
+      const commands = plugin.commands.length > 0 ? plugin.commands.map((command) => `/${command}`).join(" ") : "no commands";
+      return [
+        { text: loaded ? "✓ " : "✕ ", fg: loaded ? theme.ok : theme.danger },
+        { text: plugin.name.padEnd(name + 2), fg: theme.text, bold: true },
+        { text: loaded ? commands : (plugin.error ?? "failed to load"), fg: loaded ? theme.accent : theme.danger },
+        { text: host ? `  ${plugin.path}` : "", fg: theme.dim },
+      ];
+    }),
+    ...(host
+      ? [
+          [""] as Row,
+          [
+            { text: "/plugins new <name>", fg: theme.accent },
+            { text: " creates one · ", fg: theme.dim },
+            { text: "/plugins reload", fg: theme.accent },
+            { text: " applies your edits", fg: theme.dim },
+          ] as Row,
+        ]
+      : []),
   ];
 }
 

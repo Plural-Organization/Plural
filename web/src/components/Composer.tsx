@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 import { mentionCompletions, mentionNote, type Mentionable, type ProposalView, type Role } from "@plural/client";
 import type { Attachment } from "../hooks/useAttachments";
-import { suggestions } from "../lib/commands";
+import { suggestions, type CommandHint } from "../lib/commands";
 import { withQuote } from "../lib/quote";
 import styles from "./Composer.module.css";
 
@@ -10,6 +10,7 @@ const MAX_HEIGHT = 240;
 interface ComposerProps {
   role: Role | undefined;
   people?: Mentionable[];
+  commands?: CommandHint[];
   placeholder: string;
   disabled: string | null;
   editing: ProposalView | null;
@@ -25,13 +26,13 @@ interface ComposerProps {
   onActivity: (text: string) => void;
 }
 
-export function Composer({ role, people = [], placeholder, disabled, editing, quote = null, attachments = [], onAttach, onDetach, onSubmit, onCancelEdit, onEscape, onActivity }: ComposerProps) {
+export function Composer({ role, commands, people = [], placeholder, disabled, editing, quote = null, attachments = [], onAttach, onDetach, onSubmit, onCancelEdit, onEscape, onActivity }: ComposerProps) {
   const [value, setValue] = useState("");
   const [pick, setPick] = useState(0);
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-  const commandHints = suggestions(value, role);
+  const commandHints = suggestions(value, role, commands);
   const mentions = commandHints.length === 0 ? mentionCompletions(value, people) : [];
   const hints = [
     ...commandHints.map((hint) => ({ key: hint.name, usage: hint.usage, description: hint.description, insert: `/${hint.name}${hint.usage.includes(" ") ? " " : ""}` })),

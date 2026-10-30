@@ -42,6 +42,7 @@ from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook, RoomLink
 from plural.host.ledger import ChangeLedger
+from plural.host.plugins import PluginHost
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.providers import (
     ConfigError,
@@ -172,9 +173,10 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     )
     tools.add_source(mcp)
     mcp.start()
+    plugins = PluginHost(state_dir / "plugins", workspace=workspace.root)
     registry = ApprovalRegistry()
     gate = HostPolicyGate(
-        policy=Policy(),
+        policy=Policy(guest_run_tokens=settings.guest_run_tokens),
         registry=registry,
         inbox=inbox,
         ids=ids,
@@ -273,6 +275,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         skills=skills,
         mcp=mcp,
         agents=agents,
+        plugins=plugins,
         typing_ttl_s=settings.typing_ttl_s,
         agent_label=settings.agent_label(),
         fast_label=helper.label if helper else "",

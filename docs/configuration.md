@@ -31,6 +31,7 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 | `PLURAL_FAST_PROVIDER` | the main provider | Provider for `PLURAL_FAST_MODEL`, for example `openai` to run it on `OPENAI_API_KEY` while the main model is Claude. It shares `PLURAL_BASE_URL` with the main model |
 | `PLURAL_APPROVAL_TIMEOUT_S` | `120` | Seconds before an approval expires |
 | `PLURAL_REJECTION_LIMIT` | `2` | Rejections of one kind of action per run before the agent stops asking the host |
+| `PLURAL_GUEST_RUN_TOKENS` | none | Token budget for a run that includes a guest's prompt. Input, cache writes and output count; cache reads do not. The run ends after the turn that reaches it |
 | `PLURAL_TOKEN_TTL_S` | `86400` | Capability token lifetime, at most 24 hours |
 | `PLURAL_INVITE_TTL_S` | `3600` | Invite link lifetime |
 | `PLURAL_MAX_IMAGE_BYTES` | `2500000` | Largest image a participant may attach, at most `2900000` so it fits a 4 MB message. The terminal client scales pasted images to 1568 px first. Claude Code, Codex CLI and models without vision do not see images |

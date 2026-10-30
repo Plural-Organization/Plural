@@ -95,6 +95,9 @@ export interface CommandsSchema {
     | McpImport
     | AgentsCreate
     | AgentsRemove
+    | CommandRun
+    | PluginsReload
+    | PluginsCreate
     | TypingSet
     | SelectionSet
     | CursorSet
@@ -419,6 +422,30 @@ export interface AgentsCreate {
 export interface AgentsRemove {
   name: string;
   type?: "agents.remove";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "CommandRun".
+ */
+export interface CommandRun {
+  args?: string;
+  name: string;
+  type?: "command.run";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "PluginsReload".
+ */
+export interface PluginsReload {
+  type?: "plugins.reload";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "PluginsCreate".
+ */
+export interface PluginsCreate {
+  name: string;
+  type?: "plugins.create";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

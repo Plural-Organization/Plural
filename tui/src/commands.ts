@@ -1,4 +1,4 @@
-import { mentionCompletions, mentionNote, type Mentionable, type Role } from "@plural/client";
+import { mentionCompletions, mentionNote, type Mentionable, type PluginCommandView, type Role } from "@plural/client";
 
 export interface CommandHint {
   name: string;
@@ -22,6 +22,7 @@ export const COMMANDS: CommandHint[] = [
   { name: "mcp", usage: "/mcp [add <name> <command|url> [--global] | on|off|restart|rm <name> | import]", description: "connect MCP servers and their tools" },
   { name: "agents", usage: "/agents [rm <name>]", description: "sub-agents the agent can hand work to; create your own" },
   { name: "usage", usage: "/usage", description: "tokens spent per model and agent in this session" },
+  { name: "plugins", usage: "/plugins [new <name> | reload]", description: "the host's plugins and their commands" },
   { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
   { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
   { name: "cancel", usage: "/cancel <n>", description: "remove a queued prompt (yours, or any as host)" },
@@ -30,8 +31,17 @@ export const COMMANDS: CommandHint[] = [
   { name: "quit", usage: "/quit", description: "leave the session" },
 ];
 
-export function visibleCommands(role: Role | undefined): CommandHint[] {
-  return COMMANDS.filter((command) => !command.hostOnly || role === "host");
+export function pluginHints(commands: readonly PluginCommandView[]): CommandHint[] {
+  return commands.map((command) => ({
+    name: command.name,
+    usage: command.usage ?? `/${command.name}`,
+    description: command.description || `from the ${command.plugin} plugin`,
+    hostOnly: command.host_only ?? false,
+  }));
+}
+
+export function visibleCommands(role: Role | undefined, plugins: CommandHint[] = []): CommandHint[] {
+  return [...COMMANDS, ...plugins].filter((command) => !command.hostOnly || role === "host");
 }
 
 export function mentionHints(value: string, people: Mentionable[]): CommandHint[] {
@@ -43,10 +53,15 @@ export function mentionHints(value: string, people: Mentionable[]): CommandHint[
   }));
 }
 
-export function suggestions(value: string, role: Role | undefined, people: Mentionable[] = []): CommandHint[] {
+export function suggestions(
+  value: string,
+  role: Role | undefined,
+  people: Mentionable[] = [],
+  plugins: CommandHint[] = [],
+): CommandHint[] {
   if (value.startsWith("/") && !value.includes(" ") && !value.includes("\n")) {
     const prefix = value.slice(1).toLowerCase();
-    return visibleCommands(role).filter((command) => command.name.startsWith(prefix));
+    return visibleCommands(role, plugins).filter((command) => command.name.startsWith(prefix));
   }
   return mentionHints(value, people);
 }

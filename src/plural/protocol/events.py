@@ -27,6 +27,8 @@ from plural.protocol.models import (
     Model,
     Participant,
     PermissionMode,
+    PluginCommandView,
+    PluginView,
     PolicyRuleView,
     PromptMode,
     ProposalView,
@@ -331,6 +333,27 @@ class McpChanged(EventBase):
     servers: tuple[McpServerView, ...]
 
 
+class PluginsChanged(EventBase):
+    type: Literal["plugins.changed"] = "plugins.changed"
+    plugins: tuple[PluginView, ...]
+    commands: tuple[PluginCommandView, ...]
+
+
+class CommandInvoked(EventBase):
+    type: Literal["command.invoked"] = "command.invoked"
+    command: str
+    args: str
+    invoker_id: str
+
+
+class CommandReplied(EventBase):
+    type: Literal["command.replied"] = "command.replied"
+    command: str
+    invoker_id: str
+    text: str
+    ok: bool = True
+
+
 class ContextUsage(EventBase):
     type: Literal["context.usage"] = "context.usage"
     context: ContextView
@@ -470,6 +493,9 @@ Event = Annotated[
     | McpChanged
     | UsageRecorded
     | AgentsChanged
+    | PluginsChanged
+    | CommandInvoked
+    | CommandReplied
     | ToolStarted
     | ToolOutput
     | ToolEnded

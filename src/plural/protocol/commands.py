@@ -234,6 +234,21 @@ class AgentsRemove(Model):
     name: str = Field(min_length=1, max_length=64)
 
 
+class CommandRun(Model):
+    type: Literal["command.run"] = "command.run"
+    name: str = Field(min_length=1, max_length=32)
+    args: str = Field(default="", max_length=MAX_PROMPT_CHARS)
+
+
+class PluginsReload(Model):
+    type: Literal["plugins.reload"] = "plugins.reload"
+
+
+class PluginsCreate(Model):
+    type: Literal["plugins.create"] = "plugins.create"
+    name: str = Field(min_length=1, max_length=32, pattern=r"^[a-z][a-z0-9_-]*$")
+
+
 class TypingSet(Model):
     type: Literal["presence.typing"] = "presence.typing"
     typing: bool
@@ -348,6 +363,9 @@ Command = Annotated[
     | McpImport
     | AgentsCreate
     | AgentsRemove
+    | CommandRun
+    | PluginsReload
+    | PluginsCreate
     | TypingSet
     | SelectionSet
     | CursorSet
