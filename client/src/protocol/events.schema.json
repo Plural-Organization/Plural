@@ -2938,6 +2938,10 @@
     },
     "SkillView": {
       "properties": {
+        "builtin": {
+          "default": false,
+          "type": "boolean"
+        },
         "description": {
           "type": "string"
         },
@@ -2951,7 +2955,8 @@
       "required": [
         "name",
         "description",
-        "scope"
+        "scope",
+        "builtin"
       ],
       "type": "object"
     },

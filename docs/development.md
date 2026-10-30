@@ -42,6 +42,7 @@ src/plural/
 ├── core/       state reducer, roles, policy engine   (pure)
 ├── security/   tokens, host keys, redaction
 ├── agent/      loop, tools, sandbox, providers
+│   └── tools/  core/ declared on every request, extra/ loaded with tool_search
 ├── storage/    SQLite event store, migrations, export
 ├── host/       session actor, gateway, transports
 ├── relay/      relay router

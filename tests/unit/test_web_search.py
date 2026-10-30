@@ -25,7 +25,13 @@ from plural.agent.providers.web_search import (
     web_search_tool,
 )
 from plural.agent.tools.base import ToolError
-from plural.agent.tools.search import Found, SearchFailed, Source, WebSearchSlot, WebSearchTool
+from plural.agent.tools.extra.search import (
+    Found,
+    SearchFailed,
+    Source,
+    WebSearchSlot,
+    WebSearchTool,
+)
 from plural.host.bootstrap import build_web_search
 from plural.host.config import HostSettings
 

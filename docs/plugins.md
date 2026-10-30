@@ -10,6 +10,9 @@ sees its commands in the suggestions and can run the ones the plugin allows.
 
 ## Create one
 
+The easiest way is to ask the agent: it has a built-in `plural-plugins` skill with this whole guide,
+loads it when you ask for a plugin, and writes the file for you to install.
+
 In the terminal client, as the host:
 
 ```text

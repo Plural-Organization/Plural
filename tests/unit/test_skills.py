@@ -12,7 +12,8 @@ from plural.agent.skills import (
     parse_package,
 )
 from plural.agent.tools.base import ToolCtx, ToolError
-from plural.agent.tools.skills import SkillInstallTool, SkillTool
+from plural.agent.tools.core.skill import SkillTool
+from plural.agent.tools.extra.skills import SkillInstallTool
 from plural.core.policy.engine import Policy, ToolInvocation, evaluate
 from plural.core.provenance import direct
 from plural.protocol.models import PolicyAction, Role, SkillScope, ToolRisk
@@ -65,7 +66,9 @@ class Web:
 
 
 def library(tmp_path: Path, answers: dict[str, bytes] | None = None) -> SkillLibrary:
-    return SkillLibrary(project=tmp_path / "ws", home=tmp_path / "home", fetch=Web(answers or {}))
+    return SkillLibrary(
+        project=tmp_path / "ws", home=tmp_path / "home", fetch=Web(answers or {}), builtin=None
+    )
 
 
 def write_skill(root: Path, folder: str, text: str) -> None:
@@ -233,3 +236,18 @@ def test_loading_and_searching_are_free_installing_asks() -> None:
     install = ToolInvocation(name="skill_install", risk=ToolRisk.WRITE, subject="a/b@c")
     assert evaluate(policy, load, host).action is PolicyAction.ALLOW
     assert evaluate(policy, install, host).action is PolicyAction.ASK
+
+
+async def test_the_plugin_guide_is_built_in_and_a_home_skill_can_replace_it(tmp_path: Path) -> None:
+    library = SkillLibrary(project=tmp_path / "ws", home=tmp_path / "home")
+    [guide] = await library.refresh()
+    assert (guide.name, guide.builtin, guide.view().builtin) == ("plural-plugins", True, True)
+    assert "plural.tool(" in library.file("plural-plugins", "SKILL.md").read_text()
+    with pytest.raises(SkillError, match="built into Plural"):
+        await library.remove("plural-plugins")
+
+    mine = tmp_path / "home" / ".agents" / "skills" / "plural-plugins"
+    mine.mkdir(parents=True)
+    (mine / "SKILL.md").write_text("---\nname: plural-plugins\ndescription: my own\n---\n")
+    [replaced] = await library.refresh()
+    assert (replaced.description, replaced.builtin) == ("my own", False)

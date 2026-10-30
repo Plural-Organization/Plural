@@ -18,7 +18,7 @@ from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.messages import Message, NotesTurn, UserTurn
 from plural.agent.providers.base import LlmImage
 from plural.agent.skills import Package, SkillError, SkillLibrary, parse_package
-from plural.agent.tools.board import AGENT_AUTHOR, BoardRefused
+from plural.agent.tools.extra.board import AGENT_AUTHOR, BoardRefused
 from plural.core import access, approvals, briefings, chat, joins, policies, proposals, visibility
 from plural.core.errors import (
     Conflict,

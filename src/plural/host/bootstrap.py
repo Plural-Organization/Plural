@@ -23,13 +23,14 @@ from plural.agent.providers.web_search import (
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.skills import SkillLibrary
-from plural.agent.tools.agent import AgentTool
 from plural.agent.tools.base import ToolCtx
-from plural.agent.tools.board import board_tools
-from plural.agent.tools.discovery import ToolSearchTool
+from plural.agent.tools.core.discovery import ToolSearchTool
+from plural.agent.tools.core.skill import SkillTool
+from plural.agent.tools.extra.agent import AgentTool
+from plural.agent.tools.extra.board import board_tools
+from plural.agent.tools.extra.search import Searcher, WebSearchSlot
+from plural.agent.tools.extra.skills import skill_tools
 from plural.agent.tools.registry import Exposure, builtin_tools
-from plural.agent.tools.search import Searcher, WebSearchSlot
-from plural.agent.tools.skills import skill_tools
 from plural.core.policy.engine import Policy
 from plural.host.actor import SessionActor
 from plural.host.agent_run import AgentRun
@@ -159,9 +160,10 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     web_search = WebSearchSlot()
     web_search.use(build_web_search(settings, api_key, agent))
     tools.add_source(web_search, exposure=Exposure.DEFERRED)
+    # The skills prompt tells the model to load an installed skill, so `skill` is core.
+    tools.register(SkillTool(skills))
     for tool in skill_tools(skills, lambda: inbox.put(SkillsUpdated())):
-        # The skills prompt tells the model to load an installed skill, so `skill` stays core.
-        tools.register(tool, exposure=Exposure.CORE if tool.name == "skill" else Exposure.DEFERRED)
+        tools.register(tool, exposure=Exposure.DEFERRED)
     mcp = McpHub(
         workspace=workspace.root,
         home=Path.home(),

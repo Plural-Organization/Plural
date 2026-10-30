@@ -171,7 +171,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
         return;
       }
       if (parsed.type === "show.skills") {
-        const lines = state.skills.map((skill) => `  ${skill.name}${skill.scope === "global" ? " (global)" : ""}  ${skill.description}`);
+        const lines = state.skills.map((skill) => `  ${skill.name}${skill.builtin ? " (built-in)" : skill.scope === "global" ? " (global)" : ""}  ${skill.description}`);
         notify(
           "accent",
           lines.length > 0 ? ["skills", ...lines, "", "/skills search <query> finds more on skills.sh"].join("\n") : "no skills yet: /skills search <query> finds some on skills.sh",

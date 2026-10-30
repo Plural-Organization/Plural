@@ -26,7 +26,7 @@ from pydantic_ai.settings import ModelSettings
 
 from plural.agent.providers.anthropic_api import OAUTH_BETA
 from plural.agent.providers.base import ProviderError
-from plural.agent.tools.search import Found, SearchFailed, Source
+from plural.agent.tools.extra.search import Found, SearchFailed, Source
 
 INSTRUCTIONS: Final = (
     "You are a web search step inside a coding agent. Always run a web search for the query "
