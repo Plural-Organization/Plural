@@ -1238,12 +1238,9 @@ name = "plural-agent"
 source = { editable = "." }
 dependencies = [
     { name = "aiosqlite" },
-    { name = "anthropic" },
     { name = "cryptography" },
     { name = "mcp" },
-    { name = "openai" },
     { name = "pydantic" },
-    { name = "pydantic-ai-slim", extra = ["anthropic", "openai"] },
     { name = "pydantic-settings" },
     { name = "rich" },
     { name = "starlette" },
@@ -1253,12 +1250,25 @@ dependencies = [
     { name = "websockets" },
 ]
 
+[package.optional-dependencies]
+anthropic = [
+    { name = "anthropic" },
+    { name = "pydantic-ai-slim", extra = ["anthropic"] },
+]
+openai = [
+    { name = "openai" },
+    { name = "pydantic-ai-slim", extra = ["openai"] },
+]
+
 [package.dev-dependencies]
 dev = [
+    { name = "anthropic" },
     { name = "coverage" },
     { name = "hypothesis" },
     { name = "import-linter" },
+    { name = "openai" },
     { name = "pip-audit" },
+    { name = "pydantic-ai-slim", extra = ["anthropic", "openai"] },
     { name = "pyright" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1268,12 +1278,13 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", specifier = ">=0.21" },
-    { name = "anthropic", specifier = ">=2.3.0" },
+    { name = "anthropic", marker = "extra == 'anthropic'", specifier = ">=2.3.0" },
     { name = "cryptography", specifier = ">=44" },
     { name = "mcp", specifier = ">=1.20" },
-    { name = "openai", specifier = ">=3.37.0" },
+    { name = "openai", marker = "extra == 'openai'", specifier = ">=3.37.0" },
     { name = "pydantic", specifier = ">=2.11" },
-    { name = "pydantic-ai-slim", extras = ["anthropic", "openai"], specifier = ">=2.63.0" },
+    { name = "pydantic-ai-slim", extras = ["anthropic"], marker = "extra == 'anthropic'", specifier = ">=2.63.0" },
+    { name = "pydantic-ai-slim", extras = ["openai"], marker = "extra == 'openai'", specifier = ">=2.63.0" },
     { name = "pydantic-settings", specifier = ">=2.8" },
     { name = "rich", specifier = ">=13.9" },
     { name = "starlette", specifier = ">=0.46" },
@@ -1282,13 +1293,17 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.34" },
     { name = "websockets", specifier = ">=15" },
 ]
+provides-extras = ["anthropic", "openai"]
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "anthropic", specifier = ">=2.3.0" },
     { name = "coverage", specifier = ">=7.6" },
     { name = "hypothesis", specifier = ">=6.125" },
     { name = "import-linter", specifier = ">=2.2" },
+    { name = "openai", specifier = ">=3.37.0" },
     { name = "pip-audit", specifier = ">=2.8" },
+    { name = "pydantic-ai-slim", extras = ["anthropic", "openai"], specifier = ">=2.63.0" },
     { name = "pyright", specifier = ">=1.1.395" },
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.25" },

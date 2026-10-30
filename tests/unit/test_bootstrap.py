@@ -5,7 +5,7 @@ from plural.agent.providers.api.anthropic.adapter import AnthropicProvider
 from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
 from plural.agent.providers.fake import DemoProvider
 from plural.host.config import HostSettings
-from plural.host.providers import ConfigError, build_provider, resolve_api_key
+from plural.host.providers import ConfigError, build_provider, extra_missing, resolve_api_key
 
 
 def test_explicit_key_wins_over_environment() -> None:
@@ -56,3 +56,13 @@ def test_the_agent_label_says_what_answers() -> None:
     assert HostSettings(provider="openai", model="gpt-5").agent_label({}) == "openai · gpt-5"
     local = HostSettings(provider="openai", model="qwen3:4b", base_url="http://localhost:11434/v1")
     assert local.agent_label({}) == "openai · qwen3:4b · local"
+
+
+def test_a_missing_sdk_becomes_an_install_hint() -> None:
+    with pytest.raises(ConfigError, match=r"plural-agent\[anthropic\]"):
+        extra_missing("anthropic", ModuleNotFoundError(name="anthropic.types"))
+
+
+def test_any_other_missing_module_is_not_hidden() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        extra_missing("anthropic", ModuleNotFoundError(name="some_other_package"))

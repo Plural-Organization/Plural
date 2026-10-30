@@ -1,16 +1,14 @@
 """Builds the LLM provider the host settings ask for."""
 
 from collections.abc import Mapping
+from typing import NoReturn
 
-from plural.agent.providers.api.anthropic import adapter as anthropic_api
-from plural.agent.providers.api.anthropic.adapter import AnthropicProvider
-from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider, load_credentials
-from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
 from plural.agent.providers.base import LLMProvider
 from plural.agent.providers.cli.claude_code import ClaudeCodeProvider
 from plural.agent.providers.cli.codex_cli import CodexCliProvider
 from plural.agent.providers.fake import DemoProvider
 from plural.host.config import HostSettings
+from plural.host.extras import MODULES, Extra, hint
 
 KEY_VARIABLES = {"anthropic": "ANTHROPIC_API_KEY", "openai": "OPENAI_API_KEY"}
 LOCAL_SERVER_KEY = "not-needed"
@@ -18,6 +16,16 @@ LOCAL_SERVER_KEY = "not-needed"
 
 class ConfigError(Exception):
     pass
+
+
+def extra_missing(extra: Extra, error: ModuleNotFoundError) -> NoReturn:
+    """Turn a missing SDK into an install hint; any other missing module is a real bug."""
+    if (error.name or "").partition(".")[0] not in MODULES[extra]:
+        raise error
+    raise ConfigError(
+        f"the {extra} provider is not installed: choose Install in the plural window, "
+        f"or run: {hint(extra)}"
+    ) from error
 
 
 def resolve_api_key(settings: HostSettings, environ: Mapping[str, str]) -> str | None:
@@ -33,6 +41,10 @@ def resolve_api_key(settings: HostSettings, environ: Mapping[str, str]) -> str |
 
 def provider_secrets(settings: HostSettings, api_key: str | None) -> tuple[str, ...]:
     if settings.resolved_provider() == "anthropic_oauth":
+        try:
+            from plural.agent.providers.api.anthropic.oauth import load_credentials
+        except ModuleNotFoundError as error:
+            extra_missing("anthropic", error)
         credentials = load_credentials(settings.state_dir / "anthropic-oauth.json")
         return (credentials.access, credentials.refresh)
     return (api_key,) if api_key else ()
@@ -53,6 +65,11 @@ def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
                 raise ConfigError(
                     "set PLURAL_API_KEY or ANTHROPIC_API_KEY for the anthropic provider"
                 )
+            try:
+                from plural.agent.providers.api.anthropic import adapter as anthropic_api
+                from plural.agent.providers.api.anthropic.adapter import AnthropicProvider
+            except ModuleNotFoundError as error:
+                extra_missing("anthropic", error)
             return AnthropicProvider(
                 api_key=api_key,
                 model=settings.model or anthropic_api.DEFAULT_MODEL,
@@ -61,6 +78,11 @@ def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
                 base_url=settings.base_url,
             )
         case "anthropic_oauth":
+            try:
+                from plural.agent.providers.api.anthropic import adapter as anthropic_api
+                from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider
+            except ModuleNotFoundError as error:
+                extra_missing("anthropic", error)
             return AnthropicOAuthProvider(
                 credentials_path=settings.state_dir / "anthropic-oauth.json",
                 model=settings.model or anthropic_api.DEFAULT_OAUTH_MODEL,
@@ -82,6 +104,10 @@ def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
                 raise ConfigError("set PLURAL_MODEL for the openai provider")
             if not api_key and settings.base_url is None:
                 raise ConfigError("set PLURAL_API_KEY or OPENAI_API_KEY for the openai provider")
+            try:
+                from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
+            except ModuleNotFoundError as error:
+                extra_missing("openai", error)
             return OpenAIProvider(
                 api_key=api_key or LOCAL_SERVER_KEY,
                 model=settings.model,

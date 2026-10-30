@@ -6,6 +6,7 @@ VERSION="${PLURAL_VERSION:-latest}"
 BIN_DIR="${PLURAL_INSTALL_DIR:-$HOME/.local/bin}"
 RELEASES="${PLURAL_RELEASE_URL:-https://github.com/$REPO/releases}"
 HOST_PACKAGE="${PLURAL_HOST_PACKAGE:-}"
+EXTRAS="${PLURAL_EXTRAS:-}"
 
 if [ -t 1 ]; then
   BOLD="$(printf '\033[1m')"
@@ -78,6 +79,35 @@ asset_url() {
   fi
 }
 
+# The model SDKs are optional extras, so a demo or Claude Code install does not download them.
+# An update keeps the SDKs the installed host already has, so it never drops a provider.
+installed_extras() {
+  python="$(uv tool dir 2>/dev/null || true)/plural-agent/bin/python"
+  [ -x "$python" ] || return 0
+  for sdk in anthropic openai; do
+    "$python" -c "import $sdk" >/dev/null 2>&1 && printf '%s\n' "$sdk"
+  done
+  return 0
+}
+
+host_extras() {
+  wanted="$(printf '%s\n' "$EXTRAS" | tr ',' ' ')"
+  case "${PLURAL_PROVIDER:-}" in
+    anthropic | anthropic_oauth) wanted="$wanted anthropic" ;;
+    openai) wanted="$wanted openai" ;;
+    *) ;;
+  esac
+  wanted="$wanted $(installed_extras | tr '\n' ' ')"
+  chosen=""
+  for extra in $wanted; do
+    case " $chosen " in
+      *" $extra "*) ;;
+      *) chosen="$chosen $extra" ;;
+    esac
+  done
+  printf '%s\n' "$chosen" | awk '{ gsub(/^ +| +$/, ""); gsub(/ +/, ","); print }'
+}
+
 install_host() {
   if ! command -v uv >/dev/null 2>&1; then
     step "Installing uv"
@@ -88,14 +118,16 @@ install_host() {
   fi
   package="$HOST_PACKAGE"
   if [ -z "$package" ]; then
-    if [ "$VERSION" = "latest" ]; then
-      package="plural-agent"
-    else
-      package="plural-agent==${VERSION#v}"
+    package="plural-agent"
+    extras="$(host_extras)"
+    [ -z "$extras" ] || package="$package[$extras]"
+    if [ "$VERSION" != "latest" ]; then
+      package="$package==${VERSION#v}"
     fi
   fi
   step "Installing the host (plural-host)"
-  uv tool install --force --refresh --python 3.12 "$package"
+  # No --python: any Python >= 3.12 on the machine works, and uv fetches one only when none does.
+  uv tool install --force --refresh "$package"
 }
 
 checksum_of() {
@@ -166,8 +198,23 @@ if [ "$VERSION" = "latest" ]; then
   fi
 fi
 
+# The client download and the host install each wait on the network, so they run side by side.
+client_log="$(mktemp)"
+install_client >"$client_log" 2>&1 &
+client_pid=$!
+trap 'kill "$client_pid" 2>/dev/null || true; rm -f "$client_log"' EXIT
+step "Downloading the client in the background"
 install_host
-install_client
+if wait "$client_pid"; then
+  trap - EXIT
+  cat "$client_log"
+  rm -f "$client_log"
+else
+  trap - EXIT
+  cat "$client_log" >&2
+  rm -f "$client_log"
+  exit 1
+fi
 
 path_missing=0
 if ! on_path "$BIN_DIR"; then
@@ -185,7 +232,8 @@ say ""
 say "  cd your-project"
 say "  plural"
 say ""
-say "${DIM}The demo agent needs no key. For a real model:${RESET}"
+say "${DIM}The demo agent needs no key. For a real model, add its SDK once:${RESET}"
+say "  uv tool install --force 'plural-agent[anthropic]'   ${DIM}(or [openai])${RESET}"
 say "  ANTHROPIC_API_KEY=... PLURAL_PROVIDER=anthropic plural"
 if [ "$path_missing" = 1 ]; then
   say ""
