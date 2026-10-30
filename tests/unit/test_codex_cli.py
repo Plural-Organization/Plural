@@ -1,4 +1,5 @@
 import asyncio
+import json
 import sys
 from pathlib import Path
 
@@ -8,6 +9,7 @@ from tests.loop_support import StubGate, collect, make_loop, turn
 from plural.agent.events import MessageEnd, RunEnd
 from plural.agent.loop import LoopLimits
 from plural.agent.providers import codex_cli
+from plural.agent.providers.base import LlmImage, LlmMessage, LlmRequest
 from plural.agent.providers.codex_cli import CodexCliProvider
 from plural.protocol.models import RunEndReason
 
@@ -107,3 +109,43 @@ async def test_codex_rpc_still_has_a_deadline(
     assert isinstance(events[-1], RunEnd)
     assert events[-1].reason is RunEndReason.ERROR
     assert events[-1].error == "Codex app server timed out waiting for thread/start"
+
+
+async def test_codex_receives_the_new_messages_images(tmp_path: Path) -> None:
+    record = tmp_path / "turns.jsonl"
+    cli = tmp_path / "codex"
+    cli.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "if sys.argv[1:3] == ['login', 'status'] or '--help' in sys.argv:\n"
+        "    sys.exit(0)\n"
+        "for line in sys.stdin:\n"
+        "    msg = json.loads(line)\n"
+        "    if 'id' not in msg: continue\n"
+        "    result = {'thread': {'id': 't'}} if msg['method'] == 'thread/start' else {}\n"
+        "    print(json.dumps({'id': msg['id'], 'result': result}), flush=True)\n"
+        "    if msg['method'] != 'turn/start': continue\n"
+        f"    open({str(record)!r}, 'a').write(json.dumps(msg['params']['input']) + '\\n')\n"
+        "    answer = json.dumps({'text': 'red', 'tool_calls': []})\n"
+        "    print(json.dumps({'method': 'turn/completed', 'params': {'turn': {\n"
+        "        'status': 'completed', 'items': [{'type': 'agentMessage', 'text': answer}]}}}),\n"
+        "        flush=True)\n"
+    )
+    cli.chmod(0o755)
+    provider = CodexCliProvider(workspace=tmp_path, cli=str(cli))
+    red = LlmImage(media_type="image/png", data="cmVk")
+    first = (LlmMessage(role="user", content="what color?", images=(red,)),)
+    second = (
+        *first,
+        LlmMessage(role="assistant", content="red"),
+        LlmMessage(role="user", content="sure?"),
+    )
+    try:
+        for messages in (first, second):
+            request = LlmRequest(system="", messages=messages)
+            [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    finally:
+        await provider.close()
+    turns = [json.loads(line) for line in record.read_text().splitlines()]
+    assert turns[0][1] == {"type": "image", "url": "data:image/png;base64,cmVk"}
+    assert [item["type"] for item in turns[1]] == ["text"]
