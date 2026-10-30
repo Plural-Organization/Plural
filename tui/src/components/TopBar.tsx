@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { SessionState } from "@plural/client";
 import { theme } from "../theme";
 import type { UpdateState } from "../update";
+import { UpdateDot } from "./UpdateDot";
 
 export function TopBar({ room, state, update, onSettings }: { room: string; state: SessionState; update: UpdateState | null; onSettings: () => void }) {
   const [hover, setHover] = useState(false);
@@ -20,12 +21,15 @@ export function TopBar({ room, state, update, onSettings }: { room: string; stat
         </text>
         {update && update.phase !== "failed" ? (
           <text fg={update.phase === "installed" ? theme.ok : theme.accent}>
-            {update.phase === "installed" ? "✓ restart to update" : update.phase === "installing" ? "↻ updating" : `● update ${update.version}`}
+            {update.phase === "installed" ? "✓ restart to update" : update.phase === "installing" ? "↻ updating" : `update ${update.version}`}
             {"  "}
           </text>
         ) : null}
         <box onMouseDown={onSettings} onMouseOver={() => setHover(true)} onMouseOut={() => setHover(false)}>
-          <text fg={hover ? theme.accent : theme.dim}>⚙</text>
+          <text fg={hover ? theme.accent : theme.dim}>
+            ⚙
+            {update?.phase === "ready" ? <UpdateDot /> : null}
+          </text>
         </box>
       </box>
     </box>

@@ -5,6 +5,8 @@ import { truncate } from "../lib/wrap";
 import type { SpaceRow } from "../spaces";
 import type { InboxItem } from "./Inbox";
 import { Spinner, useElapsed } from "./Spinner";
+import { UpdateDot } from "./UpdateDot";
+import type { UpdateState } from "../update";
 import { ContextMeterView } from "./StatusBar";
 
 export const SIDEBAR_WIDTH = 30;
@@ -80,6 +82,7 @@ interface SidebarProps {
   teamError?: string | null;
   onOpenSpace?: (id: string) => void;
   onSettings: () => void;
+  update?: UpdateState | null;
   projection: Projection;
   room: string;
   inbox: InboxItem[];
@@ -87,7 +90,7 @@ interface SidebarProps {
   status: string;
 }
 
-export function Sidebar({ projection, room, inbox, running, status, spaces, teamName, teamError, onOpenSpace, onSettings }: SidebarProps) {
+export function Sidebar({ projection, room, inbox, running, status, spaces, teamName, teamError, onOpenSpace, onSettings, update }: SidebarProps) {
   const state = projection.state;
   const [hover, setHover] = useState(false);
   const elapsed = useElapsed(running);
@@ -214,9 +217,21 @@ export function Sidebar({ projection, room, inbox, running, status, spaces, team
         onMouseOver={() => setHover(true)}
         onMouseOut={() => setHover(false)}
       >
-        <text fg={hover ? theme.accent : theme.text}>⚙  settings</text>
+        <text fg={hover ? theme.accent : theme.text}>
+          ⚙  settings
+          {update?.phase === "ready" ? (
+            <>
+              {" "}
+              <UpdateDot />
+            </>
+          ) : null}
+        </text>
       </box>
-      <text fg={theme.dim}>f2 settings · ctrl+b</text>
+      {update?.phase === "ready" ? (
+        <text fg={theme.accent}>update {update.version} ready · f2</text>
+      ) : (
+        <text fg={theme.dim}>f2 settings · ctrl+b</text>
+      )}
     </box>
   );
 }

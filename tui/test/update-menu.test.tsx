@@ -46,11 +46,29 @@ test("a new release is offered at the top of the settings and installs from ther
     { width: 120, height: 40 },
   );
   open.push(setup);
-  await frame(setup, "● update 9.9.9");
+  const bar = await frame(setup, "update 9.9.9");
+  expect(bar).toContain("⚙●");
+  expect(bar).toContain("update 9.9.9 ready · f2");
 
   await setup.mockInput.pressKey("F2");
-  await frame(setup, "● update ready · 9.9.9");
+  await frame(setup, "New version available: 0.2.4 → 9.9.9 · install now");
   await setup.mockInput.pressEnter();
   await frame(setup, "9.9.9 installed · restart plural");
   expect(installs).toEqual([{ PLURAL_VERSION: "9.9.9", PLURAL_INSTALL_DIR: "/home/me/.local/bin" }]);
+});
+
+test("without a new release the settings carry no marker", async () => {
+  const updater = new Updater({ current: "0.2.4", execPath: "/home/me/.local/bin/plural", fetcher: (async () => new Response(JSON.stringify({ tag_name: "v0.2.4" }))) as unknown as typeof fetch });
+  await updater.check();
+  const fake = new FakeSession();
+  fake.emit({ type: "session.welcome", room: "r_1", token: "t", participant: HOST, base_policy: [], agent: "anthropic · claude-opus-5-5" });
+  fake.emit({ type: "session.snapshot", state: { ...fake.projection.state, participants: { [HOST.id]: HOST } }, streaming: {}, typing: [] });
+  const setup = await testRender(
+    <App client={fake} room="r_1" version="0.2.4" guestLink={null} updater={updater} settings={{ ...DEFAULT_SETTINGS, setupSeen: true }} onQuit={() => undefined} />,
+    { width: 120, height: 40 },
+  );
+  open.push(setup);
+  const text = await frame(setup, "f2 settings");
+  expect(text).not.toContain("⚙●");
+  expect(text).not.toContain("ready · f2");
 });
