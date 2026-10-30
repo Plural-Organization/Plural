@@ -12,6 +12,7 @@ from plural.agent.providers.base import (
     ToolCallReady,
     ToolCallRequest,
 )
+from plural.agent.providers.preset import Preset
 
 
 def reply(text: str) -> tuple[LlmEvent, ...]:
@@ -67,3 +68,12 @@ class DemoProvider:
                 return
             await asyncio.sleep(0)
             yield event
+
+
+PRESET = Preset(
+    id="demo",
+    label="Demo agent",
+    adapter="fake",
+    hint="A scripted agent that needs nothing, to try the interface",
+    connection="local",
+)

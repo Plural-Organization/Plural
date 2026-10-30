@@ -2,10 +2,10 @@
 
 from collections.abc import Mapping
 
-from plural.agent.providers.api import anthropic as anthropic_api
-from plural.agent.providers.api.anthropic import AnthropicProvider
-from plural.agent.providers.api.anthropic_oauth import AnthropicOAuthProvider, load_credentials
-from plural.agent.providers.api.openai_compat import OpenAIProvider
+from plural.agent.providers.api.anthropic import adapter as anthropic_api
+from plural.agent.providers.api.anthropic.adapter import AnthropicProvider
+from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider, load_credentials
+from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
 from plural.agent.providers.base import LLMProvider
 from plural.agent.providers.cli.claude_code import ClaudeCodeProvider
 from plural.agent.providers.cli.codex_cli import CodexCliProvider

@@ -8,10 +8,10 @@ import httpx2
 import openai
 import pytest
 
-from plural.agent.providers.api.anthropic import FALLBACK_BETA, AnthropicProvider
-from plural.agent.providers.api.anthropic import to_messages as anthropic_messages
-from plural.agent.providers.api.openai_compat import OpenAIProvider
-from plural.agent.providers.api.openai_compat import to_messages as openai_messages
+from plural.agent.providers.api.anthropic.adapter import FALLBACK_BETA, AnthropicProvider
+from plural.agent.providers.api.anthropic.adapter import to_messages as anthropic_messages
+from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
+from plural.agent.providers.api.openai_compat.adapter import to_messages as openai_messages
 from plural.agent.providers.base import (
     ContextOverflow,
     LlmEvent,

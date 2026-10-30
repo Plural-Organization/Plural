@@ -5,8 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.providers.api import anthropic_oauth
-from plural.agent.providers.api.anthropic_oauth import (
+from plural.agent.providers.api.anthropic import oauth as anthropic_oauth
+from plural.agent.providers.api.anthropic.oauth import (
     AnthropicOAuthProvider,
     OAuthCredentials,
     load_credentials,

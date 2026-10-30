@@ -5,7 +5,7 @@ from typing import cast
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from plural.agent.providers.api.openai_compat import OpenAIProvider
+from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
 from plural.agent.providers.catalog import PRESETS, preset
 from plural.host.bootstrap import Host
 from plural.host.config import HostSettings
