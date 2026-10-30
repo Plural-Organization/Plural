@@ -26,6 +26,7 @@ export type Parsed =
   | { kind: "update"; check: boolean }
   | { kind: "passthrough"; args: string[] }
   | { kind: "join"; link: string | null; displayName: string | null }
+  | { kind: "team_host"; name: string; tunnel: string; member: string | null }
   | { kind: "session"; options: SessionOptions };
 
 const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm", "team", "ls"]);
@@ -110,6 +111,7 @@ export function parseArgs(input: string[]): Parsed {
   if (first === "--version" || first === "-v") return { kind: "version" };
   if (first === "--selftest") return { kind: "selftest" };
   if (first === "--help" || first === "-h") return { kind: "help" };
+  if (first === "team" && rest[0] === "create" && rest.includes("--tunnel")) return teamHost(rest.slice(1));
   if (first !== undefined && PASSTHROUGH.has(first)) return { kind: "passthrough", args: argv };
   if (first === "update") return update(rest);
   if (first === "join") return join(rest);
@@ -145,6 +147,35 @@ function join(args: string[]): Parsed {
     }
   }
   return { kind: "join", link, displayName };
+}
+
+function teamHost(args: string[]): Parsed {
+  const usage = "usage: plural team create <name> --tunnel cloudflared|ngrok [--as <name>]";
+  let name: string | null = null;
+  let tunnel: string | null = null;
+  let member: string | null = null;
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index] as string;
+    if (arg === "--tunnel") {
+      tunnel = valueOf(args, index, arg);
+      index += 1;
+    } else if (arg === "--as") {
+      member = valueOf(args, index, arg);
+      index += 1;
+    } else if (arg === "--relay") {
+      throw new UsageError("--tunnel starts the team's relay itself, drop --relay");
+    } else if (arg.startsWith("-")) {
+      throw new UsageError(`unknown option ${arg} for plural team create. ${usage}`);
+    } else if (name === null) {
+      name = arg;
+    } else {
+      throw new UsageError(usage);
+    }
+  }
+  if (name === null || tunnel === null) {
+    throw new UsageError(usage);
+  }
+  return { kind: "team_host", name, tunnel, member };
 }
 
 function valueOf(args: string[], index: number, name: string): string {

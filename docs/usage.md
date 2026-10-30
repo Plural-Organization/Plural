@@ -142,6 +142,18 @@ plural team status
 
 `create` prints an invite code that works once and for an hour; give it to a teammate, who runs `join` with the same relay. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
 
+### A team on your own machine, behind a tunnel
+
+With no server at hand, one command starts the relay with a team directory, opens a tunnel to it and creates the team on the tunnel's address:
+
+```bash
+plural team create Backend --tunnel ngrok        # or cloudflared
+```
+
+It prints the invite code and keeps running in that window; leave it open and start your session in another terminal with `plural --team`. Ctrl+C stops the relay and the tunnel. The directory file is `~/.plural/teams.db`.
+
+Your machine is the directory, so while this window is closed nobody can join or see the team's cards; sessions that are already open go on. A free ngrok address and a cloudflared quick tunnel change on every start, and the team is bound to the relay's address, so after a restart everyone has to join again. For a team that stays, run the relay on a server or behind a fixed domain and use `--relay`. `--tunnel` and `--relay` cannot be combined.
+
 ### Showing your session to the team
 
 ```bash

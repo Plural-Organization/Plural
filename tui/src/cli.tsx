@@ -23,6 +23,7 @@ import { startupCommands } from "./startup";
 import { runUpdate, skewNote, Updater } from "./update";
 import { fetchSessions, loadTeam, pickTeamSession, TeamWatcher, teamProof, type Team } from "./team";
 import { listSessions, resolveSession, type SessionInfo } from "./sessions";
+import { hostTeam } from "./team-host";
 import { parseTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
 
 const USAGE = `plural ${pkg.version}
@@ -36,6 +37,7 @@ usage
   plural update [--check]     install the latest version
   plural sessions [--json]    list your sessions
   plural rm <id>              delete a session
+  plural team create <name> --tunnel cloudflared|ngrok  start a team behind a tunnel
   plural relay|doctor|export  run the host's own commands
 
 options
@@ -403,6 +405,15 @@ async function main(): Promise<void> {
   } else if (parsed.kind === "passthrough") {
     const child = runHostCommand(parsed.args);
     child.on("exit", (code) => process.exit(code ?? 0));
+  } else if (parsed.kind === "team_host") {
+    const stop = new AbortController();
+    process.once("SIGINT", () => stop.abort());
+    process.once("SIGTERM", () => stop.abort());
+    try {
+      process.exit(await hostTeam(parsed, { out: (text) => process.stdout.write(text), signal: stop.signal }));
+    } catch (error) {
+      fail(problem(error));
+    }
   } else if (parsed.kind === "join") {
     if (parsed.link === null) {
       fail("usage: plural join <link|@name> [--name <name>], or plural -r to go back to a room you were in");
