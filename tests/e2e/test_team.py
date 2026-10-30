@@ -1,4 +1,5 @@
 import asyncio
+import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
 
@@ -136,6 +137,7 @@ async def test_the_commands_do_the_whole_round_trip(
         return result.output
 
     created = await command("vlad", "create", "Backend", "--relay", relay.url, "--as", "vlad")
+    assert "Teammates run: plural team join" in created
     code = next(word for word in created.split() if word.startswith("tm-")).rstrip(",.")
     await command("alia", "join", code, "--relay", relay.url, "--as", "alia")
 
@@ -158,3 +160,22 @@ async def test_the_commands_do_the_whole_round_trip(
 
     assert "gone" in await command("vlad", "disband", "--yes")
     assert "Not in a team" in await command("vlad", "status")
+
+
+async def test_create_can_print_the_invite_as_json(
+    relay: RelayServer, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("PLURAL_DATA_DIR", str(tmp_path / "vlad"))
+    result = await asyncio.to_thread(
+        CliRunner().invoke,
+        app,
+        ["team", "create", "Backend", "--relay", relay.url, "--as", "vlad", "--json"],
+    )
+    assert result.exit_code == 0, result.output
+    printed = json.loads(result.output)
+    assert (printed["team"], printed["relay"], printed["minutes"]) == ("Backend", relay.url, 60)
+    assert printed["code"].startswith("tm-")
+
+    alia = Person(tmp_path, "alia")
+    joined = await join_team(relay.url, alia.store.identity(), code=printed["code"], member="alia")
+    assert joined.team_name == "Backend"
