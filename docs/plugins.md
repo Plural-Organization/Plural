@@ -54,6 +54,37 @@ The handler gets a context:
 `ctx.prompt` goes through the same path as a typed prompt. In `review` mode a guest's prompt becomes a
 proposal, write and exec actions still wait for the host, and `PLURAL_GUEST_RUN_TOKENS` applies.
 
+## Tools for the agent
+
+A plugin can also give the agent a tool. The agent calls it like any other tool, and its return value
+is the tool's result:
+
+```python
+def setup(plural):
+    @plural.tool(
+        "ticket",
+        description="Look up a ticket by key: title, status and assignee",
+        parameters={"key": "Ticket key, for example PLR-123"},
+        risk="read",
+    )
+    async def ticket(args, ctx):
+        ctx.log("asking the tracker")
+        return await ctx.run("tracker", "show", args["key"])
+```
+
+`plural.tool(name, description, parameters=None, risk="read", exposure="deferred")`:
+
+| | |
+|---|---|
+| `name` | `a-z`, `0-9` and `_`; it cannot reuse a built-in tool or another plugin's tool |
+| `parameters` | a mapping of name to description (required strings), or a full JSON schema object |
+| `risk` | `read`, `write` or `exec`. Like every tool the call goes through the host's policy: a tool without a rule asks the host, and write and exec in a guest's run always do. Allow one for good with `/policy allow ticket *` |
+| `exposure` | `deferred` (default): the agent finds it with `tool_search`. `core`: declared on every request |
+
+The handler receives the arguments as a dict and a context with `ctx.workspace`, `ctx.log(text)`, which
+streams progress to the room, and `await ctx.run(*argv)`. A string result goes to the model as is, any
+other value as JSON. If the handler raises, the model gets the error as the tool's result.
+
 If a handler raises, the room sees `/name failed: …` and the host keeps running. A file that fails to
 import, has no `setup`, or registers a taken name is listed as failed by `/plugins` with the reason.
 

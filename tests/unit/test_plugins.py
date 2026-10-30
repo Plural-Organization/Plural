@@ -3,9 +3,13 @@ from pathlib import Path
 
 import pytest
 
+from plural.agent.sandbox.base import Workspace
+from plural.agent.sandbox.local import LocalBackend
+from plural.agent.tools.base import ToolCtx
+from plural.agent.tools.registry import Exposure
 from plural.host.inbox import Inbox, PluginPrompt, PluginReply
 from plural.host.plugins import CommandContext, PluginError, PluginHost
-from plural.protocol.models import PluginStatus, Role
+from plural.protocol.models import PluginStatus, Role, ToolRisk
 
 HELLO = """
 def setup(plural):
@@ -116,3 +120,76 @@ async def test_run_returns_output_and_reports_failures(tmp_path: Path) -> None:
     with pytest.raises(PluginError, match="did not finish"):
         await ctx.run("sleep", "5", timeout_s=0.1)
     await asyncio.sleep(0)
+
+
+TOOLS = """
+def setup(plural):
+    @plural.tool("ticket", description="Look up a ticket", parameters={"key": "Ticket key"})
+    async def ticket(args, ctx):
+        ctx.log("looking")
+        return {"key": args["key"], "status": "open"}
+
+    @plural.tool("deploy", description="Deploy", risk="exec", exposure="core")
+    async def deploy(args, ctx):
+        raise RuntimeError("no deploys on friday")
+"""
+
+
+def test_a_plugin_registers_tools_for_the_registry(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, ops=TOOLS)
+    [view] = plugins.views()
+    assert view.tools == ("ticket", "deploy")
+    deferred = [t.name for t in plugins.tools_source(Exposure.DEFERRED).tools()]
+    core = [t.name for t in plugins.tools_source(Exposure.CORE).tools()]
+    assert (deferred, core) == (["ticket"], ["deploy"])
+    ticket = plugins.tools()[0].schema()
+    assert ticket.description == "[ops plugin] Look up a ticket"
+    assert ticket.parameters["required"] == ["key"]
+
+
+async def test_plugin_tools_report_results_and_failures_to_the_model(tmp_path: Path) -> None:
+    ticket, deploy = host_with(tmp_path, ops=TOOLS).tools()
+    chunks: list[str] = []
+    ctx = ToolCtx(workspace=Workspace.at(tmp_path), backend=LocalBackend(), emit=chunks.append)
+
+    found = ticket.prepare({"key": "PLR-1"})
+    assert found.risk is ToolRisk.READ
+    assert found.subject == '{"key": "PLR-1"}'
+    result = await found.execute(ctx)
+    assert (result.content, result.is_error) == ('{"key": "PLR-1", "status": "open"}', False)
+    assert chunks == ["looking\n"]
+
+    missing = await ticket.prepare({}).execute(ctx)
+    assert (missing.content, missing.is_error) == ("missing arguments: key", True)
+
+    failed = await deploy.prepare({}).execute(ctx)
+    assert deploy.prepare({}).risk is ToolRisk.EXEC
+    assert (failed.content, failed.is_error) == (
+        "deploy failed: RuntimeError: no deploys on friday",
+        True,
+    )
+
+
+def test_tool_names_cannot_clash(tmp_path: Path) -> None:
+    directory = tmp_path / "plugins"
+    directory.mkdir()
+    (directory / "a.py").write_text(TOOLS)
+    (directory / "b.py").write_text(TOOLS)
+    (directory / "c.py").write_text(
+        "def setup(plural):\n"
+        "    @plural.tool('read', description='mine')\n"
+        "    async def read(args, ctx): ...\n"
+    )
+    (directory / "d.py").write_text(
+        "def setup(plural):\n"
+        "    @plural.tool('x', description='x', risk='root')\n"
+        "    async def x(args, ctx): ...\n"
+    )
+    plugins = PluginHost(directory, workspace=tmp_path, reserved_tools=lambda: {"read"})
+    plugins.load()
+    assert {view.name: view.error for view in plugins.views()} == {
+        "a": None,
+        "b": "tool ticket is already taken",
+        "c": "tool read is already taken",
+        "d": "risk of x must be read, write or exec",
+    }

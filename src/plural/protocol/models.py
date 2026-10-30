@@ -254,6 +254,7 @@ class PluginView(Model):
     path: str
     status: PluginStatus
     commands: tuple[str, ...] = ()
+    tools: tuple[str, ...] = ()
     error: str | None = None
 
 

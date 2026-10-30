@@ -40,4 +40,6 @@ commands it was not built with. The security model must not move: tool execution
   like any other prompt from the invoking participant.
 - Late joiners see the command list from the snapshot, but command replies only from the moment they
   joined, like other notices.
-- Event hooks (`tool_call`, `turn_end`) are left for a later ADR; this one covers commands only.
+- `plural.tool` adds a tool for the agent, registered as a tool source (deferred by default). It
+  declares its risk, and the `PolicyGate` decides each call like any other tool's.
+- Event hooks (`tool_call`, `turn_end`) are left for a later ADR.

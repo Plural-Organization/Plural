@@ -80,7 +80,8 @@ export function pluginRows(projection: Projection): Row[] {
   return [
     ...plugins.map((plugin): Row => {
       const loaded = plugin.status === "loaded";
-      const commands = plugin.commands.length > 0 ? plugin.commands.map((command) => `/${command}`).join(" ") : "no commands";
+      const provided = [...plugin.commands.map((command) => `/${command}`), ...(plugin.tools ?? []).map((tool) => `${tool}()`)];
+      const commands = provided.length > 0 ? provided.join(" ") : "no commands or tools";
       return [
         { text: loaded ? "✓ " : "✕ ", fg: loaded ? theme.ok : theme.danger },
         { text: plugin.name.padEnd(name + 2), fg: theme.text, bold: true },
