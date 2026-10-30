@@ -19,7 +19,7 @@ class Preset:
     context_window: bool = False
     models: tuple[str, ...] = ()
     connection: Connection = "api_key"
-    key_env: str | None = None
+    key_env: tuple[str, ...] = ()
 
     def to_json(self) -> dict[str, object]:
         """The client's shape of a preset (camelCase, as tui/src/catalog.json holds it)."""
@@ -35,7 +35,7 @@ class Preset:
             "models": list(data["models"]),
             "hint": data["hint"],
             "connection": data["connection"],
-            "keyEnv": data["key_env"],
+            "keyEnv": list(data["key_env"]),
         }
 
 
@@ -47,7 +47,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"),
         hint="Claude models with an Anthropic API key",
-        key_env="ANTHROPIC_API_KEY",
+        key_env=("ANTHROPIC_API_KEY",),
     ),
     Preset(
         id="anthropic_oauth",
@@ -110,7 +110,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("gpt-5", "gpt-5-mini"),
         hint="GPT models with an OpenAI API key",
-        key_env="OPENAI_API_KEY",
+        key_env=("OPENAI_API_KEY",),
     ),
     Preset(
         id="gemini",
@@ -120,7 +120,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("gemini-2.5-pro", "gemini-2.5-flash"),
         hint="Gemini through its OpenAI-compatible endpoint",
-        key_env="GEMINI_API_KEY",
+        key_env=("GEMINI_API_KEY", "GOOGLE_API_KEY"),
     ),
     Preset(
         id="openrouter",
@@ -130,7 +130,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("anthropic/claude-sonnet-5-5", "openai/gpt-5"),
         hint="Many models behind one key",
-        key_env="OPENROUTER_API_KEY",
+        key_env=("OPENROUTER_API_KEY",),
     ),
     Preset(
         id="groq",
@@ -140,7 +140,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("llama-3.3-70b-versatile",),
         hint="Fast hosted open models",
-        key_env="GROQ_API_KEY",
+        key_env=("GROQ_API_KEY",),
     ),
     Preset(
         id="deepseek",
@@ -150,7 +150,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("deepseek-chat", "deepseek-reasoner"),
         hint="DeepSeek models",
-        key_env="DEEPSEEK_API_KEY",
+        key_env=("DEEPSEEK_API_KEY",),
     ),
     Preset(
         id="nvidia",
@@ -164,7 +164,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
             "meta/llama-3.1-70b-instruct",
         ),
         hint="NVIDIA NIM OpenAI-compatible endpoint; get a key from build.nvidia.com",
-        key_env="NVIDIA_API_KEY",
+        key_env=("NVIDIA_API_KEY",),
     ),
     Preset(
         id="azure",
@@ -227,7 +227,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("gpt-oss-120b",),
         hint="Cerebras OpenAI-compatible API",
-        key_env="CEREBRAS_API_KEY",
+        key_env=("CEREBRAS_API_KEY",),
     ),
     Preset(
         id="cloudflare_workers_ai",
@@ -245,7 +245,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("accounts/fireworks/models/kimi-k3",),
         hint="OpenAI-compatible API; model catalog may vary by account",
-        key_env="FIREWORKS_API_KEY",
+        key_env=("FIREWORKS_API_KEY",),
     ),
     Preset(
         id="huggingface",
@@ -255,7 +255,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("moonshotai/Kimi-K2.6",),
         hint="Hugging Face Inference Providers OpenAI-compatible router",
-        key_env="HF_TOKEN",
+        key_env=("HF_TOKEN",),
     ),
     Preset(
         id="kimi_coding",
@@ -274,7 +274,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("devstral-medium-latest",),
         hint="Mistral chat completions API",
-        key_env="MISTRAL_API_KEY",
+        key_env=("MISTRAL_API_KEY",),
     ),
     Preset(
         id="minimax",
@@ -302,7 +302,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("kimi-k2.6",),
         hint="OpenAI-compatible endpoint",
-        key_env="MOONSHOT_API_KEY",
+        key_env=("MOONSHOT_API_KEY",),
     ),
     Preset(
         id="moonshotai_cn",
@@ -312,7 +312,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("kimi-k2.6",),
         hint="OpenAI-compatible endpoint",
-        key_env="MOONSHOT_API_KEY",
+        key_env=("MOONSHOT_API_KEY",),
     ),
     Preset(
         id="qwen_token_plan",
@@ -349,7 +349,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("moonshotai/Kimi-K3",),
         hint="OpenAI-compatible endpoint",
-        key_env="TOGETHER_API_KEY",
+        key_env=("TOGETHER_API_KEY",),
     ),
     Preset(
         id="vercel_ai_gateway",
@@ -367,7 +367,7 @@ PRESETS: Final[tuple[Preset, ...]] = (
         needs_key=True,
         models=("grok-4.7",),
         hint="OpenAI-compatible chat completions endpoint",
-        key_env="XAI_API_KEY",
+        key_env=("XAI_API_KEY",),
     ),
     Preset(
         id="xiaomi",

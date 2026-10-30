@@ -1,4 +1,8 @@
-[
+import type { Preset } from "../../src/presets";
+
+// A snapshot of the host's catalog (plural.agent.providers.catalog) for tests only:
+// the client itself asks the host for it at start.
+export const TEST_CATALOG: Preset[] = [
   {
     "id": "anthropic",
     "label": "Anthropic",
@@ -15,7 +19,9 @@
     ],
     "hint": "Claude models with an Anthropic API key",
     "connection": "api_key",
-    "keyEnv": "ANTHROPIC_API_KEY"
+    "keyEnv": [
+      "ANTHROPIC_API_KEY"
+    ]
   },
   {
     "id": "anthropic_oauth",
@@ -43,7 +49,7 @@
     ],
     "hint": "Claude model IDs; Test connection checks access for your account",
     "connection": "oauth",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "claude_code",
@@ -71,7 +77,7 @@
     ],
     "hint": "Uses the installed Claude Code CLI; sign in with claude auth login",
     "connection": "oauth",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "codex_cli",
@@ -91,7 +97,7 @@
     ],
     "hint": "Streams replies from Codex CLI and keeps one session for this room",
     "connection": "oauth",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "openai",
@@ -107,7 +113,9 @@
     ],
     "hint": "GPT models with an OpenAI API key",
     "connection": "api_key",
-    "keyEnv": "OPENAI_API_KEY"
+    "keyEnv": [
+      "OPENAI_API_KEY"
+    ]
   },
   {
     "id": "gemini",
@@ -123,7 +131,10 @@
     ],
     "hint": "Gemini through its OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": "GEMINI_API_KEY"
+    "keyEnv": [
+      "GEMINI_API_KEY",
+      "GOOGLE_API_KEY"
+    ]
   },
   {
     "id": "openrouter",
@@ -139,7 +150,9 @@
     ],
     "hint": "Many models behind one key",
     "connection": "api_key",
-    "keyEnv": "OPENROUTER_API_KEY"
+    "keyEnv": [
+      "OPENROUTER_API_KEY"
+    ]
   },
   {
     "id": "groq",
@@ -154,7 +167,9 @@
     ],
     "hint": "Fast hosted open models",
     "connection": "api_key",
-    "keyEnv": "GROQ_API_KEY"
+    "keyEnv": [
+      "GROQ_API_KEY"
+    ]
   },
   {
     "id": "deepseek",
@@ -170,7 +185,9 @@
     ],
     "hint": "DeepSeek models",
     "connection": "api_key",
-    "keyEnv": "DEEPSEEK_API_KEY"
+    "keyEnv": [
+      "DEEPSEEK_API_KEY"
+    ]
   },
   {
     "id": "nvidia",
@@ -187,7 +204,9 @@
     ],
     "hint": "NVIDIA NIM OpenAI-compatible endpoint; get a key from build.nvidia.com",
     "connection": "api_key",
-    "keyEnv": "NVIDIA_API_KEY"
+    "keyEnv": [
+      "NVIDIA_API_KEY"
+    ]
   },
   {
     "id": "azure",
@@ -200,7 +219,7 @@
     "models": [],
     "hint": "Enter your Azure resource endpoint and deployment name",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "ollama",
@@ -216,7 +235,7 @@
     ],
     "hint": "A model on this machine, no key. Set the window the server really uses",
     "connection": "local",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "custom",
@@ -229,7 +248,7 @@
     "models": [],
     "hint": "Any OpenAI-compatible server",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "amazon_bedrock",
@@ -244,7 +263,7 @@
     ],
     "hint": "Use a Bedrock API key; enter the region's bedrock-runtime /openai/v1 URL",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "ant_ling",
@@ -259,7 +278,7 @@
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "baseten",
@@ -272,7 +291,7 @@
     "models": [],
     "hint": "OpenAI-compatible endpoint; enter a model ID",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "cerebras",
@@ -287,7 +306,9 @@
     ],
     "hint": "Cerebras OpenAI-compatible API",
     "connection": "api_key",
-    "keyEnv": "CEREBRAS_API_KEY"
+    "keyEnv": [
+      "CEREBRAS_API_KEY"
+    ]
   },
   {
     "id": "cloudflare_workers_ai",
@@ -300,7 +321,7 @@
     "models": [],
     "hint": "Enter the account-scoped OpenAI-compatible endpoint URL",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "fireworks",
@@ -315,7 +336,9 @@
     ],
     "hint": "OpenAI-compatible API; model catalog may vary by account",
     "connection": "api_key",
-    "keyEnv": "FIREWORKS_API_KEY"
+    "keyEnv": [
+      "FIREWORKS_API_KEY"
+    ]
   },
   {
     "id": "huggingface",
@@ -330,7 +353,9 @@
     ],
     "hint": "Hugging Face Inference Providers OpenAI-compatible router",
     "connection": "api_key",
-    "keyEnv": "HF_TOKEN"
+    "keyEnv": [
+      "HF_TOKEN"
+    ]
   },
   {
     "id": "kimi_coding",
@@ -345,7 +370,7 @@
     ],
     "hint": "Kimi Coding OpenAI-compatible API; subscription OAuth is not configured here",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "mistral",
@@ -360,7 +385,9 @@
     ],
     "hint": "Mistral chat completions API",
     "connection": "api_key",
-    "keyEnv": "MISTRAL_API_KEY"
+    "keyEnv": [
+      "MISTRAL_API_KEY"
+    ]
   },
   {
     "id": "minimax",
@@ -375,7 +402,7 @@
     ],
     "hint": "Anthropic-compatible Messages API",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "minimax_cn",
@@ -390,7 +417,7 @@
     ],
     "hint": "Anthropic-compatible Messages API",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "moonshotai",
@@ -405,7 +432,9 @@
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": "MOONSHOT_API_KEY"
+    "keyEnv": [
+      "MOONSHOT_API_KEY"
+    ]
   },
   {
     "id": "moonshotai_cn",
@@ -420,7 +449,9 @@
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": "MOONSHOT_API_KEY"
+    "keyEnv": [
+      "MOONSHOT_API_KEY"
+    ]
   },
   {
     "id": "qwen_token_plan",
@@ -435,7 +466,7 @@
     ],
     "hint": "Qwen Token Plan OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "qwen_token_plan_cn",
@@ -450,7 +481,7 @@
     ],
     "hint": "Qwen Token Plan OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "qwen_token_plan_individual",
@@ -465,7 +496,7 @@
     ],
     "hint": "Qwen Token Plan OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "together",
@@ -480,7 +511,9 @@
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": "TOGETHER_API_KEY"
+    "keyEnv": [
+      "TOGETHER_API_KEY"
+    ]
   },
   {
     "id": "vercel_ai_gateway",
@@ -493,7 +526,7 @@
     "models": [],
     "hint": "Anthropic-compatible Messages API; enter a model route",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "xai",
@@ -508,7 +541,9 @@
     ],
     "hint": "OpenAI-compatible chat completions endpoint",
     "connection": "api_key",
-    "keyEnv": "XAI_API_KEY"
+    "keyEnv": [
+      "XAI_API_KEY"
+    ]
   },
   {
     "id": "xiaomi",
@@ -523,7 +558,7 @@
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "xiaomi_token_plan_cn",
@@ -538,7 +573,7 @@
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "xiaomi_token_plan_ams",
@@ -553,7 +588,7 @@
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "xiaomi_token_plan_sgp",
@@ -568,7 +603,7 @@
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "zai",
@@ -583,7 +618,7 @@
     ],
     "hint": "Z.AI Coding Plan OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "zai_coding_cn",
@@ -598,7 +633,7 @@
     ],
     "hint": "Z.AI Coding Plan OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": null
+    "keyEnv": []
   },
   {
     "id": "demo",
@@ -611,6 +646,6 @@
     "models": [],
     "hint": "A scripted agent that needs nothing, to try the interface",
     "connection": "local",
-    "keyEnv": null
+    "keyEnv": []
   }
-]
+];

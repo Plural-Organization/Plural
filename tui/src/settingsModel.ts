@@ -1,6 +1,6 @@
 import type { Role } from "@plural/client";
 import type { Keys } from "./credentials";
-import { PRESETS, presetOf, type AgentChoice, type PresetId } from "./presets";
+import { presetOf, presets, type AgentChoice, type PresetId } from "./presets";
 import type { Settings } from "./settings";
 import type { UpdateState } from "./update";
 import { relayProblem, type ShareMode } from "./share";
@@ -317,8 +317,9 @@ function tabRows(tab: Tab, state: ModelState): Row[] {
 }
 
 export function nextPreset(current: AgentChoice["preset"], direction: 1 | -1): AgentChoice["preset"] {
-  const index = PRESETS.findIndex((preset) => preset.id === current);
-  return (PRESETS[(index + direction + PRESETS.length) % PRESETS.length] ?? PRESETS[0]!).id;
+  const all = presets();
+  const index = all.findIndex((preset) => preset.id === current);
+  return (all[(index + direction + all.length) % all.length] ?? all[0]!).id;
 }
 
 export type ConnectionType = "oauth" | "api_key" | "local";
@@ -333,14 +334,14 @@ export function nextConnection(current: AgentChoice["preset"], direction: 1 | -1
   const currentIndex = groups.indexOf(currentGroup);
   for (let offset = 1; offset <= groups.length; offset++) {
     const group = groups[(currentIndex + direction * offset + groups.length * 2) % groups.length]!;
-    const candidate = PRESETS.find((preset) => preset.connection === group);
+    const candidate = presets().find((preset) => preset.connection === group);
     if (candidate) return candidate.id;
   }
   return current;
 }
 
 export function nextPresetInConnection(current: AgentChoice["preset"], direction: 1 | -1): AgentChoice["preset"] {
-  const choices = PRESETS.filter((preset) => preset.connection === presetOf(current).connection);
+  const choices = presets().filter((preset) => preset.connection === presetOf(current).connection);
   const index = choices.findIndex((preset) => preset.id === current);
   return choices[(index + direction + choices.length) % choices.length]!.id;
 }

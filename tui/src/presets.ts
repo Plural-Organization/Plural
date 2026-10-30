@@ -1,6 +1,7 @@
-import catalog from "./catalog.json";
-
-/** A provider preset. The catalog comes from the host's plural.agent.providers.catalog (gen_catalog.py). */
+/**
+ * A provider preset. The catalog lives on the host, in plural.agent.providers.catalog; the client asks the
+ * host it started for it (`AgentControl.catalog`) and keeps no copy of its own.
+ */
 export type PresetId = string;
 
 export interface Preset {
@@ -14,17 +15,40 @@ export interface Preset {
   models: string[];
   hint: string;
   connection: "oauth" | "api_key" | "local";
-  keyEnv: string | null;
+  keyEnv: string[];
 }
 
-export const PRESETS: Preset[] = catalog as Preset[];
+/** What the client shows before the host answers, or when it joins a room it does not host. */
+export const DEMO: Preset = {
+  id: "demo",
+  label: "Demo agent",
+  provider: "fake",
+  baseUrl: "",
+  needsKey: false,
+  editableUrl: false,
+  contextWindow: false,
+  models: [],
+  hint: "A scripted agent that needs nothing, to try the interface",
+  connection: "local",
+  keyEnv: [],
+};
+
+let catalog: Preset[] = [DEMO];
+
+export function setPresets(list: readonly Preset[]): void {
+  catalog = list.some((preset) => preset.id === DEMO.id) ? [...list] : [...list, DEMO];
+}
+
+export function presets(): readonly Preset[] {
+  return catalog;
+}
 
 export function presetOf(id: PresetId): Preset {
-  return PRESETS.find((preset) => preset.id === id) ?? (PRESETS.at(-1) as Preset);
+  return catalog.find((preset) => preset.id === id) ?? DEMO;
 }
 
 export function isPresetId(value: unknown): value is PresetId {
-  return PRESETS.some((preset) => preset.id === value);
+  return catalog.some((preset) => preset.id === value);
 }
 
 export interface AgentChoice {

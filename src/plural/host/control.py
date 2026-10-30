@@ -15,6 +15,7 @@ from plural.agent.providers.base import (
     Stop,
     TextDelta,
 )
+from plural.agent.providers.catalog import PRESETS
 from plural.agent.providers.cli.codex_cli import CodexCliProvider
 from plural.core.errors import DomainError
 from plural.host.bootstrap import Host, build_web_search
@@ -49,8 +50,8 @@ class Request(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     id: str
-    type: Literal["configure", "test"]
-    config: AgentConfig
+    type: Literal["configure", "test", "catalog"]
+    config: AgentConfig | None = None
 
 
 Reply = Callable[[dict[str, object]], None]
@@ -123,6 +124,12 @@ class Control:
         if request is None:
             return
         try:
+            if request.type == "catalog":
+                presets = [entry.to_json() for entry in PRESETS]
+                self._reply({"type": "result", "id": request.id, "ok": True, "presets": presets})
+                return
+            if request.config is None:
+                raise ConfigError(f"{request.type} needs a config")
             if request.type == "test":
                 provider, _, _ = provider_for(self._base, request.config)
                 message = await probe(provider)

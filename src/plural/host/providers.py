@@ -25,8 +25,8 @@ def resolve_api_key(settings: HostSettings, environ: Mapping[str, str]) -> str |
         return settings.api_key.get_secret_value()
     entry = settings.catalog_entry
     if entry is not None:
-        # A preset's key lives in its own variable: never send OPENAI_API_KEY to another vendor.
-        return environ.get(entry.key_env) if entry.key_env else None
+        # A preset's key lives in its own variables: never send OPENAI_API_KEY to another vendor.
+        return next((environ[name] for name in entry.key_env if environ.get(name)), None)
     variable = KEY_VARIABLES.get(settings.resolved_provider(environ))
     return environ.get(variable) if variable else None
 
@@ -39,6 +39,12 @@ def provider_secrets(settings: HostSettings, api_key: str | None) -> tuple[str, 
 
 
 def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
+    entry = settings.catalog_entry
+    if entry is not None and entry.needs_key and not api_key:
+        where = " or ".join((*entry.key_env, "PLURAL_API_KEY"))
+        raise ConfigError(
+            f"{entry.label} needs an API key: set {where}, or enter it in the settings"
+        )
     match settings.resolved_provider():
         case "fake":
             return DemoProvider()
