@@ -1,11 +1,11 @@
 import type { ChildProcess, StdioOptions } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { connect } from "node:net";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import { freePort, HostUnavailable, runHostCommand } from "./host-process";
 import { UsageError } from "./options";
 import { parseTunnelKind, startTunnel, type Tunnel, type TunnelKind } from "./tunnel";
+import { dataDir } from "./paths";
 
 export interface TeamHostRequest {
   name: string;
@@ -42,10 +42,6 @@ export interface TeamHosting {
   stop: () => Promise<void>;
 }
 
-function dataDirectory(): string {
-  return process.env["PLURAL_DATA_DIR"] ?? join(homedir(), ".plural");
-}
-
 function accepting(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const socket = connect({ host: "127.0.0.1", port });
@@ -63,8 +59,8 @@ export const DEFAULT_DEPS: TeamHostDeps = {
   startTunnel: (kind, port) => startTunnel(kind, port),
   listening: accepting,
   teamsFile: () => {
-    mkdirSync(dataDirectory(), { recursive: true, mode: 0o700 });
-    return join(dataDirectory(), "teams.db");
+    mkdirSync(dataDir(), { recursive: true, mode: 0o700 });
+    return join(dataDir(), "teams.db");
   },
 };
 

@@ -12,6 +12,7 @@ from plural.security.identity import (
     normalize_url,
     verify_team_proof,
 )
+from plural.security.replay import ReplayGuard
 
 PARTICIPANT_PREFIX = "p_team_"
 
@@ -57,7 +58,7 @@ class TeamAdmission:
         self._skew_s = skew_s
         self._roster: dict[str, str] = {}
         self._fetched_at: datetime | None = None
-        self._seen: dict[str, int] = {}
+        self._replays = ReplayGuard(timedelta(seconds=2 * skew_s))
 
     @property
     def banned(self) -> tuple[str, ...]:
@@ -80,7 +81,8 @@ class TeamAdmission:
             raise Unauthorized("that proof was made for another address")
         if abs(int(now.timestamp()) - proof.ts) > self._skew_s:
             raise Unauthorized("your clock is off by more than a minute")
-        self._remember(claims.member, proof, int(now.timestamp()))
+        if not self._replays.fresh(f"{claims.member}:{proof.nonce}", now):
+            raise Unauthorized("this join was already used")
         if claims.member in self._banned:
             raise Forbidden("the host removed you from this session")
         if await self._roster_key(claims.member) != claims.key:
@@ -91,14 +93,6 @@ class TeamAdmission:
         if member_id in self._banned:
             return False
         return await self._roster_key(member_id) is not None
-
-    def _remember(self, member: str, proof: TeamProof, now: int) -> None:
-        for key in [key for key, seen in self._seen.items() if now - seen > 2 * self._skew_s]:
-            del self._seen[key]
-        key = f"{member}:{proof.nonce}"
-        if key in self._seen:
-            raise Unauthorized("this join was already used")
-        self._seen[key] = now
 
     async def _roster_key(self, member_id: str) -> str | None:
         now = self._clock.now()

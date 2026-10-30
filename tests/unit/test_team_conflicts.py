@@ -144,6 +144,13 @@ def test_a_failed_edit_a_read_and_a_file_outside_the_workspace_are_not_touches(
     assert board.touching(NOW) == ()
 
 
+def test_a_secret_file_is_never_published_as_a_touch(tmp_path: Path) -> None:
+    board = ConflictBoard(tmp_path)
+    board.observe(started("c1", "write", ".env"), NOW)
+    board.observe(ended("c1"), NOW)
+    assert board.touching(NOW) == ()
+
+
 def test_a_touch_is_forgotten_after_half_an_hour_and_the_newest_come_first(
     tmp_path: Path,
 ) -> None:

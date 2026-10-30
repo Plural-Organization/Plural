@@ -1470,11 +1470,12 @@ export function App({
           onAdmission={(mode) => send({ type: "link.set_admission", mode })}
           onCopyReply={copyReply}
           update={update}
+          version={version}
           onUpdate={() => void updater?.install()}
           onClose={closeSettings}
         />
       ) : null}
-      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} /> : null}
+      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} update={update} /> : null}
     </box>
   );
 }

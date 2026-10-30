@@ -349,3 +349,18 @@ async def test_an_expired_certificate_is_told_apart_from_a_forged_one(
         signed(directory, other, forged, clock, "GET", "members", nonce="n9"), 401
     )
     assert "not a member" in message
+
+
+async def test_a_failure_in_the_middle_of_creating_a_team_leaves_nothing_behind(
+    directory: TeamDirectory, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def broken(*_: object) -> None:
+        raise RuntimeError("disk full")
+
+    monkeypatch.setattr(directory, "_new_invite", broken)
+    with pytest.raises(RuntimeError):
+        await founded(directory, person())
+    monkeypatch.undo()
+    assert await directory.team_count() == 0
+    await founded(directory, person())
+    assert await directory.team_count() == 1

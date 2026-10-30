@@ -1,4 +1,5 @@
 import asyncio
+import secrets
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -12,7 +13,7 @@ from plural.host.bootstrap import Host
 from plural.host.config import HostSettings
 from plural.host.conflicts import ConflictBoard
 from plural.host.repo import RepoFacts, repo_facts
-from plural.host.team import DirectoryClient, TeamError, TeamStore
+from plural.host.team import DirectoryClient, TeamError, TeamStore, http_base
 from plural.protocol.models import Role, SessionState
 from plural.protocol.team import (
     CardDraft,
@@ -88,12 +89,12 @@ def draft_of(
     )
 
 
+def presence_path(team_id: str) -> str:
+    return f"/teams/{team_id}/presence"
+
+
 def presence_url(relay: str, team_id: str) -> str:
-    base = relay.strip().rstrip("/")
-    scheme = {"http": "ws", "https": "wss"}.get(base.split("://", 1)[0])
-    if scheme is not None:
-        base = f"{scheme}://{base.split('://', 1)[1]}"
-    return f"{base}/teams/{team_id}/presence"
+    return f"ws{http_base(relay)[4:]}{presence_path(team_id)}"
 
 
 class TeamPresence:
@@ -121,9 +122,6 @@ class TeamPresence:
             except TeamError as error:
                 log.warning("team.presence_unavailable", reason=str(error))
             except InvalidStatus as error:
-                if error.response.status_code in {401, 403}:
-                    log.error("team.presence_stopped", reason="the team refused this host")
-                    return
                 log.warning("team.presence_refused", status=error.response.status_code)
             except (OSError, WebSocketException) as error:
                 log.warning("team.presence_lost", reason=str(error))
@@ -142,15 +140,14 @@ class TeamPresence:
         client = DirectoryClient(self._store, stored)
         profile = await client.refresh()
         url = presence_url(profile.relay, profile.team_id)
-        path = "/" + url.split("://", 1)[1].split("/", 1)[1]
         header = authorization(
             self._store.identity(),
             profile.certificate,
             "GET",
-            path,
+            presence_path(profile.team_id),
             b"",
             timestamp=int(time.time()),
-            nonce=time.time_ns().to_bytes(8, "big").hex(),
+            nonce=secrets.token_hex(8),
         )
         async with connect(url, additional_headers={"authorization": header}) as socket:
             log.info("team.presence_connected", team=profile.team_name)
