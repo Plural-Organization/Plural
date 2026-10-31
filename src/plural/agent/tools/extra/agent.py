@@ -12,7 +12,14 @@ from plural.agent.gate import GateResult, PolicyGate
 from plural.agent.loop import AgentLoop
 from plural.agent.messages import UserTurn
 from plural.agent.providers.base import ToolSchema
-from plural.agent.tools.base import PreparedCall, ToolArgs, ToolCtx, ToolError, ToolResult
+from plural.agent.tools.base import (
+    PreparedCall,
+    ToolArgs,
+    ToolCtx,
+    ToolError,
+    ToolResult,
+    args_schema,
+)
 from plural.agent.tools.registry import ToolRegistry
 from plural.agent.tools.truncation import truncate_head
 from plural.core.ports import IdGenerator
@@ -87,7 +94,7 @@ class AgentTool:
 
     def schema(self) -> ToolSchema:
         names = [agent.name for agent in self._library.agents]
-        parameters = AgentArgs.model_json_schema()
+        parameters = args_schema(AgentArgs)
         parameters["properties"]["agent"]["enum"] = names
         return ToolSchema(
             name=AGENT_TOOL,

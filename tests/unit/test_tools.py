@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -5,7 +6,7 @@ from pydantic import JsonValue
 
 from plural.agent.sandbox.base import PathDenied, PathOutsideWorkspace, Workspace
 from plural.agent.sandbox.local import LocalBackend
-from plural.agent.tools.base import ToolCtx, ToolError
+from plural.agent.tools.base import ToolArgs, ToolCtx, ToolError, args_schema
 from plural.agent.tools.registry import builtin_tools
 
 
@@ -105,3 +106,16 @@ async def test_bash_timeout_keeps_the_output_so_far(ctx: ToolCtx) -> None:
     output = await run(ctx, "bash", command="echo started; sleep 30", timeout_s=3)
     assert "started" in output
     assert "timed out" in output
+
+
+def test_tool_schemas_carry_no_titles() -> None:
+    class Note(ToolArgs):
+        title: str
+        tags: tuple[str, ...] = ()
+
+    schema = args_schema(Note)
+    assert "title" not in schema
+    assert set(schema["properties"]) == {"title", "tags"}
+    assert all("title" not in field for field in schema["properties"].values())
+    for tool in builtin_tools().schemas():
+        assert '"title": "' not in json.dumps(tool.parameters)

@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
@@ -19,6 +19,25 @@ class ToolError(Exception):
 
 class ToolArgs(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+def args_schema(model: type[BaseModel]) -> dict[str, Any]:
+    """The JSON schema of a tool's arguments, without the titles pydantic adds: they repeat the
+    names and cost the model tokens on every request."""
+    return _untitled(model.model_json_schema())
+
+
+def _untitled(node: Any) -> Any:
+    if isinstance(node, dict):
+        items = cast("dict[str, Any]", node).items()
+        return {
+            key: _untitled(value)
+            for key, value in items
+            if not (key == "title" and isinstance(value, str))
+        }
+    if isinstance(node, list):
+        return [_untitled(value) for value in cast("list[Any]", node)]
+    return node
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,7 +124,7 @@ class TypedTool[A: ToolArgs](ABC):
         return ToolSchema(
             name=self.spec.name,
             description=self.spec.description,
-            parameters=self.spec.args_model.model_json_schema(),
+            parameters=args_schema(self.spec.args_model),
         )
 
     def prepare(self, raw: Mapping[str, JsonValue]) -> PreparedCall:
