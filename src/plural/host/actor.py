@@ -435,7 +435,9 @@ class SessionActor:
             case ApprovalNeeded(approval=approval):
                 if self._conflicts is not None:
                     warnings = self._conflicts.warnings_for(approval.call, self._clock.now())
-                    approval = approval.model_copy(update={"warnings": warnings})
+                    approval = approval.model_copy(
+                        update={"warnings": (*approval.warnings, *warnings)}
+                    )
                 await self._emit(ApprovalRequested(approval=approval))
                 delay = max((approval.timeout_at - self._clock.now()).total_seconds(), 0)
                 self._timers[approval.id] = asyncio.get_running_loop().call_later(

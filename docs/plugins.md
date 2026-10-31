@@ -107,6 +107,37 @@ The handler receives the arguments as a dict and a context with `ctx.workspace`,
 streams progress to the room, and `await ctx.run(*argv)`. A string result goes to the model as is, any
 other value as JSON. If the handler raises, the model gets the error as the tool's result.
 
+## Hooks
+
+`plural.on(event)` runs a function when something happens instead of when someone calls it.
+
+### Guarding tool calls
+
+A `tool_call` hook sees every tool call the agent makes before the host's policy is applied, and can make
+the host stricter, never looser:
+
+```python
+def setup(plural):
+    @plural.on("tool_call")
+    async def guard(call, ctx):
+        if call.name == "bash" and "git push" in call.args.get("command", "") and "main" in call.subject:
+            return plural.deny("pushes to main go through review")
+        if call.name == "edit" and call.subject.startswith("migrations/"):
+            return plural.ask("migrations need a second look")
+```
+
+| | |
+|---|---|
+| `call.name`, `call.risk`, `call.subject`, `call.args` | the tool, `read`/`write`/`exec`, what it acts on, and its arguments |
+| `call.author_id`, `call.role` | who started the run the call belongs to |
+| `return plural.deny(reason)` | refuses the call; the agent is told the reason and not to retry |
+| `return plural.ask(reason)` | the host approves it even in auto mode; the card shows `<plugin> plugin: <reason>` |
+| return nothing | the policy decides as usual |
+
+Any deny wins. There is no allow: a call the policy refuses, or one plan mode forbids, never reaches the
+hook. A hook gets 5 seconds; one that raises or takes longer counts as `ask`, so a broken guard makes the
+host ask rather than let a call through. `ctx.reply(text)` and `ctx.run(*argv)` work as in commands.
+
 If a handler raises, the room sees `/name failed: …` and the host keeps running. A file that fails to
 import, has no `setup`, or registers a taken name is listed as failed by `/plugins` with the reason.
 

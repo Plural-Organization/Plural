@@ -101,6 +101,14 @@ exception becomes an error result the model reads, so raise with a clear message
 an error string. Every call goes through the host's policy: a tool without a rule asks the host, and
 the host can allow it for good with `/policy allow <tool> *`.
 
+## Hooks
+
+`@plural.on("tool_call")` runs before the policy on every tool call the agent makes. The handler gets
+`(call, ctx)`: `call.name`, `call.risk`, `call.subject`, `call.args`, `call.author_id`, `call.role`. It
+returns `plural.deny(reason)`, `plural.ask(reason)` or nothing. There is no allow, so use it for guards
+("never push to main", "ask before touching migrations/"), not to skip approvals. Keep it fast: after 5
+seconds, or if it raises, the call needs the host's approval.
+
 ## Good plugins
 
 - Keep handlers `async`. Wrap blocking work in `await asyncio.to_thread(...)` so the room does not

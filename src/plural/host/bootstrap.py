@@ -178,7 +178,10 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     tools.add_source(mcp, exposure=Exposure.DEFERRED)
     mcp.start()
     plugins = PluginHost(
-        state_dir / "plugins", workspace=workspace.root, reserved_tools=tools.registered
+        state_dir / "plugins",
+        workspace=workspace.root,
+        inbox=inbox,
+        reserved_tools=tools.registered,
     )
     tools.add_source(plugins.tools_source(Exposure.CORE))
     tools.add_source(plugins.tools_source(Exposure.DEFERRED), exposure=Exposure.DEFERRED)
@@ -191,6 +194,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         clock=clock,
         timeout_s=settings.approval_timeout_s,
         rejection_limit=settings.rejection_limit,
+        guard=plugins.guard_tool,
     )
     environment = Environment(
         workspace=workspace.root,

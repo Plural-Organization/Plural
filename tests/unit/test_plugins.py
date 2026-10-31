@@ -7,9 +7,17 @@ from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.registry import Exposure
+from plural.host import plugins as plugin_module
 from plural.host.inbox import Inbox, PluginPrompt, PluginReply
 from plural.host.plugins import CommandContext, PluginError, PluginHost
-from plural.protocol.models import PluginStatus, Role, ToolRisk
+from plural.protocol.models import (
+    Origin,
+    PluginStatus,
+    Provenance,
+    Role,
+    ToolCallView,
+    ToolRisk,
+)
 
 HELLO = """
 def setup(plural):
@@ -202,3 +210,55 @@ def test_tool_names_cannot_clash(tmp_path: Path) -> None:
         "c": "tool read is already taken",
         "d": "risk of x must be read, write or exec",
     }
+
+
+GUARDS = """
+import asyncio
+
+
+def setup(plural):
+    @plural.on("tool_call")
+    async def careful(call, ctx):
+        if call.name == "bash":
+            return plural.ask("shell")
+
+    @plural.on("tool_call")
+    async def strict(call, ctx):
+        if "rm" in call.subject:
+            return plural.deny("no deleting")
+        if call.name == "slow":
+            await asyncio.sleep(1)
+"""
+
+BASH = ToolCallView(id="c", name="bash", risk=ToolRisk.EXEC, subject="rm -rf build", args={})
+HOST = Provenance(initiator_id="p_host", initiator_role=Role.HOST, origin=Origin.DIRECT)
+
+
+async def test_tool_call_hooks_can_ask_or_deny_and_deny_wins(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plugins = host_with(tmp_path, guards=GUARDS)
+    denied = await plugins.guard_tool(BASH, HOST)
+    assert denied is not None
+    assert (denied.action, denied.reason, denied.plugin) == ("deny", "no deleting", "guards")
+    listing = BASH.model_copy(update={"subject": "ls"})
+    asked = await plugins.guard_tool(listing, HOST)
+    assert asked is not None
+    assert (asked.action, asked.reason) == ("ask", "shell")
+    read = BASH.model_copy(update={"name": "read", "risk": ToolRisk.READ, "subject": "a.txt"})
+    assert await plugins.guard_tool(read, HOST) is None
+
+    monkeypatch.setattr(plugin_module, "GUARD_TIMEOUT_S", 0.05)
+    slow = await plugins.guard_tool(read.model_copy(update={"name": "slow"}), HOST)
+    assert slow is not None
+    assert (slow.action, slow.reason) == ("ask", "its guard took longer than 0.05s")
+
+
+def test_hooks_need_a_known_event_and_an_async_handler(tmp_path: Path) -> None:
+    unknown = "def setup(plural):\n    @plural.on('tool_called')\n    async def h(e, c): ...\n"
+    sync = "def setup(plural):\n    @plural.on('run_end')\n    def h(e, c): ...\n"
+    views = host_with(tmp_path, unknown=unknown, sync=sync).views()
+    errors = {view.name: view.error for view in views}
+    assert errors["sync"] == "the run_end hook must be an async function"
+    assert errors["unknown"] is not None
+    assert errors["unknown"].startswith("unknown event 'tool_called'")

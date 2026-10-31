@@ -8,6 +8,7 @@ from plural.client.connection import CommandRejected
 from plural.protocol.commands import (
     ApprovalRespond,
     CommandRun,
+    PermissionModeSet,
     PluginsCreate,
     PluginsReload,
     PluginsRemove,
@@ -25,7 +26,7 @@ from plural.protocol.events import (
     ToolEnded,
     ToolsLoaded,
 )
-from plural.protocol.models import ApprovalDecision, PluginStatus, Role
+from plural.protocol.models import ApprovalDecision, PermissionMode, PluginStatus, Role
 from tests.e2e.support import running_session
 
 PLUGIN = """
@@ -234,3 +235,59 @@ async def test_the_agent_calls_a_plugin_tool_after_the_host_approves(tmp_path: P
         await owner.next(RunEnded)
         assert "ticket" not in [tool.name for tool in provider.requests[0].tools]
         assert "ticket" in [tool.name for tool in provider.requests[1].tools]
+
+
+GUARD = """
+def setup(plural):
+    @plural.on("tool_call")
+    async def guard(call, ctx):
+        command = call.args.get("command", "")
+        if call.name == "bash" and "git push" in command and "main" in command:
+            await ctx.reply("stopped a push to main")
+            return plural.deny("pushes to main go through review")
+        if call.name == "read" and call.subject.endswith("notes.txt"):
+            return plural.ask("it may hold real values")
+        if call.name == "ls":
+            raise RuntimeError("guard bug")
+"""
+
+
+async def test_a_tool_call_hook_refuses_a_call_even_in_auto_mode(tmp_path: Path) -> None:
+    install(tmp_path, "guard", GUARD)
+    provider = FakeProvider([use_tool("bash", command="git push origin main"), reply("ok")])
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        owner = await session.owner()
+        await owner.client.send(PermissionModeSet(mode=PermissionMode.AUTO))
+        await owner.client.send(PromptSubmit(text="ship it"))
+        ended = await owner.next(ToolEnded)
+        assert not ended.ok
+        assert "refused by the guard plugin: pushes to main go through review" in ended.output
+        await owner.next(RunEnded)
+        replies = [e.text for e in owner.events if isinstance(e, CommandReplied)]
+        assert replies == ["stopped a push to main"]
+        assert not any(isinstance(event, ApprovalRequested) for event in owner.events)
+
+
+async def test_a_tool_call_hook_turns_an_allowed_call_into_an_approval(tmp_path: Path) -> None:
+    install(tmp_path, "guard", GUARD)
+    provider = FakeProvider(
+        [use_tool("read", path="notes.txt"), use_tool("ls", call_id="c2"), reply("ok")]
+    )
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        owner = await session.owner()
+        await owner.client.send(PermissionModeSet(mode=PermissionMode.AUTO))
+        await owner.client.send(PromptSubmit(text="look around"))
+        first = await owner.next(ApprovalRequested)
+        assert first.approval.call.name == "read"
+        assert first.approval.warnings == ("guard plugin: it may hold real values",)
+        await owner.client.send(
+            ApprovalRespond(approval_id=first.approval.id, decision=ApprovalDecision.ONCE)
+        )
+        second = await owner.next(ApprovalRequested)
+        assert second.approval.call.name == "ls"
+        failed = "guard plugin: its guard failed: RuntimeError: guard bug"
+        assert second.approval.warnings == (failed,)
+        await owner.client.send(
+            ApprovalRespond(approval_id=second.approval.id, decision=ApprovalDecision.ONCE)
+        )
+        await owner.next(RunEnded)

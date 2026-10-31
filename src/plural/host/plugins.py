@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from itertools import count
 from pathlib import Path
 from types import ModuleType
-from typing import Final
+from typing import Final, Literal
 
 import structlog
 from pydantic import JsonValue
@@ -20,10 +20,13 @@ from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
 from plural.agent.tools.registry import Exposure
 from plural.host.inbox import Inbox, PluginPrompt, PluginReply, PluginShow
 from plural.protocol.models import (
+    HOST_PARTICIPANT_ID,
     PluginCommandView,
     PluginStatus,
     PluginView,
+    Provenance,
     Role,
+    ToolCallView,
     ToolRisk,
 )
 
@@ -53,6 +56,8 @@ TOOL_NAME: Final = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 RISKS: Final = {"read": ToolRisk.READ, "write": ToolRisk.WRITE, "exec": ToolRisk.EXEC}
 RUN_TIMEOUT_S: Final = 120.0
 ASK_TIMEOUT_S: Final = 120.0
+GUARD_TIMEOUT_S: Final = 5.0
+HOOK_EVENTS: Final = frozenset({"session_start", "before_run", "tool_call", "run_end"})
 MAX_OUTPUT_CHARS: Final = 64_000
 
 TEMPLATE: Final = '''\
@@ -189,8 +194,52 @@ async def _run_program(argv: tuple[str, ...], workspace: Path, timeout_s: float)
     return output
 
 
+class HookContext:
+    """What a hook gets besides its event: it may reply to the room and run programs."""
+
+    def __init__(self, *, plugin: str, workspace: Path, inbox: Inbox) -> None:
+        self.plugin = plugin
+        self.workspace = workspace
+        self._inbox = inbox
+
+    async def reply(self, text: str) -> None:
+        self._inbox.put(PluginReply(self.plugin, HOST_PARTICIPANT_ID, text))
+
+    async def run(self, *argv: str, timeout_s: float = RUN_TIMEOUT_S) -> str:
+        return await _run_program(argv, self.workspace, timeout_s)
+
+
+@dataclass(frozen=True, slots=True)
+class Verdict:
+    """A tool_call hook's answer. There is no allow: a hook only makes the policy stricter."""
+
+    action: Literal["ask", "deny"]
+    reason: str
+    plugin: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class ToolCall:
+    """The tool call a tool_call hook sees, before the policy decides it."""
+
+    name: str
+    risk: str
+    subject: str
+    args: Mapping[str, JsonValue]
+    author_id: str
+    role: str
+
+
 Handler = Callable[[CommandContext], Awaitable[None]]
 ToolHandler = Callable[[dict[str, JsonValue], ToolContext], Awaitable[object]]
+HookHandler = Callable[[object, HookContext], Awaitable[object]]
+
+
+@dataclass(frozen=True, slots=True)
+class Hook:
+    event: str
+    plugin: str
+    handler: HookHandler
 
 
 class PluginTool:
@@ -286,6 +335,27 @@ class PluginApi:
         self._workspace = workspace
         self.commands: list[PluginCommand] = []
         self.tools: list[PluginTool] = []
+        self.hooks: list[Hook] = []
+
+    def on(self, event: str) -> Callable[[HookHandler], HookHandler]:
+        if event not in HOOK_EVENTS:
+            raise PluginError(f"unknown event {event!r}: use {', '.join(sorted(HOOK_EVENTS))}")
+
+        def register(handler: HookHandler) -> HookHandler:
+            if not inspect.iscoroutinefunction(handler):
+                raise PluginError(f"the {event} hook must be an async function")
+            self.hooks.append(Hook(event, self._plugin, handler))
+            return handler
+
+        return register
+
+    def ask(self, reason: str) -> Verdict:
+        """From a tool_call hook: have the host approve this call even if the policy allows it."""
+        return Verdict("ask", reason, self._plugin)
+
+    def deny(self, reason: str) -> Verdict:
+        """From a tool_call hook: refuse this call."""
+        return Verdict("deny", reason, self._plugin)
 
     def command(
         self, name: str, *, description: str = "", usage: str = "", host_only: bool = False
@@ -350,20 +420,24 @@ class PluginHost:
         directory: Path,
         *,
         workspace: Path,
+        inbox: Inbox | None = None,
         reserved_tools: Callable[[], Iterable[str]] = lambda: (),
     ) -> None:
         self.directory = directory
+        self._inbox = inbox or Inbox()
         self.workspace = workspace
         self._reserved_tools = reserved_tools
         self._views: tuple[PluginView, ...] = ()
         self._commands: dict[str, PluginCommand] = {}
         self._tools: dict[str, PluginTool] = {}
+        self._hooks: tuple[Hook, ...] = ()
         self._generation = count()
 
     def load(self) -> None:
         views: list[PluginView] = []
         commands: dict[str, PluginCommand] = {}
         tools: dict[str, PluginTool] = {}
+        hooks: list[Hook] = []
         reserved = set(self._reserved_tools())
         generation = next(self._generation)
         paths = sorted(self.directory.glob("*.py")) if self.directory.is_dir() else []
@@ -398,6 +472,7 @@ class PluginHost:
                 continue
             commands.update((command.view.name, command) for command in api.commands)
             tools.update((tool.name, tool) for tool in api.tools)
+            hooks.extend(api.hooks)
             views.append(
                 PluginView(
                     name=name,
@@ -410,6 +485,7 @@ class PluginHost:
         self._views = tuple(views)
         self._commands = commands
         self._tools = tools
+        self._hooks = tuple(hooks)
 
     def views(self) -> tuple[PluginView, ...]:
         return self._views
@@ -425,6 +501,41 @@ class PluginHost:
 
     def tools_source(self, exposure: Exposure) -> PluginToolSource:
         return PluginToolSource(self, exposure)
+
+    def hooks(self, event: str) -> tuple[Hook, ...]:
+        return tuple(hook for hook in self._hooks if hook.event == event)
+
+    def _context(self, plugin: str) -> HookContext:
+        return HookContext(plugin=plugin, workspace=self.workspace, inbox=self._inbox)
+
+    async def guard_tool(self, call: ToolCallView, provenance: Provenance) -> Verdict | None:
+        """Ask every tool_call hook about a call. Any deny wins; a hook that fails counts as ask."""
+        seen = ToolCall(
+            name=call.name,
+            risk=call.risk.value,
+            subject=call.subject,
+            args=call.args,
+            author_id=provenance.initiator_id,
+            role=provenance.initiator_role.value,
+        )
+        asked: Verdict | None = None
+        for hook in self.hooks("tool_call"):
+            try:
+                answer = await asyncio.wait_for(
+                    hook.handler(seen, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                )
+            except TimeoutError:
+                answer = Verdict("ask", f"its guard took longer than {GUARD_TIMEOUT_S:g}s")
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                answer = Verdict("ask", f"its guard failed: {_describe(error)}")
+            if not isinstance(answer, Verdict):
+                continue
+            answer = Verdict(answer.action, answer.reason, hook.plugin)
+            if answer.action == "deny":
+                return answer
+            asked = asked or answer
+        return asked
 
     def create(self, name: str) -> Path:
         if not NAME.match(name):
