@@ -108,8 +108,13 @@ class CommandContext:
     async def reply(self, text: str) -> None:
         self._inbox.put(PluginReply(self.command, self.author_id, text))
 
-    async def prompt(self, text: str, *, follow_up: bool = False) -> None:
-        self._inbox.put(PluginPrompt(self.command, self.author_id, text, follow_up=follow_up))
+    async def prompt(
+        self, text: str, *, follow_up: bool = False, display: str | None = None
+    ) -> None:
+        """Prompt the agent with `text`; the room sees `display` instead, the full text folded."""
+        self._inbox.put(
+            PluginPrompt(self.command, self.author_id, text, follow_up=follow_up, display=display)
+        )
 
     async def run(self, *argv: str, timeout_s: float = RUN_TIMEOUT_S) -> str:
         return await _run_program(argv, self.workspace, timeout_s)

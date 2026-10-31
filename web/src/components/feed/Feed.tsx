@@ -111,6 +111,12 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
           <div className={styles.bubble}>
             {mine ? null : <div className={styles.who}>{item.name}</div>}
             <Text text={item.text} anchor={item.id} />
+            {item.full ? (
+              <details className={styles.meta}>
+                <summary>what /{item.via ?? "plugin"} sent the agent</summary>
+                <pre className={styles.full}>{item.full}</pre>
+              </details>
+            ) : null}
             {item.files && item.files.length > 0 ? (
               <ul className={styles.files}>
                 {item.files.map((file, index) => (
@@ -119,8 +125,8 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
               </ul>
             ) : null}
           </div>
-          {item.viaProposal || item.role === "viewer" ? (
-            <div className={styles.meta}>{item.viaProposal ? "approved by the host" : item.role}</div>
+          {item.viaProposal || item.role === "viewer" || item.via ? (
+            <div className={styles.meta}>{[item.via ? `via /${item.via}` : null, item.viaProposal ? "approved by the host" : item.role === "viewer" ? item.role : null].filter(Boolean).join(" · ")}</div>
           ) : null}
         </article>
       );

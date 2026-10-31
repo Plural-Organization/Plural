@@ -36,6 +36,10 @@ def setup(plural):
     async def ask(ctx):
         await ctx.prompt(f"please {ctx.args}")
 
+    @plural.command("btw")
+    async def btw(ctx):
+        await ctx.prompt(f"Answer briefly, prefix BTW: {ctx.args}", display=ctx.args)
+
     @plural.command("deploy", host_only=True)
     async def deploy(ctx):
         await ctx.reply("deployed")
@@ -58,7 +62,7 @@ async def test_everyone_sees_plugin_commands_and_their_replies(tmp_path: Path) -
         owner = await session.owner()
         guest = await session.guest("Alia")
         names = [command.name for command in guest.client.projection.state.commands]
-        assert names == ["hello", "ask", "deploy", "broken"]
+        assert names == ["hello", "ask", "btw", "deploy", "broken"]
 
         await guest.client.send(CommandRun(name="hello", args="there"))
         invoked = await owner.next(CommandInvoked)
@@ -93,7 +97,27 @@ async def test_a_plugin_prompt_belongs_to_whoever_ran_the_command(tmp_path: Path
         assert accepted.text == "please check the tests"
         assert accepted.author_id == guest.client.projection.me_id
         assert accepted.provenance.initiator_role is Role.PARTICIPANT
+        assert (accepted.via, accepted.display) == ("ask", None)
         await owner.next(RunEnded)
+
+
+async def test_the_room_sees_a_plugin_prompts_display_and_the_agent_the_full_text(
+    tmp_path: Path,
+) -> None:
+    install(tmp_path, "team", PLUGIN)
+    provider = FakeProvider([reply("BTW: it is fine")])
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        owner = await session.owner()
+        guest = await session.guest("Alia")
+        await guest.client.send(CommandRun(name="btw", args="is it fine?"))
+        accepted = await guest.next(PromptAccepted)
+        assert accepted.text == "Answer briefly, prefix BTW: is it fine?"
+        assert (accepted.via, accepted.display) == ("btw", "is it fine?")
+        await owner.next(RunEnded)
+        assert "Answer briefly, prefix BTW: is it fine?" in str(provider.requests[-1].messages)
+        transcript = guest.client.projection.state.transcript
+        [entry] = [e for e in transcript if e.id == accepted.prompt_id]
+        assert (entry.via, entry.display) == ("btw", "is it fine?")
 
 
 async def test_viewers_cannot_run_commands(tmp_path: Path) -> None:

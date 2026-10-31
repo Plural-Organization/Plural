@@ -12,7 +12,19 @@ export type ToolStatus = "running" | "ok" | "failed";
 
 export type FeedItem =
   | { kind: "banner"; id: string; room: string; version: string; guestLink: string | null }
-  | { kind: "user"; id: string; participantId: string; name: string; role: Role; viaProposal: boolean; text: string; files?: string[] }
+  | {
+      kind: "user";
+      id: string;
+      participantId: string;
+      name: string;
+      role: Role;
+      viaProposal: boolean;
+      text: string;
+      files?: string[];
+      /** The plugin command that sent it; `full` is what the agent got when the room sees a short `text`. */
+      via?: string | null;
+      full?: string | null;
+    }
   | {
       kind: "chat";
       id: string;
@@ -199,7 +211,7 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
             name: author ? label(state, author) : event.author_id,
             role: author?.role ?? event.provenance.initiator_role,
             viaProposal: event.provenance.origin === "proposal",
-            text: event.text,
+            ...promptText(event.text, event.via, event.display),
             files: event.attachments.map((id) => state.attachments[id]?.name ?? "a file"),
           },
         ],
@@ -382,6 +394,10 @@ function loadHistory(
   return { ...feed, items, counter, approvals, history: true };
 }
 
+function promptText(text: string, via: string | null | undefined, display: string | null | undefined): { text: string; via: string | null; full: string | null } {
+  return display ? { text: display, via: via ?? null, full: text } : { text, via: via ?? null, full: null };
+}
+
 function fromEntry(entry: TranscriptEntry, state: SessionState, counter: number): FeedItem | null {
   switch (entry.kind) {
     case "prompt": {
@@ -393,7 +409,7 @@ function fromEntry(entry: TranscriptEntry, state: SessionState, counter: number)
         name: author ? label(state, author) : (entry.author_id ?? "system"),
         role: author?.role ?? "participant",
         viaProposal: false,
-        text: entry.text,
+        ...promptText(entry.text, entry.via, entry.display),
       };
     }
     case "assistant":

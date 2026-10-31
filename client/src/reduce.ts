@@ -178,6 +178,8 @@ function apply(state: SessionState, record: EventRecord): SessionState {
           tool: null,
           ok: null,
           output: "",
+          via: event.via ?? null,
+          display: event.display ?? null,
         },
       );
     case "prompt.dequeued":
@@ -198,6 +200,8 @@ function apply(state: SessionState, record: EventRecord): SessionState {
         tool: null,
         ok: null,
         output: "",
+        via: null,
+        display: null,
       });
     case "context.compacted":
       return append(
@@ -210,6 +214,8 @@ function apply(state: SessionState, record: EventRecord): SessionState {
           tool: null,
           ok: null,
           output: "",
+          via: null,
+          display: null,
         },
       );
     case "tool.started":
@@ -221,6 +227,8 @@ function apply(state: SessionState, record: EventRecord): SessionState {
         tool: event.call,
         ok: null,
         output: "",
+        via: null,
+        display: null,
       });
     case "tool.ended":
       return {

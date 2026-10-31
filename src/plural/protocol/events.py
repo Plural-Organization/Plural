@@ -274,6 +274,10 @@ class PromptAccepted(EventBase):
     delivery: Delivery
     provenance: Provenance
     attachments: tuple[str, ...] = ()
+    # A plugin's prompt: the command that sent it, and the short text the room sees in place of
+    # the full one the agent gets.
+    via: str | None = None
+    display: str | None = None
 
 
 class RunStarted(EventBase):

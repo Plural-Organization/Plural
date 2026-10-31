@@ -50,7 +50,7 @@ takes `ctx`:
 | `ctx.author`, `ctx.author_id`, `ctx.role` | who ran it (`role` is `host` or `participant`) |
 | `ctx.workspace` | the workspace path on the host |
 | `await ctx.reply(text)` | a reply the whole room sees |
-| `await ctx.prompt(text, follow_up=False)` | a prompt to the agent **as the person who ran the command** |
+| `await ctx.prompt(text, follow_up=False, display=None)` | a prompt to the agent **as the person who ran the command**; the room sees `display` and the full text folded |
 | `await ctx.run(*argv, timeout_s=120)` | runs a program in the workspace without a shell, returns stdout; raises on a non-zero exit or a timeout |
 
 Names use `a-z`, `0-9`, `-` and `_` and cannot reuse a built-in command (`abort`, `cancel`,
@@ -61,7 +61,8 @@ everyone but the host; viewers can never run commands. If a handler raises, the 
 
 `ctx.prompt` takes the same path as a typed prompt: in review mode a guest's prompt becomes a proposal,
 write and exec actions still wait for the host, and the guest token budget applies. Never use it to get
-around those rules.
+around those rules. When the prompt wraps the user's words in instructions, pass their words as
+`display` so the room does not read the instructions as theirs.
 
 ## Tools for the agent
 

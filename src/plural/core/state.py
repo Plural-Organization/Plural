@@ -174,6 +174,8 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
                 kind=EntryKind.PROMPT,
                 author_id=event.author_id,
                 text=event.text,
+                via=event.via,
+                display=event.display,
             )
             queued = state.run is not None
             if queued:

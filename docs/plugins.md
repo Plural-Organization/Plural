@@ -52,11 +52,15 @@ The handler gets a context:
 | `ctx.author`, `ctx.author_id`, `ctx.role` | who ran it |
 | `ctx.workspace` | the workspace directory |
 | `await ctx.reply(text)` | posts a reply the whole room sees |
-| `await ctx.prompt(text, follow_up=False)` | sends a prompt to the agent as the person who ran the command |
+| `await ctx.prompt(text, follow_up=False, display=None)` | sends a prompt to the agent as the person who ran the command |
 | `await ctx.run(*argv, timeout_s=120)` | runs a program in the workspace without a shell and returns its output; a non-zero exit raises |
 
 `ctx.prompt` goes through the same path as a typed prompt. In `review` mode a guest's prompt becomes a
 proposal, write and exec actions still wait for the host, and `PLURAL_GUEST_RUN_TOKENS` applies.
+
+When a plugin wraps a short request in longer instructions, pass the short one as `display`: the room
+sees `what is overfitting?` marked `via /btw`, and the full text the agent got stays folded under it, one
+click or `ctrl+o` away. A proposal shows the host the full text.
 
 ## Tools for the agent
 

@@ -105,7 +105,7 @@ export function BriefingCard({ item, expanded, onToggle, onCopy }: { item: Extra
 
 export type Queued = "steer" | "follow_up" | null;
 
-export function UserCard({ item, queued }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued }) {
+export function UserCard({ item, queued, expanded, onToggle }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued; expanded: boolean; onToggle: () => void }) {
   const color = colorFor(item.participantId);
   return (
     <box id={pinId(item.id)} flexDirection="column" marginTop={1} marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={color} backgroundColor={theme.panel} paddingX={1} paddingY={1}>
@@ -116,10 +116,17 @@ export function UserCard({ item, queued }: { item: Extract<FeedItem, { kind: "us
         <span fg={theme.dim}>
           {"  "}
           {item.role} · to agent
+          {item.via ? ` · via /${item.via}` : ""}
           {item.viaProposal ? " · approved by host" : ""}
         </span>
       </text>
       <text fg={theme.text} wrapMode="word">{item.text}</text>
+      {item.full ? (
+        <box flexDirection="column" onMouseDown={onToggle}>
+          <text fg={theme.accent}>{expanded ? "▴ hide what the agent got" : `▸ the agent got the full text from /${item.via ?? "plugin"} · click or ctrl+o`}</text>
+          {expanded ? <text fg={theme.dim} wrapMode="word">{item.full}</text> : null}
+        </box>
+      ) : null}
       {queued ? (
         <text fg={theme.warn}>
           ⧗ queued · <span fg={theme.dim}>{queued === "steer" ? "the agent reads it after its current step" : "sent when the run ends"}</span>
@@ -338,7 +345,7 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, onT
     case "banner":
       return <Banner item={item} />;
     case "user":
-      return <UserCard item={item} queued={queued} />;
+      return <UserCard item={item} queued={queued} expanded={expanded} onToggle={() => onToggle(item.id)} />;
     case "chat":
       return <ChatCard item={item} />;
     case "assistant":

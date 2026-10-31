@@ -686,10 +686,12 @@ export interface PromptAccepted {
   attachments: string[];
   author_id: string;
   delivery: Delivery;
+  display: string | null;
   prompt_id: string;
   provenance: Provenance;
   text: string;
   type: "prompt.accepted";
+  via: string | null;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -1156,12 +1158,14 @@ export interface RunView {
  */
 export interface TranscriptEntry {
   author_id: string | null;
+  display: string | null;
   id: string;
   kind: EntryKind;
   ok: boolean | null;
   output: string;
   text: string;
   tool: ToolCallView | null;
+  via: string | null;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema

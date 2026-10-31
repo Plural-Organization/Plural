@@ -111,6 +111,7 @@ class PluginPrompt:
     invoker_id: str
     text: str
     follow_up: bool = False
+    display: str | None = None
 
 
 InboxMessage = (

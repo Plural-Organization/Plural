@@ -221,6 +221,7 @@ PLAN_NOTE = (
     "anything. End with a concrete step-by-step plan; the host approves it before you start]"
 )
 MAX_REPLY_CHARS = 8000
+MAX_DISPLAY_CHARS = 500
 
 
 def _check_points(kind: BoardShape, points: tuple[float, ...]) -> None:
@@ -903,7 +904,14 @@ class SessionActor:
             raise Unauthorized("token is bound to another connection")
         return participant
 
-    async def _submit(self, participant: Participant, command: PromptSubmit) -> None:
+    async def _submit(
+        self,
+        participant: Participant,
+        command: PromptSubmit,
+        *,
+        via: str | None = None,
+        display: str | None = None,
+    ) -> None:
         if participant.role is Role.HOST or self._state.prompt_mode is PromptMode.OPEN:
             proposals.ensure_attachments(self._state, command.attachments)
             await self._accept(
@@ -912,8 +920,11 @@ class SessionActor:
                 delivery=command.delivery,
                 attachments=command.attachments,
                 provenance=direct(participant.id, participant.role),
+                via=via,
+                display=display,
             )
             return
+        # A proposal shows the host the whole text it approves, so the short display is dropped.
         created = proposals.submit(
             self._state, proposal_id=self._ids.new("pr_"), author_id=participant.id, command=command
         )
@@ -1251,8 +1262,14 @@ class SessionActor:
         )
         if author is not None and problem is None:
             delivery = Delivery.FOLLOW_UP if request.follow_up else Delivery.NOW
+            display = (request.display or "").strip()[:MAX_DISPLAY_CHARS] or None
             try:
-                await self._submit(author, PromptSubmit(text=text, delivery=delivery))
+                await self._submit(
+                    author,
+                    PromptSubmit(text=text, delivery=delivery),
+                    via=request.command,
+                    display=display,
+                )
             except DomainError as error:
                 problem = str(error)
             else:
@@ -1290,6 +1307,8 @@ class SessionActor:
         delivery: Delivery,
         attachments: tuple[str, ...],
         provenance: Provenance,
+        via: str | None = None,
+        display: str | None = None,
     ) -> None:
         prompt_id = self._ids.new("pm_")
         accepted = PromptAccepted(
@@ -1299,6 +1318,8 @@ class SessionActor:
             delivery=delivery,
             provenance=provenance,
             attachments=attachments,
+            via=via,
+            display=display,
         )
         await self._emit(accepted, actor_id=author.id)
         await self._set_typing(author.id, typing=False)

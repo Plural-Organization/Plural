@@ -287,6 +287,8 @@ class TranscriptEntry(Model):
     tool: ToolCallView | None = None
     ok: bool | None = None
     output: str = ""
+    via: str | None = None
+    display: str | None = None
 
 
 class TextSelection(Model):

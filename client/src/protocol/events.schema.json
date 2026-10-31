@@ -2301,6 +2301,17 @@
         "delivery": {
           "$ref": "#/$defs/Delivery"
         },
+        "display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "prompt_id": {
           "type": "string"
         },
@@ -2314,6 +2325,17 @@
           "const": "prompt.accepted",
           "default": "prompt.accepted",
           "type": "string"
+        },
+        "via": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2323,7 +2345,9 @@
         "text",
         "delivery",
         "provenance",
-        "attachments"
+        "attachments",
+        "via",
+        "display"
       ],
       "type": "object"
     },
@@ -3201,6 +3225,17 @@
           ],
           "default": null
         },
+        "display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "id": {
           "type": "string"
         },
@@ -3236,6 +3271,17 @@
             }
           ],
           "default": null
+        },
+        "via": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -3245,7 +3291,9 @@
         "text",
         "tool",
         "ok",
-        "output"
+        "output",
+        "via",
+        "display"
       ],
       "type": "object"
     },

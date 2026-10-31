@@ -28,7 +28,7 @@ test("the run status follows what the run is waiting for", () => {
   const call = { id: "t1", name: "bash", risk: "exec", subject: "ls", args: {} } as const;
   projection.state = {
     ...projection.state,
-    transcript: [{ id: "t1", kind: "tool", author_id: null, text: "", tool: call, ok: null, output: "" }],
+    transcript: [{ id: "t1", kind: "tool", author_id: null, text: "", tool: call, ok: null, output: "", via: null, display: null }],
   };
   expect(status(projection)).toBe("… running bash");
   const approval = { id: "ap", call, provenance, timeout_at: "2026-10-26T12:00:00Z", suggested_patterns: [], warnings: [] };
