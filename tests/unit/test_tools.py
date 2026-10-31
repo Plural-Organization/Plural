@@ -8,6 +8,7 @@ from plural.agent.sandbox.base import PathDenied, PathOutsideWorkspace, Workspac
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import ToolArgs, ToolCtx, ToolError, args_schema
 from plural.agent.tools.registry import builtin_tools
+from plural.agent.tools.truncation import OUTPUTS_KEPT, FullOutputs
 
 
 @pytest.fixture
@@ -106,6 +107,29 @@ async def test_bash_timeout_keeps_the_output_so_far(ctx: ToolCtx) -> None:
     output = await run(ctx, "bash", command="echo started; sleep 30", timeout_s=3)
     assert "started" in output
     assert "timed out" in output
+
+
+async def test_long_bash_output_is_kept_whole_for_read(ctx: ToolCtx) -> None:
+    output = await run(ctx, "bash", command="seq 1 5000")
+    assert output.startswith("[truncated 3000 lines; the whole output is output:1,")
+    assert "\n5000\n" in output
+    assert "\n1\n" not in output
+    head = await run(ctx, "read", path="output:1", limit=3)
+    assert head.split() == ["1", "1", "2", "2", "3", "3"]
+    assert "3001  3001" in await run(ctx, "read", path="output:1", offset=3000, limit=1)
+
+
+async def test_short_bash_output_is_not_kept(ctx: ToolCtx) -> None:
+    assert not (await run(ctx, "bash", command="echo hi")).startswith("[truncated")
+    with pytest.raises(ToolError, match="no longer kept"):
+        await run(ctx, "read", path="output:1")
+
+
+def test_only_the_latest_outputs_are_kept() -> None:
+    outputs = FullOutputs()
+    refs = [outputs.keep(str(n)) for n in range(OUTPUTS_KEPT + 1)]
+    assert outputs.get(refs[0]) is None
+    assert outputs.get(refs[-1]) == str(OUTPUTS_KEPT)
 
 
 def test_tool_schemas_carry_no_titles() -> None:

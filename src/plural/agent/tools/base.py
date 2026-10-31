@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 
 from plural.agent.providers.base import ToolSchema
 from plural.agent.sandbox.base import ExecutionBackend, Workspace
+from plural.agent.tools.truncation import FullOutputs
 from plural.protocol.models import Provenance, ToolRisk
 
 
@@ -83,6 +84,7 @@ class ToolCtx:
     backend: ExecutionBackend
     locks: FileLocks = field(default_factory=FileLocks)
     stamps: FileStamps = field(default_factory=FileStamps)
+    outputs: FullOutputs = field(default_factory=FullOutputs)
     emit: Callable[[str], None] = _discard
     provenance: Provenance | None = None
     cancel: asyncio.Event | None = None
