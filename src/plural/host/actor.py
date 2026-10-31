@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 from plural.agent import events as agent
 from plural.agent.agents import AgentError, AgentLibrary, AgentSpec, agent_tools
-from plural.agent.loop import BriefingFailed
+from plural.agent.loop import AskFailed, BriefingFailed
 from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.messages import Message, NotesTurn, UserTurn
 from plural.agent.providers.base import LlmImage
@@ -53,6 +53,7 @@ from plural.host.inbox import (
     McpUpdated,
     PluginPrompt,
     PluginReply,
+    PluginShow,
     Reconfigure,
     SkillsReply,
     SkillsUpdated,
@@ -165,6 +166,7 @@ from plural.protocol.events import (
     ParticipantTyping,
     PermissionModeChanged,
     PluginsChanged,
+    PluginShown,
     PolicyRuleAdded,
     PolicyRuleRemoved,
     PromptAccepted,
@@ -222,6 +224,7 @@ PLAN_NOTE = (
 )
 MAX_REPLY_CHARS = 8000
 MAX_DISPLAY_CHARS = 500
+MAX_SHOWN_CHARS = 20_000
 
 
 def _check_points(kind: BoardShape, points: tuple[float, ...]) -> None:
@@ -481,6 +484,13 @@ class SessionActor:
                     ok=ok,
                 )
                 await self._emit(replied, actor_id=invoker_id)
+            case PluginShow(command=command, invoker_id=invoker_id, title=title, text=text):
+                shown = PluginShown(
+                    command=command,
+                    title=title.strip()[:120] or f"/{command}",
+                    text=text[:MAX_SHOWN_CHARS] or "(empty)",
+                )
+                self._publisher.deliver_to(invoker_id, self._redactor.scrub(shown))
             case PluginPrompt() as request:
                 await self._plugin_prompt(request)
             case TypingExpired(participant_id=participant_id):
@@ -1239,6 +1249,7 @@ class SessionActor:
             role=participant.role,
             workspace=self._require_plugins().workspace,
             inbox=self._inbox,
+            asker=self._plugin_ask,
         )
         self._background(self._invoke_plugin(found, context))
 
@@ -1249,6 +1260,13 @@ class SessionActor:
             log.exception("actor.plugin_command_failed", command=context.command)
             text = f"/{context.command} failed: {type(error).__name__}: {error}"
             self._inbox.put(PluginReply(context.command, context.author_id, text, ok=False))
+
+    async def _plugin_ask(self, question: str, history: bool, main: bool) -> str:
+        try:
+            answer = await self._agent.ask(question, history=history, main=main)
+        except AskFailed as error:
+            raise PluginError(f"the model could not answer: {error}") from None
+        return self._redactor.redact(answer)
 
     async def _plugin_prompt(self, request: PluginPrompt) -> None:
         author = self._state.participants.get(request.invoker_id)

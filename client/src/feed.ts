@@ -39,7 +39,8 @@ export type FeedItem =
   | { kind: "assistant"; id: string; text: string; streaming: boolean }
   | { kind: "tool"; id: string; call: ToolCallView; status: ToolStatus; output: string; diff: string | null; live: string }
   | { kind: "notice"; id: string; tone: Tone; text: string; action?: "board" }
-  | { kind: "briefing"; id: string; from: string; text: string; asOf: number; update: boolean };
+  | { kind: "briefing"; id: string; from: string; text: string; asOf: number; update: boolean }
+  | { kind: "shown"; id: string; command: string; title: string; text: string };
 
 export interface Feed {
   items: FeedItem[];
@@ -145,6 +146,10 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
       const host = Object.values(state.participants).find((person) => person.role === "host");
       const from = host ? label(state, host) : "the host";
       return { ...feed, counter, items: [...feed.items, { kind: "briefing", id: `b${counter}`, from, text: event.text, asOf: event.as_of_seq, update: event.update }] };
+    }
+    case "plugin.shown": {
+      const counter = feed.counter + 1;
+      return { ...feed, counter, items: [...feed.items, { kind: "shown", id: `s${counter}`, command: event.command, title: event.title, text: event.text }] };
     }
     case "briefing.sharing_changed":
       return note("accent", { off: "this session shares no briefings", ask: "briefings of this session are given when you agree", team: "briefings of this session are given to anyone who asks" }[event.mode]);

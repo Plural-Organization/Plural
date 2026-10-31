@@ -179,6 +179,17 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
           </div>
         </article>
       );
+    case "shown":
+      return (
+        <article className={styles.agent}>
+          <div className={styles.agentName}>
+            {item.title} · from /{item.command} · only you see this
+          </div>
+          <div data-anchor={item.id}>
+            <Text text={item.text} anchor={item.id} />
+          </div>
+        </article>
+      );
     case "notice":
       if (item.action === "board") {
         return (

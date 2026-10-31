@@ -103,6 +103,32 @@ export function BriefingCard({ item, expanded, onToggle, onCopy }: { item: Extra
   );
 }
 
+export function ShownCard({ item, expanded, onToggle, onCopy }: { item: Extract<FeedItem, { kind: "shown" }>; expanded: boolean; onToggle: () => void; onCopy: (text: string) => void }) {
+  const long = item.text.split("\n").length > BRIEFING_LINES;
+  const view = long && !expanded ? collapseText(item.text, BRIEFING_LINES) : { text: item.text, hidden: 0 };
+  return (
+    <box flexDirection="column" marginY={1} border={["left"]} borderStyle="heavy" borderColor={theme.accent} backgroundColor={theme.panel} paddingX={1}>
+      <text>
+        <span fg={theme.accent}>
+          <b>◆ {item.title}</b>
+        </span>
+        <span fg={theme.dim}> · from /{item.command} · only you see this</span>
+      </text>
+      <text fg={theme.text} wrapMode="word">
+        {view.text}
+      </text>
+      {long ? (
+        <box onMouseDown={() => onToggle()}>
+          <text fg={theme.accent}>{expanded ? "▴ show less" : `▾ ${view.hidden} more lines · click or ctrl+o to expand`}</text>
+        </box>
+      ) : null}
+      <box onMouseDown={() => onCopy(item.text)}>
+        <text fg={theme.accent}>copy</text>
+      </box>
+    </box>
+  );
+}
+
 export type Queued = "steer" | "follow_up" | null;
 
 export function UserCard({ item, queued, expanded, onToggle }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued; expanded: boolean; onToggle: () => void }) {
@@ -356,5 +382,7 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, onT
       return <NoticeCard item={item} />;
     case "briefing":
       return <BriefingCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} />;
+    case "shown":
+      return <ShownCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} />;
   }
 }

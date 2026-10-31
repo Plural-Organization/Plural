@@ -161,6 +161,7 @@ export interface EventsSchema {
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PluginShown
     | BoardErased
     | BoardCleared
     | ChatPosted
@@ -608,6 +609,18 @@ export interface AttachmentData {
   content_b64: string;
   media_type: string;
   type: "attachment.data";
+}
+/**
+ * What a plugin command shows the person who ran it, and nobody else. It is not logged.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginShown".
+ */
+export interface PluginShown {
+  command: string;
+  text: string;
+  title: string;
+  type: "plugin.shown";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -1224,6 +1237,7 @@ export interface EventRecord {
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PluginShown
     | BoardErased
     | BoardCleared
     | ChatPosted

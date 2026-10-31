@@ -128,6 +128,20 @@ describe("App", () => {
     expect(fake.commands).toEqual([]);
   });
 
+  test("what a plugin shows opens in the tray and stays in the conversation", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "plugin.shown", command: "btw", title: "btw", text: "Overfitting is memorising noise." });
+    const text = await frame(setup, "btw · only you see this");
+    expect(text).toContain("Overfitting is memorising noise.");
+    await setup.mockInput.pressEscape();
+    await tick(50);
+    await setup.renderOnce();
+    const after = setup.captureCharFrame();
+    expect(after).not.toContain("esc close");
+    expect(after).toContain("from /btw · only you see this");
+  });
+
   test("clicking the composer takes the keys back from the inbox", async () => {
     const fake = session();
     const setup = await mount(fake);

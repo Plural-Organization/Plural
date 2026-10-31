@@ -255,6 +255,14 @@ export function App({
               copy(event.link, "Invite link copied", "send it to one person, it works once");
             }
           }
+          if (event.type === "plugin.shown") {
+            setTray({
+              kind: "text",
+              title: `${event.title} · only you see this`,
+              tone: "accent",
+              rows: event.text.split("\n").map((line): Row => [line]),
+            });
+          }
           if (event.type === "skills.found") {
             const host = client.projection.me?.role === "host";
             setTray({ kind: "pick", title: `skills.sh · ${event.query}`, hits: [...event.hits], selected: 0, canInstall: host });

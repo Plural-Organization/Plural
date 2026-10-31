@@ -97,6 +97,15 @@ class SkillsFound(TransientEvent):
     hits: tuple[SkillHit, ...]
 
 
+class PluginShown(TransientEvent):
+    """What a plugin command shows the person who ran it, and nobody else. It is not logged."""
+
+    type: Literal["plugin.shown"] = "plugin.shown"
+    command: str
+    title: str
+    text: str
+
+
 class AgentChanged(EventBase):
     type: Literal["agent.changed"] = "agent.changed"
     agent: str
@@ -484,6 +493,7 @@ Event = Annotated[
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PluginShown
     | BoardErased
     | BoardCleared
     | ChatPosted

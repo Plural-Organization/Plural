@@ -84,6 +84,16 @@ class BriefingFailed(Exception):
     pass
 
 
+class AskFailed(Exception):
+    pass
+
+
+ASIDE = (
+    "\n\n[An aside, outside the task: answer this in plain text. Do not call tools. Your answer is "
+    "not added to the conversation]"
+)
+
+
 SHARED = Provenance(initiator_id="shared-context", initiator_role=Role.VIEWER, origin=Origin.DIRECT)
 
 
@@ -492,6 +502,39 @@ class AgentLoop:
             self.spend("fast" if provider is self._helper else "main", "briefing", Usage(), uses=1)
             return text
         raise BriefingFailed("no model is available")
+
+    async def ask(self, question: str, *, history: bool, main: bool, cancel: asyncio.Event) -> str:
+        """Answer one question outside any run, without changing the conversation."""
+        past = to_llm(settled(self._conversation)) if history else ()
+        request = LlmRequest(
+            system=self._context.system(),
+            messages=(*past, LlmMessage(role="user", content=question + ASIDE)),
+            tools=self._tools.schemas(),
+        )
+        providers = [self._provider] if main else [p for p in (self._helper, self._provider) if p]
+        for provider in providers:
+            role = "fast" if provider is self._helper else "main"
+            text: list[str] = []
+            try:
+                async for event in self._events(request, cancel, provider):
+                    match event:
+                        case TextDelta(text=chunk):
+                            text.append(chunk)
+                        case UsageReport(usage=delta):
+                            self.spend(role, "plugin", delta)
+                        case _:
+                            pass
+            except ProviderError as error:
+                if cancel.is_set() or provider is self._provider:
+                    raise AskFailed(str(error)) from error
+                log.warning("agent.helper_ask_failed", error=str(error))
+                continue
+            self.spend(role, "plugin", Usage(), uses=1)
+            answer = "".join(text).strip()
+            if not answer:
+                raise AskFailed("the model gave no answer")
+            return answer
+        raise AskFailed("no model is available")
 
     async def _summarize(
         self,

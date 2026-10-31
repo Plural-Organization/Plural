@@ -51,7 +51,12 @@ takes `ctx`:
 | `ctx.workspace` | the workspace path on the host |
 | `await ctx.reply(text)` | a reply the whole room sees |
 | `await ctx.prompt(text, follow_up=False, display=None)` | a prompt to the agent **as the person who ran the command**; the room sees `display` and the full text folded |
+| `await ctx.show(title, text)` | a window only the person who ran the command sees, not logged |
+| `await ctx.ask(question, history=True, model="fast")` | one answer from the session's model, outside the conversation: no tools, nothing added to the history; raises `PluginError` if no model answers |
 | `await ctx.run(*argv, timeout_s=120)` | runs a program in the workspace without a shell, returns stdout; raises on a non-zero exit or a timeout |
+
+For a side question (`/btw`) use `ctx.ask` + `ctx.show`, not `ctx.prompt`: the main task and the room are
+left alone.
 
 Names use `a-z`, `0-9`, `-` and `_` and cannot reuse a built-in command (`abort`, `cancel`,
 `compact`, `copy`, `help`, `invite`, `leave`, `mcp`, `mode`, `plugins`, `policy`, `quit`,

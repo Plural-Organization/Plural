@@ -1349,6 +1349,7 @@
               "participant.role_changed": "#/$defs/ParticipantRoleChanged",
               "participant.selected": "#/$defs/ParticipantSelected",
               "participant.typing": "#/$defs/ParticipantTyping",
+              "plugin.shown": "#/$defs/PluginShown",
               "plugins.changed": "#/$defs/PluginsChanged",
               "policy.rule_added": "#/$defs/PolicyRuleAdded",
               "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
@@ -1462,6 +1463,9 @@
             },
             {
               "$ref": "#/$defs/AttachmentData"
+            },
+            {
+              "$ref": "#/$defs/PluginShown"
             },
             {
               "$ref": "#/$defs/BoardErased"
@@ -2137,6 +2141,32 @@
         "description",
         "usage",
         "host_only"
+      ],
+      "type": "object"
+    },
+    "PluginShown": {
+      "description": "What a plugin command shows the person who ran it, and nobody else. It is not logged.",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "plugin.shown",
+          "default": "plugin.shown",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command",
+        "title",
+        "text"
       ],
       "type": "object"
     },
@@ -3427,6 +3457,7 @@
           "participant.role_changed": "#/$defs/ParticipantRoleChanged",
           "participant.selected": "#/$defs/ParticipantSelected",
           "participant.typing": "#/$defs/ParticipantTyping",
+          "plugin.shown": "#/$defs/PluginShown",
           "plugins.changed": "#/$defs/PluginsChanged",
           "policy.rule_added": "#/$defs/PolicyRuleAdded",
           "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
@@ -3540,6 +3571,9 @@
         },
         {
           "$ref": "#/$defs/AttachmentData"
+        },
+        {
+          "$ref": "#/$defs/PluginShown"
         },
         {
           "$ref": "#/$defs/BoardErased"

@@ -18,7 +18,7 @@ from pydantic import JsonValue
 from plural.agent.providers.base import ToolSchema
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
 from plural.agent.tools.registry import Exposure
-from plural.host.inbox import Inbox, PluginPrompt, PluginReply
+from plural.host.inbox import Inbox, PluginPrompt, PluginReply, PluginShow
 from plural.protocol.models import (
     PluginCommandView,
     PluginStatus,
@@ -52,6 +52,7 @@ BUILT_IN: Final = frozenset(
 TOOL_NAME: Final = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 RISKS: Final = {"read": ToolRisk.READ, "write": ToolRisk.WRITE, "exec": ToolRisk.EXEC}
 RUN_TIMEOUT_S: Final = 120.0
+ASK_TIMEOUT_S: Final = 120.0
 MAX_OUTPUT_CHARS: Final = 64_000
 
 TEMPLATE: Final = '''\
@@ -85,6 +86,14 @@ class PluginError(Exception):
     pass
 
 
+# Answers one question with the session's model: (question, with_history, main_model) -> text.
+Asker = Callable[[str, bool, bool], Awaitable[str]]
+
+
+async def _no_model(question: str, history: bool, main: bool) -> str:
+    raise PluginError("no model is available to answer")
+
+
 class CommandContext:
     def __init__(
         self,
@@ -96,6 +105,7 @@ class CommandContext:
         role: Role,
         workspace: Path,
         inbox: Inbox,
+        asker: Asker = _no_model,
     ) -> None:
         self.command = command
         self.args = args
@@ -104,6 +114,7 @@ class CommandContext:
         self.role = role
         self.workspace = workspace
         self._inbox = inbox
+        self._asker = asker
 
     async def reply(self, text: str) -> None:
         self._inbox.put(PluginReply(self.command, self.author_id, text))
@@ -115,6 +126,25 @@ class CommandContext:
         self._inbox.put(
             PluginPrompt(self.command, self.author_id, text, follow_up=follow_up, display=display)
         )
+
+    async def show(self, title: str, text: str) -> None:
+        """Show `text` to the person who ran the command, in a window only they see."""
+        self._inbox.put(PluginShow(self.command, self.author_id, title, text))
+
+    async def ask(self, question: str, *, history: bool = True, model: str = "fast") -> str:
+        """Ask the session's model one question, outside the conversation, and return its answer.
+
+        With `history` the model sees the conversation so far. Nothing is added to it, the room
+        sees nothing, and the model cannot call tools. `model` is "fast" or "main".
+        """
+        if model not in {"fast", "main"}:
+            raise PluginError('model is "fast" or "main"')
+        try:
+            return await asyncio.wait_for(
+                self._asker(question, history, model == "main"), ASK_TIMEOUT_S
+            )
+        except TimeoutError:
+            raise PluginError(f"the model did not answer in {ASK_TIMEOUT_S:g}s") from None
 
     async def run(self, *argv: str, timeout_s: float = RUN_TIMEOUT_S) -> str:
         return await _run_program(argv, self.workspace, timeout_s)

@@ -114,6 +114,14 @@ class PluginPrompt:
     display: str | None = None
 
 
+@dataclass(frozen=True, slots=True)
+class PluginShow:
+    command: str
+    invoker_id: str
+    title: str
+    text: str
+
+
 InboxMessage = (
     Incoming
     | Disconnected
@@ -131,6 +139,7 @@ InboxMessage = (
     | BoardRequest
     | PluginReply
     | PluginPrompt
+    | PluginShow
 )
 
 

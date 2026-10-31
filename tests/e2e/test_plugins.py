@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from plural.protocol.events import (
     CommandInvoked,
     CommandReplied,
     PluginsChanged,
+    PluginShown,
     PromptAccepted,
     RunEnded,
     ToolEnded,
@@ -162,6 +164,41 @@ async def test_the_host_creates_and_reloads_plugins(tmp_path: Path) -> None:
         with pytest.raises(CommandRejected) as missing:
             await owner.client.send(PluginsRemove(name="notes"))
         assert missing.value.error.code is ErrorCode.NOT_FOUND
+
+
+ASIDE = """
+def setup(plural):
+    @plural.command("aside")
+    async def aside(ctx):
+        answer = await ctx.ask(ctx.args)
+        await ctx.show("btw", answer)
+"""
+
+
+async def test_a_plugin_asks_the_model_aside_and_shows_only_its_author(tmp_path: Path) -> None:
+    install(tmp_path, "aside", ASIDE)
+    provider = FakeProvider([reply("first answer"), reply("Overfitting is memorising noise.")])
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        owner = await session.owner()
+        guest = await session.guest("Alia")
+        await owner.client.send(PromptSubmit(text="look at the model"))
+        await owner.next(RunEnded)
+        transcript = len(owner.client.projection.state.transcript)
+
+        await guest.client.send(CommandRun(name="aside", args="what is overfitting?"))
+        shown = await guest.next(PluginShown)
+        assert (shown.command, shown.title) == ("aside", "btw")
+        assert shown.text == "Overfitting is memorising noise."
+        asked = str(provider.requests[-1].messages)
+        assert "look at the model" in asked
+        assert "what is overfitting?" in asked
+
+        await owner.client.send(CommandRun(name="aside", args="again?"))
+        await owner.next(PluginShown)
+        await asyncio.sleep(0.2)
+        assert sum(isinstance(event, PluginShown) for event in guest.events) == 1
+        assert len(owner.client.projection.state.transcript) == transcript
+        assert owner.client.projection.state.run is None
 
 
 TOOL = """

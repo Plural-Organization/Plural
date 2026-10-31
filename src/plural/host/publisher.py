@@ -58,6 +58,12 @@ class Publisher:
         )
         connection.send(envelope)
 
+    def deliver_to(self, participant_id: str, event: Event) -> None:
+        """Send a transient event to every connection of one participant."""
+        for connection, pid in list(self._bound.values()):
+            if pid == participant_id:
+                self.deliver(connection, event)
+
     def deliver_record(self, connection: Connection, record: EventRecord) -> None:
         recipient = self.participant_of(connection)
         if recipient is not None and not record_visible_to(record, recipient):

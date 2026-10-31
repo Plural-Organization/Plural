@@ -5,7 +5,7 @@ export function searchableText(item: FeedItem): string {
     case "banner":
       return "";
     case "user":
-      return [item.name, item.text, ...(item.files ?? [])].join("\n");
+      return [item.name, item.text, item.full ?? "", ...(item.files ?? [])].join("\n");
     case "chat":
       return [item.name, item.toName ?? "", item.text].join("\n");
     case "assistant":
@@ -16,6 +16,8 @@ export function searchableText(item: FeedItem): string {
       return item.text;
     case "briefing":
       return `${item.from}\n${item.text}`;
+    case "shown":
+      return `${item.title}\n${item.text}`;
   }
 }
 

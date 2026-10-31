@@ -53,7 +53,21 @@ The handler gets a context:
 | `ctx.workspace` | the workspace directory |
 | `await ctx.reply(text)` | posts a reply the whole room sees |
 | `await ctx.prompt(text, follow_up=False, display=None)` | sends a prompt to the agent as the person who ran the command |
+| `await ctx.show(title, text)` | opens a window only the person who ran the command sees; nothing is logged |
+| `await ctx.ask(question, history=True, model="fast")` | asks the session's model one question outside the conversation and returns the answer |
 | `await ctx.run(*argv, timeout_s=120)` | runs a program in the workspace without a shell and returns its output; a non-zero exit raises |
+
+A side question that should not touch the conversation, answered only to the person who asked:
+
+```python
+@plural.command("btw", description="Ask something on the side", usage="/btw <question>")
+async def btw(ctx):
+    answer = await ctx.ask(ctx.args)
+    await ctx.show("btw", answer)
+```
+
+`ctx.ask` sees the conversation so far, cannot call tools, and adds nothing to the history; its tokens
+count as session usage.
 
 `ctx.prompt` goes through the same path as a typed prompt. In `review` mode a guest's prompt becomes a
 proposal, write and exec actions still wait for the host, and `PLURAL_GUEST_RUN_TOKENS` applies.

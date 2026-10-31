@@ -83,6 +83,9 @@ class AgentRun:
     async def brief(self, instruction: str, *, cancel: asyncio.Event) -> str:
         return await self._loop.brief(instruction, cancel=cancel)
 
+    async def ask(self, question: str, *, history: bool, main: bool) -> str:
+        return await self._loop.ask(question, history=history, main=main, cancel=asyncio.Event())
+
     def cancel_pending(self, prompt_id: str) -> bool:
         return self._loop.cancel_pending(prompt_id)
 
