@@ -318,7 +318,7 @@ export async function buildSite(files: ReadonlyMap<string, string>, entry: strin
 
   // Scripts: a module, or anything TypeScript or JSX, joins the module graph; the rest goes inline.
   const scripts: { tag: string; replacement: Promise<string> }[] = [];
-  html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi, (tag, attrs: string, body: string) => {
+  html.replace(/<script\b([^>]*)>([\s\S]*?)<\/script\b[^>]*>/gi, (tag, attrs: string, body: string) => {
     const src = attrValue(attrs, "src");
     const module = /\btype\s*=\s*["']?module/i.test(attrs);
     let replacement: Promise<string> | null = null;

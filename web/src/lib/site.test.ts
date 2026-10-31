@@ -68,7 +68,7 @@ test("packages come from esm.sh at the project's versions and leave React to the
 
 test("a static page gets its stylesheet, script and pictures inline and the bridge first", async () => {
   const files = new Map([
-    ["site/index.html", `<!doctype html><html><head><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="https://cdn.example/x.css"></head><body><img src="logo.svg"><script src="app.js"></script></body></html>`],
+    ["site/index.html", `<!doctype html><html><head><link rel="stylesheet" href="style.css"><link rel="stylesheet" href="https://cdn.example/x.css"></head><body><img src="logo.svg"><script src="app.js"></script\t\n></body></html>`],
     ["site/style.css", "h1 { color: red }"],
     ["site/app.js", "console.log('</script>')"],
     ["site/logo.svg", "<svg/>"],
