@@ -1,6 +1,6 @@
 import type { SyntaxStyle } from "@opentui/core";
 import { useRenderer } from "@opentui/react";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { codeBlockRenderer } from "../code";
 import type { FeedItem, Tone } from "../feed";
 import { gutterWidth, languageFor, parseDiff } from "../lib/diff";
@@ -9,7 +9,6 @@ import { bodyLines, displayName, kindOf, lastLine, metaOf, oneLine } from "../li
 import { truncate } from "../lib/wrap";
 import { colorFor, theme } from "../theme";
 import { collapseText } from "@plural/client";
-import { Picture } from "./Splash";
 import { Spinner, useElapsed } from "./Spinner";
 
 const TONES: Record<Tone, { color: string; mark: string }> = {
@@ -22,33 +21,63 @@ const TONES: Record<Tone, { color: string; mark: string }> = {
 
 const table = () => ({ widthMode: "content", cellPaddingY: 0, borderStyle: "rounded", borderColor: theme.line }) as const;
 
+function BannerSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <box flexDirection="column" marginBottom={1}>
+      <text fg={theme.dim}>{title.toUpperCase()}</text>
+      {children}
+    </box>
+  );
+}
+
+function BannerRow({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <box flexDirection="row">
+      <box width={8} flexShrink={0}>
+        <text fg={theme.dim}>{label}</text>
+      </box>
+      <box flexGrow={1} flexShrink={1}>
+        {children}
+      </box>
+    </box>
+  );
+}
+
+const KEYS: readonly (readonly [string, string])[] = [
+  ["/help", "commands"],
+  ["esc", "stop the agent"],
+  ["ctrl+o", "tool details"],
+  ["ctrl+c", "twice to quit"],
+];
+
 export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }) {
   return (
-    <box flexDirection="row" alignItems="center" marginBottom={1}>
-      <box flexShrink={0} marginRight={3}>
-        <Picture />
-      </box>
-      <box flexDirection="column" flexShrink={1}>
-        <text>
-          <span fg={theme.accent}>
-            <b>◆ plural</b>
-          </span>
-          <span fg={theme.dim}>  v{item.version} · room {item.room.slice(0, 14)}…</span>
-        </text>
-        {item.guestLink ? (
-          <text fg={theme.dim}>
-            room link: <span fg={theme.info}>plural join "{item.guestLink}"</span>
-            <span fg={theme.dim}> · you let people in, /invite revoke ends the link</span>
-          </text>
-        ) : null}
-        {item.teamLink ? (
-          <text fg={theme.dim}>
-            team link: <span fg={theme.info}>{item.teamLink}</span>
-            <span fg={theme.dim}> · one use, for an hour</span>
-          </text>
-        ) : null}
-        <text fg={theme.dim}>/help for commands · esc interrupts · ctrl+o tool details · ctrl+c twice quits</text>
-      </box>
+    <box flexDirection="column" border borderStyle="rounded" borderColor={theme.line} title={` Plural  v${item.version} `} paddingX={2} paddingY={1} marginBottom={1}>
+      {item.guestLink || item.teamLink ? (
+        <BannerSection title="invite">
+          {item.guestLink ? (
+            <BannerRow label="room">
+              <text fg={theme.info} wrapMode="char">
+                plural join "{item.guestLink}"
+              </text>
+            </BannerRow>
+          ) : null}
+          {item.teamLink ? (
+            <BannerRow label="team">
+              <text fg={theme.info} wrapMode="char">
+                {item.teamLink}
+              </text>
+            </BannerRow>
+          ) : null}
+        </BannerSection>
+      ) : null}
+      <BannerSection title="keys">
+        {KEYS.map(([key, what]) => (
+          <BannerRow key={key} label={key}>
+            <text fg={theme.dim}>{what}</text>
+          </BannerRow>
+        ))}
+      </BannerSection>
     </box>
   );
 }
@@ -61,17 +90,15 @@ export function PinnedPrompt({ item, width, onJump }: { item: Extract<FeedItem, 
   const first = item.text.split("\n")[0] ?? "";
   const room = Math.max(10, width - item.name.length - item.role.length - 16);
   return (
-    <box position="absolute" top={1} left={0} width="100%" zIndex={10} paddingX={2} backgroundColor={theme.panel} onMouseDown={onJump}>
-      <box border={["left"]} borderStyle="heavy" borderColor={color} paddingLeft={1}>
-        <text wrapMode="none">
-          <span fg={color}>
-            <b>{item.name}</b>
-          </span>
-          <span fg={theme.dim}> {item.role} · </span>
-          <span fg={theme.text}>{truncate(first, room)}</span>
-          <span fg={theme.dim}>{"  ↑ jump"}</span>
-        </text>
-      </box>
+    <box position="absolute" top={1} left={0} width="100%" zIndex={10} paddingX={2} backgroundColor={theme.bubble} onMouseDown={onJump}>
+      <text wrapMode="none">
+        <span fg={color}>
+          <b>{item.name}</b>
+        </span>
+        <span fg={theme.dim}> {item.role} · </span>
+        <span fg={theme.text}>{truncate(first, room)}</span>
+        <span fg={theme.dim}>{"  ↑ jump"}</span>
+      </text>
     </box>
   );
 }
@@ -82,7 +109,7 @@ export function BriefingCard({ item, expanded, onToggle, onCopy }: { item: Extra
   const long = item.text.split("\n").length > BRIEFING_LINES;
   const view = long && !expanded ? collapseText(item.text, BRIEFING_LINES) : { text: item.text, hidden: 0 };
   return (
-    <box flexDirection="column" marginY={1} border={["left"]} borderStyle="heavy" borderColor={theme.info} backgroundColor={theme.panel} paddingX={1}>
+    <box flexDirection="column" marginY={1} backgroundColor={theme.bubble} paddingX={2} paddingY={1}>
       <text>
         <span fg={theme.info}>
           <b>✉ briefing from {item.from}</b>
@@ -114,7 +141,7 @@ export type Queued = "steer" | "follow_up" | null;
 export function UserCard({ item, queued }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued }) {
   const color = colorFor(item.participantId);
   return (
-    <box id={pinId(item.id)} flexDirection="column" marginTop={1} marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={color} backgroundColor={theme.panel} paddingX={1} paddingY={1}>
+    <box id={pinId(item.id)} flexDirection="column" marginTop={1} marginBottom={1} backgroundColor={theme.bubble} paddingX={2} paddingY={1}>
       <text>
         <span fg={color}>
           <b>{item.name}</b>
@@ -145,9 +172,10 @@ export function ChatCard({ item }: { item: Extract<FeedItem, { kind: "chat" }> }
     : item.mine
       ? "you · to the room"
       : `${item.name} · to the room`;
+  const forYou = (direct && !item.mine) || item.mentioned;
   const mark = item.mentioned ? theme.accent : direct ? theme.warn : color;
   return (
-    <box flexDirection="column" marginBottom={1} border={["left"]} borderStyle="single" borderColor={mark} paddingLeft={1}>
+    <box flexDirection="column" marginBottom={1} backgroundColor={forYou ? theme.you : theme.bubble} paddingX={2} paddingY={1}>
       <text>
         <span fg={mark}>✉ </span>
         <span fg={direct ? theme.warn : color}>
@@ -181,20 +209,16 @@ export function AssistantCard({ item, syntax, expanded, onToggle }: AssistantPro
   const long = !item.streaming && item.text.split("\n").length > REPLY_LINES;
   const view = long && !expanded ? collapseText(item.text, REPLY_LINES) : { text: item.text, hidden: 0 };
   return (
-    <box flexDirection="column" marginBottom={1}>
-      <text>
-        <span fg={theme.accent}>
-          <b>● plural</b>
-        </span>
-      </text>
-      <box paddingLeft={2}>
+    <box flexDirection="row" marginBottom={1}>
+      <text fg={theme.text}>⏺ </text>
+      <box flexDirection="column" flexGrow={1} flexShrink={1}>
         <markdown content={view.text} syntaxStyle={syntax} streaming={item.streaming} renderNode={renderNode} tableOptions={table()} />
+        {long ? (
+          <box onMouseDown={() => onToggle()}>
+            <text fg={theme.accent}>{expanded ? "▴ show less" : `▾ ${view.hidden} more lines · click or ctrl+o to expand`}</text>
+          </box>
+        ) : null}
       </box>
-      {long ? (
-        <box paddingLeft={2} onMouseDown={() => onToggle()}>
-          <text fg={theme.accent}>{expanded ? "▴ show less" : `▾ ${view.hidden} more lines · click or ctrl+o to expand`}</text>
-        </box>
-      ) : null}
     </box>
   );
 }
@@ -294,25 +318,29 @@ export function ToolCard({ item, expanded, onToggle, onCopy, width }: ToolCardPr
     ? `${elapsed}s`
     : metaOf({ name, tool: item.call.name, status: item.status, subject: item.call.subject, output: item.output, diff: item.diff, live: item.live });
   const peek = running && kindOf(item.call.name) === "agent" ? lastLine(item.live) : "";
-  const fixed = name.length + meta.length + 10;
+  const fixed = name.length + meta.length + 12;
   const subject = truncate(oneLine(item.call.subject), Math.max(0, width - fixed - (peek ? 24 : 0)));
   const room = Math.max(0, width - fixed - subject.length - 3);
   return (
     <box flexDirection="column" marginBottom={expanded ? 1 : 0}>
       <box flexDirection="row" onMouseDown={() => onToggle()}>
         <text wrapMode="none">
-          <span fg={theme.dim}>{expanded ? "▾ " : "▸ "}</span>
-          {running ? <Spinner color={theme.info} /> : <span fg={failed ? theme.danger : theme.ok}>{failed ? "✗" : "✓"}</span>}
+          {running ? <Spinner color={theme.info} /> : <span fg={failed ? theme.danger : theme.ok}>⏺</span>}
           <span> </span>
           <b>{name}</b>
-          <span fg={theme.text}> {subject}</span>
+          <span fg={theme.dim}>(</span>
+          <span fg={theme.text}>{subject}</span>
+          <span fg={theme.dim}>)</span>
           {meta ? <span fg={failed ? theme.danger : theme.dim}> · {meta}</span> : null}
           {peek && room > 8 ? <span fg={theme.dim}> · {truncate(peek, room)}</span> : null}
         </text>
       </box>
       {expanded ? (
-        <box flexDirection="column" marginLeft={2} paddingLeft={1} border={["left"]} borderColor={theme.line}>
-          <Body item={item} onCopy={onCopy} />
+        <box flexDirection="row" marginLeft={2}>
+          <text fg={theme.dim}>⎿ </text>
+          <box flexDirection="column" flexGrow={1} flexShrink={1}>
+            <Body item={item} onCopy={onCopy} />
+          </box>
         </box>
       ) : null}
     </box>

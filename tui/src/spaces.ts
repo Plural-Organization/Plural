@@ -61,7 +61,7 @@ export function buildSpaces({ home, team, visits, active, summaries }: SpacesInp
   const rows: SpaceRow[] = [
     {
       id: OWN,
-      title: "you",
+      title: team?.member ?? "you",
       detail: mine ? where(mine) : home,
       status: statusOf(summaries[OWN]?.phase, mine?.status ?? "idle"),
       viewers: mine?.viewers ?? 0,

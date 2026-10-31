@@ -1346,7 +1346,7 @@ export function App({
   return (
     <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg} visible={active}>
       <box flexDirection="column" flexGrow={1} minWidth={0}>
-        <TopBar room={room} state={state} update={update} onSettings={() => setDialog(true)} />
+        <TopBar state={state} update={update} team={teamName ?? null} onSettings={() => setDialog(true)} />
         {viewing !== null ? (
           <box flexShrink={0} height={1} paddingX={2} backgroundColor={theme.panel}>
             <text fg={theme.info} wrapMode="none">
@@ -1388,9 +1388,7 @@ export function App({
                 flexDirection="column"
                 flexShrink={0}
                 paddingLeft={marked ? 0 : 1}
-                border={marked ? ["left"] : false}
-                borderStyle={active ? "heavy" : "single"}
-                borderColor={active ? theme.warn : theme.line}
+                {...(marked ? { border: ["left"] as ["left"], borderStyle: active ? ("heavy" as const) : ("single" as const), borderColor: active ? theme.warn : theme.line } : {})}
               >
                 <FeedItemView
                   item={item}
@@ -1512,8 +1510,7 @@ export function App({
       {extrasPrompt !== null && control ? (
         <ExtrasDialog width={width} height={height} control={control} preselect={extrasPrompt.preselect} reason={extrasPrompt.reason} onClose={closeExtras} />
       ) : null}
-      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} /> : null}
-      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} update={update} /> : null}
+      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} onInvite={() => send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true })} update={update} /> : null}
     </box>
   );
 }

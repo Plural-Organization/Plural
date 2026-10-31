@@ -48,7 +48,8 @@ test("a new release is offered at the top of the settings and installs from ther
   open.push(setup);
   const bar = await frame(setup, "update 9.9.9");
   expect(bar).toContain("⚙●");
-  expect(bar).toContain("update 9.9.9 ready · f2");
+  expect(bar).toContain("update 9.9.9 ready");
+  expect(bar).toMatch(/\+ invite\s+● menu/);
 
   await setup.mockInput.pressKey("F2");
   await frame(setup, "New version available: 0.2.4 → 9.9.9 · install now");
@@ -68,7 +69,8 @@ test("without a new release the settings carry no marker", async () => {
     { width: 120, height: 40 },
   );
   open.push(setup);
-  const text = await frame(setup, "f2 settings");
+  const text = await frame(setup, "menu");
   expect(text).not.toContain("⚙●");
-  expect(text).not.toContain("ready · f2");
+  expect(text).not.toContain("● menu");
+  expect(text).not.toContain("update 0.2.4 ready");
 });
