@@ -895,7 +895,7 @@ describe("App", () => {
     await setup.mockInput.pressKey("o", { ctrl: true });
     const open = await frame(setup, "return a + b");
     expect(open).toMatch(/1\s+def add\(a, b\):/);
-    expect(open).toMatch(/2 − {5}return a - b/);
+    expect(open).toMatch(/2 - {5}return a - b/);
     expect(open).toMatch(/2 \+ {5}return a \+ b/);
   });
 
