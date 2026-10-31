@@ -5,6 +5,8 @@ format Claude Code and Cursor use, so a config can be copied or imported as is. 
 such as the browser, start first and a configured server of the same name replaces them.
 """
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import hashlib
@@ -13,21 +15,21 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import IO, Any, Final, cast
+from typing import IO, TYPE_CHECKING, Any, Final, cast
 
 import httpx2
 import structlog
-from mcp import Client
-from mcp.client.stdio import StdioServerParameters, stdio_client
-from mcp.client.streamable_http import streamable_http_client
-from mcp.types import CallToolResult, ImageContent, TextContent
-from mcp.types import Tool as McpToolInfo
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from plural.agent.providers.base import ToolSchema
 from plural.agent.tools.base import PreparedCall, ToolError, ToolResult
 from plural.agent.tools.truncation import truncate_head
 from plural.protocol.models import McpServerView, McpStatus, SkillScope, ToolRisk
+
+if TYPE_CHECKING:
+    from mcp import Client
+    from mcp.types import CallToolResult
+    from mcp.types import Tool as McpToolInfo
 
 log = structlog.get_logger(__name__)
 
@@ -187,7 +189,7 @@ class _Server:
     scope: SkillScope
     status: McpStatus = McpStatus.OFF
     error: str | None = None
-    tools: dict[str, McpToolInfo] = field(default_factory=dict[str, McpToolInfo])
+    tools: dict[str, McpToolInfo] = field(default_factory=lambda: {})
     client: Client | None = None
     task: asyncio.Task[None] | None = None
     stop: asyncio.Event = field(default_factory=asyncio.Event)
@@ -206,7 +208,7 @@ class _Server:
 class McpTool:
     """An MCP tool as the agent sees it. Every call is an exec: the host is asked first."""
 
-    def __init__(self, hub: "McpHub", server: str, info: McpToolInfo) -> None:
+    def __init__(self, hub: McpHub, server: str, info: McpToolInfo) -> None:
         self._hub = hub
         self._server = server
         self._info = info
@@ -403,6 +405,9 @@ class McpHub:
             server.task = None
 
     def _transport(self, server: _Server) -> Any:
+        from mcp.client.stdio import StdioServerParameters, stdio_client
+        from mcp.client.streamable_http import streamable_http_client
+
         spec = server.spec
         if spec.url:
             return streamable_http_client(
@@ -420,7 +425,8 @@ class McpHub:
     async def _run(self, server: _Server) -> None:
         client: Client | None = None
         try:
-            client = Client(self._transport(server))
+            client_class = await asyncio.to_thread(_client_class)
+            client = client_class(self._transport(server))
             await asyncio.wait_for(client.__aenter__(), timeout=CONNECT_TIMEOUT_S)
             tools: dict[str, McpToolInfo] = {}
             cursor: str | None = None
@@ -468,7 +474,15 @@ def _describe(failure: BaseException) -> str:
     return text.splitlines()[0][:200]
 
 
+def _client_class() -> type[Client]:
+    from mcp import Client
+
+    return Client
+
+
 def _result(result: CallToolResult) -> ToolResult:
+    from mcp.types import ImageContent, TextContent
+
     parts: list[str] = []
     for block in result.content:
         if isinstance(block, TextContent):

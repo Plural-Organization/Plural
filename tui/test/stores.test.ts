@@ -193,6 +193,24 @@ describe("control link", () => {
     expect(await done).toEqual({ ok: true });
   });
 
+  test("asking for the presets, SDKs and tools together makes one request, and a later ask makes a new one", async () => {
+    const { written, link: control } = link();
+    const together = Promise.all([control.catalog(), control.extras(), control.tools()]);
+    expect(written).toHaveLength(1);
+    control.receive(
+      '{"type": "result", "id": "k1", "ok": true, "presets": [{"id": "demo"}], "extras": [{"id": "openai", "label": "OpenAI SDK", "installed": true}], "tools": [{"id": "claude"}]}\n',
+    );
+    const [presets, sdks, installable] = await together;
+    expect(presets.map((preset) => preset.id)).toEqual(["demo"]);
+    expect(sdks).toHaveLength(1);
+    expect(installable.map((tool) => tool.id)).toEqual(["claude"]);
+
+    const later = control.tools();
+    expect(written).toHaveLength(2);
+    control.receive('{"type": "result", "id": "k2", "ok": true, "tools": []}\n');
+    expect(await later).toEqual([]);
+  });
+
   test("a host that reports no SDKs leaves nothing to offer", async () => {
     const { link: control } = link();
     const status = control.extras();
