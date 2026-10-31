@@ -345,10 +345,19 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   progress.step("opening the session…");
   const renderer = await createCliRenderer({ exitOnCtrlC: false, useMouse: true });
   progress.done();
+  const shared: HostHandle[] = [];
+  const shareHost = async (folder: string): Promise<void> => {
+    if (team === null) {
+      throw new UsageError("you are not in a team: plural team create or plural team join");
+    }
+    const handle = await startLocalHost(["--team", "--workspace", folder, "--relay", team.profile.relay, "--name", name]);
+    shared.push(handle);
+  };
   const quit = new Promise<void>((resolve) => {
     createRoot(renderer).render(
       <Shell
         team={team}
+        shareHost={team === null ? undefined : shareHost}
         watcher={watcher}
         home={basename(process.cwd())}
         connect={(card, member) =>
@@ -398,6 +407,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   await host?.stop();
   await tunnel?.stop();
   await hosting?.stop();
+  await Promise.all(shared.map((handle) => handle.stop()));
   process.exit(0);
 }
 

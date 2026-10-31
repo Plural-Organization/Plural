@@ -40,6 +40,8 @@ import { SCOPES, TrayView, type Form, type McpWizard, type Row, type Tray } from
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, ModeLine, Working } from "./components/Working";
 import { InviteDialog } from "./components/InviteDialog";
+import { ShareDialog } from "./components/ShareDialog";
+import { candidateFolders } from "./folders";
 import { helpRows, pluginRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
@@ -64,6 +66,7 @@ export interface AppProps {
   guestLink: string | null;
   teamLink?: string | null;
   onInviteTeam?: () => Promise<string>;
+  onShareHost?: (folder: string) => Promise<void>;
   settings?: Settings;
   onSettings?: (settings: Settings) => void;
   control?: AgentControl | null;
@@ -114,6 +117,7 @@ export function App({
   guestLink,
   teamLink = null,
   onInviteTeam,
+  onShareHost,
   settings: initialSettings,
   onSettings,
   control = null,
@@ -146,6 +150,7 @@ export function App({
   const syntax = useMemo(() => createSyntaxStyle(renderer), [renderer, settings.theme]);
   const [dialog, setDialog] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [setup, setSetup] = useState<{ first: boolean; back: boolean } | null>(null);
   const [extrasPrompt, setExtrasPrompt] = useState<{ preselect: string | null; reason: string | null; back: boolean } | null>(null);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
@@ -1473,7 +1478,7 @@ export function App({
           <SearchBar query={query} count={hits.length} position={hitIndex} preview={matched} onQuery={search} onStep={step} onClose={closeSearch} />
         ) : null}
         <Composer
-          focused={active && focus === "composer" && !dialog && !inviteOpen && extrasPrompt === null && setup === null}
+          focused={active && focus === "composer" && !dialog && !inviteOpen && !shareOpen && extrasPrompt === null && setup === null}
           disabled={disabled}
           placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
           remember={!asking?.secret}
@@ -1585,7 +1590,17 @@ export function App({
           onClose={() => setInviteOpen(false)}
         />
       ) : null}
-      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} onInvite={() => setInviteOpen(true)} update={update} /> : null}
+      {shareOpen && onShareHost ? (
+        <ShareDialog
+          width={width}
+          height={height}
+          teamName={teamName}
+          folders={candidateFolders(process.cwd())}
+          onShare={onShareHost}
+          onClose={() => setShareOpen(false)}
+        />
+      ) : null}
+      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} onInvite={() => setInviteOpen(true)} onShare={onShareHost ? () => setShareOpen(true) : undefined} update={update} /> : null}
     </box>
   );
 }

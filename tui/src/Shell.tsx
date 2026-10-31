@@ -11,6 +11,7 @@ export interface ShellProps {
   team: Team | null;
   watcher?: TeamWatcher;
   home: string;
+  shareHost?: (folder: string) => Promise<void>;
   connect: (card: SessionCard, team: Team) => Session;
 }
 
@@ -25,7 +26,7 @@ const TITLES: Record<Phase, string> = {
   idle: "plural",
 };
 
-export function Shell({ app, team, watcher, home, connect }: ShellProps) {
+export function Shell({ app, team, watcher, home, shareHost, connect }: ShellProps) {
   const renderer = useRenderer();
   const [settings, setSettings] = useState<Settings>(app.settings ?? DEFAULT_SETTINGS);
   const [view, setView] = useState<TeamView | null>(watcher?.view ?? null);
@@ -85,7 +86,7 @@ export function Shell({ app, team, watcher, home, connect }: ShellProps) {
 
   return (
     <>
-      <App {...app} {...shared} onInviteTeam={inviteTeam} conflicts={conflicts} settings={settings} onSettings={change} active={active === OWN} onSummary={summary(OWN)} />
+      <App {...app} {...shared} onInviteTeam={inviteTeam} onShareHost={team === null ? undefined : shareHost} conflicts={conflicts} settings={settings} onSettings={change} active={active === OWN} onSummary={summary(OWN)} />
       {visits.map((visit) => (
         <App
           key={visit.id}
