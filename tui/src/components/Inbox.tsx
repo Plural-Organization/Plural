@@ -46,9 +46,10 @@ interface InboxProps {
   selected: number;
   focused: boolean;
   now: number;
+  approvalChoice?: { id: string; index: number } | null;
 }
 
-export function Inbox({ items, state, selected, focused, now }: InboxProps) {
+export function Inbox({ items, state, selected, focused, now, approvalChoice }: InboxProps) {
   const index = Math.min(selected, items.length - 1);
   const item = items[index];
   if (!item) {
@@ -80,7 +81,7 @@ export function Inbox({ items, state, selected, focused, now }: InboxProps) {
       ) : item.kind === "briefing" ? (
         <BriefingBody request={item.request} now={now} focused={focused} />
       ) : item.kind === "approval" ? (
-        <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} />
+        <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} selected={approvalChoice?.id === item.id ? approvalChoice.index : 0} />
       ) : item.kind === "plan" ? (
         <PlanBody focused={focused} />
       ) : (
@@ -144,7 +145,7 @@ function AccessBody({ request, now, focused }: { request: AccessRequestView; now
   );
 }
 
-function ApprovalBody({ approval, state, now, focused }: { approval: ApprovalView; state: SessionState; now: number; focused: boolean }) {
+function ApprovalBody({ approval, state, now, focused, selected }: { approval: ApprovalView; state: SessionState; now: number; focused: boolean; selected: number }) {
   const call = approval.call;
   const seconds = Math.max(0, Math.round((Date.parse(approval.timeout_at) - now) / 1000));
   const origin = approval.provenance.origin === "proposal" ? "via proposal" : "direct";
@@ -166,7 +167,19 @@ function ApprovalBody({ approval, state, now, focused }: { approval: ApprovalVie
         </text>
       ))}
       {focused ? (
-        <Keys items={[["y", "once"], ["a", pattern ? `always ${pattern}` : "always"], ["n", "reject"], ["b", "block this kind"]]} />
+        <box flexDirection="column">
+            {([
+              ["y", "once"],
+              ["a", pattern ? `always ${pattern}` : "always"],
+              ["n", "reject"],
+              ["b", "block this kind"],
+            ] as const).map(([key, action], index) => (
+              <text key={key} fg={index === selected ? theme.accent : theme.dim}>
+                {index === selected ? "› " : "  "}{key}  {action}
+              </text>
+            ))}
+            <text fg={theme.dim}>↑/↓ choose · enter confirm · ←/→ requests · tab back</text>
+          </box>
       ) : (
         <text fg={theme.dim}>tab to answer</text>
       )}

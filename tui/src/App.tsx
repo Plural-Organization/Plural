@@ -163,6 +163,7 @@ export function App({
   const [connection, setConnection] = useState<ConnectionStatus>(client.status);
   const [focus, setFocus] = useState<Focus>("composer");
   const [selected, setSelected] = useState(0);
+  const [approvalChoice, setApprovalChoice] = useState<{ id: string; index: number } | null>(null);
   const [seed, setSeed] = useState<{ text: string; key: number } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
@@ -1278,10 +1279,18 @@ export function App({
     key.preventDefault();
     if (key.name === "tab" || key.name === "escape") {
       setFocus("composer");
-    } else if (key.name === "up" || key.name === "k") {
-      setSelected((value) => Math.max(0, value - 1));
-    } else if (key.name === "down" || key.name === "j") {
-      setSelected((value) => Math.min(items.length - 1, value + 1));
+    } else if (item?.kind === "approval" && (key.name === "up" || key.name === "down")) {
+      const direction = key.name === "up" ? -1 : 1;
+      setApprovalChoice((current) => ({
+        id: item.id,
+        index: Math.max(0, Math.min(3, (current?.id === item.id ? current.index : 0) + direction)),
+      }));
+    } else if (key.name === "up" || key.name === "k" || key.name === "left") {
+      setApprovalChoice(null);
+      setSelected(Math.max(0, Math.min(selected, items.length - 1) - 1));
+    } else if (key.name === "down" || key.name === "j" || key.name === "right") {
+      setApprovalChoice(null);
+      setSelected(Math.min(items.length - 1, selected + 1));
     } else if (item?.kind === "join") {
       const choices: Record<string, "allow" | "viewer" | "deny"> = { y: "allow", return: "allow", v: "viewer", n: "deny", x: "deny" };
       const choice = choices[key.name];
@@ -1302,7 +1311,9 @@ export function App({
       }
     } else if (item?.kind === "approval") {
       const decisions: Record<string, "once" | "always" | "reject" | "block"> = { y: "once", a: "always", n: "reject", b: "block" };
-      const decision = key.name === "return" ? "once" : decisions[key.name];
+      const options = ["once", "always", "reject", "block"] as const;
+      const index = approvalChoice?.id === item.id ? approvalChoice.index : 0;
+      const decision = key.name === "return" ? options[index] : decisions[key.name];
       if (decision) {
         send({ type: "approval.respond", approval_id: item.id, decision });
       }
@@ -1451,7 +1462,7 @@ export function App({
             </text>
           </box>
         ) : null}
-        {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} /> : null}
+        {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} approvalChoice={approvalChoice} /> : null}
         {projection.compacting ? (
           <Compacting tokens={projection.compacting.tokens} />
         ) : running ? (
