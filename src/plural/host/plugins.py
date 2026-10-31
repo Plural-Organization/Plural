@@ -57,6 +57,7 @@ RISKS: Final = {"read": ToolRisk.READ, "write": ToolRisk.WRITE, "exec": ToolRisk
 RUN_TIMEOUT_S: Final = 120.0
 ASK_TIMEOUT_S: Final = 120.0
 GUARD_TIMEOUT_S: Final = 5.0
+HOOK_TIMEOUT_S: Final = 120.0
 HOOK_EVENTS: Final = frozenset({"session_start", "before_run", "tool_call", "run_end"})
 MAX_OUTPUT_CHARS: Final = 64_000
 
@@ -197,13 +198,32 @@ async def _run_program(argv: tuple[str, ...], workspace: Path, timeout_s: float)
 class HookContext:
     """What a hook gets besides its event: it may reply to the room and run programs."""
 
-    def __init__(self, *, plugin: str, workspace: Path, inbox: Inbox) -> None:
+    def __init__(
+        self, *, plugin: str, workspace: Path, inbox: Inbox, can_prompt: bool = False
+    ) -> None:
         self.plugin = plugin
         self.workspace = workspace
         self._inbox = inbox
+        self._can_prompt = can_prompt
 
     async def reply(self, text: str) -> None:
         self._inbox.put(PluginReply(self.plugin, HOST_PARTICIPANT_ID, text))
+
+    async def prompt(
+        self, text: str, *, follow_up: bool = True, display: str | None = None
+    ) -> None:
+        """From run_end: prompt the agent as the host. That run does not fire run_end again."""
+        if not self._can_prompt:
+            raise PluginError("only a run_end hook can prompt the agent")
+        message = PluginPrompt(
+            self.plugin,
+            HOST_PARTICIPANT_ID,
+            text,
+            follow_up=follow_up,
+            display=display,
+            from_hook=True,
+        )
+        self._inbox.put(message)
 
     async def run(self, *argv: str, timeout_s: float = RUN_TIMEOUT_S) -> str:
         return await _run_program(argv, self.workspace, timeout_s)
@@ -216,6 +236,20 @@ class Verdict:
     action: Literal["ask", "deny"]
     reason: str
     plugin: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class RunInfo:
+    """A finished run, as a run_end hook sees it."""
+
+    run_id: str
+    reason: str
+    error: str | None
+    author_id: str
+    role: str
+    files: tuple[str, ...]
+    input_tokens: int
+    output_tokens: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -505,8 +539,26 @@ class PluginHost:
     def hooks(self, event: str) -> tuple[Hook, ...]:
         return tuple(hook for hook in self._hooks if hook.event == event)
 
-    def _context(self, plugin: str) -> HookContext:
-        return HookContext(plugin=plugin, workspace=self.workspace, inbox=self._inbox)
+    def _context(self, plugin: str, *, can_prompt: bool = False) -> HookContext:
+        return HookContext(
+            plugin=plugin, workspace=self.workspace, inbox=self._inbox, can_prompt=can_prompt
+        )
+
+    async def run_ended(self, run: RunInfo) -> None:
+        """Run every run_end hook in turn; one that fails is reported and the rest still run."""
+        for hook in self.hooks("run_end"):
+            context = self._context(hook.plugin, can_prompt=True)
+            try:
+                await asyncio.wait_for(hook.handler(run, context), HOOK_TIMEOUT_S)
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                problem = (
+                    f"took longer than {HOOK_TIMEOUT_S:g}s"
+                    if isinstance(error, TimeoutError)
+                    else _describe(error)
+                )
+                text = f"the run_end hook failed: {problem}"
+                self._inbox.put(PluginReply(hook.plugin, HOST_PARTICIPANT_ID, text, ok=False))
 
     async def guard_tool(self, call: ToolCallView, provenance: Provenance) -> Verdict | None:
         """Ask every tool_call hook about a call. Any deny wins; a hook that fails counts as ask."""

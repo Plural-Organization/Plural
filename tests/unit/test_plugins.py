@@ -262,3 +262,50 @@ def test_hooks_need_a_known_event_and_an_async_handler(tmp_path: Path) -> None:
     assert errors["sync"] == "the run_end hook must be an async function"
     assert errors["unknown"] is not None
     assert errors["unknown"].startswith("unknown event 'tool_called'")
+
+
+FAILING_AFTER = """
+def setup(plural):
+    @plural.on("run_end")
+    async def broken(run, ctx):
+        raise ValueError("nope")
+
+    @plural.on("run_end")
+    async def fine(run, ctx):
+        await ctx.prompt("again")
+
+    @plural.on("tool_call")
+    async def eager(call, ctx):
+        await ctx.prompt("not allowed here")
+"""
+
+
+async def test_run_end_hooks_report_failures_and_only_they_can_prompt(tmp_path: Path) -> None:
+    inbox = Inbox()
+    directory = tmp_path / "plugins"
+    directory.mkdir()
+    (directory / "after.py").write_text(FAILING_AFTER)
+    plugins = PluginHost(directory, workspace=tmp_path, inbox=inbox)
+    plugins.load()
+    run = plugin_module.RunInfo(
+        run_id="r",
+        reason="stop",
+        error=None,
+        author_id="p_host",
+        role="host",
+        files=(),
+        input_tokens=0,
+        output_tokens=0,
+    )
+    await plugins.run_ended(run)
+    failed = await inbox.get()
+    assert failed == PluginReply(
+        "after", "p_host", "the run_end hook failed: ValueError: nope", ok=False
+    )
+    prompted = await inbox.get()
+    assert isinstance(prompted, PluginPrompt)
+    assert (prompted.text, prompted.from_hook, prompted.follow_up) == ("again", True, True)
+
+    asked = await plugins.guard_tool(BASH, HOST)
+    assert asked is not None
+    assert asked.reason == "its guard failed: only a run_end hook can prompt the agent"

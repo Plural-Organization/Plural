@@ -112,6 +112,8 @@ class PluginPrompt:
     text: str
     follow_up: bool = False
     display: str | None = None
+    # Sent by a run_end hook: the run it starts does not fire run_end hooks again.
+    from_hook: bool = False
 
 
 @dataclass(frozen=True, slots=True)

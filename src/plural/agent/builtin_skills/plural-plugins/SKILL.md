@@ -109,6 +109,12 @@ returns `plural.deny(reason)`, `plural.ask(reason)` or nothing. There is no allo
 ("never push to main", "ask before touching migrations/"), not to skip approvals. Keep it fast: after 5
 seconds, or if it raises, the call needs the host's approval.
 
+`@plural.on("run_end")` runs after each run with `(run, ctx)`: `run.reason` (`stop`, `aborted`, `error`,
+`limit`), `run.error`, `run.author_id`, `run.role`, `run.files` (edited or written this run),
+`run.input_tokens`, `run.output_tokens`. `ctx.reply`, `ctx.run` and `ctx.prompt(text)` (as the host) work;
+the run a hook prompt starts does not fire `run_end` again. Good for running tests or a linter after the
+agent changed files.
+
 ## Good plugins
 
 - Keep handlers `async`. Wrap blocking work in `await asyncio.to_thread(...)` so the room does not

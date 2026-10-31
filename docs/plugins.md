@@ -138,6 +138,33 @@ Any deny wins. There is no allow: a call the policy refuses, or one plan mode fo
 hook. A hook gets 5 seconds; one that raises or takes longer counts as `ask`, so a broken guard makes the
 host ask rather than let a call through. `ctx.reply(text)` and `ctx.run(*argv)` work as in commands.
 
+### After a run
+
+A `run_end` hook runs after every run of the agent, in the background:
+
+```python
+def setup(plural):
+    @plural.on("run_end")
+    async def tests(run, ctx):
+        if run.reason == "stop" and any(path.endswith(".py") for path in run.files):
+            output = await ctx.run("pytest", "-q")
+            await ctx.reply(output.strip().splitlines()[-1])
+```
+
+| | |
+|---|---|
+| `run.reason`, `run.error` | `stop`, `aborted`, `error` or `limit`, and the error if any |
+| `run.author_id`, `run.role` | who started the run |
+| `run.files` | files the agent edited or wrote in this run, relative to the workspace |
+| `run.input_tokens`, `run.output_tokens` | what the run used |
+| `await ctx.reply(text)`, `await ctx.run(*argv)` | as in commands |
+| `await ctx.prompt(text, follow_up=True, display=None)` | prompts the agent **as the host** |
+
+A run started by a `run_end` prompt does not fire `run_end` again, so hooks cannot keep the agent going
+on their own. Such a prompt is the host's, so it is not reviewed and does not taint the run; do not paste
+a guest's text into it. A hook has 120 seconds; if it fails the room sees why and the other hooks still
+run.
+
 If a handler raises, the room sees `/name failed: …` and the host keeps running. A file that fails to
 import, has no `setup`, or registers a taken name is listed as failed by `/plugins` with the reason.
 

@@ -291,3 +291,36 @@ async def test_a_tool_call_hook_turns_an_allowed_call_into_an_approval(tmp_path:
             ApprovalRespond(approval_id=second.approval.id, decision=ApprovalDecision.ONCE)
         )
         await owner.next(RunEnded)
+
+
+AFTER = """
+def setup(plural):
+    @plural.on("run_end")
+    async def after(run, ctx):
+        await ctx.reply(f"{run.reason} {run.role} {','.join(run.files) or 'nothing'}")
+        if run.files:
+            await ctx.prompt("run the tests", display="checking the tests")
+"""
+
+
+async def test_a_run_end_hook_reports_the_run_and_can_start_one_more(tmp_path: Path) -> None:
+    install(tmp_path, "after", AFTER)
+    provider = FakeProvider(
+        [use_tool("write", path="hello.txt", content="hi\n"), reply("written"), reply("tests ok")]
+    )
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        owner = await session.owner()
+        await owner.client.send(PermissionModeSet(mode=PermissionMode.AUTO))
+        await owner.client.send(PromptSubmit(text="write hello"))
+        await owner.next(RunEnded)
+        assert (await owner.next(CommandReplied)).text == "stop host hello.txt"
+        follow = await owner.next(PromptAccepted)
+        assert (follow.text, follow.display, follow.via) == (
+            "run the tests",
+            "checking the tests",
+            "after",
+        )
+        await owner.next(RunEnded)
+        await asyncio.sleep(0.2)
+        replies = [e.text for e in owner.events if isinstance(e, CommandReplied)]
+        assert replies == ["stop host hello.txt"]

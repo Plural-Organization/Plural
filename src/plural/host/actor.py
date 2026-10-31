@@ -62,7 +62,7 @@ from plural.host.inbox import (
 )
 from plural.host.invites import InviteBook, RoomLink
 from plural.host.ledger import ChangeLedger
-from plural.host.plugins import CommandContext, PluginCommand, PluginError, PluginHost
+from plural.host.plugins import CommandContext, PluginCommand, PluginError, PluginHost, RunInfo
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.publisher import Publisher
 from plural.host.team_admission import (
@@ -286,6 +286,9 @@ class SessionActor:
         self._team_sweep_s = team_sweep_s
         self._briefing = briefing
         self._ledger = ledger
+        # What the agent changed in the current run, for run_end hooks.
+        self._run_changes: ChangeLedger | None = None
+        self._hook_prompts: set[str] = set()
         self._briefing_at: dict[str, datetime] = {}
         self._team = team
         self._conflicts = conflicts
@@ -923,6 +926,7 @@ class SessionActor:
         *,
         via: str | None = None,
         display: str | None = None,
+        from_hook: bool = False,
     ) -> None:
         if participant.role is Role.HOST or self._state.prompt_mode is PromptMode.OPEN:
             proposals.ensure_attachments(self._state, command.attachments)
@@ -934,6 +938,7 @@ class SessionActor:
                 provenance=direct(participant.id, participant.role),
                 via=via,
                 display=display,
+                from_hook=from_hook,
             )
             return
         # A proposal shows the host the whole text it approves, so the short display is dropped.
@@ -1289,6 +1294,7 @@ class SessionActor:
                     PromptSubmit(text=text, delivery=delivery),
                     via=request.command,
                     display=display,
+                    from_hook=request.from_hook,
                 )
             except DomainError as error:
                 problem = str(error)
@@ -1329,8 +1335,11 @@ class SessionActor:
         provenance: Provenance,
         via: str | None = None,
         display: str | None = None,
+        from_hook: bool = False,
     ) -> None:
         prompt_id = self._ids.new("pm_")
+        if from_hook:
+            self._hook_prompts.add(prompt_id)
         accepted = PromptAccepted(
             prompt_id=prompt_id,
             author_id=author.id,
@@ -1362,6 +1371,8 @@ class SessionActor:
 
     async def _start_run(self, turn: UserTurn) -> None:
         run_id = self._ids.new("run_")
+        if self._plugins is not None and self._plugins.hooks("run_end"):
+            self._run_changes = ChangeLedger(self._plugins.workspace)
         await self._emit(RunStarted(run_id=run_id, prompt_id=turn.id, provenance=turn.provenance))
         self._agent.start(run_id, turn)
 
@@ -1422,7 +1433,24 @@ class SessionActor:
             await self._emit(resolved)
         self._streaming.clear()
         await self._record_usage()
+        run = self._state.run
         await self._emit(RunEnded(run_id=run_id, reason=reason, usage=usage, error=error))
+        changes, self._run_changes = self._run_changes, None
+        if run is not None and self._plugins is not None and changes is not None:
+            if run.prompt_id in self._hook_prompts:
+                self._hook_prompts.discard(run.prompt_id)
+            else:
+                info = RunInfo(
+                    run_id=run_id,
+                    reason=reason.value,
+                    error=error,
+                    author_id=run.provenance.initiator_id,
+                    role=run.provenance.initiator_role.value,
+                    files=tuple(path for path, _, _ in changes.files()),
+                    input_tokens=usage.prompt_tokens,
+                    output_tokens=usage.output_tokens,
+                )
+                self._background(self._plugins.run_ended(info))
         pending = self._agent.drain_pending()
         if reason is RunEndReason.ABORTED:
             for turn in pending:
@@ -1597,6 +1625,8 @@ class SessionActor:
             self._conflicts.observe(event, record.ts)
         if self._ledger is not None:
             self._ledger.observe(event)
+        if self._run_changes is not None:
+            self._run_changes.observe(event)
         if isinstance(event, PolicyRuleAdded | PolicyRuleRemoved | PermissionModeChanged):
             self._sync_policy()
         self._publisher.publish(record)
