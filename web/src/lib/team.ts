@@ -4,7 +4,7 @@ import { sha256 } from "./sha256";
 // A team in the browser works as in the terminal (ADR 0007): this browser has its own ed25519 key, the
 // team's directory on the relay signs it a member certificate, and every request and team join is
 // signed with the key. The private key never leaves the browser: it is made non-extractable and kept
-// in IndexedDB; the profile, which holds nothing secret, sits in localStorage.
+// in IndexedDB, next to the team's profile.
 
 export type SessionStatus = "idle" | "running" | "waiting";
 
@@ -40,10 +40,10 @@ export interface TeamInvite {
   relay: string;
 }
 
-const PROFILE_KEY = "plural.team";
 const DATABASE = "plural";
 const STORE = "keys";
 const IDENTITY = "identity";
+const PROFILE = "team";
 const TIMEOUT_MS = 8000;
 // A certificate lasts 30 days; past this much of it left, the browser asks for a fresh one.
 const RENEW_BEFORE_MS = 7 * 24 * 3600 * 1000;
@@ -184,37 +184,24 @@ export async function identity(): Promise<CryptoKeyPair> {
   return made;
 }
 
-export function savedProfile(): TeamProfile | null {
-  try {
-    const raw = localStorage.getItem(PROFILE_KEY);
-    const profile = raw === null ? null : (JSON.parse(raw) as TeamProfile);
-    return profile && typeof profile.team_id === "string" && typeof profile.certificate === "string" ? profile : null;
-  } catch {
-    return null;
-  }
+async function savedProfile(): Promise<TeamProfile | null> {
+  const profile = await keyStore<TeamProfile | undefined>("readonly", (store) => store.get(PROFILE) as IDBRequest<TeamProfile | undefined>).catch(() => undefined);
+  return profile && typeof profile.team_id === "string" && typeof profile.certificate === "string" ? profile : null;
 }
 
-function saveProfile(profile: TeamProfile | null): void {
-  try {
-    if (profile === null) {
-      localStorage.removeItem(PROFILE_KEY);
-    } else {
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-    }
-  } catch {
-    return;
-  }
+async function saveProfile(profile: TeamProfile | null): Promise<void> {
+  await keyStore<unknown>("readwrite", (store) => (profile === null ? store.delete(PROFILE) : store.put(profile, PROFILE)) as IDBRequest<unknown>);
 }
 
 // A profile without its key is no use: the certificate names a key this browser no longer has.
 export async function loadTeam(): Promise<Team | null> {
-  const profile = savedProfile();
+  const profile = await savedProfile();
   if (profile === null) {
     return null;
   }
   const key = await savedKey();
   if (key === undefined) {
-    saveProfile(null);
+    await saveProfile(null);
     throw new Error(`this browser lost its key for ${profile.team_name}; ask the owner for a new invite`);
   }
   return { profile, key };
@@ -262,7 +249,7 @@ export async function joinTeam(invite: TeamInvite, name: string): Promise<Team> 
     certificate: grant.certificate,
     member: { id: grant.member.id, name: grant.member.name, role: grant.member.role },
   };
-  saveProfile(profile);
+  await saveProfile(profile);
   return { profile, key };
 }
 
@@ -281,18 +268,18 @@ export async function renewIfDue(team: Team, now = Date.now()): Promise<Team> {
   }
   const { certificate } = await signed<{ certificate: string }>(team, "POST", `/teams/${team.profile.team_id}/renew`);
   const profile = { ...team.profile, certificate };
-  saveProfile(profile);
+  await saveProfile(profile);
   return { ...team, profile };
 }
 
 // Leaving takes this browser out of the team on the relay too, then forgets the team here.
 export async function leaveTeam(team: Team): Promise<void> {
   await signed(team, "DELETE", `/teams/${team.profile.team_id}/members/${team.profile.member.id}`);
-  saveProfile(null);
+  await saveProfile(null);
 }
 
-export function forgetTeam(): void {
-  saveProfile(null);
+export function forgetTeam(): Promise<void> {
+  return saveProfile(null);
 }
 
 // Where a teammate's session can be reached from this page: an https page reaches only wss.

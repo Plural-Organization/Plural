@@ -101,7 +101,7 @@ export function useTeam(): TeamState {
         setError(null);
       } catch (problem) {
         // A team that is gone, or a member already removed, is left here all the same.
-        forgetTeam();
+        await forgetTeam().catch(() => undefined);
         setError(`left ${team.profile.team_name} here, but the relay did not hear it: ${messageOf(problem)}`);
       }
       setTeam(null);
