@@ -27,7 +27,9 @@ import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
 import { SearchBar } from "./components/SearchBar";
 import { Inbox, inboxItems, type InboxItem } from "./components/Inbox";
+import { ExtrasDialog } from "./components/ExtrasDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { missingExtras, type ExtraStatus } from "./extras";
 import { Splash } from "./components/Splash";
 import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { preview, Toast, TOAST_MS, type ToastMessage } from "./components/Toast";
@@ -139,6 +141,7 @@ export function App({
   const syntax = useMemo(() => createSyntaxStyle(renderer), [renderer, settings.theme]);
   const [dialog, setDialog] = useState(false);
   const [welcome, setWelcome] = useState(false);
+  const [extrasPrompt, setExtrasPrompt] = useState<{ preselect: string | null; reason: string | null; back: boolean } | null>(null);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [allOpen, setAllOpen] = useState(false);
   const toggle = (id: string): void =>
@@ -487,12 +490,42 @@ export function App({
     setDialog(false);
   };
 
-  useEffect(() => {
+  const showWelcome = (): void => {
     if (control && isHost && !settings.setupSeen && settings.agent.preset === "demo" && state.agent.startsWith("demo")) {
       setWelcome(true);
       setDialog(true);
     }
+  };
+
+  // The first run offers the optional model SDKs before the welcome settings, once.
+  useEffect(() => {
+    if (control && isHost && !settings.extrasSeen && missingExtras().length > 0) {
+      setExtrasPrompt({ preselect: null, reason: null, back: false });
+      return;
+    }
+    showWelcome();
   }, [isHost, state.agent]);
+
+  const askForExtra = (extra: ExtraStatus): void => {
+    setDialog(false);
+    setExtrasPrompt({ preselect: extra.id, reason: `This provider needs the ${extra.label}.`, back: true });
+  };
+
+  const closeExtras = (installed: boolean): void => {
+    const back = extrasPrompt?.back ?? false;
+    setExtrasPrompt(null);
+    if (!settings.extrasSeen) {
+      change({ ...settings, extrasSeen: true });
+    }
+    if (back) {
+      setDialog(true);
+      if (installed) {
+        notify("ok", "SDK installed: choose Save and use");
+      }
+    } else {
+      showWelcome();
+    }
+  };
 
   useEffect(() => {
     if (startupNote) {
@@ -1147,7 +1180,7 @@ export function App({
   };
 
   useKeyboard((key) => {
-    if (!active || dialog || intro) {
+    if (!active || dialog || intro || extrasPrompt !== null) {
       return;
     }
     if (key.meta && (key.name === "left" || key.name === "right") && onCycleSpace) {
@@ -1397,7 +1430,7 @@ export function App({
           <SearchBar query={query} count={hits.length} position={hitIndex} preview={matched} onQuery={search} onStep={step} onClose={closeSearch} />
         ) : null}
         <Composer
-          focused={active && focus === "composer" && !dialog}
+          focused={active && focus === "composer" && !dialog && extrasPrompt === null}
           disabled={disabled}
           placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
           remember={!asking?.secret}
@@ -1467,11 +1500,15 @@ export function App({
           admission={state.admission}
           onAdmission={(mode) => send({ type: "link.set_admission", mode })}
           onCopyReply={copyReply}
+          onNeedExtra={askForExtra}
           update={update}
           version={version}
           onUpdate={() => void updater?.install()}
           onClose={closeSettings}
         />
+      ) : null}
+      {extrasPrompt !== null && control ? (
+        <ExtrasDialog width={width} height={height} control={control} preselect={extrasPrompt.preselect} reason={extrasPrompt.reason} onClose={closeExtras} />
       ) : null}
       {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} onInvite={() => send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true })} update={update} /> : null}
     </box>

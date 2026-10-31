@@ -10,6 +10,7 @@ from plural.agent.providers.catalog import PRESETS, preset
 from plural.host.bootstrap import Host
 from plural.host.config import HostSettings
 from plural.host.control import AgentConfig, Control, settings_for
+from plural.host.extras import extra_for
 from plural.host.providers import ConfigError, build_provider, resolve_api_key
 
 
@@ -81,7 +82,13 @@ async def test_the_client_gets_the_catalog_from_the_host(tmp_path: Path) -> None
     await control.handle(json.dumps({"id": "k1", "type": "catalog"}))
     [reply] = replies
     assert (reply["id"], reply["ok"]) == ("k1", True)
-    assert reply["presets"] == [entry.to_json() for entry in PRESETS]
+    presets = cast("list[dict[str, object]]", reply["presets"])
+    assert [(entry["id"], entry["extra"]) for entry in presets] == [
+        (entry.id, extra_for(entry.adapter)) for entry in PRESETS
+    ]
+    assert {entry["id"] for entry in presets if entry["extra"] is None} >= {"demo", "claude_code"}
+    extras = cast("list[dict[str, object]]", reply["extras"])
+    assert [entry["id"] for entry in extras] == ["anthropic", "openai"]
 
 
 def test_a_preset_can_read_its_key_from_several_variables(tmp_path: Path) -> None:

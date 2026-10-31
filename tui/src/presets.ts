@@ -16,6 +16,8 @@ export interface Preset {
   hint: string;
   connection: "oauth" | "api_key" | "local";
   keyEnv: string[];
+  /** The optional SDK this provider needs on the host (see extras.ts), when it needs one. */
+  extra?: string | null;
 }
 
 /** What the client shows before the host answers, or when it joins a room it does not host. */

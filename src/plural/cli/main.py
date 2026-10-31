@@ -5,11 +5,10 @@ import os
 import sys
 from contextlib import suppress
 from pathlib import Path
-from typing import Annotated, Any
+from typing import TYPE_CHECKING, Annotated, Any
 
 import structlog
 import typer
-import uvicorn
 from rich.console import Console
 from rich.markup import escape
 from rich.panel import Panel
@@ -18,19 +17,17 @@ from rich.table import Table
 from plural import __version__
 from plural.cli.format import ago
 from plural.cli.team import ls, team_app
-from plural.host.bootstrap import Host, build_host
 from plural.host.config import HostSettings
-from plural.host.control import MAX_LINE_BYTES, Control, read_lines
-from plural.host.providers import ConfigError, build_provider, resolve_api_key
 from plural.host.team import TeamStore
-from plural.host.team_presence import PresenceUnavailable, TeamPresence, ensure_ready
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import AdmissionMode, PromptMode
-from plural.relay.app import create_app
 from plural.relay.limits import RelayLimits
 from plural.storage.jsonl_export import export_jsonl
 from plural.storage.sessions import delete_session, list_sessions, read_session, session_path
 from plural.storage.sqlite_store import SqliteEventStore
+
+if TYPE_CHECKING:
+    from plural.host.bootstrap import Host
 
 app = typer.Typer(name="plural-host", no_args_is_help=True, add_completion=False)
 app.add_typer(team_app, name="team")
@@ -92,6 +89,9 @@ def host(
     if name is None and "PLURAL_HOST_NAME" not in os.environ:
         options["host_name"] = getpass.getuser()
     settings = HostSettings(**options)
+    from plural.host.providers import ConfigError
+    from plural.host.team_presence import PresenceUnavailable
+
     try:
         asyncio.run(_host(settings, machine=machine))
     except (ConfigError, PresenceUnavailable) as error:
@@ -148,6 +148,9 @@ def plain_links(room: str, guest_link: str, host_link: str) -> str:
 
 
 async def _host(settings: HostSettings, *, machine: bool) -> None:
+    from plural.host.bootstrap import build_host
+    from plural.host.team_presence import TeamPresence, ensure_ready
+
     _configure_logging(settings.state_dir / "logs" / "host.log" if machine else None)
     if settings.team:
         ensure_ready(settings, TeamStore(settings.state_dir))
@@ -185,7 +188,7 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
         await plural_host.close()
 
 
-async def _serve_until_stdin_closes(plural_host: Host, settings: HostSettings) -> None:
+async def _serve_until_stdin_closes(plural_host: "Host", settings: HostSettings) -> None:
     serving = asyncio.create_task(plural_host.serve())
     watching = asyncio.create_task(_control_until_stdin_closes(plural_host, settings))
     done, pending = await asyncio.wait({serving, watching}, return_when=asyncio.FIRST_COMPLETED)
@@ -201,7 +204,9 @@ def _write_reply(message: dict[str, object]) -> None:
     print(json.dumps(message), flush=True)
 
 
-async def _control_until_stdin_closes(plural_host: Host, settings: HostSettings) -> None:
+async def _control_until_stdin_closes(plural_host: "Host", settings: HostSettings) -> None:
+    from plural.host.control import MAX_LINE_BYTES, Control, read_lines
+
     loop = asyncio.get_running_loop()
     reader = asyncio.StreamReader(limit=2 * MAX_LINE_BYTES)
     await loop.connect_read_pipe(lambda: asyncio.StreamReaderProtocol(reader), sys.stdin)
@@ -246,6 +251,10 @@ def relay(
         ),
     ] = None,
 ) -> None:
+    import uvicorn
+
+    from plural.relay.app import create_app
+
     limits = RelayLimits(
         max_rooms=max_rooms,
         max_rooms_per_peer=rooms_per_peer,
@@ -342,6 +351,8 @@ def export(
 
 
 def _provider_check(settings: HostSettings) -> tuple[bool, str]:
+    from plural.host.providers import ConfigError, build_provider, resolve_api_key
+
     try:
         build_provider(settings, resolve_api_key(settings, os.environ))
     except ConfigError as error:
