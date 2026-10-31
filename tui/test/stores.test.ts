@@ -181,6 +181,25 @@ describe("control link", () => {
     expect(await first).toEqual({ ok: false, error: "no" });
   });
 
+  test("the SDK list comes with the catalog and an install names the SDK to add", async () => {
+    const { written, link: control } = link();
+    const status = control.extras();
+    control.receive('{"type": "result", "id": "k1", "ok": true, "presets": [], "extras": [{"id": "openai", "label": "OpenAI SDK", "installed": false}]}\n');
+    expect(await status).toEqual([{ id: "openai", label: "OpenAI SDK", installed: false }]);
+
+    const done = control.install("openai");
+    expect(JSON.parse(written[1] as string)).toEqual({ id: "k2", type: "install", extra: "openai" });
+    control.receive('{"type": "result", "id": "k2", "ok": true}\n');
+    expect(await done).toEqual({ ok: true });
+  });
+
+  test("a host that reports no SDKs leaves nothing to offer", async () => {
+    const { link: control } = link();
+    const status = control.extras();
+    control.receive('{"type": "result", "id": "k1", "ok": true, "presets": []}\n');
+    expect(await status).toEqual([]);
+  });
+
   test("replies split across chunks and unrelated lines are handled", async () => {
     const { link: control } = link();
     const pending = control.configure({ provider: "fake", model: null, base_url: null, api_key: null, context_window: null });

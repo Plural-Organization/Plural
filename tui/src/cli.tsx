@@ -7,6 +7,7 @@ import pkg from "../package.json" with { type: "json" };
 import { basename } from "node:path";
 import { Shell } from "./Shell";
 import { loadKeys, saveKeys } from "./credentials";
+import { setExtras } from "./extras";
 import { setPresets, toConfig } from "./presets";
 import { loadSettings, saveSettings } from "./settings";
 import { freePort, HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
@@ -279,6 +280,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   // The catalog lives on the host: ask it before resolving the saved model choice.
   if (host !== null) {
     setPresets(await host.control.catalog());
+    setExtras(await host.control.extras());
   }
   let plan;
   try {
