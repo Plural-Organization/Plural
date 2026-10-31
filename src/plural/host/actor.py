@@ -109,6 +109,7 @@ from plural.protocol.commands import (
     PermissionModeSet,
     PluginsCreate,
     PluginsReload,
+    PluginsRemove,
     PolicyAdd,
     PolicyRemove,
     PromptModeSet,
@@ -601,6 +602,14 @@ class SessionActor:
                     plugins.create(command.name)
                 except PluginError as error:
                     raise Conflict(str(error)) from None
+                await asyncio.to_thread(plugins.load)
+                await self._sync_plugins(actor_id=participant.id)
+            case PluginsRemove():
+                plugins = self._require_plugins()
+                try:
+                    plugins.remove(command.name)
+                except PluginError as error:
+                    raise NotFound(str(error)) from None
                 await asyncio.to_thread(plugins.load)
                 await self._sync_plugins(actor_id=participant.id)
             case TypingSet():

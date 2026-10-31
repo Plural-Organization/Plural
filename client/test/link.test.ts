@@ -69,5 +69,6 @@ test("plugin commands go to the host and /plugins manages them", () => {
   expect(parseSlash("/plugins")).toEqual({ type: "show.plugins" });
   expect(parseSlash("/plugins reload")).toEqual({ type: "plugins.reload" });
   expect(parseSlash("/plugins new git-tools")).toEqual({ type: "plugins.create", name: "git-tools" });
+  expect(parseSlash("/plugins rm git-tools")).toEqual({ type: "plugins.remove", name: "git-tools" });
   expect(() => parseSlash("/plugins new Bad Name")).toThrow(SlashError);
 });

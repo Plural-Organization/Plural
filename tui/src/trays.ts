@@ -97,6 +97,8 @@ export function pluginRows(projection: Projection): Row[] {
           [
             { text: "/plugins new <name>", fg: theme.accent },
             { text: " creates one · ", fg: theme.dim },
+            { text: "/plugins rm <name>", fg: theme.accent },
+            { text: " deletes one · ", fg: theme.dim },
             { text: "/plugins reload", fg: theme.accent },
             { text: " applies your edits", fg: theme.dim },
           ] as Row,

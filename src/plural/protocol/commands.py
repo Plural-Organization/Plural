@@ -249,6 +249,11 @@ class PluginsCreate(Model):
     name: str = Field(min_length=1, max_length=32, pattern=r"^[a-z][a-z0-9_-]*$")
 
 
+class PluginsRemove(Model):
+    type: Literal["plugins.remove"] = "plugins.remove"
+    name: str = Field(min_length=1, max_length=32, pattern=r"^[a-z][a-z0-9_-]*$")
+
+
 class TypingSet(Model):
     type: Literal["presence.typing"] = "presence.typing"
     typing: bool
@@ -366,6 +371,7 @@ Command = Annotated[
     | CommandRun
     | PluginsReload
     | PluginsCreate
+    | PluginsRemove
     | TypingSet
     | SelectionSet
     | CursorSet

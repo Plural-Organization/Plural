@@ -1085,6 +1085,8 @@ export function App({
         }
         if (parsed.type === "plugins.create") {
           setTray({ kind: "busy", title: "plugins", text: `creating ~/.plural/plugins/${parsed.name}.py`, key: Date.now() });
+        } else if (parsed.type === "plugins.remove") {
+          setTray({ kind: "busy", title: "plugins", text: `removing ~/.plural/plugins/${parsed.name}.py`, key: Date.now() });
         } else if (parsed.type === "plugins.reload") {
           setTray({ kind: "busy", title: "plugins", text: "reloading plugins", key: Date.now() });
         }

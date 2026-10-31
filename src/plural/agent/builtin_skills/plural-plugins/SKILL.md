@@ -26,6 +26,7 @@ You work inside the workspace, so you cannot write to the plugin folder yourself
 
 Then the host runs `/plugins reload`. `/plugins` lists every plugin with ✓ and its commands and tools,
 or ✕ and the error, for example `SyntaxError line 3` or `/deploy is already taken`.
+`/plugins rm <name>` deletes a plugin's file and unloads it.
 
 ## Commands
 

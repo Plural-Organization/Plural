@@ -18,6 +18,7 @@ In the terminal client, as the host:
 ```text
 /plugins new hello      creates ~/.plural/plugins/hello.py from a template
 /plugins                lists plugins, their commands and file paths
+/plugins rm hello       deletes ~/.plural/plugins/hello.py and unloads it
 /plugins reload         applies your edits without restarting the host
 ```
 

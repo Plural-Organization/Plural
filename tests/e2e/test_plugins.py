@@ -9,6 +9,7 @@ from plural.protocol.commands import (
     CommandRun,
     PluginsCreate,
     PluginsReload,
+    PluginsRemove,
     PromptSubmit,
 )
 from plural.protocol.envelope import ErrorCode
@@ -130,6 +131,13 @@ async def test_the_host_creates_and_reloads_plugins(tmp_path: Path) -> None:
         reloaded = await owner.next(PluginsChanged)
         assert reloaded.plugins[0].error == "RuntimeError: oops"
         assert reloaded.commands == ()
+
+        await owner.client.send(PluginsRemove(name="notes"))
+        removed = await owner.next(PluginsChanged)
+        assert removed.plugins == ()
+        with pytest.raises(CommandRejected) as missing:
+            await owner.client.send(PluginsRemove(name="notes"))
+        assert missing.value.error.code is ErrorCode.NOT_FOUND
 
 
 TOOL = """

@@ -406,6 +406,13 @@ class PluginHost:
         path.write_text(TEMPLATE.format(name=name, function=function), encoding="utf-8")
         return path
 
+    def remove(self, name: str) -> Path:
+        path = self.directory / f"{name}.py"
+        if not NAME.match(name) or not path.is_file():
+            raise PluginError(f"no plugin named {name}")
+        path.unlink()
+        return path
+
 
 def _import(path: Path, module_name: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location(module_name, path)

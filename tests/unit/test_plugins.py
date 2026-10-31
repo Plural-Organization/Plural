@@ -84,6 +84,15 @@ def test_create_writes_a_starter_that_loads(tmp_path: Path) -> None:
         plugins.create("abort")
 
 
+def test_remove_deletes_the_file_and_unloads_it(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, greet=HELLO)
+    assert plugins.remove("greet") == tmp_path / "plugins" / "greet.py"
+    plugins.load()
+    assert plugins.views() == ()
+    with pytest.raises(PluginError, match="no plugin named greet"):
+        plugins.remove("greet")
+
+
 def test_reload_picks_up_edits(tmp_path: Path) -> None:
     plugins = host_with(tmp_path, greet=HELLO)
     (tmp_path / "plugins" / "greet.py").write_text(HELLO.replace('"hello"', '"hey"'))

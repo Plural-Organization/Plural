@@ -98,6 +98,7 @@ export interface CommandsSchema {
     | CommandRun
     | PluginsReload
     | PluginsCreate
+    | PluginsRemove
     | TypingSet
     | SelectionSet
     | CursorSet
@@ -446,6 +447,14 @@ export interface PluginsReload {
 export interface PluginsCreate {
   name: string;
   type?: "plugins.create";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "PluginsRemove".
+ */
+export interface PluginsRemove {
+  name: string;
+  type?: "plugins.remove";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
