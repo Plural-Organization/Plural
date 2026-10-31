@@ -5,6 +5,8 @@ format Claude Code and Cursor use, so a config can be copied or imported as is. 
 such as the browser, start first and a configured server of the same name replaces them.
 """
 
+from __future__ import annotations
+
 import asyncio
 import contextlib
 import hashlib
@@ -206,7 +208,7 @@ class _Server:
 class McpTool:
     """An MCP tool as the agent sees it. Every call is an exec: the host is asked first."""
 
-    def __init__(self, hub: "McpHub", server: str, info: McpToolInfo) -> None:
+    def __init__(self, hub: McpHub, server: str, info: McpToolInfo) -> None:
         self._hub = hub
         self._server = server
         self._info = info
@@ -472,13 +474,13 @@ def _describe(failure: BaseException) -> str:
     return text.splitlines()[0][:200]
 
 
-def _client_class() -> "type[Client]":
+def _client_class() -> type[Client]:
     from mcp import Client
 
     return Client
 
 
-def _result(result: "CallToolResult") -> ToolResult:
+def _result(result: CallToolResult) -> ToolResult:
     from mcp.types import ImageContent, TextContent
 
     parts: list[str] = []
