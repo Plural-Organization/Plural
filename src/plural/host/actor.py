@@ -17,7 +17,7 @@ from plural.agent.loop import AskFailed, BriefingFailed
 from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.messages import Message, NotesTurn, UserTurn
 from plural.agent.providers.base import LlmImage
-from plural.agent.skills import Package, SkillError, SkillLibrary, parse_package
+from plural.agent.skills import SKILL_COMMAND, Package, SkillError, SkillLibrary, parse_package
 from plural.agent.tools.extra.board import AGENT_AUTHOR, BoardRefused
 from plural.core import access, approvals, briefings, chat, joins, policies, proposals, visibility
 from plural.core.errors import (
@@ -971,6 +971,14 @@ class SessionActor:
         display: str | None = None,
         from_hook: bool = False,
     ) -> None:
+        if via is None and command.text.startswith(SKILL_COMMAND):
+            try:
+                name, args, text = await self._library().expand(command.text)
+            except SkillError as error:
+                raise NotFound(str(error)) from None
+            # The room sees what was typed; the agent gets the skill's instructions too.
+            command = command.model_copy(update={"text": text})
+            via, display = f"skill:{name}", args or f"{SKILL_COMMAND}{name}"
         if participant.role is Role.HOST or self._state.prompt_mode is PromptMode.OPEN:
             proposals.ensure_attachments(self._state, command.attachments)
             await self._accept(

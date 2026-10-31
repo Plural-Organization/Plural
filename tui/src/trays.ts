@@ -62,6 +62,7 @@ export function skillRows(projection: Projection, width: number): Row[] {
         ? { text: "built-in", fg: theme.dim }
         : { text: skill.scope === "global" ? "global  " : "project ", fg: skill.scope === "global" ? theme.info : theme.ok },
       { text: skill.description.length > room ? `${skill.description.slice(0, room - 1)}…` : skill.description, fg: theme.dim },
+      ...(skill.hidden ? [{ text: `  /skill:${skill.name} only`, fg: theme.info }] : []),
     ]),
     [""],
     [{ text: "/skills search <query>", fg: theme.accent }, { text: " finds more · ", fg: theme.dim }, { text: "/skills rm <name>", fg: theme.accent }, { text: " removes one", fg: theme.dim }],

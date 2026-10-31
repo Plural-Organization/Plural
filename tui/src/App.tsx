@@ -11,6 +11,7 @@ import {
   matchPreview,
   nextPermissionMode,
   parseChat,
+  isSkillCommand,
   parseSlash,
   routeOf,
   SlashError,
@@ -22,7 +23,7 @@ import {
   type PluginAsked,
   type Session,
 } from "@plural/client";
-import { COMMANDS, pluginHints } from "./commands";
+import { COMMANDS, pluginHints, skillHints } from "./commands";
 import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
@@ -315,6 +316,7 @@ export function App({
   const state = projection.state;
   const me = projection.me;
   const pluginCommands = useMemo(() => pluginHints(state.commands), [state.commands]);
+  const suggested = useMemo(() => [...pluginCommands, ...skillHints(state.skills)], [pluginCommands, state.skills]);
   const isHost = me?.role === "host";
   const mode = state.permission_mode;
   const running = state.run !== null;
@@ -1105,7 +1107,7 @@ export function App({
       warn(text.split(/\s+/)[0] ?? "chat", error instanceof SlashError ? error.message : String(error));
       return;
     }
-    if (text.startsWith("/")) {
+    if (text.startsWith("/") && !isSkillCommand(text)) {
       const name = text.slice(1).split(/\s+/)[0] ?? "";
       const known = [...COMMANDS, ...pluginCommands].find((command) => command.name === name);
       if (known?.hostOnly && !isHost) {
@@ -1445,7 +1447,7 @@ export function App({
           tips={!asking}
           role={me?.role}
           people={mentionable(state, projection.meId)}
-          commands={pluginCommands}
+          commands={suggested}
           seed={seed}
           label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
           route={asking || editing || disabled ? () => null : (text) => routeOf(text, state, projection.meId)}

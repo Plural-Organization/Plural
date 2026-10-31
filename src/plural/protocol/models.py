@@ -216,6 +216,7 @@ class SkillView(Model):
     description: str
     scope: SkillScope
     builtin: bool = False
+    hidden: bool = False
 
 
 class SkillHit(Model):

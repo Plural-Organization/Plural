@@ -17,6 +17,7 @@ from plural.protocol.models import SkillHit, SkillScope, SkillView
 from plural.security.secrets import is_denied_path
 
 SKILL_FILE: Final = "SKILL.md"
+SKILL_COMMAND: Final = "/skill:"
 INSTALL_DIR: Final = (".agents", "skills")
 BUILTIN_DIR: Final = Path(__file__).parent / "builtin_skills"
 SEARCH_DIRS: Final = (INSTALL_DIR, (".claude", "skills"), (".plural", "skills"))
@@ -59,10 +60,16 @@ class Skill:
     path: Path
     scope: SkillScope
     builtin: bool = False
+    # disable-model-invocation: left out of the prompt, run only as /skill:name.
+    hidden: bool = False
 
     def view(self) -> SkillView:
         return SkillView(
-            name=self.name, description=self.description, scope=self.scope, builtin=self.builtin
+            name=self.name,
+            description=self.description,
+            scope=self.scope,
+            builtin=self.builtin,
+            hidden=self.hidden,
         )
 
 
@@ -123,7 +130,23 @@ def read_skill(directory: Path, scope: SkillScope, *, builtin: bool = False) -> 
     description = " ".join(fields.get("description", "").split())
     if len(description) > MAX_DESCRIPTION:
         description = f"{description[: MAX_DESCRIPTION - 1]}…"
-    return Skill(name=name, description=description, path=directory, scope=scope, builtin=builtin)
+    return Skill(
+        name=name,
+        description=description,
+        path=directory,
+        scope=scope,
+        builtin=builtin,
+        hidden=fields.get("disable-model-invocation", "").lower() == "true",
+    )
+
+
+def body(text: str) -> str:
+    """A SKILL.md without its frontmatter."""
+    lines = text.splitlines()
+    if lines and lines[0].strip() == "---":
+        end = next((i for i, line in enumerate(lines[1:], 1) if line.strip() == "---"), 0)
+        lines = lines[end + 1 :]
+    return "\n".join(lines).strip()
 
 
 class SkillLibrary:
@@ -164,7 +187,9 @@ class SkillLibrary:
 
     def describe(self) -> str:
         installed = [
-            f"- {skill.name}: {skill.description or '(no description)'}" for skill in self._skills
+            f"- {skill.name}: {skill.description or '(no description)'}"
+            for skill in self._skills
+            if not skill.hidden
         ]
         return "\n".join(
             (
@@ -176,6 +201,24 @@ class SkillLibrary:
                 *installed,
             )
         )
+
+    async def expand(self, text: str) -> tuple[str, str, str]:
+        """Turns `/skill:name args` into the skill's instructions followed by the args, as pi
+        does, and returns the name, the args and that text."""
+        name, _, args = text.removeprefix(SKILL_COMMAND).partition(" ")
+        skill = self.get(name)
+        if skill is None:
+            raise SkillError(f"no skill named {name}; installed: {self._names()}")
+        content = await asyncio.to_thread(
+            (skill.path / SKILL_FILE).read_text, encoding="utf-8", errors="replace"
+        )
+        block = (
+            f'<skill name="{skill.name}">\n'
+            f'Load its other files with skill(name="{skill.name}", file=...).\n\n'
+            f"{body(content)}\n</skill>"
+        )
+        args = args.strip()
+        return skill.name, args, f"{block}\n\n{args}" if args else block
 
     def file(self, name: str, relative: str) -> Path:
         skill = self.get(name)

@@ -1,4 +1,4 @@
-import { findPerson, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
+import { findPerson, isSkillCommand, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
 import { commandName, helpText, isHostOnly, pluginHints } from "../lib/commands";
 import type { Session } from "./useSession";
@@ -171,7 +171,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
         return;
       }
       if (parsed.type === "show.skills") {
-        const lines = state.skills.map((skill) => `  ${skill.name}${skill.builtin ? " (built-in)" : skill.scope === "global" ? " (global)" : ""}  ${skill.description}`);
+        const lines = state.skills.map((skill) => `  ${skill.name}${skill.builtin ? " (built-in)" : skill.scope === "global" ? " (global)" : ""}${skill.hidden ? ` (/skill:${skill.name} only)` : ""}  ${skill.description}`);
         notify(
           "accent",
           lines.length > 0 ? ["skills", ...lines, "", "/skills search <query> finds more on skills.sh"].join("\n") : "no skills yet: /skills search <query> finds some on skills.sh",
@@ -215,7 +215,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
       onEdited();
     } else if (chat(text)) {
       return;
-    } else if (text.startsWith("/")) {
+    } else if (text.startsWith("/") && !isSkillCommand(text)) {
       slash(text);
     } else {
       send({ type: "prompt.submit", text, delivery: "now" });

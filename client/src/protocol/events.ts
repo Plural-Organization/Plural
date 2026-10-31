@@ -313,6 +313,7 @@ export interface SkillsChanged {
 export interface SkillView {
   builtin: boolean;
   description: string;
+  hidden: boolean;
   name: string;
   scope: SkillScope;
 }

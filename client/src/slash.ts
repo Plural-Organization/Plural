@@ -6,6 +6,13 @@ const MODE_USAGE = "usage: /mode open|review";
 
 export class SlashError extends Error {}
 
+/** `/skill:name request` runs a skill by hand; the host expands it, so it goes out as a prompt. */
+export const SKILL_COMMAND = "/skill:";
+
+export function isSkillCommand(text: string): boolean {
+  return text.startsWith(SKILL_COMMAND) && text.length > SKILL_COMMAND.length;
+}
+
 const SKILLS_USAGE = "usage: /skills | /skills search <query> | /skills add <owner/repo@skill> [--global] | /skills rm <name>";
 
 const PLUGINS_USAGE = "usage: /plugins | /plugins new <name> | /plugins rm <name> | /plugins reload";

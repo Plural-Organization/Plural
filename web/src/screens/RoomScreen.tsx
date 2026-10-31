@@ -24,7 +24,7 @@ import { canvasDocs } from "../lib/canvas";
 import { copyText } from "../lib/clipboard";
 import { upload } from "../lib/upload";
 import { cx } from "../lib/cx";
-import { pluginHints } from "../lib/commands";
+import { pluginHints, skillHints } from "../lib/commands";
 import styles from "./RoomScreen.module.css";
 
 interface RoomScreenProps {
@@ -37,7 +37,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   const { projection, feed, connection, invite, send, sendPresence } = session;
   const state = projection.state;
   const me = projection.me;
-  const pluginCommands = useMemo(() => pluginHints(state.commands), [state.commands]);
+  const pluginCommands = useMemo(() => [...pluginHints(state.commands), ...skillHints(state.skills)], [state.commands, state.skills]);
   const isHost = me?.role === "host";
   const items = useMemo(
     () => [...askItems(session.asks), ...(isHost ? inboxItems(state) : [])],

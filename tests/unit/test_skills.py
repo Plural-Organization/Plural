@@ -251,3 +251,37 @@ async def test_the_plugin_guide_is_built_in_and_a_home_skill_can_replace_it(tmp_
     (mine / "SKILL.md").write_text("---\nname: plural-plugins\ndescription: my own\n---\n")
     [replaced] = await library.refresh()
     assert (replaced.description, replaced.builtin) == ("my own", False)
+
+
+async def test_a_skill_hidden_from_the_model_stays_out_of_the_prompt(tmp_path: Path) -> None:
+    root = tmp_path / "home" / ".agents" / "skills"
+    write_skill(root, "tdd", skill_md("tdd"))
+    write_skill(
+        root,
+        "grill",
+        "---\nname: grill\ndescription: Grill a plan.\ndisable-model-invocation: true\n---\nAsk.\n",
+    )
+    skills = library(tmp_path)
+    await skills.refresh()
+    assert {(view.name, view.hidden) for view in skills.views()} == {
+        ("tdd", False),
+        ("grill", True),
+    }
+    assert "- tdd:" in skills.describe()
+    assert "grill" not in skills.describe()
+
+
+async def test_a_skill_command_expands_to_its_instructions_and_the_request(
+    tmp_path: Path,
+) -> None:
+    write_skill(tmp_path / "home" / ".agents" / "skills", "grill", skill_md("grill"))
+    skills = library(tmp_path)
+    await skills.refresh()
+    name, args, text = await skills.expand("/skill:grill  my plan ")
+    assert (name, args) == ("grill", "my plan")
+    assert text.startswith('<skill name="grill">\n')
+    assert "---" not in text
+    assert "# grill\nSteps.\n</skill>\n\nmy plan" in text
+    assert (await skills.expand("/skill:grill"))[2].endswith("</skill>")
+    with pytest.raises(SkillError, match="no skill named nope"):
+        await skills.expand("/skill:nope")

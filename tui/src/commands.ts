@@ -1,4 +1,4 @@
-import { mentionCompletions, mentionNote, type Mentionable, type PluginCommandView, type Role } from "@plural/client";
+import { mentionCompletions, mentionNote, type Mentionable, type PluginCommandView, type Role, type SkillView } from "@plural/client";
 
 export interface CommandHint {
   name: string;
@@ -37,6 +37,15 @@ export function pluginHints(commands: readonly PluginCommandView[]): CommandHint
     usage: command.usage ?? `/${command.name}`,
     description: command.description || `from the ${command.plugin} plugin`,
     hostOnly: command.host_only ?? false,
+  }));
+}
+
+/** `/skill:<name>` for every skill, the only way to run one the model does not see. */
+export function skillHints(skills: readonly SkillView[]): CommandHint[] {
+  return skills.map((skill) => ({
+    name: `skill:${skill.name}`,
+    usage: `/skill:${skill.name} [request]`,
+    description: skill.description || "run this skill",
   }));
 }
 

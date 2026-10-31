@@ -251,6 +251,9 @@ The host reads skills from `.agents/skills`, `.claude/skills` and `.plural/skill
 | `/skills add <owner/repo@skill>` | Install into the project's `.agents/skills` (host) |
 | `/skills add <owner/repo@skill> --global` | Install into `~/.agents/skills` for every session (host) |
 | `/skills rm <name>` | Remove a skill Plural installed (host) |
+| `/skill:<name> [request]` | Run a skill by hand: the agent gets its instructions and your request |
+
+`/skill:grill-me my plan` works for anyone who can prompt, as in pi: the room sees `my plan` marked `via /skill:grill-me`, and the agent gets the skill's instructions followed by the request. Every installed skill also costs a line of the agent's prompt on every request. A skill you only ever run by hand can stay out of it: add `disable-model-invocation: true` to its frontmatter, and the agent no longer sees it, while `/skill:<name>` still runs it. `/skills` marks such skills.
 
 The agent can search the catalog on its own and suggest a skill. It can install one too, but every install waits for the host's approval like an edit does, and plan mode refuses it. A skill is someone else's instructions that the agent will follow with the host's permissions, so install skills from sources you trust.
 

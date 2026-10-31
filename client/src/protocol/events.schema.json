@@ -3160,6 +3160,10 @@
         "description": {
           "type": "string"
         },
+        "hidden": {
+          "default": false,
+          "type": "boolean"
+        },
         "name": {
           "type": "string"
         },
@@ -3171,7 +3175,8 @@
         "name",
         "description",
         "scope",
-        "builtin"
+        "builtin",
+        "hidden"
       ],
       "type": "object"
     },

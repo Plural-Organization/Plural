@@ -128,7 +128,7 @@ describe("App", () => {
       { type: "skills.search", query: "react" },
       { type: "skills.install", package: "vercel-labs/agent-skills@vercel-react-native-skills", scope: "global" },
     ]);
-    fake.emit({ type: "skills.changed", skills: [{ name: "vercel-react-native-skills", description: "React Native.", scope: "global", builtin: false }], added: ["vercel-react-native-skills"], removed: [] });
+    fake.emit({ type: "skills.changed", skills: [{ name: "vercel-react-native-skills", description: "React Native.", scope: "global", builtin: false, hidden: false }], added: ["vercel-react-native-skills"], removed: [] });
     await frame(setup, "✓ vercel-react-native-skills installed");
     await setup.mockInput.typeText("/skills");
     await setup.mockInput.pressEnter();
@@ -450,6 +450,15 @@ describe("App", () => {
     await setup.mockInput.pressEnter();
     await tick(100);
     expect(fake.commands).toEqual([{ type: "prompt.submit", text: "hello", delivery: "now" }]);
+  });
+
+  test("a skill command goes to the host as a prompt", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    await setup.mockInput.typeText("/skill:grill my plan");
+    await setup.mockInput.pressEnter();
+    await tick(100);
+    expect(fake.commands).toEqual([{ type: "prompt.submit", text: "/skill:grill my plan", delivery: "now" }]);
   });
 
   test("slash commands become protocol commands and unknown ones are explained", async () => {
