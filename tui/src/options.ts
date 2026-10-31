@@ -27,6 +27,7 @@ export type Parsed =
   | { kind: "passthrough"; args: string[] }
   | { kind: "join"; link: string | null; displayName: string | null }
   | { kind: "team_host"; name: string; tunnel: string; member: string | null }
+  | { kind: "team_join"; args: string[] }
   | { kind: "session"; options: SessionOptions };
 
 const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm", "team", "ls"]);
@@ -112,6 +113,7 @@ export function parseArgs(input: string[]): Parsed {
   if (first === "--selftest") return { kind: "selftest" };
   if (first === "--help" || first === "-h") return { kind: "help" };
   if (first === "team" && rest[0] === "create" && rest.includes("--tunnel")) return teamHost(rest.slice(1));
+  if (first === "team" && rest[0] === "join") return { kind: "team_join", args: argv };
   if (first !== undefined && PASSTHROUGH.has(first)) return { kind: "passthrough", args: argv };
   if (first === "update") return update(rest);
   if (first === "join") return join(rest);

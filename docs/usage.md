@@ -127,7 +127,7 @@ A private message is private from the other guests, not from the host: it is sto
 
 ## Teams
 
-A team is a group of people who run their own plural, each with their own agent and key, and trust each other enough to see who is around. You see who shares a session; opening each other's sessions comes next.
+A team is a group of people who run their own plural, each with their own agent and key, and trust each other enough to see who is around. You see every session shared with the team and can open a teammate's session from the side panel.
 
 ```bash
 plural team create Backend --relay wss://relay.example.com --as vlad
@@ -140,7 +140,7 @@ plural team disband         # owner only, deletes the team for everyone
 plural team status
 ```
 
-`create` prints an invite code that works once and for an hour; give it to a teammate, who runs `join` with the same relay. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
+`create` prints an invite code that works once and for an hour; give it to a teammate, who runs `join` with the same relay. After a successful join, Plural opens automatically and the side panel shows every session currently shared with the team; no separate room link is needed. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
 
 ### A team on your own machine, behind a tunnel
 
