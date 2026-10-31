@@ -6,18 +6,29 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.12"
+          enable-cache: true
+      - name: Require a green ci run for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          green=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow ci.yml --commit "$GITHUB_SHA" --status success --json databaseId --jq length)
+          if [ "$green" -lt 1 ]; then
+            echo "::error::ci has no green run for $GITHUB_SHA. Wait for it to pass on this commit, then run this workflow again"
+            exit 1
+          fi
       - name: Check the tag matches every package version
         run: |
           version=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' src/plural/__init__.py)
           test "v${version}" = "${GITHUB_REF_NAME}"
           test "$(node -p "require('./tui/package.json').version")" = "${version}"
-      - run: uv sync --frozen
-      - run: uv run pytest
       - run: uv build
       - uses: actions/upload-artifact@v4
         with:
