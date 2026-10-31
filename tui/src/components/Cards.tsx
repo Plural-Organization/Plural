@@ -236,14 +236,14 @@ function DiffView({ diff, path }: { diff: string; path: string }) {
   const language = languageFor(path);
   const width = gutterWidth(rows);
   const shown = rows.slice(0, DIFF_LINES);
-  const tint = { add: theme.addBg, del: theme.removeBg, ctx: undefined, gap: undefined } as const;
-  const sign = { add: "+", del: "−", ctx: " ", gap: " " } as const;
+  const tint = { add: theme.addBg, del: theme.removeBg, ctx: theme.diffBg, gap: theme.diffBg } as const;
+  const sign = { add: "+", del: "-", ctx: " ", gap: " " } as const;
   const signColor = { add: theme.ok, del: theme.danger, ctx: theme.dim, gap: theme.dim } as const;
   return (
-    <box flexDirection="column">
+    <box flexDirection="column" backgroundColor={theme.diffBg}>
       {shown.map((row, index) =>
         row.kind === "gap" ? (
-          <text key={index} fg={theme.dim}>
+          <text key={index} fg={theme.dim} bg={theme.diffBg}>
             {" ".repeat(width)} ⋯
           </text>
         ) : (

@@ -65,11 +65,13 @@ export function codeBlockRenderer(context: RenderContext): MarkdownOptions["rend
       return undefined;
     }
     const language = typeof token.lang === "string" && token.lang !== "" ? token.lang : undefined;
+    const isDiff = language === "diff" || language === "patch";
     const box = new BoxRenderable(context, {
       flexDirection: "column",
       border: true,
       borderStyle: "rounded",
       borderColor: theme.line,
+      ...(isDiff ? { backgroundColor: theme.diffBg } : {}),
       paddingX: 1,
       title: language,
       titleColor: theme.dim,

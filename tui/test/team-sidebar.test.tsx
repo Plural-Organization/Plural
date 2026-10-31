@@ -248,11 +248,15 @@ test("the panel is two halves: the people and the agent above the line, the team
   watcher.stop();
 });
 
-test("the invite button makes the room link, and the menu button opens the settings", async () => {
+test("the invite button opens a dialog, and the room card makes the room link; the menu button opens the settings", async () => {
   const { setup, own, watcher } = await mount([card("alia", "idle", "main")]);
   const lines = (await frame(setup, "+ invite")).split("\n");
   const row = lines.findIndex((line) => line.includes("+ invite"));
   await setup.mockMouse.click(lines[row]!.indexOf("+ invite") + 2, row);
+  const dialog = (await frame(setup, "Invite to this room")).split("\n");
+  expect(own.commands).toEqual([]);
+  const cardRow = dialog.findIndex((line) => line.includes("Invite to this room"));
+  await setup.mockMouse.click(dialog[cardRow]!.indexOf("Invite to this room") + 2, cardRow);
   await new Promise((resolve) => setTimeout(resolve, 100));
   expect(own.commands).toEqual([{ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true }]);
   await setup.mockMouse.click(lines[row]!.indexOf("menu") + 1, row);

@@ -40,6 +40,7 @@ usage
   plural sessions [--json]    list your sessions
   plural rm <id>              delete a session
   plural team create <name> --tunnel cloudflared|ngrok  create a team behind a tunnel and open a session in it
+  plural team join <code> --relay <url>  join a team and open its rooms
   plural relay|doctor|export  run the host's own commands
 
 options
@@ -344,10 +345,34 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   progress.step("opening the session…");
   const renderer = await createCliRenderer({ exitOnCtrlC: false, useMouse: true });
   progress.done();
+  const shared: HostHandle[] = [];
+  const shareHost = async (folder: string): Promise<void> => {
+    if (team === null) {
+      throw new UsageError("you are not in a team: plural team create or plural team join");
+    }
+    const selected = planAgent(loadSettings(), loadKeys(), options);
+    if (selected.problem !== null) {
+      throw new UsageError(`could not use the model: ${selected.problem}`);
+    }
+    const handle = await startLocalHost(["--team", "--workspace", folder, "--relay", team.profile.relay, "--name", name]);
+    try {
+      if (selected.choice !== null) {
+        const applied = await handle.control.configure(toConfig(selected.choice, selected.key));
+        if (!applied.ok) {
+          throw new UsageError(`could not use the model: ${applied.error ?? "unknown error"}`);
+        }
+      }
+      shared.push(handle);
+    } catch (error) {
+      await handle.stop();
+      throw error;
+    }
+  };
   const quit = new Promise<void>((resolve) => {
     createRoot(renderer).render(
       <Shell
         team={team}
+        shareHost={team === null ? undefined : shareHost}
         watcher={watcher}
         home={basename(process.cwd())}
         connect={(card, member) =>
@@ -397,6 +422,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   await host?.stop();
   await tunnel?.stop();
   await hosting?.stop();
+  await Promise.all(shared.map((handle) => handle.stop()));
   process.exit(0);
 }
 
@@ -430,6 +456,21 @@ async function main(): Promise<void> {
       fail(problem(error));
     }
     await run({ ...emptyOptions(), hostArgs: ["--team"], displayName: name }, null, name, hosting);
+  } else if (parsed.kind === "team_join") {
+    const child = runHostCommand(parsed.args);
+    const code = await new Promise<number>((resolve, reject) => {
+      child.once("error", reject);
+      child.once("exit", (status) => resolve(status ?? 1));
+    }).catch((error: unknown) => fail(problem(error)));
+    if (code !== 0) {
+      process.exit(code);
+    }
+    const joined = loadTeam();
+    if (joined === null) {
+      fail("joined the team, but its profile was not saved");
+    }
+    const name = joined.profile.member.name;
+    await run({ ...emptyOptions(), displayName: name }, null, name);
   } else if (parsed.kind === "join") {
     if (parsed.link === null) {
       fail("usage: plural join <link|@name> [--name <name>], or plural -r to go back to a room you were in");

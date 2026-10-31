@@ -40,7 +40,7 @@ function ParticipantRow({ participant, name, me, typing }: { participant: Partic
 
 const STATUS_MARK = { running: "●", waiting: "◆", idle: "○" } as const;
 
-function SpacesSection({ rows, name, error, onOpen }: { rows: SpaceRow[]; name: string; error: string | null; onOpen?: (id: string) => void }) {
+function SpacesSection({ rows, name, error, onOpen, onShare }: { rows: SpaceRow[]; name: string; error: string | null; onOpen?: (id: string) => void; onShare?: () => void }) {
   return (
     <Section title={`spaces · ${truncate(name, 12)}`} count={rows.length}>
       {rows.slice(0, 8).map((row) => {
@@ -68,6 +68,7 @@ function SpacesSection({ rows, name, error, onOpen }: { rows: SpaceRow[]; name: 
         );
       })}
       {rows.length > 8 ? <text fg={theme.dim}>  +{rows.length - 8} more</text> : null}
+      {onShare ? <PanelButton onPress={onShare}>{(hover) => (hover ? "▸ share my host" : "+ share my host")}</PanelButton> : null}
       {rows.length <= 1 && error === null ? <text fg={theme.dim}>nobody else is sharing a session yet</text> : null}
       {error !== null ? (
         <text fg={theme.warn} wrapMode="word">
@@ -85,6 +86,7 @@ interface SidebarProps {
   onOpenSpace?: (id: string) => void;
   onSettings: () => void;
   onInvite?: () => void;
+  onShare?: () => void;
   update?: UpdateState | null;
   projection: Projection;
   room: string;
@@ -130,7 +132,7 @@ function ActionRow({ onInvite, onSettings, update }: { onInvite?: () => void; on
   );
 }
 
-export function Sidebar({ projection, room: _room, inbox, running, status, spaces, teamName, teamError, onOpenSpace, onSettings, onInvite, update }: SidebarProps) {
+export function Sidebar({ projection, room: _room, inbox, running, status, spaces, teamName, teamError, onOpenSpace, onSettings, onInvite, onShare, update }: SidebarProps) {
   const state = projection.state;
   const elapsed = useElapsed(running);
   const rank = (participant: Participant): number =>
@@ -227,7 +229,7 @@ export function Sidebar({ projection, room: _room, inbox, running, status, space
         <>
           <Divider />
           <box flexGrow={1} flexBasis={0} flexDirection="column" paddingX={2} paddingY={1}>
-            <SpacesSection rows={spaces ?? []} name={teamName ?? ""} error={teamError ?? null} onOpen={onOpenSpace} />
+            <SpacesSection rows={spaces ?? []} name={teamName ?? ""} error={teamError ?? null} onOpen={onOpenSpace} onShare={onShare} />
           </box>
         </>
       ) : null}

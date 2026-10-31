@@ -71,14 +71,23 @@ describe("TypeScript client against a Python host", () => {
 
   test("the host switches the prompt mode and the guest sees it", async () => {
     const owner = connect(host.hostLink, "vlad");
-    const guest = connect(host.guestLink.replace(/invite=.*/, "invite=unused"), "bek");
-    await until(() => owner.client.projection.me !== undefined);
-    await owner.client.send({ type: "session.set_prompt_mode", mode: "open" });
-    await until(() => owner.client.projection.state.prompt_mode === "open");
-    owner.client.close();
-    guest.client.close();
-    await owner.pump;
-    await guest.pump;
+    let guest: ReturnType<typeof connect> | undefined;
+    try {
+      await until(() => owner.client.projection.ready && owner.client.projection.me !== undefined);
+      await owner.client.send({ type: "invite.create", role: "participant", ttl_s: 600 });
+      const inviteLink = (): string | undefined => owner.seen.flatMap((event) => event.type === "invite.created" ? [event.link] : [])[0];
+      await until(() => inviteLink() !== undefined);
+      const connectedGuest = connect(inviteLink() as string, "bek");
+      guest = connectedGuest;
+      await until(() => connectedGuest.client.projection.ready && connectedGuest.client.projection.me !== undefined);
+      expect(connectedGuest.client.projection.state.prompt_mode).toBe("review");
+      await owner.client.send({ type: "session.set_prompt_mode", mode: "open" });
+      await until(() => owner.client.projection.state.prompt_mode === "open" && connectedGuest.client.projection.state.prompt_mode === "open");
+    } finally {
+      owner.client.close();
+      guest?.client.close();
+      await Promise.all([owner.pump, guest?.pump]);
+    }
   }, 60_000);
 
   test("a private message reaches only its two people and the room's message reaches all", async () => {
