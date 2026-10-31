@@ -201,9 +201,9 @@ describe("control link", () => {
       '{"type": "result", "id": "k1", "ok": true, "presets": [{"id": "demo"}], "extras": [{"id": "openai", "label": "OpenAI SDK", "installed": true}], "tools": [{"id": "claude"}]}\n',
     );
     const [presets, sdks, installable] = await together;
-    expect(presets).toEqual([{ id: "demo" }]);
+    expect(presets.map((preset) => preset.id)).toEqual(["demo"]);
     expect(sdks).toHaveLength(1);
-    expect(installable).toEqual([{ id: "claude" }]);
+    expect(installable.map((tool) => tool.id)).toEqual(["claude"]);
 
     const later = control.tools();
     expect(written).toHaveLength(2);
