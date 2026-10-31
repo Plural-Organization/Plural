@@ -433,7 +433,7 @@ export function Board(props: BoardProps) {
       timer.current ??= setTimeout(flush, wait);
     }
   };
-  const cursor = (x: number, y: number, ink: boolean): BoardCursor => ({ x, y, ink, color: ink ? color : null, width: ink ? width : null });
+  const cursor = (x: number, y: number, ink: boolean): BoardCursor => ({ x, y, ink, color: ink ? color : null, width: ink ? width : null, surface: "board" });
 
   const place = (line: Line) => {
     const points = rounded(line.points);

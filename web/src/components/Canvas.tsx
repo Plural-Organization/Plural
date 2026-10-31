@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { copyText } from "../lib/clipboard";
 import { fileName, lineCount, type CanvasDoc } from "../lib/canvas";
 import { cx } from "../lib/cx";
@@ -16,9 +16,11 @@ interface CanvasProps {
   onToggleFull: () => void;
   onPick: (id: string) => void;
   onClose: () => void;
+  // Draws a site document; without it a site shows as its page's path.
+  site?: (doc: CanvasDoc) => ReactNode;
 }
 
-export function Canvas({ doc, docs, selectors, full, onToggleFull, onPick, onClose }: CanvasProps) {
+export function Canvas({ doc, docs, selectors, full, onToggleFull, onPick, onClose, site }: CanvasProps) {
   const body = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState(false);
 
@@ -77,14 +79,20 @@ export function Canvas({ doc, docs, selectors, full, onToggleFull, onPick, onClo
         ) : (
           <span className={styles.title}>{doc.title}</span>
         )}
-        <span className={styles.meta} aria-live="polite">{doc.live ? <span className={styles.live}>agent is writing</span> : `${lineCount(doc.text)} lines`}</span>
+        <span className={styles.meta} aria-live="polite">
+          {doc.live ? <span className={styles.live}>agent is writing</span> : doc.kind === "site" ? "live preview" : `${lineCount(doc.text)} lines`}
+        </span>
         <span className="grow" />
-        <button className="button small" type="button" onClick={copy}>
-          {copied ? "copied" : "copy"}
-        </button>
-        <button className="button small ghost" type="button" onClick={download}>
-          download
-        </button>
+        {doc.kind === "site" ? null : (
+          <>
+            <button className="button small" type="button" onClick={copy}>
+              {copied ? "copied" : "copy"}
+            </button>
+            <button className="button small ghost" type="button" onClick={download}>
+              download
+            </button>
+          </>
+        )}
         <button
           className="button small ghost"
           type="button"
@@ -98,26 +106,30 @@ export function Canvas({ doc, docs, selectors, full, onToggleFull, onPick, onClo
           ✕
         </button>
       </header>
-      <div className={styles.body} ref={body} data-quotable>
-        <SelectionLayer selectors={selectors} version={doc.text} />
-        {doc.kind === "diff" ? (
-          <div className={styles.diff}>
-            <DiffView diff={doc.text} anchor={`canvas:${doc.id}`} />
-          </div>
-        ) : doc.kind === "text" ? (
-          <div className={styles.doc} data-anchor={`canvas:${doc.id}`}>
-            <Markdown text={doc.text} streaming={doc.live} />
-          </div>
-        ) : (
-          <pre className={cx(styles.code, doc.live && styles.writing)} data-anchor={`canvas:${doc.id}`}>
-            {doc.text.split("\n").map((line, index) => (
-              <span key={index} className={styles.line}>
-                {line}
-              </span>
-            ))}
-          </pre>
-        )}
-      </div>
+      {doc.kind === "site" ? (
+        <div className={styles.site}>{site ? site(doc) : <span className={styles.meta}>{doc.text}</span>}</div>
+      ) : (
+        <div className={styles.body} ref={body} data-quotable>
+          <SelectionLayer selectors={selectors} version={doc.text} />
+          {doc.kind === "diff" ? (
+            <div className={styles.diff}>
+              <DiffView diff={doc.text} anchor={`canvas:${doc.id}`} />
+            </div>
+          ) : doc.kind === "text" ? (
+            <div className={styles.doc} data-anchor={`canvas:${doc.id}`}>
+              <Markdown text={doc.text} streaming={doc.live} />
+            </div>
+          ) : (
+            <pre className={cx(styles.code, doc.live && styles.writing)} data-anchor={`canvas:${doc.id}`}>
+              {doc.text.split("\n").map((line, index) => (
+                <span key={index} className={styles.line}>
+                  {line}
+                </span>
+              ))}
+            </pre>
+          )}
+        </div>
+      )}
     </aside>
   );
 }

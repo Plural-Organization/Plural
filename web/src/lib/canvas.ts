@@ -1,5 +1,6 @@
 import type { FeedItem } from "@plural/client";
 import { blocks } from "../components/feed/Markdown";
+import { normalize, siteEntries, siteFiles, type Site } from "./site";
 
 // A code block this long opens in the canvas instead of the feed, and so does a reply that reads as a
 // document: a titled piece of a few paragraphs, like an essay, or a long one with sections.
@@ -22,7 +23,8 @@ function leadingTitle(text: string): string | null {
 export interface CanvasDoc {
   id: string;
   title: string;
-  kind: "code" | "text" | "diff";
+  // A site is the page at `path`, built from the files the agent wrote, and shown live.
+  kind: "code" | "text" | "diff" | "site";
   lang: string;
   text: string;
   live: boolean;
@@ -95,8 +97,11 @@ export function fileName(doc: CanvasDoc): string {
 }
 
 // Every client reads the same feed, so every participant gets the same documents in the same order.
-export function canvasDocs(items: FeedItem[]): CanvasDoc[] {
+export function canvasDocs(items: FeedItem[], site: Site = siteFiles(items)): CanvasDoc[] {
   const docs: CanvasDoc[] = [];
+  // A site joins the list after the change that first wrote its page, and opens for everyone then.
+  const entries = new Set(siteEntries(site.files));
+  const sites = new Set<string>();
   for (const item of items) {
     if (item.kind === "assistant" && item.text !== "") {
       const parsed = blocks(item.text);
@@ -126,6 +131,11 @@ export function canvasDocs(items: FeedItem[]): CanvasDoc[] {
       const doc = toolDoc(item);
       if (doc !== null) {
         docs.push(doc);
+      }
+      const path = typeof item.call.args.path === "string" ? normalize(item.call.args.path) : null;
+      if (item.status === "ok" && path !== null && entries.has(path) && !sites.has(path)) {
+        sites.add(path);
+        docs.push({ id: `site:${path}`, title: `preview · ${path}`, kind: "site", lang: "html", text: path, live: false, auto: true, path });
       }
     }
   }

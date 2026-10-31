@@ -128,6 +128,11 @@ export type EntryKind = "prompt" | "assistant" | "tool" | "compaction";
  * via the `definition` "BoardShape".
  */
 export type BoardShape = "pen" | "line" | "arrow" | "rect" | "ellipse" | "text" | "image" | "erase";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "CursorSurface".
+ */
+export type CursorSurface = "board" | "preview";
 
 export interface EventsSchema {
   envelope: Envelope;
@@ -536,7 +541,7 @@ export interface ParticipantCursor {
   type: "participant.cursor";
 }
 /**
- * Where someone points on the board; with ink, the pen is down and draws.
+ * Where someone points on the board or the site preview; with ink, the pen draws.
  *
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "BoardCursor".
@@ -544,6 +549,7 @@ export interface ParticipantCursor {
 export interface BoardCursor {
   color: string | null;
   ink: boolean;
+  surface: "board" | "preview";
   width: number | null;
   x: number;
   y: number;

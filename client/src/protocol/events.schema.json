@@ -399,7 +399,7 @@
       "type": "object"
     },
     "BoardCursor": {
-      "description": "Where someone points on the board; with ink, the pen is down and draws.",
+      "description": "Where someone points on the board or the site preview; with ink, the pen draws.",
       "properties": {
         "color": {
           "anyOf": [
@@ -416,6 +416,10 @@
         "ink": {
           "default": false,
           "type": "boolean"
+        },
+        "surface": {
+          "$ref": "#/$defs/CursorSurface",
+          "default": "board"
         },
         "width": {
           "anyOf": [
@@ -444,6 +448,7 @@
       "required": [
         "x",
         "y",
+        "surface",
         "ink",
         "color",
         "width"
@@ -1087,6 +1092,13 @@
         "compact_at"
       ],
       "type": "object"
+    },
+    "CursorSurface": {
+      "enum": [
+        "board",
+        "preview"
+      ],
+      "type": "string"
     },
     "Delivery": {
       "enum": [
