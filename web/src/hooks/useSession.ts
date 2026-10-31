@@ -16,6 +16,7 @@ import {
 } from "@plural/client";
 import { alertMention, alertNotice } from "../lib/alert";
 import { forgetRoom, rememberRoom } from "../lib/saved";
+import { teamProof, type Team } from "../lib/team";
 
 const CLIENT = { kind: "web", version: "0.2.0" };
 
@@ -56,6 +57,8 @@ export class SessionStore {
     private readonly link: JoinLink,
     private readonly name: string,
     private readonly onFatal: (reason: string) => void,
+    // Given, the first join proves team membership and the host lets this person watch.
+    private readonly team: Team | null = null,
   ) {
     this.token = link.token;
   }
@@ -69,7 +72,8 @@ export class SessionStore {
 
   start(): () => void {
     const link = { ...this.link, token: this.token, invite: this.token === null ? this.link.invite : null };
-    const client = new SessionClient(link, { name: this.name, client: CLIENT });
+    const team = this.team;
+    const client = new SessionClient(link, { name: this.name, client: CLIENT, team: team ? (room, url) => teamProof(team, url, room) : undefined });
     this.client = client;
     this.update({ projection: client.projection, feed: emptyFeed(), connection: client.status, invite: null });
     const off = client.onStatus((connection) => this.update({ connection }));
@@ -181,8 +185,8 @@ export class SessionStore {
   }
 }
 
-export function useSession(link: JoinLink, name: string, onFatal: (reason: string) => void): Session {
-  const [store] = useState(() => new SessionStore(link, name, onFatal));
+export function useSession(link: JoinLink, name: string, onFatal: (reason: string) => void, team: Team | null = null): Session {
+  const [store] = useState(() => new SessionStore(link, name, onFatal, team));
   const view = useSyncExternalStore(store.subscribe, store.snapshot);
   useEffect(() => store.start(), [store]);
   return { ...view, send: store.send, fetchPicture: store.fetchPicture, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, close: store.close };

@@ -15,7 +15,8 @@ export interface SessionOptions {
   name: string;
   client: ClientInfo;
   onWelcome?: (welcome: { room: string; token: string }) => void;
-  team?: (room: string, url: string) => TeamProof;
+  // Proves team membership on the first join; a browser signs asynchronously.
+  team?: (room: string, url: string) => TeamProof | Promise<TeamProof>;
 }
 
 export interface Session {
@@ -76,7 +77,7 @@ export class SessionClient implements Session {
       try {
         const wire = await Wire.open(this.link.url, this.link.room);
         try {
-          await wire.request(this.hello(), null);
+          await wire.request(await this.hello(), null);
           this.wire = wire;
           this.setStatus("online");
           delay = INITIAL_DELAY_MS;
@@ -108,14 +109,14 @@ export class SessionClient implements Session {
     }
   }
 
-  private hello(): Command {
+  private async hello(): Promise<Command> {
     return {
       type: "session.hello",
       client: this.options.client,
       name: this.options.name,
       invite: this.token === null ? this.link.invite : null,
       join: this.token === null ? this.link.join : null,
-      team: this.token === null && this.options.team ? this.options.team(this.link.room, this.link.url) : null,
+      team: this.token === null && this.options.team ? await this.options.team(this.link.room, this.link.url) : null,
       token: this.token,
       since: this.projection.ready ? this.projection.state.last_seq : null,
     };
