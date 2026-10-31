@@ -24,16 +24,21 @@ function from(state: SessionState, participantId: string): string {
   return participant ? label(state, participant) : participantId;
 }
 
-function Keys({ items }: { items: [string, string][] }) {
+// What an approval may be answered with, in the order its keys are shown.
+export const APPROVAL_DECISIONS = ["once", "always", "reject", "block"] as const;
+
+// With `selected`, that choice is marked and Enter takes it.
+function Keys({ items, selected }: { items: [string, string][]; selected?: number }) {
   return (
     <text>
       {items.map(([key, action], index) => (
         <span key={key}>
           {index > 0 ? "   " : ""}
-          <span fg={theme.accent}>
+          <span fg={index === selected ? theme.bg : theme.accent} bg={index === selected ? theme.accent : undefined}>
             <b>{key}</b>
+            {index === selected ? <span> {action}</span> : null}
           </span>
-          <span fg={theme.dim}> {action}</span>
+          {index === selected ? null : <span fg={theme.dim}> {action}</span>}
         </span>
       ))}
     </text>
@@ -168,18 +173,9 @@ function ApprovalBody({ approval, state, now, focused, selected }: { approval: A
       ))}
       {focused ? (
         <box flexDirection="column">
-            {([
-              ["y", "once"],
-              ["a", pattern ? `always ${pattern}` : "always"],
-              ["n", "reject"],
-              ["b", "block this kind"],
-            ] as const).map(([key, action], index) => (
-              <text key={key} fg={index === selected ? theme.accent : theme.dim}>
-                {index === selected ? "› " : "  "}{key}  {action}
-              </text>
-            ))}
-            <text fg={theme.dim}>↑/↓ choose · enter confirm · ←/→ requests · tab back</text>
-          </box>
+          <Keys items={[["y", "once"], ["a", pattern ? `always ${pattern}` : "always"], ["n", "reject"], ["b", "block this kind"]]} selected={selected} />
+          <text fg={theme.dim}>←/→ choose · enter confirm</text>
+        </box>
       ) : (
         <text fg={theme.dim}>tab to answer</text>
       )}

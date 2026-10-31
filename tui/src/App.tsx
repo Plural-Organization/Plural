@@ -26,7 +26,7 @@ import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
 import { SearchBar } from "./components/SearchBar";
-import { Inbox, inboxItems, type InboxItem } from "./components/Inbox";
+import { APPROVAL_DECISIONS, Inbox, inboxItems, type InboxItem } from "./components/Inbox";
 import { ExtrasDialog } from "./components/ExtrasDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SetupDialog } from "./components/SetupDialog";
@@ -1279,16 +1279,16 @@ export function App({
     key.preventDefault();
     if (key.name === "tab" || key.name === "escape") {
       setFocus("composer");
-    } else if (item?.kind === "approval" && (key.name === "up" || key.name === "down")) {
-      const direction = key.name === "up" ? -1 : 1;
+    } else if (item?.kind === "approval" && (key.name === "left" || key.name === "right")) {
+      const direction = key.name === "left" ? -1 : 1;
       setApprovalChoice((current) => ({
         id: item.id,
-        index: Math.max(0, Math.min(3, (current?.id === item.id ? current.index : 0) + direction)),
+        index: Math.max(0, Math.min(APPROVAL_DECISIONS.length - 1, (current?.id === item.id ? current.index : 0) + direction)),
       }));
-    } else if (key.name === "up" || key.name === "k" || key.name === "left") {
+    } else if (key.name === "up" || key.name === "k") {
       setApprovalChoice(null);
       setSelected(Math.max(0, Math.min(selected, items.length - 1) - 1));
-    } else if (key.name === "down" || key.name === "j" || key.name === "right") {
+    } else if (key.name === "down" || key.name === "j") {
       setApprovalChoice(null);
       setSelected(Math.min(items.length - 1, selected + 1));
     } else if (item?.kind === "join") {
@@ -1311,9 +1311,8 @@ export function App({
       }
     } else if (item?.kind === "approval") {
       const decisions: Record<string, "once" | "always" | "reject" | "block"> = { y: "once", a: "always", n: "reject", b: "block" };
-      const options = ["once", "always", "reject", "block"] as const;
       const index = approvalChoice?.id === item.id ? approvalChoice.index : 0;
-      const decision = key.name === "return" ? options[index] : decisions[key.name];
+      const decision = key.name === "return" ? APPROVAL_DECISIONS[index] : decisions[key.name];
       if (decision) {
         send({ type: "approval.respond", approval_id: item.id, decision });
       }

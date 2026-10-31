@@ -1,6 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
 import { App } from "../src/App";
+import { APPROVAL_DECISIONS } from "../src/components/Inbox";
 import { DEFAULT_SETTINGS } from "../src/settings";
 import { CALL, FakeSession, GUEST, HOST } from "./support/fake-session";
 
@@ -40,38 +41,45 @@ async function mount() {
   open.push(setup);
   await setup.renderOnce();
   request(fake, "ap1");
-  await frame(setup, "› y  once");
+  await frame(setup, "←/→ choose");
   await tick(500);
   return { fake, setup };
 }
 
-for (const [index, decision] of ["once", "always", "reject", "block"].entries()) {
+for (const [index, decision] of APPROVAL_DECISIONS.entries()) {
   test(`arrows and Enter choose ${decision}`, async () => {
     const { fake, setup } = await mount();
-    await setup.mockInput.pressArrow("up");
+    // One step too far to the left stays on the first choice.
+    await setup.mockInput.pressArrow("left");
     await tick();
     for (let step = 0; step < index; step++) {
-      await setup.mockInput.pressArrow("down");
-      await tick();
-    }
-    if (index === 3) {
-      await setup.mockInput.pressArrow("down");
+      await setup.mockInput.pressArrow("right");
       await tick();
     }
     expect(fake.commands).toEqual([]);
-    await frame(setup, `› ${["y  once", "a  always", "n  reject", "b  block this kind"][index]}`);
     await setup.mockInput.pressEnter();
     await tick();
     expect(fake.commands).toEqual([{ type: "approval.respond", approval_id: "ap1", decision }]);
   });
 }
 
-for (const [key, decision] of [["y", "once"], ["a", "always"], ["n", "reject"], ["b", "block"]]) {
+test("the choice stops at the last decision", async () => {
+  const { fake, setup } = await mount();
+  for (let step = 0; step < APPROVAL_DECISIONS.length + 2; step++) {
+    await setup.mockInput.pressArrow("right");
+    await tick();
+  }
+  await setup.mockInput.pressEnter();
+  await tick();
+  expect(fake.commands).toEqual([{ type: "approval.respond", approval_id: "ap1", decision: "block" }]);
+});
+
+for (const [key, decision] of [["y", "once"], ["a", "always"], ["n", "reject"], ["b", "block"]] as const) {
   test(`hotkey ${key} still chooses ${decision}`, async () => {
     const { fake, setup } = await mount();
-    await setup.mockInput.pressArrow("down");
+    await setup.mockInput.pressArrow("right");
     await tick();
-    await setup.mockInput.typeText(key!);
+    await setup.mockInput.typeText(key);
     await tick();
     expect(fake.commands).toEqual([{ type: "approval.respond", approval_id: "ap1", decision }]);
   });
@@ -81,11 +89,10 @@ test("switching requests resets the choice and sends the displayed approval id",
   const { fake, setup } = await mount();
   request(fake, "ap2");
   await tick(550);
-  await setup.mockInput.pressArrow("down");
-  await frame(setup, "› a  always");
   await setup.mockInput.pressArrow("right");
+  await tick();
+  await setup.mockInput.pressArrow("down");
   await frame(setup, "2/2");
-  await frame(setup, "› y  once");
   await setup.mockInput.pressEnter();
   await tick();
   expect(fake.commands).toEqual([{ type: "approval.respond", approval_id: "ap2", decision: "once" }]);
