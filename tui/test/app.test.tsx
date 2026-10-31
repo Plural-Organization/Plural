@@ -142,6 +142,30 @@ describe("App", () => {
     expect(after).toContain("from /btw · only you see this");
   });
 
+  test("a plugin's question opens in the tray and the answer goes back to the host", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "plugin.asked", ask_id: "pq1", command: "deploy", kind: "select", title: "where to?", options: ["staging", "prod"], default: "" });
+    expect(await frame(setup, "/deploy asks")).toContain("where to?");
+    setup.mockInput.pressArrow("down");
+    await tick(20);
+    setup.mockInput.pressEnter();
+    await tick(50);
+    fake.emit({ type: "plugin.asked", ask_id: "pq2", command: "deploy", kind: "input", title: "tag", options: [], default: "v1" });
+    await frame(setup, "tag");
+    setup.mockInput.pressEnter();
+    await tick(50);
+    fake.emit({ type: "plugin.asked", ask_id: "pq3", command: "deploy", kind: "confirm", title: "sure?", options: ["yes", "no"], default: "" });
+    await frame(setup, "sure?");
+    setup.mockInput.pressEscape();
+    await tick(50);
+    expect(fake.commands).toEqual([
+      { type: "plugin.answer", ask_id: "pq1", value: "prod" },
+      { type: "plugin.answer", ask_id: "pq2", value: "v1" },
+      { type: "plugin.answer", ask_id: "pq3", value: null },
+    ]);
+  });
+
   test("clicking the composer takes the keys back from the inbox", async () => {
     const fake = session();
     const setup = await mount(fake);

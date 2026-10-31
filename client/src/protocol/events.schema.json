@@ -298,6 +298,14 @@
       ],
       "type": "object"
     },
+    "AskKind": {
+      "enum": [
+        "confirm",
+        "select",
+        "input"
+      ],
+      "type": "string"
+    },
     "AttachmentAdded": {
       "properties": {
         "attachment": {
@@ -1349,8 +1357,10 @@
               "participant.role_changed": "#/$defs/ParticipantRoleChanged",
               "participant.selected": "#/$defs/ParticipantSelected",
               "participant.typing": "#/$defs/ParticipantTyping",
+              "plugin.asked": "#/$defs/PluginAsked",
               "plugin.context": "#/$defs/PluginContextAdded",
               "plugin.line": "#/$defs/PluginLineSet",
+              "plugin.notified": "#/$defs/PluginNotified",
               "plugin.shown": "#/$defs/PluginShown",
               "plugins.changed": "#/$defs/PluginsChanged",
               "policy.rule_added": "#/$defs/PolicyRuleAdded",
@@ -1468,6 +1478,12 @@
             },
             {
               "$ref": "#/$defs/PluginShown"
+            },
+            {
+              "$ref": "#/$defs/PluginAsked"
+            },
+            {
+              "$ref": "#/$defs/PluginNotified"
             },
             {
               "$ref": "#/$defs/BoardErased"
@@ -2123,6 +2139,49 @@
       ],
       "type": "object"
     },
+    "PluginAsked": {
+      "description": "A plugin command asks whoever ran it a question. Only they get it; it is not logged.",
+      "properties": {
+        "ask_id": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "default": {
+          "default": "",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/AskKind"
+        },
+        "options": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "plugin.asked",
+          "default": "plugin.asked",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "ask_id",
+        "command",
+        "kind",
+        "title",
+        "options",
+        "default"
+      ],
+      "type": "object"
+    },
     "PluginCommandView": {
       "properties": {
         "description": {
@@ -2212,6 +2271,28 @@
       "required": [
         "type",
         "plugin",
+        "text"
+      ],
+      "type": "object"
+    },
+    "PluginNotified": {
+      "description": "A short toast from a plugin command for the person who ran it.",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "plugin.notified",
+          "default": "plugin.notified",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command",
         "text"
       ],
       "type": "object"
@@ -3537,8 +3618,10 @@
           "participant.role_changed": "#/$defs/ParticipantRoleChanged",
           "participant.selected": "#/$defs/ParticipantSelected",
           "participant.typing": "#/$defs/ParticipantTyping",
+          "plugin.asked": "#/$defs/PluginAsked",
           "plugin.context": "#/$defs/PluginContextAdded",
           "plugin.line": "#/$defs/PluginLineSet",
+          "plugin.notified": "#/$defs/PluginNotified",
           "plugin.shown": "#/$defs/PluginShown",
           "plugins.changed": "#/$defs/PluginsChanged",
           "policy.rule_added": "#/$defs/PolicyRuleAdded",
@@ -3656,6 +3739,12 @@
         },
         {
           "$ref": "#/$defs/PluginShown"
+        },
+        {
+          "$ref": "#/$defs/PluginAsked"
+        },
+        {
+          "$ref": "#/$defs/PluginNotified"
         },
         {
           "$ref": "#/$defs/BoardErased"

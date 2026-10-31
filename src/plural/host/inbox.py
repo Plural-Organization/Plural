@@ -128,6 +128,26 @@ class PluginLineFlush:
 
 
 @dataclass(frozen=True, slots=True)
+class PluginQuestion:
+    """A plugin waits for `answer` from `invoker_id`; None means closed, timed out or gone."""
+
+    command: str
+    invoker_id: str
+    kind: str
+    title: str
+    options: tuple[str, ...]
+    default: str
+    answer: "asyncio.Future[str | None]"
+
+
+@dataclass(frozen=True, slots=True)
+class PluginNotify:
+    command: str
+    invoker_id: str
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
 class PluginShow:
     command: str
     invoker_id: str
@@ -153,6 +173,8 @@ InboxMessage = (
     | PluginReply
     | PluginPrompt
     | PluginShow
+    | PluginQuestion
+    | PluginNotify
     | PluginLineUpdate
     | PluginLineFlush
 )

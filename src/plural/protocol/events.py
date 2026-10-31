@@ -11,6 +11,7 @@ from plural.protocol.models import (
     AgentView,
     ApprovalDecision,
     ApprovalView,
+    AskKind,
     AttachmentMeta,
     BoardCursor,
     BoardStroke,
@@ -111,6 +112,26 @@ class PluginLineSet(EventBase):
 
     type: Literal["plugin.line"] = "plugin.line"
     plugin: str
+    text: str
+
+
+class PluginAsked(TransientEvent):
+    """A plugin command asks whoever ran it a question. Only they get it; it is not logged."""
+
+    type: Literal["plugin.asked"] = "plugin.asked"
+    ask_id: str
+    command: str
+    kind: AskKind
+    title: str
+    options: tuple[str, ...] = ()
+    default: str = ""
+
+
+class PluginNotified(TransientEvent):
+    """A short toast from a plugin command for the person who ran it."""
+
+    type: Literal["plugin.notified"] = "plugin.notified"
+    command: str
     text: str
 
 
@@ -511,6 +532,8 @@ Event = Annotated[
     | BoardMoved
     | AttachmentData
     | PluginShown
+    | PluginAsked
+    | PluginNotified
     | BoardErased
     | BoardCleared
     | ChatPosted

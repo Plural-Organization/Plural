@@ -5,7 +5,7 @@ import json
 import keyword
 import re
 import sys
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from itertools import count
 from pathlib import Path
@@ -18,7 +18,15 @@ from pydantic import JsonValue
 from plural.agent.providers.base import ToolSchema
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
 from plural.agent.tools.registry import Exposure
-from plural.host.inbox import Inbox, PluginLineUpdate, PluginPrompt, PluginReply, PluginShow
+from plural.host.inbox import (
+    Inbox,
+    PluginLineUpdate,
+    PluginNotify,
+    PluginPrompt,
+    PluginQuestion,
+    PluginReply,
+    PluginShow,
+)
 from plural.protocol.models import (
     HOST_PARTICIPANT_ID,
     PluginCommandView,
@@ -58,6 +66,7 @@ RUN_TIMEOUT_S: Final = 120.0
 ASK_TIMEOUT_S: Final = 120.0
 GUARD_TIMEOUT_S: Final = 5.0
 HOOK_TIMEOUT_S: Final = 120.0
+MAX_OPTIONS: Final = 20
 MAX_CONTEXT_CHARS: Final = 8000
 HOOK_EVENTS: Final = frozenset({"session_start", "before_run", "tool_call", "run_end"})
 MAX_OUTPUT_CHARS: Final = 64_000
@@ -137,6 +146,34 @@ class CommandContext:
     async def show(self, title: str, text: str) -> None:
         """Show `text` to the person who ran the command, in a window only they see."""
         self._inbox.put(PluginShow(self.command, self.author_id, title, text))
+
+    async def notify(self, text: str) -> None:
+        """A short toast for the person who ran the command; it is not kept anywhere."""
+        self._inbox.put(PluginNotify(self.command, self.author_id, text))
+
+    async def confirm(self, title: str) -> bool:
+        """Ask the person who ran the command yes or no. Closing it or not answering is no."""
+        return await self._question("confirm", title, ("yes", "no")) == "yes"
+
+    async def select(self, title: str, options: Sequence[str]) -> str | None:
+        """Let the person who ran the command pick one option; None when they close it."""
+        choices = tuple(dict.fromkeys(str(option) for option in options))
+        if not choices or len(choices) > MAX_OPTIONS:
+            raise PluginError(f"select takes 1 to {MAX_OPTIONS} options")
+        return await self._question("select", title, choices)
+
+    async def input(self, title: str, *, default: str = "") -> str | None:
+        """Ask the person who ran the command to type a line; None when they close it."""
+        return await self._question("input", title, (), default)
+
+    async def _question(
+        self, kind: str, title: str, options: tuple[str, ...], default: str = ""
+    ) -> str | None:
+        answer: asyncio.Future[str | None] = asyncio.get_running_loop().create_future()
+        self._inbox.put(
+            PluginQuestion(self.command, self.author_id, kind, title, options, default, answer)
+        )
+        return await answer
 
     async def ask(self, question: str, *, history: bool = True, model: str = "fast") -> str:
         """Ask the session's model one question, outside the conversation, and return its answer.

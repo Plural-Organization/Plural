@@ -9,6 +9,7 @@ from plural.protocol.commands import (
     ApprovalRespond,
     CommandRun,
     PermissionModeSet,
+    PluginAnswer,
     PluginsCreate,
     PluginsReload,
     PluginsRemove,
@@ -19,8 +20,10 @@ from plural.protocol.events import (
     ApprovalRequested,
     CommandInvoked,
     CommandReplied,
+    PluginAsked,
     PluginContextAdded,
     PluginLineSet,
+    PluginNotified,
     PluginsChanged,
     PluginShown,
     PromptAccepted,
@@ -407,3 +410,55 @@ async def test_session_start_hooks_run_at_start_and_on_reload(tmp_path: Path) ->
         await asyncio.sleep(0.2)
         after = [e for e in owner.events if isinstance(e, CommandReplied)]
         assert [(e.command, e.text) for e in after[len(before) :]] == [("boot", "started in r_")]
+
+
+DEPLOY = """
+def setup(plural):
+    @plural.command("deploy")
+    async def deploy(ctx):
+        target = await ctx.select("where to?", ["staging", "prod"])
+        if target is None:
+            await ctx.reply("cancelled")
+            return
+        tag = await ctx.input("tag", default="v1")
+        if not await ctx.confirm(f"deploy {tag} to {target}?"):
+            await ctx.reply("not confirmed")
+            return
+        await ctx.notify("deploying")
+        await ctx.reply(f"deployed {tag} to {target}")
+"""
+
+
+async def test_a_plugin_asks_whoever_ran_it_and_waits_for_the_answers(tmp_path: Path) -> None:
+    install(tmp_path, "ops", DEPLOY)
+    async with running_session(tmp_path, relayed=False, provider=FakeProvider()) as session:
+        owner = await session.owner()
+        guest = await session.guest("Alia")
+        await guest.client.send(CommandRun(name="deploy"))
+        where = await guest.next(PluginAsked)
+        assert (where.kind, where.title, where.options) == (
+            "select",
+            "where to?",
+            ("staging", "prod"),
+        )
+        with pytest.raises(CommandRejected) as stranger:
+            await owner.client.send(PluginAnswer(ask_id=where.ask_id, value="prod"))
+        assert stranger.value.error.code is ErrorCode.NOT_FOUND
+        with pytest.raises(CommandRejected) as wrong:
+            await guest.client.send(PluginAnswer(ask_id=where.ask_id, value="moon"))
+        assert wrong.value.error.code is ErrorCode.INVALID
+        await guest.client.send(PluginAnswer(ask_id=where.ask_id, value="staging"))
+        tag = await guest.next(PluginAsked)
+        assert (tag.kind, tag.default) == ("input", "v1")
+        await guest.client.send(PluginAnswer(ask_id=tag.ask_id, value="v2"))
+        sure = await guest.next(PluginAsked)
+        assert (sure.kind, sure.options) == ("confirm", ("yes", "no"))
+        await guest.client.send(PluginAnswer(ask_id=sure.ask_id, value="yes"))
+        assert (await guest.next(PluginNotified)).text == "deploying"
+        assert (await owner.next(CommandReplied)).text == "deployed v2 to staging"
+        assert not any(isinstance(event, PluginAsked | PluginNotified) for event in owner.events)
+
+        await guest.client.send(CommandRun(name="deploy"))
+        closed = await guest.next(PluginAsked)
+        await guest.client.send(PluginAnswer(ask_id=closed.ask_id))
+        assert (await owner.next(CommandReplied)).text == "cancelled"

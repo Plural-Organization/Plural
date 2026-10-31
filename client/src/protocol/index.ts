@@ -29,6 +29,7 @@ export type {
   McpServerView,
   Participant,
   PermissionMode,
+  PluginAsked,
   PluginCommandView,
   PluginStatus,
   PluginView,

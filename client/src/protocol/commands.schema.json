@@ -917,6 +917,37 @@
       ],
       "type": "object"
     },
+    "PluginAnswer": {
+      "description": "The answer to a plugin's question; no value means the person closed it.",
+      "properties": {
+        "ask_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "plugin.answer",
+          "default": "plugin.answer",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "ask_id"
+      ],
+      "type": "object"
+    },
     "PluginsCreate": {
       "properties": {
         "name": {
@@ -1429,6 +1460,7 @@
           "mcp.toggle": "#/$defs/McpToggle",
           "participant.revoke": "#/$defs/ParticipantRevoke",
           "participant.set_role": "#/$defs/ParticipantSetRole",
+          "plugin.answer": "#/$defs/PluginAnswer",
           "plugins.create": "#/$defs/PluginsCreate",
           "plugins.reload": "#/$defs/PluginsReload",
           "plugins.remove": "#/$defs/PluginsRemove",
@@ -1559,6 +1591,9 @@
         },
         {
           "$ref": "#/$defs/PluginsRemove"
+        },
+        {
+          "$ref": "#/$defs/PluginAnswer"
         },
         {
           "$ref": "#/$defs/TypingSet"

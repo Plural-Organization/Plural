@@ -37,6 +37,10 @@ export type Form = {
   values: Record<string, string>;
   selected: number;
   warning: string | null;
+  /** Set when a plugin asked the question: the answer goes back to the host as plugin.answer. */
+  ask?: string;
+  /** What an empty answer to a plugin's text question means. */
+  fallback?: string;
 };
 
 export type McpWizard = {

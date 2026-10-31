@@ -52,6 +52,8 @@ takes `ctx`:
 | `await ctx.reply(text)` | a reply the whole room sees |
 | `await ctx.prompt(text, follow_up=False, display=None)` | a prompt to the agent **as the person who ran the command**; the room sees `display` and the full text folded |
 | `await ctx.show(title, text)` | a window only the person who ran the command sees, not logged |
+| `await ctx.confirm(title)` / `await ctx.select(title, options)` / `await ctx.input(title, default="")` | ask the person who ran the command and wait: `bool`, the option or `None`, the text or `None`; closed or five minutes unanswered is `False`/`None` |
+| `await ctx.notify(text)` | a toast only they see |
 | `await ctx.ask(question, history=True, model="fast")` | one answer from the session's model, outside the conversation: no tools, nothing added to the history; raises `PluginError` if no model answers |
 | `await ctx.run(*argv, timeout_s=120)` | runs a program in the workspace without a shell, returns stdout; raises on a non-zero exit or a timeout |
 

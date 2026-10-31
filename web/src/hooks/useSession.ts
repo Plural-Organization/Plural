@@ -12,6 +12,7 @@ import {
   type ConnectionStatus,
   type Feed,
   type JoinLink,
+  type PluginAsked,
   type Tone,
 } from "@plural/client";
 import { alertMention, alertNotice } from "../lib/alert";
@@ -33,6 +34,8 @@ export interface SessionView {
   invite: Invite | null;
   // Pictures on the board, as object URLs, by attachment id.
   pictures: Record<string, string>;
+  // Questions plugin commands asked this person, oldest first.
+  asks: PluginAsked[];
 }
 
 export interface Session extends SessionView {
@@ -42,11 +45,12 @@ export interface Session extends SessionView {
   sendPresence: (command: Command) => boolean;
   notify: (tone: Tone, text: string) => void;
   clearInvite: () => void;
+  answer: (askId: string, value: string | null) => void;
   close: () => void;
 }
 
 export class SessionStore {
-  private view: SessionView = { projection: new Projection(), feed: emptyFeed(), connection: "connecting", invite: null, pictures: {} };
+  private view: SessionView = { projection: new Projection(), feed: emptyFeed(), connection: "connecting", invite: null, pictures: {}, asks: [] };
   private readonly asked = new Set<string>();
   private readonly listeners = new Set<() => void>();
   private client: SessionClient | null = null;
@@ -71,7 +75,7 @@ export class SessionStore {
     const link = { ...this.link, token: this.token, invite: this.token === null ? this.link.invite : null };
     const client = new SessionClient(link, { name: this.name, client: CLIENT });
     this.client = client;
-    this.update({ projection: client.projection, feed: emptyFeed(), connection: client.status, invite: null });
+    this.update({ projection: client.projection, feed: emptyFeed(), connection: client.status, invite: null, asks: [] });
     const off = client.onStatus((connection) => this.update({ connection }));
     let alive = true;
     void (async () => {
@@ -94,6 +98,14 @@ export class SessionStore {
             } else if (event.type === "join.requested" || event.type === "access.requested" || event.type === "briefing.requested" || event.type === "approval.requested" || event.type === "proposal.created") {
               alertNotice("A request needs your attention");
             }
+          }
+          if (event.type === "plugin.asked") {
+            this.update({ asks: [...this.view.asks, event] });
+            continue;
+          }
+          if (event.type === "plugin.notified") {
+            this.notify("accent", `/${event.command}: ${event.text}`);
+            continue;
           }
           if (event.type === "attachment.data") {
             const bytes = Uint8Array.from(atob(event.content_b64), (char) => char.charCodeAt(0));
@@ -166,6 +178,11 @@ export class SessionStore {
 
   readonly clearInvite = (): void => this.update({ invite: null });
 
+  readonly answer = (askId: string, value: string | null): void => {
+    this.update({ asks: this.view.asks.filter((ask) => ask.ask_id !== askId) });
+    this.client?.send({ type: "plugin.answer", ask_id: askId, value }).catch(() => undefined);
+  };
+
   readonly close = (): void => this.client?.close();
 
   private update(changes: Partial<SessionView>): void {
@@ -185,7 +202,7 @@ export function useSession(link: JoinLink, name: string, onFatal: (reason: strin
   const [store] = useState(() => new SessionStore(link, name, onFatal));
   const view = useSyncExternalStore(store.subscribe, store.snapshot);
   useEffect(() => store.start(), [store]);
-  return { ...view, send: store.send, fetchPicture: store.fetchPicture, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, close: store.close };
+  return { ...view, send: store.send, fetchPicture: store.fetchPicture, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, answer: store.answer, close: store.close };
 }
 
 function messageOf(error: unknown): string {

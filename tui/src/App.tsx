@@ -19,6 +19,7 @@ import {
   type Command,
   type ConnectionStatus,
   type PermissionMode,
+  type PluginAsked,
   type Session,
 } from "@plural/client";
 import { COMMANDS, pluginHints } from "./commands";
@@ -33,7 +34,7 @@ import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { preview, Toast, TOAST_MS, type ToastMessage } from "./components/Toast";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
-import { SCOPES, TrayView, type Form, type McpWizard, type Row, type Tray } from "./components/Tray";
+import { SCOPES, TrayView, type Form, type FormStep, type McpWizard, type Row, type Tray } from "./components/Tray";
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, ModeLine, Working } from "./components/Working";
 import { helpRows, pluginRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
@@ -254,6 +255,12 @@ export function App({
             } else {
               copy(event.link, "Invite link copied", "send it to one person, it works once");
             }
+          }
+          if (event.type === "plugin.asked") {
+            setTray(askForm(event));
+          }
+          if (event.type === "plugin.notified") {
+            showToast(event.text, `from /${event.command}`, "accent", "◆");
           }
           if (event.type === "plugin.shown") {
             setTray({
@@ -619,8 +626,31 @@ export function App({
     ],
   });
 
+  const askForm = (event: PluginAsked): Form => {
+    const options = event.kind === "confirm" ? ["yes", "no"] : event.options;
+    const step: FormStep =
+      event.kind === "input"
+        ? { kind: "text", key: "answer", label: event.title, hint: event.default ? `enter keeps "${event.default}" · esc closes` : "esc closes", optional: true }
+        : { kind: "choice", key: "answer", label: event.title, options: options.map((option) => ({ value: option, title: option, detail: "" })) };
+    return { kind: "form", title: `/${event.command} asks`, steps: [step], index: 0, values: {}, selected: 0, warning: null, ask: event.ask_id, fallback: event.default };
+  };
+
+  // Closing the tray answers an open plugin question with nothing, so the plugin is not left waiting.
+  const closeTray = (): void => {
+    const current = trayRef.current;
+    if (current?.kind === "form" && current.ask) {
+      send({ type: "plugin.answer", ask_id: current.ask, value: null });
+    }
+    setTray(null);
+  };
+
   const finishForm = (form: Form): void => {
     const values = form.values;
+    if (form.ask) {
+      send({ type: "plugin.answer", ask_id: form.ask, value: values.answer || form.fallback || "" });
+      setTray(null);
+      return;
+    }
     send({
       type: "agents.create",
       name: values.name ?? "",
@@ -644,8 +674,9 @@ export function App({
     } else {
       value = (typed ?? "").trim();
       const taken = client.projection.state.agents.map((agent) => agent.name);
-      const warning =
-        !value && !step.optional
+      const warning = form.ask
+        ? null
+        : !value && !step.optional
           ? `${step.label.toLowerCase()} is needed`
           : step.key === "name" && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value)
             ? "use letters, digits, ., - and _"
@@ -907,7 +938,7 @@ export function App({
 
   const escape = (): void => {
     if (trayRef.current) {
-      setTray(null);
+      closeTray();
     } else if (editing) {
       setEditing(null);
       setSeed({ text: "", key: Date.now() });
@@ -1446,7 +1477,7 @@ export function App({
             servers={state.mcp}
             agents={state.agents}
             maxRows={Math.max(4, Math.floor(height * 0.55))}
-            onClose={() => setTray(null)}
+            onClose={closeTray}
             onSelect={(index) => {
               setFocus("composer");
               setTray((current) => (current?.kind === "pick" || current?.kind === "mcp" || current?.kind === "mcp-add" || current?.kind === "agents" || current?.kind === "form" ? { ...current, selected: index } : current));

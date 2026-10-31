@@ -53,7 +53,9 @@ from plural.host.inbox import (
     McpUpdated,
     PluginLineFlush,
     PluginLineUpdate,
+    PluginNotify,
     PluginPrompt,
+    PluginQuestion,
     PluginReply,
     PluginShow,
     Reconfigure,
@@ -117,6 +119,7 @@ from plural.protocol.commands import (
     ParticipantRevoke,
     ParticipantSetRole,
     PermissionModeSet,
+    PluginAnswer,
     PluginsCreate,
     PluginsReload,
     PluginsRemove,
@@ -174,8 +177,10 @@ from plural.protocol.events import (
     ParticipantSelected,
     ParticipantTyping,
     PermissionModeChanged,
+    PluginAsked,
     PluginContextAdded,
     PluginLineSet,
+    PluginNotified,
     PluginsChanged,
     PluginShown,
     PolicyRuleAdded,
@@ -202,6 +207,7 @@ from plural.protocol.models import (
     ActorKind,
     AdmissionMode,
     ApprovalDecision,
+    AskKind,
     AttachmentMeta,
     BoardShape,
     BoardStroke,
@@ -239,6 +245,7 @@ MAX_DISPLAY_CHARS = 500
 MAX_SHOWN_CHARS = 20_000
 MAX_LINE_CHARS = 80
 LINE_INTERVAL_S = 1.0
+QUESTION_TIMEOUT_S = 300.0
 
 
 def _check_points(kind: BoardShape, points: tuple[float, ...]) -> None:
@@ -306,6 +313,9 @@ class SessionActor:
         # Plugin status lines waiting for their one-a-second slot, and when each last changed.
         self._lines_waiting: dict[str, str] = {}
         self._lines_at: dict[str, float] = {}
+        # Plugin questions waiting for an answer, by id, and the one each person has open.
+        self._questions: dict[str, PluginQuestion] = {}
+        self._question_of: dict[str, str] = {}
         self._briefing_at: dict[str, datetime] = {}
         self._team = team
         self._conflicts = conflicts
@@ -511,6 +521,11 @@ class SessionActor:
                 text = self._lines_waiting.pop(plugin, None)
                 if text is not None:
                     await self._plugin_line(plugin, text)
+            case PluginQuestion() as question:
+                self._open_question(question)
+            case PluginNotify(command=command, invoker_id=invoker_id, text=text):
+                notified = PluginNotified(command=command, text=" ".join(text.split())[:200])
+                self._publisher.deliver_to(invoker_id, self._redactor.scrub(notified))
             case PluginShow(command=command, invoker_id=invoker_id, title=title, text=text):
                 shown = PluginShown(
                     command=command,
@@ -631,6 +646,13 @@ class SessionActor:
                 await self._sync_skills(actor_id=participant.id)
             case CommandRun():
                 await self._run_command(participant, command)
+            case PluginAnswer(ask_id=ask_id, value=value):
+                question = self._questions.get(ask_id)
+                if question is None or question.invoker_id != participant.id:
+                    raise NotFound("no such question, it may have timed out")
+                if value is not None and question.kind != "input" and value not in question.options:
+                    raise Invalid(f"answer one of: {', '.join(question.options)}")
+                self._close_question(ask_id, value)
             case PluginsReload():
                 await self._load_plugins(
                     self._require_plugins(), actor_id=participant.id, force=True
@@ -1297,6 +1319,39 @@ class SessionActor:
             text = f"/{context.command} failed: {type(error).__name__}: {error}"
             self._inbox.put(PluginReply(context.command, context.author_id, text, ok=False))
 
+    def _open_question(self, question: PluginQuestion) -> None:
+        if not self._publisher.is_online(question.invoker_id):
+            question.answer.set_result(None)
+            return
+        if question.invoker_id in self._question_of:
+            question.answer.set_exception(
+                PluginError("the person already has a question from a plugin open")
+            )
+            return
+        ask_id = self._ids.new("pq_")
+        self._questions[ask_id] = question
+        self._question_of[question.invoker_id] = ask_id
+        asked = PluginAsked(
+            ask_id=ask_id,
+            command=question.command,
+            kind=AskKind(question.kind),
+            title=question.title.strip()[:300] or f"/{question.command}",
+            options=question.options,
+            default=question.default[:4000],
+        )
+        self._publisher.deliver_to(question.invoker_id, self._redactor.scrub(asked))
+        asyncio.get_running_loop().call_later(
+            QUESTION_TIMEOUT_S, self._close_question, ask_id, None
+        )
+
+    def _close_question(self, ask_id: str, value: str | None) -> None:
+        question = self._questions.pop(ask_id, None)
+        if question is None:
+            return
+        self._question_of.pop(question.invoker_id, None)
+        if not question.answer.done():
+            question.answer.set_result(value)
+
     async def _plugin_line(self, plugin: str, text: str) -> None:
         line = " ".join(text.split())[:MAX_LINE_CHARS]
         if plugin in self._lines_waiting:
@@ -1545,6 +1600,8 @@ class SessionActor:
         if participant_id is None or self._publisher.is_online(participant_id):
             return
         await self._set_typing(participant_id, typing=False)
+        if participant_id in self._question_of:
+            self._close_question(self._question_of[participant_id], None)
         await self._set_selection(participant_id, SelectionSet(selection=None))
         await self._set_cursor(participant_id, CursorSet(cursor=None))
         if participant_id in self._state.participants:

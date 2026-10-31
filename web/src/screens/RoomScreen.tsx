@@ -7,7 +7,7 @@ import { QuoteButton } from "../components/QuoteButton";
 import { SelectionLayer, type Selector } from "../components/SelectionLayer";
 import { Feed } from "../components/feed/Feed";
 import { Inbox } from "../components/inbox/Inbox";
-import { inboxItems } from "../components/inbox/items";
+import { askItems, inboxItems } from "../components/inbox/items";
 import { InviteDialog } from "../components/InviteDialog";
 import { Sidebar } from "../components/side/Sidebar";
 import { TopBar } from "../components/TopBar";
@@ -39,7 +39,10 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   const me = projection.me;
   const pluginCommands = useMemo(() => pluginHints(state.commands), [state.commands]);
   const isHost = me?.role === "host";
-  const items = useMemo(() => (isHost ? inboxItems(state) : []), [isHost, state.approvals, state.proposals, state.join_requests]);
+  const items = useMemo(
+    () => [...askItems(session.asks), ...(isHost ? inboxItems(state) : [])],
+    [session.asks, isHost, state.approvals, state.proposals, state.join_requests],
+  );
   const [editing, setEditing] = useState<ProposalView | null>(null);
   const [panel, setPanel] = useState(false);
   const { toast, flash } = useToast();
@@ -233,7 +236,7 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
             </button>
           ) : null}
           {connection === "offline" ? <div className="banner warn">The connection dropped. Reconnecting…</div> : null}
-          <Inbox items={items} state={state} send={send} onEdit={setEditing} />
+          <Inbox items={items} state={state} send={send} onEdit={setEditing} answer={session.answer} />
           <div className={styles.presence}>
             {typers.length > 0 ? (
               <span>

@@ -54,6 +54,10 @@ The handler gets a context:
 | `await ctx.reply(text)` | posts a reply the whole room sees |
 | `await ctx.prompt(text, follow_up=False, display=None)` | sends a prompt to the agent as the person who ran the command |
 | `await ctx.show(title, text)` | opens a window only the person who ran the command sees; nothing is logged |
+| `await ctx.confirm(title)` | asks the person who ran it yes or no; closing or five minutes without an answer is `False` |
+| `await ctx.select(title, options)` | lets them pick one of up to 20 options; `None` if they close it |
+| `await ctx.input(title, default="")` | lets them type a line; `None` if they close it |
+| `await ctx.notify(text)` | a short toast only they see |
 | `await ctx.ask(question, history=True, model="fast")` | asks the session's model one question outside the conversation and returns the answer |
 | `await ctx.run(*argv, timeout_s=120)` | runs a program in the workspace without a shell and returns its output; a non-zero exit raises |
 
@@ -65,6 +69,21 @@ async def btw(ctx):
     answer = await ctx.ask(ctx.args)
     await ctx.show("btw", answer)
 ```
+
+Asking before acting:
+
+```python
+@plural.command("deploy", host_only=True)
+async def deploy(ctx):
+    target = await ctx.select("where to?", ["staging", "prod"])
+    if target is None or not await ctx.confirm(f"deploy to {target}?"):
+        return
+    await ctx.notify("deploying")
+    await ctx.reply(await ctx.run("./deploy.sh", target))
+```
+
+A question goes only to the person who ran the command: the terminal opens it under the composer (esc
+closes it), the web client puts it first in the inbox. One question is open per person at a time.
 
 `ctx.ask` sees the conversation so far, cannot call tools, and adds nothing to the history; its tokens
 count as session usage.

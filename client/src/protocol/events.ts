@@ -80,6 +80,11 @@ export type BriefingSharing = "off" | "ask" | "team";
 export type DequeueReason = "delivered" | "cancelled" | "dropped";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AskKind".
+ */
+export type AskKind = "confirm" | "select" | "input";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "Delivery".
  */
 export type Delivery = "now" | "steer" | "follow_up";
@@ -162,6 +167,8 @@ export interface EventsSchema {
     | BoardMoved
     | AttachmentData
     | PluginShown
+    | PluginAsked
+    | PluginNotified
     | BoardErased
     | BoardCleared
     | ChatPosted
@@ -623,6 +630,32 @@ export interface PluginShown {
   text: string;
   title: string;
   type: "plugin.shown";
+}
+/**
+ * A plugin command asks whoever ran it a question. Only they get it; it is not logged.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginAsked".
+ */
+export interface PluginAsked {
+  ask_id: string;
+  command: string;
+  default: string;
+  kind: AskKind;
+  options: string[];
+  title: string;
+  type: "plugin.asked";
+}
+/**
+ * A short toast from a plugin command for the person who ran it.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginNotified".
+ */
+export interface PluginNotified {
+  command: string;
+  text: string;
+  type: "plugin.notified";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -1274,6 +1307,8 @@ export interface EventRecord {
     | BoardMoved
     | AttachmentData
     | PluginShown
+    | PluginAsked
+    | PluginNotified
     | BoardErased
     | BoardCleared
     | ChatPosted

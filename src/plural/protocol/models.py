@@ -259,6 +259,12 @@ class PluginView(Model):
     error: str | None = None
 
 
+class AskKind(StrEnum):
+    CONFIRM = "confirm"
+    SELECT = "select"
+    INPUT = "input"
+
+
 class PluginLine(Model):
     """A short status line a plugin keeps in the side panel, such as "tests ✓"."""
 
