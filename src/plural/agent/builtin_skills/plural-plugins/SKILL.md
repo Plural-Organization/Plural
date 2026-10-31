@@ -115,6 +115,9 @@ returns `plural.deny(reason)`, `plural.ask(reason)` or nothing. There is no allo
 ("never push to main", "ask before touching migrations/"), not to skip approvals. Keep it fast: after 5
 seconds, or if it raises, the call needs the host's approval.
 
+`@plural.on("session_start")` gets `(session, ctx)` (`session.room`, `session.workspace`) after the
+plugins load, at start and on every reload.
+
 `@plural.on("before_run")` gets `(prompt, ctx)` (`prompt.text`, `prompt.author_id`, `prompt.role`) when
 a run starts and returns text the agent reads as a note right before the prompt, or nothing. 5 seconds,
 8,000 characters across plugins. Use it for facts the agent should not have to look up: branch, failing

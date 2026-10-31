@@ -33,8 +33,10 @@ and the system prompt and tool list stay fixed for the length of a run so the pr
   - Plan mode and policy denials are evaluated as today; a hook never sees a call to make it pass.
 - **Hooks are bounded.** `tool_call` and `before_run` have 5 seconds, `session_start` and `run_end` 120. A
   `tool_call` hook that raises or times out counts as `ask` with "plugin X failed", so a broken guard
-  slows the host down instead of opening the gate. Other hooks that fail are logged and listed under the
-  plugin in `/plugins`; the run goes on.
+  slows the host down instead of opening the gate. A `before_run` hook that fails adds nothing; a
+  `session_start` or `run_end` hook that fails is reported to the room. The run goes on either way.
+- **`before_run` runs in the run's task**, between `run.started` and the first request, so a slow hook
+  never holds up the room. It fires when a run starts, not for a prompt steered into a running one.
 - **`before_run` text is context, not instructions from a person.** It goes to the agent as a notes turn
   with source `plugin:<name>` right before the prompt, never into the system prompt. It is recorded as a
   durable event so a restored or exported session shows what the agent saw, and the room sees a collapsed

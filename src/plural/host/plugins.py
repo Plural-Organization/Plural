@@ -240,6 +240,14 @@ class Verdict:
 
 
 @dataclass(frozen=True, slots=True)
+class SessionInfo:
+    """The session a session_start hook starts in."""
+
+    room: str
+    workspace: Path
+
+
+@dataclass(frozen=True, slots=True)
 class PromptInfo:
     """The prompt a run starts with, as a before_run hook sees it."""
 
@@ -581,12 +589,19 @@ class PluginHost:
                 room -= len(added[-1][1])
         return added
 
+    async def session_started(self, room: str) -> None:
+        """Run every session_start hook after the plugins load, at start and on reload."""
+        await self._each("session_start", SessionInfo(room=room, workspace=self.workspace))
+
     async def run_ended(self, run: RunInfo) -> None:
         """Run every run_end hook in turn; one that fails is reported and the rest still run."""
-        for hook in self.hooks("run_end"):
-            context = self._context(hook.plugin, can_prompt=True)
+        await self._each("run_end", run, can_prompt=True)
+
+    async def _each(self, event: str, info: object, *, can_prompt: bool = False) -> None:
+        for hook in self.hooks(event):
+            context = self._context(hook.plugin, can_prompt=can_prompt)
             try:
-                await asyncio.wait_for(hook.handler(run, context), HOOK_TIMEOUT_S)
+                await asyncio.wait_for(hook.handler(info, context), HOOK_TIMEOUT_S)
             except Exception as error:
                 log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
                 problem = (
@@ -594,7 +609,7 @@ class PluginHost:
                     if isinstance(error, TimeoutError)
                     else _describe(error)
                 )
-                text = f"the run_end hook failed: {problem}"
+                text = f"the {event} hook failed: {problem}"
                 self._inbox.put(PluginReply(hook.plugin, HOST_PARTICIPANT_ID, text, ok=False))
 
     async def guard_tool(self, call: ToolCallView, provenance: Provenance) -> Verdict | None:

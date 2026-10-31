@@ -145,6 +145,20 @@ Any deny wins. There is no allow: a call the policy refuses, or one plan mode fo
 hook. A hook gets 5 seconds; one that raises or takes longer counts as `ask`, so a broken guard makes the
 host ask rather than let a call through. `ctx.reply(text)` and `ctx.run(*argv)` work as in commands.
 
+### When the plugins load
+
+A `session_start` hook runs after the plugins load: when the host starts and after every
+`/plugins reload`, `new` or `rm`. It gets `session.room` and `session.workspace`, and `ctx.reply` and
+`ctx.run` work. Use it to check the environment or set the first status line:
+
+```python
+@plural.on("session_start")
+async def ready(session, ctx):
+    plural.status("watching tests")
+```
+
+It has 120 seconds; if it fails the room sees why.
+
 ### Before a run
 
 A `before_run` hook can hand the agent context just before a run starts, such as the branch or the tests

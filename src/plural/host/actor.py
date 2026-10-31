@@ -411,8 +411,7 @@ class SessionActor:
         await self._sync_mcp()
         await self._sync_agents()
         if self._plugins is not None:
-            await asyncio.to_thread(self._plugins.load)
-            await self._sync_plugins()
+            await self._load_plugins(self._plugins)
 
     async def run(self) -> None:
         sweeper = asyncio.create_task(self._sweep_team_loop()) if self._team else None
@@ -633,24 +632,23 @@ class SessionActor:
             case CommandRun():
                 await self._run_command(participant, command)
             case PluginsReload():
-                await asyncio.to_thread(self._require_plugins().load)
-                await self._sync_plugins(actor_id=participant.id, force=True)
+                await self._load_plugins(
+                    self._require_plugins(), actor_id=participant.id, force=True
+                )
             case PluginsCreate():
                 plugins = self._require_plugins()
                 try:
                     plugins.create(command.name)
                 except PluginError as error:
                     raise Conflict(str(error)) from None
-                await asyncio.to_thread(plugins.load)
-                await self._sync_plugins(actor_id=participant.id)
+                await self._load_plugins(plugins, actor_id=participant.id)
             case PluginsRemove():
                 plugins = self._require_plugins()
                 try:
                     plugins.remove(command.name)
                 except PluginError as error:
                     raise NotFound(str(error)) from None
-                await asyncio.to_thread(plugins.load)
-                await self._sync_plugins(actor_id=participant.id)
+                await self._load_plugins(plugins, actor_id=participant.id)
             case TypingSet():
                 await self._set_typing(participant.id, typing=command.typing)
             case SelectionSet():
@@ -1254,6 +1252,14 @@ class SessionActor:
         if self._plugins is None:
             raise Conflict("plugins are not available on this host")
         return self._plugins
+
+    async def _load_plugins(
+        self, plugins: PluginHost, *, actor_id: str | None = None, force: bool = False
+    ) -> None:
+        await asyncio.to_thread(plugins.load)
+        await self._sync_plugins(actor_id=actor_id, force=force)
+        if plugins.hooks("session_start"):
+            self._background(plugins.session_started(self._publisher.room))
 
     async def _sync_plugins(self, *, actor_id: str | None = None, force: bool = False) -> None:
         if self._plugins is None:

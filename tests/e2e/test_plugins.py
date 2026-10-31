@@ -383,3 +383,27 @@ async def test_a_before_run_hook_gives_the_agent_context_without_tainting_the_ru
         context = next(i for i, text in enumerate(contents) if "branch feat/x" in text)
         assert "git plugin" in contents[context]
         assert "write a" in contents[context + 1]
+
+
+STARTUP = """
+def setup(plural):
+    @plural.on("session_start")
+    async def ready(session, ctx):
+        plural.status(f"ready in {session.workspace.name}")
+        await ctx.reply(f"started in {session.room[:2]}")
+"""
+
+
+async def test_session_start_hooks_run_at_start_and_on_reload(tmp_path: Path) -> None:
+    install(tmp_path, "boot", STARTUP)
+    async with running_session(tmp_path, relayed=False, provider=FakeProvider()) as session:
+        owner = await session.owner()
+        await asyncio.sleep(0.2)
+        lines = owner.client.projection.state.plugin_lines
+        assert [(line.plugin, line.text) for line in lines] == [("boot", "ready in ws")]
+        before = [e for e in owner.events if isinstance(e, CommandReplied)]
+        await owner.client.send(PluginsReload())
+        await owner.next(PluginsChanged)
+        await asyncio.sleep(0.2)
+        after = [e for e in owner.events if isinstance(e, CommandReplied)]
+        assert [(e.command, e.text) for e in after[len(before) :]] == [("boot", "started in r_")]
