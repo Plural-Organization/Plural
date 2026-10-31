@@ -15,13 +15,13 @@ const card = (owner: string, status: SessionCard["status"] = "idle", branch: str
   updated_at: "2026-10-29T12:00:00Z",
 });
 
-const team = (...sessions: SessionCard[]): TeamView => ({ name: "Backend", me: "m_vlad", sessions, error: null });
+const team = (...sessions: SessionCard[]): TeamView => ({ name: "Backend", me: "m_vlad", member: "vlad", sessions, error: null });
 
 describe("the list of spaces", () => {
   test("starts with my own session and then the team's, each with where and what", () => {
     const rows = buildSpaces({ home: "api", team: team(card("alia", "running", "feat/x", 2), card("bek", "waiting")), visits: [], active: OWN, summaries: {} });
     expect(rows.map((row) => [row.id, row.title, row.detail, row.status, row.viewers, row.active])).toEqual([
-      [OWN, "you", "api", "idle", 0, true],
+      [OWN, "vlad", "api", "idle", 0, true],
       ["r_alia", "alia", "plural · feat/x", "running", 2, false],
       ["r_bek", "bek", "plural · main", "waiting", 0, false],
     ]);

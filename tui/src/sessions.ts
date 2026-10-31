@@ -9,6 +9,7 @@ export interface SessionInfo {
   title: string;
   workspace: string | null;
   host_name: string | null;
+  team?: string | null;
   created_at: string;
   updated_at: string;
   prompts: number;

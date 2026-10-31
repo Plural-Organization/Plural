@@ -128,6 +128,7 @@ export async function fetchSessions(team: Team, fetcher: typeof fetch = fetch): 
 export interface TeamView {
   name: string;
   me: string;
+  member: string;
   sessions: SessionCard[];
   error: string | null;
 }
@@ -143,7 +144,7 @@ export class TeamWatcher {
     private readonly fetcher: typeof fetch = fetch,
     private readonly everyMs = 5000,
   ) {
-    this.current = { name: team.profile.team_name, me: team.profile.member.id, sessions: [], error: null };
+    this.current = { name: team.profile.team_name, me: team.profile.member.id, member: team.profile.member.name, sessions: [], error: null };
   }
 
   get view(): TeamView {

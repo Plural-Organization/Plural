@@ -155,6 +155,9 @@ async def test_a_running_host_shows_its_session_and_who_watches(
     )
     ensure_ready(settings, vlad.store)
     host = await build_host(settings, provider=FakeProvider([reply("ok")]))
+    profile = vlad.store.load()
+    assert profile is not None
+    assert await host.store.meta("team") == profile.team_name
     serving = asyncio.create_task(host.serve())
     presence = asyncio.create_task(TeamPresence(host, settings, vlad.store).run())
     session = Session(host=host, watchers=[], relay=relay)

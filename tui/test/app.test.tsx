@@ -79,14 +79,15 @@ describe("App", () => {
       { width: 160, height: 36 },
     );
     open.push(setup);
-    const text = await frame(setup, "team link:");
-    expect(text).toContain('room link: plural join "wss://calm.example.dev/r_1?invite=x"');
+    const text = await frame(setup, "plural team join tm-abcde-fghj2");
+    expect(text).toMatch(/room\s+plural join "wss:\/\/calm\.example\.dev\/r_1\?invite=x"/);
+    expect(text).toMatch(/team\s+plural team join/);
     expect(text).toContain("plural team join tm-abcde-fghj2 --relay wss://calm.example.dev");
   });
 
   test("a session that is not a team host has no team link", async () => {
-    const text = await frame(await mount(session()), "room link:");
-    expect(text).not.toContain("team link:");
+    const text = await frame(await mount(session()), "plural join");
+    expect(text).not.toMatch(/team\s+plural team join/);
   });
 
   test("the splash draws the logo, then opens the session once it is joined", async () => {
@@ -328,7 +329,7 @@ describe("App", () => {
     fake.emit({ type: "tool.started", run_id: "r", call });
     fake.emit({ type: "tool.output", call_id: "d1", chunk: "explore on the fast model\n· grep verify_token\n" });
     const live = await frame(setup, "· grep verify_token");
-    expect(live).toContain("Agent explore: where are tokens checked?");
+    expect(live).toContain("Agent(explore: where are tokens checked?)");
     fake.emit({
       type: "tool.ended",
       run_id: "r",
@@ -523,7 +524,7 @@ describe("App", () => {
     const text = await frame(setup, "two");
     expect(text).toContain("Title");
     expect(text).toContain("First bold paragraph.");
-    expect(text.match(/● plural/g)?.length).toBe(1);
+    expect(text.match(/⏺ /g)?.length).toBe(1);
   });
 
   test("a run shows a working line instead of an empty reply", async () => {
@@ -533,7 +534,7 @@ describe("App", () => {
     fake.emit({ type: "message.started", run_id: "r", message_id: "m1" });
     const text = await frame(setup, "thinking…");
     expect(text).toContain("esc to interrupt");
-    expect(text).not.toContain("● plural");
+    expect(text).not.toContain("⏺");
   });
 
   test("shift+tab cycles the permission mode and the line under the composer follows it", async () => {
@@ -684,11 +685,11 @@ describe("App", () => {
 
   test("the buttons in the panel and the top bar open the settings with the mouse", async () => {
     const setup = await mount(session());
-    const text = await frame(setup, "⚙  settings");
+    const text = await frame(setup, "menu");
     const lines = text.split("\n");
-    const row = lines.findIndex((line) => line.includes("⚙  settings"));
-    const column = (lines[row] ?? "").indexOf("⚙");
-    await setup.mockMouse.click(column + 2, row);
+    const row = lines.findIndex((line) => line.includes("menu") && line.indexOf("menu") > 90);
+    const column = (lines[row] ?? "").indexOf("menu");
+    await setup.mockMouse.click(column + 1, row);
     await frame(setup, "○ Appearance");
     await setup.mockInput.pressEscape();
     await tick(100);
@@ -837,12 +838,12 @@ describe("App", () => {
     const setup = await mount(fake);
     runTool(fake, { id: "t1", name: "bash", risk: "exec", subject: "pytest -q", args: {} }, "a\nb\nc\n[exit 0]");
     const collapsed = await frame(setup, "pytest -q");
-    expect(collapsed).toContain("▸ ✓ Bash pytest -q · 3 lines");
+    expect(collapsed).toContain("⏺ Bash(pytest -q) · 3 lines");
     expect(collapsed).not.toContain("$ pytest -q");
 
     await setup.mockInput.pressKey("o", { ctrl: true });
     const open = await frame(setup, "$ pytest -q");
-    expect(open).toContain("▾ ✓ Bash");
+    expect(open).toContain("⎿ $ pytest -q");
     expect(open).toContain("c");
     await setup.mockInput.pressKey("o", { ctrl: true });
     await tick(100);
@@ -861,15 +862,16 @@ describe("App", () => {
     await setup.mockMouse.click((lines[row] ?? "").indexOf("Bash"), row);
     const open = await frame(setup, "$ echo second");
     expect(open).not.toContain("$ echo first");
-    expect(open).toContain("▾ ✓ Bash echo second");
-    expect(open).toContain("▸ ✓ Bash echo first");
+    expect(open).toContain("⎿ $ echo second");
+    expect(open).toContain("⏺ Bash(echo first)");
+    expect(open).not.toContain("$ echo first");
   });
 
   test("a failing command shows how it failed on its one line", async () => {
     const fake = session();
     const setup = await mount(fake);
     runTool(fake, { id: "t1", name: "bash", risk: "exec", subject: "pytest", args: {} }, "FAILED test_x\n[exit 1]", false);
-    expect(await frame(setup, "exit 1")).toContain("✗ Bash pytest · exit 1");
+    expect(await frame(setup, "exit 1")).toContain("⏺ Bash(pytest) · exit 1");
   });
 
   test("a running command keeps output inside its expandable details", async () => {
@@ -889,7 +891,7 @@ describe("App", () => {
     const fake = session();
     const setup = await mount(fake);
     runTool(fake, { id: "t1", name: "edit", risk: "write", subject: "calc.py", args: {} }, "edited", true, DIFF);
-    expect(await frame(setup, "+1 −1")).toContain("✓ Edit calc.py · +1 −1");
+    expect(await frame(setup, "+1 −1")).toContain("⏺ Edit(calc.py) · +1 −1");
     await setup.mockInput.pressKey("o", { ctrl: true });
     const open = await frame(setup, "return a + b");
     expect(open).toMatch(/1\s+def add\(a, b\):/);
@@ -902,6 +904,6 @@ describe("App", () => {
     const setup = await mount(fake);
     runTool(fake, { id: "t1", name: "edit", risk: "write", subject: "calc.py", args: {} }, "edited", true, "@@ -1,9 +1,9 @@\n-a\n+b");
     await setup.mockInput.pressKey("o", { ctrl: true });
-    expect(await frame(setup, "Edit calc.py")).toContain("+1 −1");
+    expect(await frame(setup, "Edit(calc.py)")).toContain("+1 −1");
   });
 });

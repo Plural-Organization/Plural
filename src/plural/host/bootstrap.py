@@ -56,7 +56,7 @@ from plural.host.publisher import Publisher
 from plural.host.repo import git_branch
 from plural.host.routing import build_helper
 from plural.host.system import SystemClock, UlidGenerator
-from plural.host.team import DirectoryClient, TeamStore
+from plural.host.team import DirectoryClient, TeamProfile, TeamStore
 from plural.host.team_admission import TeamAdmission
 from plural.host.transport.base import HostTransport
 from plural.host.transport.direct import DirectTransport
@@ -133,10 +133,15 @@ def build_web_search(
 
 
 async def remember_session(
-    store: SqliteEventStore, workspace: Path, settings: HostSettings, now: datetime
+    store: SqliteEventStore,
+    workspace: Path,
+    settings: HostSettings,
+    now: datetime,
+    team: str | None = None,
 ) -> None:
     await store.set_meta("workspace", str(workspace))
     await store.set_meta("host_name", settings.host_name)
+    await store.set_meta("team", team or "")
     if await store.meta("created_at") is None:
         await store.set_meta("created_at", now.isoformat())
     if settings.title:
@@ -152,7 +157,10 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     signer = TokenSigner(await asyncio.to_thread(load_or_create_host_key, state_dir / "host_key"))
     store = await SqliteEventStore.open(state_dir / "sessions" / f"{room}.db")
     workspace = await asyncio.to_thread(Workspace.at, settings.workspace)
-    await remember_session(store, workspace.root, settings, clock.now())
+    profile = await _team_profile(settings) if settings.team else None
+    await remember_session(
+        store, workspace.root, settings, clock.now(), profile.team_name if profile else None
+    )
     inbox = Inbox()
     skills = SkillLibrary(project=workspace.root, home=Path.home())
     tools = builtin_tools()
@@ -244,7 +252,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         token_ttl_s=settings.token_ttl_s,
     )
     host = Participant(id=HOST_PARTICIPANT_ID, name=settings.host_name, role=Role.HOST)
-    team = await _team_admission(settings, store, clock, room) if settings.team else None
+    team = await _team_admission(settings, store, clock, room, profile) if profile else None
     board = ConflictBoard(workspace.root) if settings.team else None
     agent_run = AgentRun(loop, inbox)
     redactor = Redactor.from_environment(
@@ -323,14 +331,21 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     )
 
 
-async def _team_admission(
-    settings: HostSettings, store: SqliteEventStore, clock: SystemClock, room: str
-) -> TeamAdmission:
-    team_store = TeamStore(settings.state_dir)
-    profile = await asyncio.to_thread(team_store.load)
+async def _team_profile(settings: HostSettings) -> TeamProfile:
+    profile = await asyncio.to_thread(TeamStore(settings.state_dir).load)
     if profile is None:
         raise ConfigError("this session is for a team, but you are not in one")
-    directory = DirectoryClient(team_store, profile)
+    return profile
+
+
+async def _team_admission(
+    settings: HostSettings,
+    store: SqliteEventStore,
+    clock: SystemClock,
+    room: str,
+    profile: TeamProfile,
+) -> TeamAdmission:
+    directory = DirectoryClient(TeamStore(settings.state_dir), profile)
     banned: list[str] = []
     try:
         stored: object = json.loads(await store.meta("team_banned") or "[]")

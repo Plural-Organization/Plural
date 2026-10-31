@@ -37,6 +37,7 @@ async def make(
     prompts: tuple[str, ...] = (),
     workspace: Path | None = None,
     title: str | None = None,
+    team: str | None = None,
 ) -> None:
     store = await SqliteEventStore.open(session_path(data_dir, room))
     for index, who in enumerate((HOST, ALIA)):
@@ -61,7 +62,7 @@ async def make(
         )
     if workspace is not None:
         settings = HostSettings(workspace=workspace, data_dir=data_dir, title=title)
-        await remember_session(store, workspace, settings, when)
+        await remember_session(store, workspace, settings, when, team)
     await store.close()
 
 
@@ -84,6 +85,21 @@ def test_a_session_is_listed_with_its_first_prompt_as_the_title(data: Path, tmp_
     assert (info.prompts, info.people) == (2, 2)
     assert info.created_at == START
     assert info.updated_at == START + timedelta(minutes=2)
+
+
+def test_a_session_says_which_team_it_was_shown_to(data: Path, tmp_path: Path) -> None:
+    folder = tmp_path / "app"
+    folder.mkdir()
+    build(data, "r_TEAM01", when=START, prompts=("a",), workspace=folder, team="Backend")
+    build(data, "r_SOLO02", when=START, prompts=("b",), workspace=folder)
+    found = {info.room: info.team for info in list_sessions(data)}
+    assert found == {"r_TEAM01": "Backend", "r_SOLO02": None}
+    listing = runner.invoke(app, ["sessions"])
+    assert "team Backend" in listing.output
+    assert json.loads(runner.invoke(app, ["sessions", "--json"]).output)[0]["team"] in {
+        "Backend",
+        None,
+    }
 
 
 def test_a_chosen_title_wins_and_a_long_prompt_is_cut(data: Path, tmp_path: Path) -> None:
