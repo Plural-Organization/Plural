@@ -350,8 +350,23 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
     if (team === null) {
       throw new UsageError("you are not in a team: plural team create or plural team join");
     }
+    const selected = planAgent(loadSettings(), loadKeys(), options);
+    if (selected.problem !== null) {
+      throw new UsageError(`could not use the model: ${selected.problem}`);
+    }
     const handle = await startLocalHost(["--team", "--workspace", folder, "--relay", team.profile.relay, "--name", name]);
-    shared.push(handle);
+    try {
+      if (selected.choice !== null) {
+        const applied = await handle.control.configure(toConfig(selected.choice, selected.key));
+        if (!applied.ok) {
+          throw new UsageError(`could not use the model: ${applied.error ?? "unknown error"}`);
+        }
+      }
+      shared.push(handle);
+    } catch (error) {
+      await handle.stop();
+      throw error;
+    }
   };
   const quit = new Promise<void>((resolve) => {
     createRoot(renderer).render(

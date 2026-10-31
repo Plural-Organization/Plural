@@ -41,11 +41,11 @@ export function ShareDialog({ width, height, teamName, folders, onShare, onClose
     }
   };
 
-  const confirm = (): void => {
+  const confirm = (accepted = agree): void => {
     if (busy || chosen === null) {
       return;
     }
-    if (!agree) {
+    if (!accepted) {
       onClose();
       return;
     }
@@ -79,7 +79,7 @@ export function ShareDialog({ width, height, teamName, folders, onShare, onClose
         setAgree((current) => !current);
       } else if (key.name === "y") {
         setAgree(true);
-        confirm();
+        confirm(true);
       } else if (key.name === "n") {
         onClose();
       } else if (key.name === "return") {
@@ -184,7 +184,7 @@ export function ShareDialog({ width, height, teamName, folders, onShare, onClose
                 paddingX={2}
                 onMouseDown={() => {
                   setAgree(true);
-                  confirm();
+                  confirm(true);
                 }}
               >
                 <text fg={agree ? theme.ok : theme.dim}>{busy ? "starting…" : "I agree · share (y)"}</text>

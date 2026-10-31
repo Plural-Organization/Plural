@@ -1228,7 +1228,7 @@ export function App({
   };
 
   useKeyboard((key) => {
-    if (!active || dialog || intro || extrasPrompt !== null || setup !== null) {
+    if (!active || dialog || inviteOpen || shareOpen || intro || extrasPrompt !== null || setup !== null) {
       return;
     }
     if (key.meta && (key.name === "left" || key.name === "right") && onCycleSpace) {
