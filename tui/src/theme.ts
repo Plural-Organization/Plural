@@ -3,6 +3,8 @@ export type ThemeName = "tokyo" | "light" | "gruvbox" | "mono";
 export interface Palette {
   bg: string;
   panel: string;
+  bubble: string;
+  you: string;
   line: string;
   text: string;
   dim: string;
@@ -23,6 +25,8 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
     colors: {
       bg: "#16161e",
       panel: "#1a1b26",
+      bubble: "#202335",
+      you: "#1e2d4d",
       line: "#2a2e42",
       text: "#c0caf5",
       dim: "#565f89",
@@ -42,6 +46,8 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
     colors: {
       bg: "#fafafc",
       panel: "#eeeff4",
+      bubble: "#e8e9f1",
+      you: "#d9e4ff",
       line: "#d3d5e0",
       text: "#2a2b3d",
       dim: "#82859b",
@@ -61,6 +67,8 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
     colors: {
       bg: "#1d2021",
       panel: "#282828",
+      bubble: "#32302f",
+      you: "#2b3a3a",
       line: "#3c3836",
       text: "#ebdbb2",
       dim: "#928374",
@@ -80,6 +88,8 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
     colors: {
       bg: "#000000",
       panel: "#111111",
+      bubble: "#1c1c1c",
+      you: "#1f1f4a",
       line: "#4a4a4a",
       text: "#ffffff",
       dim: "#a0a0a0",

@@ -11,7 +11,7 @@ export type Tone = "dim" | "ok" | "warn" | "danger" | "accent";
 export type ToolStatus = "running" | "ok" | "failed";
 
 export type FeedItem =
-  | { kind: "banner"; id: string; room: string; version: string; guestLink: string | null }
+  | { kind: "banner"; id: string; room: string; version: string; guestLink: string | null; teamLink?: string | null }
   | {
       kind: "user";
       id: string;

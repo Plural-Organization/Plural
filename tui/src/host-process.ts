@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess, type StdioOptions } from "node:child_process";
 import { createServer } from "node:net";
 import { ControlLink, type AgentControl } from "./control";
 
@@ -18,9 +18,9 @@ export function hostCommand(): string[] {
   return configured ? configured.split(/\s+/).filter(Boolean) : ["plural-host"];
 }
 
-export function runHostCommand(args: string[]): ChildProcess {
+export function runHostCommand(args: string[], stdio: StdioOptions = "inherit"): ChildProcess {
   const [command, ...prefix] = hostCommand();
-  return spawn(command as string, [...prefix, ...args], { stdio: "inherit" });
+  return spawn(command as string, [...prefix, ...args], { stdio });
 }
 
 export function freePort(): Promise<number> {

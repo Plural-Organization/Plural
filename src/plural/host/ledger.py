@@ -1,10 +1,7 @@
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 
-from plural.protocol.events import Event, ToolEnded, ToolStarted
-from plural.protocol.models import ToolCallView
-from plural.security.secrets import is_denied_path
-
-WRITING_TOOLS = frozenset({"edit", "write"})
+from plural.host.writes import WriteTracker
+from plural.protocol.events import Event
 
 
 def diff_stats(diff: str) -> tuple[int, int]:
@@ -19,35 +16,17 @@ def diff_stats(diff: str) -> tuple[int, int]:
 
 class ChangeLedger:
     def __init__(self, workspace: Path) -> None:
-        self._root = workspace.resolve()
-        self._started: dict[str, ToolCallView] = {}
+        self._writes = WriteTracker(workspace)
         self._changes: dict[str, tuple[int, int]] = {}
 
     def observe(self, event: Event) -> None:
-        if isinstance(event, ToolStarted) and event.call.name in WRITING_TOOLS:
-            self._started[event.call.id] = event.call
-        elif isinstance(event, ToolEnded):
-            call = self._started.pop(event.call_id, None)
-            if call is None or not event.ok:
-                return
-            path = self._relative(call.subject)
-            if path is None:
-                return
-            added, removed = diff_stats(event.diff or "")
-            before_added, before_removed = self._changes.get(path, (0, 0))
-            self._changes[path] = (before_added + added, before_removed + removed)
+        done = self._writes.observe(event)
+        if done is None:
+            return
+        added, removed = diff_stats(done.diff or "")
+        before_added, before_removed = self._changes.get(done.path, (0, 0))
+        self._changes[done.path] = (before_added + added, before_removed + removed)
 
     def files(self) -> tuple[tuple[str, int, int], ...]:
         ranked = sorted(self._changes.items(), key=lambda item: (-sum(item[1]), item[0]))
         return tuple((path, added, removed) for path, (added, removed) in ranked)
-
-    def _relative(self, subject: str) -> str | None:
-        path = Path(subject)
-        resolved = (path if path.is_absolute() else self._root / path).resolve()
-        try:
-            inside = resolved.relative_to(self._root)
-        except ValueError:
-            return None
-        if is_denied_path(PurePosixPath(*inside.parts)):
-            return None
-        return str(PurePosixPath(*inside.parts))

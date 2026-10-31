@@ -277,8 +277,9 @@ def sessions(
         console.print("No sessions yet.")
         return
     for info in found:
+        where = f"[cyan]team {escape(info.team)}[/cyan]  " if info.team else ""
         console.print(
-            f"[bold]{escape(info.title)}[/bold]  "
+            f"[bold]{escape(info.title)}[/bold]  {where}"
             f"[dim]{info.prompts} prompts · {ago(info.updated_at)}[/dim]",
             soft_wrap=True,
         )

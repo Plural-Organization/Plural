@@ -27,7 +27,10 @@ export interface SpaceRow {
 export const OWN = "own";
 
 function statusOf(phase: Phase | undefined, fallback: SessionStatus): SessionStatus {
-  return phase === "waiting" || phase === "running" ? phase : phase === undefined ? fallback : "idle";
+  if (phase === undefined) {
+    return fallback;
+  }
+  return phase === "waiting" || phase === "running" ? phase : "idle";
 }
 
 function where(card: SessionCard): string {
@@ -58,7 +61,7 @@ export function buildSpaces({ home, team, visits, active, summaries }: SpacesInp
   const rows: SpaceRow[] = [
     {
       id: OWN,
-      title: "you",
+      title: team?.member ?? "you",
       detail: mine ? where(mine) : home,
       status: statusOf(summaries[OWN]?.phase, mine?.status ?? "idle"),
       viewers: mine?.viewers ?? 0,

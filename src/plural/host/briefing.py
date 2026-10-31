@@ -1,6 +1,5 @@
 import asyncio
 from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -12,12 +11,6 @@ from plural.protocol.commands import MAX_BRIEFING_CHARS
 
 MAX_FILES = 30
 TRUNCATED = "\n[the briefing was cut here to fit the size limit]"
-
-
-@dataclass(frozen=True, slots=True)
-class Written:
-    text: str
-    narrative: str
 
 
 def facts_block(
@@ -86,7 +79,7 @@ class BriefingService:
         as_of: int,
         when: datetime,
         cancel: asyncio.Event,
-    ) -> Written:
+    ) -> str:
         earlier = self._earlier.get(requester) if update else None
         narrative = self._scrub(
             await self._agent.brief(briefing_prompt(focus, earlier), cancel=cancel)
@@ -103,9 +96,6 @@ class BriefingService:
             files=self._ledger.files(),
         )
         self._earlier[requester] = narrative
-        return Written(
-            text=self._scrub(
-                assemble(self._owner, when, as_of, facts, narrative, update=earlier is not None)
-            ),
-            narrative=narrative,
+        return self._scrub(
+            assemble(self._owner, when, as_of, facts, narrative, update=earlier is not None)
         )

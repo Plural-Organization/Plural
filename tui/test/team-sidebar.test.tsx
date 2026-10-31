@@ -231,3 +231,42 @@ test("a file my teammate changed too is flagged on my row, theirs and in the con
   await frame(setup, "on feat/x");
   await frame(setup, "Same file");
 });
+
+test("the panel is two halves: the people and the agent above the line, the team's rooms below it", async () => {
+  const { setup, watcher } = await mount([card("vlad", "idle", "main"), card("alia", "running", "feat/login", 2)]);
+  const lines = (await frame(setup, "alia")).split("\n");
+  const at = (needle: string): number => lines.findIndex((line) => line.includes(needle) && line.indexOf(needle) > 90);
+  const divider = lines.findIndex((line) => line.slice(90).includes("─".repeat(25)));
+  expect(at("PARTICIPANTS")).toBeLessThan(at("anthropic · opus 5.5"));
+  expect(at("anthropic · opus 5.5")).toBeLessThan(at("+ invite"));
+  expect(at("+ invite")).toBeLessThan(divider);
+  expect(divider).toBeLessThan(at("SPACES · BACKEND"));
+  expect(lines[at("+ invite")]).toMatch(/\+ invite\s+menu/);
+  const mine = lines.findIndex((line, index) => index > divider && line.includes("vlad (you)"));
+  expect(lines[mine + 1]).toContain("plural · main");
+  expect(lines.findIndex((line, index) => index > divider && line.includes("alia") && line.includes("running"))).toBeGreaterThan(mine);
+  watcher.stop();
+});
+
+test("the invite button makes the room link, and the menu button opens the settings", async () => {
+  const { setup, own, watcher } = await mount([card("alia", "idle", "main")]);
+  const lines = (await frame(setup, "+ invite")).split("\n");
+  const row = lines.findIndex((line) => line.includes("+ invite"));
+  await setup.mockMouse.click(lines[row]!.indexOf("+ invite") + 2, row);
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  expect(own.commands).toEqual([{ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true }]);
+  await setup.mockMouse.click(lines[row]!.indexOf("menu") + 1, row);
+  await frame(setup, "○ Appearance");
+  watcher.stop();
+});
+
+test("a guest has no invite button", async () => {
+  const fake = new FakeSession();
+  const me = { id: "p_alia", name: "alia", role: "participant", connected: true } as const;
+  fake.emit({ type: "session.welcome", room: "r_1", token: "t", participant: me, base_policy: [], agent: "openai · gpt-5" });
+  fake.emit({ type: "session.snapshot", state: { ...fake.projection.state, participants: { [me.id]: me } }, streaming: {}, typing: [] });
+  const setup = await testRender(<Shell team={null} home="api" connect={() => fake} app={{ client: fake, room: "r_1", version: "0.2.5", guestLink: null, settings: { ...DEFAULT_SETTINGS, setupSeen: true }, onQuit: () => undefined }} />, { width: 120, height: 40 });
+  open.push(setup);
+  const text = await frame(setup, "menu");
+  expect(text).not.toContain("+ invite");
+});

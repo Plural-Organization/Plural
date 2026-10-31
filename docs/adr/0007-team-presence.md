@@ -1,6 +1,6 @@
 # ADR 0007: team presence
 
-Status: proposed.
+Status: accepted.
 
 ## Context
 

@@ -91,6 +91,9 @@ def create(
     name: Annotated[str, typer.Argument(help="Team name.")],
     relay: RelayOption = None,
     as_name: NameOption = None,
+    as_json: Annotated[
+        bool, typer.Option("--json", help="Print the team and the invite code as JSON.")
+    ] = False,
 ) -> None:
     store = _store()
     _already(store)
@@ -99,8 +102,15 @@ def create(
 
     profile = _run(create_team(address, store.identity(), team=name, member=member))
     store.save(profile)
-    console.print(f"Team [bold]{escape(profile.team_name)}[/bold] created, you are {member}.")
     invite = _run(DirectoryClient(store, profile).invite())
+    if as_json:
+        typer.echo(
+            json.dumps(
+                {"team": profile.team_name, "relay": address, "code": invite.code, "minutes": 60}
+            )
+        )
+        return
+    console.print(f"Team [bold]{escape(profile.team_name)}[/bold] created, you are {member}.")
     _share(address, invite.code, 60)
 
 

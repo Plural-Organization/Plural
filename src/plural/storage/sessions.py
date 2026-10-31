@@ -17,6 +17,7 @@ class SessionInfo(BaseModel):
     title: str
     workspace: str | None
     host_name: str | None
+    team: str | None = None
     created_at: datetime
     updated_at: datetime
     prompts: int
@@ -71,6 +72,7 @@ def read_session(path: Path) -> SessionInfo | None:
             title=title or "(no prompt yet)",
             workspace=meta.get("workspace"),
             host_name=meta.get("host_name"),
+            team=meta.get("team") or None,
             created_at=datetime.fromisoformat(meta.get("created_at") or first),
             updated_at=datetime.fromisoformat(last),
             prompts=int(prompts) if isinstance(prompts, int) else 0,

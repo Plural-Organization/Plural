@@ -38,21 +38,23 @@ export interface ModelState {
   canConfigure: boolean;
   oauthLoggedIn?: boolean;
   update?: UpdateState | null;
+  version?: string;
 }
 
-export function updateRows(update: UpdateState | null | undefined): Row[] {
+export function updateRows(update: UpdateState | null | undefined, current?: string): Row[] {
   if (!update) {
     return [];
   }
+  const jump = current ? `${current} → ${update.version}` : update.version;
   const hint = {
-    ready: "install it now, then start plural again",
+    ready: "enter installs it in the background, then start plural again to use it",
     installing: "downloading and installing, this takes a moment",
     installed: "installed, quit and start plural again to use it",
     failed: `the installer exited with code ${update.phase === "failed" ? update.code : 0}, press enter to try again or run plural update`,
   }[update.phase];
   const label = {
-    ready: `● update ready · ${update.version}`,
-    installing: `↻ updating to ${update.version}…`,
+    ready: `● New version available: ${jump} · install now`,
+    installing: `↻ updating ${jump}…`,
     installed: `✓ ${update.version} installed · restart plural`,
     failed: `✕ update to ${update.version} failed`,
   }[update.phase];
@@ -302,7 +304,7 @@ export function appearanceRows(state: ModelState): Row[] {
 }
 
 export function rowsFor(tab: Tab, state: ModelState): Row[] {
-  return [...updateRows(state.update), ...tabRows(tab, state)];
+  return [...updateRows(state.update, state.version), ...tabRows(tab, state)];
 }
 
 function tabRows(tab: Tab, state: ModelState): Row[] {

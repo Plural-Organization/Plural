@@ -100,6 +100,30 @@ describe("the list of sessions", () => {
   });
 });
 
+describe("the watcher while a request is slow", () => {
+  test("a second refresh does not start another request", async () => {
+    let calls = 0;
+    let release: () => void = () => undefined;
+    const fetcher = (async () => {
+      calls += 1;
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      return new Response(JSON.stringify({ sessions: [] }));
+    }) as unknown as typeof fetch;
+    const watcher = new TeamWatcher(team(), fetcher, 60_000);
+    const first = watcher.refresh();
+    await watcher.refresh();
+    expect(calls).toBe(1);
+    release();
+    await first;
+    const next = watcher.refresh();
+    expect(calls).toBe(2);
+    release();
+    await next;
+  });
+});
+
 describe("joining a teammate's session", () => {
   test("the proof is signed exactly the way the Python host checks it, and names the address it is for", () => {
     const proof = teamProof(team(), "wss://relay.example.com/r_live", "r_live", 1700000000, "abcd1234");

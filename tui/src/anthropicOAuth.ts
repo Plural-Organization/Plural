@@ -1,9 +1,9 @@
 import { createHash, randomBytes } from "node:crypto";
 import { spawn } from "node:child_process";
 import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { copyToClipboard } from "./lib/clipboard";
+import { dataDir } from "./paths";
 
 const CLIENT_ID = "9d1c250a-e61b-44d9-88ed-5944d1962f5e";
 const REDIRECT_URI = "https://platform.claude.com/oauth/code/callback";
@@ -22,7 +22,7 @@ export interface OAuthAttempt {
 }
 
 export function oauthPath(environment: Record<string, string | undefined> = process.env): string {
-  return join(environment["PLURAL_DATA_DIR"] ?? join(homedir(), ".plural"), "anthropic-oauth.json");
+  return join(dataDir(environment), "anthropic-oauth.json");
 }
 
 export function beginOAuth(): OAuthAttempt {

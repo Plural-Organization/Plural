@@ -9,24 +9,38 @@ import { theme } from "./theme";
 
 export type Pick = { kind: "host"; info: SessionInfo } | { kind: "joined"; room: JoinedRoom };
 
+type Tone = "team" | "private" | "joined";
+
 interface Row {
   pick: Pick;
   title: string;
+  badge: string;
+  tone: Tone;
   detail: string;
   search: string;
 }
+
+const TONES: Record<Tone, () => string> = {
+  team: () => theme.accent,
+  private: () => theme.dim,
+  joined: () => theme.info,
+};
 
 export function rowsFor(sessions: SessionInfo[], joined: JoinedRoom[], folder: string | null, now: Date = new Date()): Row[] {
   const hosted = folder === null ? sessions : inFolder(sessions, folder);
   const rows: Row[] = hosted.map((info) => ({
     pick: { kind: "host", info },
     title: info.title,
+    badge: info.team ? `◆ team ${info.team}` : "○ private",
+    tone: info.team ? "team" : "private",
     detail: `${ago(info.updated_at, now)} · ${info.prompts} prompts${info.people > 1 ? ` · ${info.people} people` : ""}${info.workspace ? ` · ${info.workspace}` : ""}`,
-    search: `${info.title} ${info.room} ${info.workspace ?? ""}`.toLowerCase(),
+    search: `${info.title} ${info.room} ${info.workspace ?? ""} ${info.team ?? "private"}`.toLowerCase(),
   }));
   const guest: Row[] = joined.map((room) => ({
     pick: { kind: "joined", room },
     title: `joined room ${room.room.slice(0, 14)}…`,
+    badge: "↗ joined",
+    tone: "joined",
     detail: `${ago(room.savedAt, now)} · as ${room.name} · another person's session`,
     search: `${room.room} joined ${room.url}`.toLowerCase(),
   }));
@@ -97,10 +111,13 @@ export function Picker({ sessions, joined, folder, onChoose }: PickerProps) {
           const on = first + position === chosen;
           return (
             <box key={`${row.pick.kind}-${row.title}-${first + position}`} flexDirection="column" marginBottom={1}>
-              <text fg={on ? theme.accent : theme.text}>
-                {on ? "› " : "  "}
-                <b>{truncate(row.title, width - 8)}</b>
-              </text>
+              <box flexDirection="row" justifyContent="space-between">
+                <text fg={on ? theme.accent : theme.text}>
+                  {on ? "› " : "  "}
+                  <b>{truncate(row.title, Math.max(8, width - 10 - row.badge.length))}</b>
+                </text>
+                <text fg={TONES[row.tone]()}>{row.badge}</text>
+              </box>
               <text fg={theme.dim}>{`    ${truncate(row.detail, width - 8)}`}</text>
             </box>
           );

@@ -2,7 +2,8 @@ import asyncio
 import hashlib
 import os
 import secrets
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -24,6 +25,7 @@ from plural.protocol.team import (
 from plural.security.identity import (
     CertSigner,
     CertVerifier,
+    ExpiredCertificate,
     InvalidCertificate,
     InvalidRequest,
     member_id,
@@ -31,6 +33,7 @@ from plural.security.identity import (
     valid_public_key,
     verify_request,
 )
+from plural.security.replay import ReplayGuard
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS teams (
@@ -120,8 +123,18 @@ class TeamDirectory:
         self._db = db
         self._limits = limits or TeamLimits()
         self._clock = clock
-        self._seen: dict[str, datetime] = {}
+        self._replays = ReplayGuard(timedelta(seconds=2 * self._limits.clock_skew_s))
         self._writing = asyncio.Lock()
+
+    @asynccontextmanager
+    async def _transaction(self) -> AsyncGenerator[None]:
+        async with self._writing:
+            try:
+                yield
+            except BaseException:
+                await self._db.rollback()
+                raise
+            await self._db.commit()
 
     @classmethod
     async def open(
@@ -150,7 +163,7 @@ class TeamDirectory:
         return int(row[0]) if row else 0
 
     async def create(self, request: TeamCreate) -> TeamGrant:
-        async with self._writing:
+        async with self._transaction():
             if not valid_public_key(request.key):
                 raise DirectoryError(400, "that is not a public key")
             if await self.team_count() >= self._limits.max_teams:
@@ -163,21 +176,14 @@ class TeamDirectory:
                 " VALUES (?, ?, ?, ?, ?)",
                 (team_id, request.name, signer.to_pem(), signer.public_b64, _iso(now)),
             )
-            try:
-                member = await self._add_member(
-                    team_id, request.member_name, request.key, TeamRole.OWNER, now
-                )
-                code, expires = await self._new_invite(team_id, member.id, now)
-            except DirectoryError:
-                await self._db.rollback()
-                raise
-            await self._db.commit()
-            return self._grant(
-                team_id, request.name, signer, member, request.key, now, code, expires
+            member = await self._add_member(
+                team_id, request.member_name, request.key, TeamRole.OWNER, now
             )
+            code, expires = await self._new_invite(team_id, member.id, now)
+        return self._grant(team_id, request.name, signer, member, request.key, now, code, expires)
 
     async def join(self, request: TeamJoin) -> TeamGrant:
-        async with self._writing:
+        async with self._transaction():
             if not valid_public_key(request.key):
                 raise DirectoryError(400, "that is not a public key")
             now = self._clock()
@@ -202,16 +208,11 @@ class TeamDirectory:
             )
             if claimed.rowcount != 1:
                 raise DirectoryError(403, "that invite code is wrong, used or expired")
-            try:
-                member = await self._add_member(
-                    team_id, request.name, request.key, TeamRole.MEMBER, now
-                )
-            except DirectoryError:
-                await self._db.rollback()
-                raise
-            await self._db.commit()
-            signer = CertSigner.from_pem(row["signing_key"])
-            return self._grant(team_id, row["name"], signer, member, request.key, now)
+            member = await self._add_member(
+                team_id, request.name, request.key, TeamRole.MEMBER, now
+            )
+        signer = CertSigner.from_pem(row["signing_key"])
+        return self._grant(team_id, row["name"], signer, member, request.key, now)
 
     async def authenticate(
         self, team_id: str, header: str | None, method: str, path: str, body: bytes
@@ -230,11 +231,11 @@ class TeamDirectory:
         now = self._clock()
         try:
             claims = CertVerifier(team["public_key"]).verify(signed.certificate, now=now)
+        except ExpiredCertificate as error:
+            raise DirectoryError(
+                401, "your team certificate has expired, ask the owner for a new invite"
+            ) from error
         except InvalidCertificate as error:
-            if "expired" in str(error):
-                raise DirectoryError(
-                    401, "your team certificate has expired, ask the owner for a new invite"
-                ) from error
             raise denied from error
         if claims.team != team_id or not await self._is_member(team_id, claims):
             raise denied
@@ -242,11 +243,8 @@ class TeamDirectory:
             raise DirectoryError(401, "your clock is off by more than a minute")
         if not verify_request(signed, claims, method, path, body):
             raise denied
-        key = f"{claims.member}:{signed.nonce}"
-        self._forget_old(now)
-        if key in self._seen:
+        if not self._replays.fresh(f"{claims.member}:{signed.nonce}", now):
             raise DirectoryError(401, "this request was already used")
-        self._seen[key] = now
         return claims
 
     async def still_valid(self, claims: MemberClaims) -> bool:
@@ -257,6 +255,8 @@ class TeamDirectory:
             "SELECT name FROM teams WHERE id = ?", (claims.team,)
         ) as cursor:
             team = await cursor.fetchone()
+        if team is None:
+            raise DirectoryError(404, "this team is gone")
         async with self._db.execute(
             "SELECT id, name, key, role, joined_at FROM members WHERE team_id = ?"
             " ORDER BY (role = 'owner') DESC, joined_at, name",
@@ -265,21 +265,20 @@ class TeamDirectory:
             rows = await cursor.fetchall()
         return MemberList(
             team_id=claims.team,
-            team_name=team["name"] if team else "",
+            team_name=team["name"],
             members=tuple(_view(row) for row in rows),
         )
 
     async def invite(self, claims: MemberClaims) -> Invite:
-        async with self._writing:
+        async with self._transaction():
             self._owner_only(claims)
             if await self._member_count(claims.team) >= self._limits.max_members:
                 raise DirectoryError(409, "this team is full")
             code, expires = await self._new_invite(claims.team, claims.member, self._clock())
-            await self._db.commit()
-            return Invite(code=code, expires_at=expires)
+        return Invite(code=code, expires_at=expires)
 
     async def remove(self, claims: MemberClaims, target: str) -> MemberView:
-        async with self._writing:
+        async with self._transaction():
             async with self._db.execute(
                 "SELECT id, name, key, role, joined_at FROM members WHERE team_id = ?"
                 " AND (id = ? OR lower(name) = lower(?))",
@@ -296,14 +295,12 @@ class TeamDirectory:
             await self._db.execute(
                 "DELETE FROM members WHERE team_id = ? AND id = ?", (claims.team, view.id)
             )
-            await self._db.commit()
-            return view
+        return view
 
     async def disband(self, claims: MemberClaims) -> None:
-        async with self._writing:
+        async with self._transaction():
             self._owner_only(claims)
             await self._db.execute("DELETE FROM teams WHERE id = ?", (claims.team,))
-            await self._db.commit()
 
     async def renew(self, claims: MemberClaims) -> Renewed:
         async with self._db.execute(
@@ -321,11 +318,6 @@ class TeamDirectory:
     def _owner_only(self, claims: MemberClaims) -> None:
         if claims.role is not TeamRole.OWNER:
             raise DirectoryError(403, "only the team owner can do that")
-
-    def _forget_old(self, now: datetime) -> None:
-        horizon = now - timedelta(seconds=2 * self._limits.clock_skew_s)
-        for key in [key for key, seen in self._seen.items() if seen < horizon]:
-            del self._seen[key]
 
     async def _is_member(self, team_id: str, claims: MemberClaims) -> bool:
         async with self._db.execute(

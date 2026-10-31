@@ -1,5 +1,5 @@
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
@@ -40,11 +40,6 @@ class Presence:
         )
         self._entries[key] = _Entry(card, self._clock(), holder)
         return True
-
-    def touch(self, team: str, room: str) -> None:
-        entry = self._entries.get((team, room))
-        if entry is not None:
-            entry.seen = self._clock()
 
     def drop_held_by(self, holder: object) -> None:
         for key in [key for key, entry in self._entries.items() if entry.holder is holder]:
@@ -93,16 +88,20 @@ CONFLICT_WINDOW = timedelta(minutes=30)
 MAX_CONFLICT_PATHS = 10
 
 
+def _neighbours(card: SessionCard, others: Iterable[SessionCard]) -> Iterator[SessionCard]:
+    if card.repo_id is None:
+        return
+    for other in others:
+        if other.owner_id != card.owner_id and other.repo_id == card.repo_id:
+            yield other
+
+
 def conflicts_for(
     card: SessionCard, others: Iterable[SessionCard], now: datetime
 ) -> tuple[Conflict, ...]:
-    if card.repo_id is None:
-        return ()
     mine = {touch.path for touch in card.touching if now - touch.at <= CONFLICT_WINDOW}
     found: list[Conflict] = []
-    for other in others:
-        if other.owner_id == card.owner_id or other.repo_id != card.repo_id:
-            continue
+    for other in _neighbours(card, others):
         shared = {
             touch.path: touch.at
             for touch in other.touching
@@ -124,12 +123,8 @@ def conflicts_for(
 
 
 def peers_for(card: SessionCard, others: Iterable[SessionCard], now: datetime) -> tuple[Peer, ...]:
-    if card.repo_id is None:
-        return ()
     found: list[Peer] = []
-    for other in others:
-        if other.owner_id == card.owner_id or other.repo_id != card.repo_id:
-            continue
+    for other in _neighbours(card, others):
         touched = tuple(touch for touch in other.touching if now - touch.at <= CONFLICT_WINDOW)
         if touched:
             found.append(

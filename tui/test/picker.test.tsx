@@ -14,12 +14,12 @@ afterEach(() => {
 
 const NOW = new Date("2026-10-28T13:00:00Z");
 
-function info(room: string, title: string, workspace: string, updated: string, prompts = 3, people = 1): SessionInfo {
-  return { room, title, workspace, host_name: "vlad", created_at: updated, updated_at: updated, prompts, people };
+function info(room: string, title: string, workspace: string, updated: string, prompts = 3, people = 1, team: string | null = null): SessionInfo {
+  return { room, title, workspace, host_name: "vlad", team, created_at: updated, updated_at: updated, prompts, people };
 }
 
 const SESSIONS = [
-  info("r_01A", "fix the login bug", "/work/app", "2026-10-28T12:30:00Z", 4, 2),
+  info("r_01A", "fix the login bug", "/work/app", "2026-10-28T12:30:00Z", 4, 2, "Backend"),
   info("r_01B", "refactor auth", "/work/app", "2026-10-28T09:00:00Z"),
   info("r_01C", "billing report", "/work/shop", "2026-10-26T09:00:00Z"),
 ];
@@ -42,6 +42,26 @@ test("rows say how long ago, how many prompts and people and which folder", () =
   expect(rows[1]?.detail).toBe("4h ago · 3 prompts · /work/app");
   expect(rows[3]?.title).toContain("joined room r_01JOINEDROOM");
   expect(rows[3]?.detail).toContain("as alia");
+});
+
+test("every row says how the session was raised: in a team, private, or joined", async () => {
+  const rows = rowsFor(SESSIONS, JOINED, null, NOW);
+  expect(rows.map((row) => row.badge)).toEqual(["◆ team Backend", "○ private", "○ private", "↗ joined"]);
+  const { setup } = await mount();
+  const frame = setup.captureCharFrame();
+  expect(frame).toContain("◆ team Backend");
+  expect(frame).toContain("○ private");
+  expect(frame).toContain("↗ joined");
+});
+
+test("typing the team's name finds its sessions", async () => {
+  const { setup } = await mount();
+  await setup.mockInput.typeText("backend");
+  await tick();
+  await setup.renderOnce();
+  const frame = setup.captureCharFrame();
+  expect(frame).toContain("fix the login bug");
+  expect(frame).not.toContain("refactor auth");
 });
 
 test("the folder's sessions come first and the rooms I joined follow", async () => {

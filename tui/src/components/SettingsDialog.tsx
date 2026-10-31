@@ -65,6 +65,7 @@ export interface DialogProps {
   onAdmission?: (mode: "approve" | "open") => void;
   onCopyReply: () => void;
   update?: UpdateState | null;
+  version?: string;
   onUpdate?: () => void;
   onClose: () => void;
 }
@@ -97,6 +98,7 @@ export function SettingsDialog(props: DialogProps) {
     canConfigure: live.current.control !== null && live.current.role === "host",
     oauthLoggedIn: hasOAuth(),
     update: live.current.update,
+    version: live.current.version,
   });
   const rows = (): Row[] => rowsFor(local.current.tab, state());
   const set = (patch: Partial<Local>): void => {

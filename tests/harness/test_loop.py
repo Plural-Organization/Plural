@@ -98,9 +98,12 @@ async def test_guest_steer_taints_provenance(tmp_path: Path) -> None:
 
 async def test_cancel_settles_conversation(tmp_path: Path) -> None:
     provider = FakeProvider([use_tool("bash", command="make")])
-    loop = make_loop(tmp_path, provider, StubGate(block=True))
+    gate = StubGate(block=True)
+    loop = make_loop(tmp_path, provider, gate)
     task = asyncio.create_task(collect(loop, turn("go")))
-    await asyncio.sleep(0.05)
+    async with asyncio.timeout(10):
+        while not gate.seen:
+            await asyncio.sleep(0.01)
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task

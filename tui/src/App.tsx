@@ -59,6 +59,7 @@ export interface AppProps {
   room: string;
   version: string;
   guestLink: string | null;
+  teamLink?: string | null;
   settings?: Settings;
   onSettings?: (settings: Settings) => void;
   control?: AgentControl | null;
@@ -106,6 +107,7 @@ export function App({
   room,
   version,
   guestLink,
+  teamLink = null,
   settings: initialSettings,
   onSettings,
   control = null,
@@ -151,7 +153,7 @@ export function App({
       return next;
     });
   const { width, height } = useTerminalDimensions();
-  const initial = useMemo(() => withBanner(emptyFeed(), { kind: "banner", id: "banner", room, version, guestLink }), []);
+  const initial = useMemo(() => withBanner(emptyFeed(), { kind: "banner", id: "banner", room, version, guestLink, teamLink }), []);
   const [feed, setFeed] = useState<Feed>(initial);
   const feedRef = useRef(initial);
   const [connection, setConnection] = useState<ConnectionStatus>(client.status);
@@ -1352,7 +1354,7 @@ export function App({
   return (
     <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg} visible={active}>
       <box flexDirection="column" flexGrow={1} minWidth={0}>
-        <TopBar room={room} state={state} update={update} onSettings={() => setDialog(true)} />
+        <TopBar state={state} update={update} team={teamName ?? null} onSettings={() => setDialog(true)} />
         {viewing !== null ? (
           <box flexShrink={0} height={1} paddingX={2} backgroundColor={theme.panel}>
             <text fg={theme.info} wrapMode="none">
@@ -1394,9 +1396,7 @@ export function App({
                 flexDirection="column"
                 flexShrink={0}
                 paddingLeft={marked ? 0 : 1}
-                border={marked ? ["left"] : false}
-                borderStyle={active ? "heavy" : "single"}
-                borderColor={active ? theme.warn : theme.line}
+                {...(marked ? { border: ["left"] as ["left"], borderStyle: active ? ("heavy" as const) : ("single" as const), borderColor: active ? theme.warn : theme.line } : {})}
               >
                 <FeedItemView
                   item={item}
@@ -1509,11 +1509,12 @@ export function App({
           onAdmission={(mode) => send({ type: "link.set_admission", mode })}
           onCopyReply={copyReply}
           update={update}
+          version={version}
           onUpdate={() => void updater?.install()}
           onClose={closeSettings}
         />
       ) : null}
-      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} /> : null}
+      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} onInvite={() => send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true })} update={update} /> : null}
     </box>
   );
 }

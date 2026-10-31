@@ -1,6 +1,6 @@
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { dataDir } from "./paths";
 
 export interface JoinedRoom {
   room: string;
@@ -13,7 +13,7 @@ export interface JoinedRoom {
 const LIMIT = 20;
 
 export function joinedPath(environment: Record<string, string | undefined> = process.env): string {
-  return join(environment["PLURAL_DATA_DIR"] ?? join(homedir(), ".plural"), "joined.json");
+  return join(dataDir(environment), "joined.json");
 }
 
 export function loadJoined(path: string = joinedPath()): JoinedRoom[] {
