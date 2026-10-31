@@ -10,6 +10,7 @@ import { Inbox } from "../components/inbox/Inbox";
 import { inboxItems } from "../components/inbox/items";
 import { InviteDialog } from "../components/InviteDialog";
 import { Sidebar } from "../components/side/Sidebar";
+import { TeamPanel } from "../components/TeamPanel";
 import { TopBar } from "../components/TopBar";
 import { useAttachments } from "../hooks/useAttachments";
 import { useHotkeys } from "../hooks/useHotkeys";
@@ -19,6 +20,8 @@ import { useStickToBottom } from "../hooks/useStickToBottom";
 import { useSubmit } from "../hooks/useSubmit";
 import { useToast } from "../hooks/useToast";
 import { useTyping } from "../hooks/useTyping";
+import type { TeamState } from "../hooks/useTeam";
+import type { SessionCard, Team } from "../lib/team";
 import { activity } from "../lib/activity";
 import { canvasDocs } from "../lib/canvas";
 import { copyText } from "../lib/clipboard";
@@ -30,10 +33,14 @@ import styles from "./RoomScreen.module.css";
 interface RoomScreenProps {
   link: JoinLink;
   name: string;
+  // The team this room was opened through, if it was.
+  member: Team | null;
+  team: TeamState;
+  onWatch: (card: SessionCard, url: string) => void;
   onLeave: (reason: string | null) => void;
 }
-export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
-  const session = useSession(link, name, (reason) => onLeave(reason));
+export function RoomScreen({ link, name, member, team, onWatch, onLeave }: RoomScreenProps) {
+  const session = useSession(link, name, (reason) => onLeave(reason), member);
   const { projection, feed, connection, invite, send, sendPresence } = session;
   const state = projection.state;
   const me = projection.me;
@@ -297,6 +304,19 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
           open={panel}
           send={send}
           onInvite={(role) => send({ type: "invite.create", role, ttl_s: 3600, reusable: role === "participant" })}
+          team={
+            team.team === null ? null : (
+              <TeamPanel
+                state={team}
+                current={link.room}
+                onOpen={(card, url) => {
+                  session.close();
+                  onWatch(card, url);
+                }}
+                onNotice={flash}
+              />
+            )
+          }
         />
       )}
 

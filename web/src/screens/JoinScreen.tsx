@@ -3,23 +3,67 @@ import { parseLink, type JoinLink } from "@plural/client";
 import { Logo } from "../components/Logo";
 import { blockedByMixedContent, hostOf, unwrapLink } from "../lib/links";
 import { forgetRoom, linkOf, rememberName, savedName, savedRooms, type SavedRoom } from "../lib/saved";
+import { parseTeamInvite, type SessionCard } from "../lib/team";
+import { TeamPanel } from "../components/TeamPanel";
+import type { TeamState } from "../hooks/useTeam";
 import styles from "./JoinScreen.module.css";
 
 interface JoinScreenProps {
   notice: string | null;
+  team: TeamState;
   onJoin: (link: JoinLink, name: string) => void;
+  onWatch: (card: SessionCard, url: string) => void;
 }
+
+// A team member's name: what teammates see and @name uses.
+const MEMBER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$/;
 
 function initialLink(): string {
   return new URLSearchParams(window.location.search).get("join") ?? "";
 }
 
-export function JoinScreen({ notice, onJoin }: JoinScreenProps) {
+// A team invite link carries ?team=<code>&relay=<url>.
+function initialInvite(): string {
+  return parseTeamInvite(window.location.href) === null ? "" : window.location.href;
+}
+
+export function JoinScreen({ notice, team, onJoin, onWatch }: JoinScreenProps) {
   const [raw, setRaw] = useState(initialLink);
   const [name, setName] = useState(savedName);
   const [error, setError] = useState<string | null>(null);
   const [rooms, setRooms] = useState<SavedRoom[]>(savedRooms);
   const insecure = blockedByMixedContent(unwrapLink(raw), window.location.protocol);
+  const [teamInvite, setTeamInvite] = useState(initialInvite);
+  const [teamError, setTeamError] = useState<string | null>(null);
+  const [joiningTeam, setJoiningTeam] = useState(false);
+  const [teamNote, setTeamNote] = useState<string | null>(null);
+  const teamRelay = parseTeamInvite(teamInvite)?.relay ?? "";
+  const teamInsecure = blockedByMixedContent(teamRelay, window.location.protocol);
+
+  const joinTeam = (event: FormEvent) => {
+    event.preventDefault();
+    const invite = parseTeamInvite(teamInvite);
+    if (invite === null) {
+      setTeamError("Paste the command the owner shared, plural team join <code> --relay <url>, or their invite link.");
+      return;
+    }
+    const member = name.trim();
+    if (!MEMBER_NAME.test(member)) {
+      setTeamError("Your name in the team: 1 to 32 letters, digits, dots, dashes or underscores, starting with a letter or digit.");
+      return;
+    }
+    setJoiningTeam(true);
+    setTeamError(null);
+    team
+      .join(invite, member)
+      .then(() => {
+        rememberName(member);
+        setTeamInvite("");
+        window.history.replaceState(null, "", window.location.pathname);
+      })
+      .catch((problem: unknown) => setTeamError(problem instanceof Error ? problem.message : String(problem)))
+      .finally(() => setJoiningTeam(false));
+  };
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -97,6 +141,42 @@ export function JoinScreen({ notice, onJoin }: JoinScreenProps) {
             join
           </button>
         </form>
+
+        {team.team !== null ? (
+          <div>
+            <h2 className="label">your team</h2>
+            <TeamPanel state={team} onOpen={onWatch} onNotice={setTeamNote} />
+            {teamNote ? <p className="hint">{teamNote}</p> : null}
+          </div>
+        ) : team.loading ? null : (
+          <form className={styles.form} onSubmit={joinTeam}>
+            <label className="label" htmlFor="team-invite">
+              or join a team
+            </label>
+            <input
+              id="team-invite"
+              value={teamInvite}
+              onChange={(event) => {
+                setTeamInvite(event.target.value);
+                setTeamError(null);
+              }}
+              placeholder="plural team join tm-… --relay wss://…"
+              spellCheck={false}
+              autoComplete="off"
+            />
+            <p className="hint">
+              In a team you see everyone's shared sessions and open them without a room link. Your name above is your name in the team; it
+              must differ from the one you use in the terminal.
+            </p>
+            {teamInsecure ? (
+              <p className="hint warn">This page is served over https, so the browser cannot reach a team relay at ws://. The team needs a relay with wss://.</p>
+            ) : null}
+            {(teamError ?? team.error) ? <p className="hint danger">{teamError ?? team.error}</p> : null}
+            <button className="button" type="submit" disabled={joiningTeam}>
+              {joiningTeam ? "joining…" : "join the team"}
+            </button>
+          </form>
+        )}
 
         {rooms.length > 0 ? (
           <div>

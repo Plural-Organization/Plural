@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route, WebSocketRoute
@@ -53,6 +55,17 @@ def create_app(
                 await opened.close()
 
     return Starlette(
+        # The team directory answers browsers too. Requests are signed, never sent with cookies,
+        # so any page may ask.
+        middleware=[
+            Middleware(
+                CORSMiddleware,
+                allow_origins=["*"],
+                allow_methods=["GET", "POST", "DELETE"],
+                allow_headers=["authorization", "content-type"],
+                max_age=600,
+            )
+        ],
         routes=[
             Route("/healthz", healthz),
             Route("/metrics", metrics),

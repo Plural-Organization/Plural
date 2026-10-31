@@ -142,6 +142,10 @@ plural team status
 
 `create` prints an invite code that works once and for an hour; give it to a teammate, who runs `join` with the same relay. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
 
+### A team in the browser
+
+The web client joins a team too: paste the `plural team join …` command into *or join a team* on its first page, or open the invite link the owner made there (*invite to the team* in the side panel). The browser keeps a key of its own, so it is a member of its own with its own name, separate from your terminal. It lists the team's shared sessions, a click opens one as a viewer, and `/access` asks to write. A page served over https reaches only a relay and sessions at `wss://`.
+
 ### A team on your own machine, behind a tunnel
 
 With no server at hand, one command starts the relay with a team directory, opens a tunnel to it, creates the team on the tunnel's address and opens a session in that team:
