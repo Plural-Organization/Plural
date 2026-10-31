@@ -32,6 +32,7 @@ export const INSTALL_TIMEOUT_MS = 11 * 60_000;
 export class ControlLink implements AgentControl {
   private counter = 0;
   private readonly pending = new Map<string, (result: ControlResult) => void>();
+  private inventory: Promise<ControlResult> | null = null;
   private buffered = "";
 
   constructor(private readonly write: (line: string) => boolean) {}
@@ -61,12 +62,12 @@ export class ControlLink implements AgentControl {
   }
 
   async catalog(): Promise<Preset[]> {
-    const result = await this.request("catalog", null);
+    const result = await this.snapshot();
     return result.ok ? (result.presets ?? []) : [];
   }
 
   async extras(): Promise<ExtraStatus[]> {
-    const result = await this.request("catalog", null);
+    const result = await this.snapshot();
     return result.ok ? (result.extras ?? []) : [];
   }
 
@@ -75,12 +76,25 @@ export class ControlLink implements AgentControl {
   }
 
   async tools(): Promise<ToolStatus[]> {
-    const result = await this.request("catalog", null);
+    const result = await this.snapshot();
     return result.ok ? (result.tools ?? []) : [];
   }
 
   installTool(tool: string): Promise<ControlResult> {
     return this.request("install", null, { tool }, INSTALL_TIMEOUT_MS);
+  }
+
+  private snapshot(): Promise<ControlResult> {
+    if (this.inventory === null) {
+      const asked = this.request("catalog", null);
+      this.inventory = asked;
+      void asked.finally(() => {
+        if (this.inventory === asked) {
+          this.inventory = null;
+        }
+      });
+    }
+    return this.inventory;
   }
 
   private request(

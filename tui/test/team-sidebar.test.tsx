@@ -147,8 +147,8 @@ test("clicking a teammate opens their whole session beside mine, and clicking me
   await frame(setup, "my own marker");
 
   await clickRow(setup, "alia");
-  const visiting = await frame(setup, "viewing alia");
-  expect(visiting).toContain("alia's agent says hello");
+  await frame(setup, "viewing alia");
+  const visiting = await frame(setup, "alia's agent says hello");
   expect(visiting).not.toContain("my own marker");
   expect(connects).toEqual(["r_alia"]);
 

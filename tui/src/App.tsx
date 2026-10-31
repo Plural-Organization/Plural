@@ -90,6 +90,7 @@ export interface AppProps {
 type Focus = "composer" | "inbox" | "search";
 
 const GUARD_MS = 400;
+const FRAME_MS = 33;
 const MIN_WIDTH_FOR_PANEL = 90;
 const TYPING_REFRESH_MS = 3000;
 const TYPING_IDLE_MS = 2500;
@@ -208,9 +209,33 @@ export function App({
     setSettings(next);
     onSettings?.(next);
   };
+  const frames = useRef({ last: 0, timer: null as ReturnType<typeof setTimeout> | null });
+  const publish = (): void => {
+    const state = frames.current;
+    const wait = FRAME_MS - (Date.now() - state.last);
+    if (wait > 0) {
+      state.timer ??= setTimeout(publish, wait);
+      return;
+    }
+    if (state.timer !== null) {
+      clearTimeout(state.timer);
+      state.timer = null;
+    }
+    state.last = Date.now();
+    setFeed(feedRef.current);
+    bump();
+  };
+  useEffect(
+    () => () => {
+      if (frames.current.timer !== null) {
+        clearTimeout(frames.current.timer);
+      }
+    },
+    [],
+  );
   const commit = (next: Feed): void => {
     feedRef.current = next;
-    setFeed(next);
+    publish();
   };
   const notify = (tone: Tone, text: string): void => commit(withNotice(feedRef.current, tone, text));
   const showToast = (title: string, detail: string | null = null, tone: "ok" | "accent" = "ok", icon = "✓"): void => {
@@ -235,7 +260,7 @@ export function App({
           if (!(pending && event.type === "error")) {
             commit(absorb(feedRef.current, event, client.projection));
           }
-          bump();
+          publish();
           if (event.type === "chat.posted" && mentionsMe(event, client.projection.meId)) {
             const author = client.projection.state.participants[event.author_id];
             const who = author ? label(client.projection.state, author) : "someone";

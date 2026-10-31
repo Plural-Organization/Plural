@@ -280,9 +280,14 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   const { host, tunnel } = target;
   // The catalog lives on the host: ask it before resolving the saved model choice.
   if (host !== null) {
-    setPresets(await host.control.catalog());
-    setExtras(await host.control.extras());
-    setTools((await host.control.tools?.()) ?? []);
+    const [presets, sdks, installable] = await Promise.all([
+      host.control.catalog(),
+      host.control.extras(),
+      host.control.tools?.() ?? Promise.resolve([]),
+    ]);
+    setPresets(presets);
+    setExtras(sdks);
+    setTools(installable);
   }
   let plan;
   try {
