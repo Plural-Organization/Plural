@@ -1,5 +1,6 @@
 import type { ExtraStatus } from "./extras";
 import type { AgentConfig, Preset } from "./presets";
+import type { ToolStatus } from "./tools";
 
 export interface ControlResult {
   ok: boolean;
@@ -8,6 +9,7 @@ export interface ControlResult {
   error?: string;
   presets?: Preset[];
   extras?: ExtraStatus[];
+  tools?: ToolStatus[];
 }
 
 export interface AgentControl {
@@ -19,6 +21,8 @@ export interface AgentControl {
   extras(): Promise<ExtraStatus[]>;
   /** Install one of them into the host's environment; this can take minutes on a slow network. */
   install(extra: string): Promise<ControlResult>;
+  tools?(): Promise<ToolStatus[]>;
+  installTool?(tool: string): Promise<ControlResult>;
 }
 
 export const CONTROL_TIMEOUT_MS = 60_000;
@@ -70,6 +74,15 @@ export class ControlLink implements AgentControl {
     return this.request("install", null, { extra }, INSTALL_TIMEOUT_MS);
   }
 
+  async tools(): Promise<ToolStatus[]> {
+    const result = await this.request("catalog", null);
+    return result.ok ? (result.tools ?? []) : [];
+  }
+
+  installTool(tool: string): Promise<ControlResult> {
+    return this.request("install", null, { tool }, INSTALL_TIMEOUT_MS);
+  }
+
   private request(
     type: "configure" | "test" | "catalog" | "install",
     config: AgentConfig | null,
@@ -118,6 +131,7 @@ export class ControlLink implements AgentControl {
       ...(typeof message["error"] === "string" ? { error: message["error"] } : {}),
       ...(Array.isArray(message["presets"]) ? { presets: message["presets"] as Preset[] } : {}),
       ...(Array.isArray(message["extras"]) ? { extras: message["extras"] as ExtraStatus[] } : {}),
+      ...(Array.isArray(message["tools"]) ? { tools: message["tools"] as ToolStatus[] } : {}),
     });
   }
 }

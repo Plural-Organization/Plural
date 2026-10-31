@@ -29,7 +29,8 @@ import { SearchBar } from "./components/SearchBar";
 import { Inbox, inboxItems, type InboxItem } from "./components/Inbox";
 import { ExtrasDialog } from "./components/ExtrasDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
-import { missingExtras, type ExtraStatus } from "./extras";
+import { SetupDialog } from "./components/SetupDialog";
+import { type ExtraStatus } from "./extras";
 import { Splash } from "./components/Splash";
 import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { preview, Toast, TOAST_MS, type ToastMessage } from "./components/Toast";
@@ -47,7 +48,7 @@ import { explain } from "./failure";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
-import type { PresetId } from "./presets";
+import type { AgentChoice, PresetId } from "./presets";
 import type { Tab } from "./settingsModel";
 import { copyToClipboard, IMAGE_LIMIT_BYTES, pasteImage } from "./lib/clipboard";
 import { createSyntaxStyle } from "./syntax";
@@ -140,7 +141,7 @@ export function App({
   setTheme(settings.theme);
   const syntax = useMemo(() => createSyntaxStyle(renderer), [renderer, settings.theme]);
   const [dialog, setDialog] = useState(false);
-  const [welcome, setWelcome] = useState(false);
+  const [setup, setSetup] = useState<{ first: boolean; back: boolean } | null>(null);
   const [extrasPrompt, setExtrasPrompt] = useState<{ preselect: string | null; reason: string | null; back: boolean } | null>(null);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [allOpen, setAllOpen] = useState(false);
@@ -483,28 +484,43 @@ export function App({
   }, [approvals]);
 
   const closeSettings = (): void => {
-    if (welcome) {
-      change({ ...settings, setupSeen: true });
-      setWelcome(false);
-    }
     setDialog(false);
   };
 
-  const showWelcome = (): void => {
+  useEffect(() => {
     if (control && isHost && !settings.setupSeen && settings.agent.preset === "demo" && state.agent.startsWith("demo")) {
-      setWelcome(true);
+      setSetup({ first: true, back: false });
+    }
+  }, [isHost, state.agent]);
+
+  const chooseProvider = (): void => {
+    setDialog(false);
+    setSetup({ first: false, back: true });
+  };
+
+  const closeSetup = (): void => {
+    const back = setup?.back ?? false;
+    setSetup(null);
+    if (!settings.setupSeen) {
+      change({ ...settings, setupSeen: true });
+    }
+    if (back) {
       setDialog(true);
     }
   };
 
-  // The first run offers the optional model SDKs before the welcome settings, once.
-  useEffect(() => {
-    if (control && isHost && !settings.extrasSeen && missingExtras().length > 0) {
-      setExtrasPrompt({ preselect: null, reason: null, back: false });
-      return;
-    }
-    showWelcome();
-  }, [isHost, state.agent]);
+  const applyProvider = (choice: AgentChoice, key: string, label: string): void => {
+    change({ ...settings, agent: choice, agentChoices: { ...settings.agentChoices, [choice.preset]: choice }, setupSeen: true });
+    onKeys?.(choice.preset, key, settings.rememberKey);
+    setSetup(null);
+    notify("ok", `Now using ${label}`);
+  };
+
+  const finishInSettings = (preset: string): void => {
+    change({ ...settings, agent: { preset, model: "", baseUrl: "", contextWindow: "" }, setupSeen: true });
+    setSetup(null);
+    setDialog(true);
+  };
 
   const askForExtra = (extra: ExtraStatus): void => {
     setDialog(false);
@@ -522,8 +538,6 @@ export function App({
       if (installed) {
         notify("ok", "SDK installed: choose Save and use");
       }
-    } else {
-      showWelcome();
     }
   };
 
@@ -1180,7 +1194,7 @@ export function App({
   };
 
   useKeyboard((key) => {
-    if (!active || dialog || intro || extrasPrompt !== null) {
+    if (!active || dialog || intro || extrasPrompt !== null || setup !== null) {
       return;
     }
     if (key.meta && (key.name === "left" || key.name === "right") && onCycleSpace) {
@@ -1430,7 +1444,7 @@ export function App({
           <SearchBar query={query} count={hits.length} position={hitIndex} preview={matched} onQuery={search} onStep={step} onClose={closeSearch} />
         ) : null}
         <Composer
-          focused={active && focus === "composer" && !dialog && extrasPrompt === null}
+          focused={active && focus === "composer" && !dialog && extrasPrompt === null && setup === null}
           disabled={disabled}
           placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
           remember={!asking?.secret}
@@ -1492,7 +1506,7 @@ export function App({
           control={isHost ? control : null}
           keys={keys}
           initialTab="model"
-          welcome={welcome}
+          onChooseProvider={chooseProvider}
           onSettings={change}
           onKeys={(preset, key, remember) => onKeys?.(preset, key, remember)}
           onMode={(mode) => send({ type: "session.set_prompt_mode", mode })}
@@ -1505,6 +1519,20 @@ export function App({
           version={version}
           onUpdate={() => void updater?.install()}
           onClose={closeSettings}
+        />
+      ) : null}
+      {setup !== null && control ? (
+        <SetupDialog
+          width={width}
+          height={height}
+          control={control}
+          settings={settings}
+          keys={keys}
+          first={setup.first}
+          current={settings.agent.preset}
+          onApplied={applyProvider}
+          onSettings={finishInSettings}
+          onClose={closeSetup}
         />
       ) : null}
       {extrasPrompt !== null && control ? (

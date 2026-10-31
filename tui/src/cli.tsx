@@ -8,6 +8,7 @@ import { basename } from "node:path";
 import { Shell } from "./Shell";
 import { loadKeys, saveKeys } from "./credentials";
 import { setExtras } from "./extras";
+import { setTools } from "./tools";
 import { setPresets, toConfig } from "./presets";
 import { loadSettings, saveSettings } from "./settings";
 import { freePort, HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
@@ -281,6 +282,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   if (host !== null) {
     setPresets(await host.control.catalog());
     setExtras(await host.control.extras());
+    setTools((await host.control.tools?.()) ?? []);
   }
   let plan;
   try {

@@ -79,6 +79,7 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Uses the installed Claude Code CLI; sign in with claude auth login",
     "connection": "oauth",
+    "tool": "claude",
     "keyEnv": [],
     "extra": null
   },
@@ -100,6 +101,7 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Streams replies from Codex CLI and keeps one session for this room",
     "connection": "oauth",
+    "tool": "codex",
     "keyEnv": [],
     "extra": null
   },
