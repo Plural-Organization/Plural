@@ -111,11 +111,10 @@ describe("Model tab", () => {
     const { setup, hooks } = await mount(session(), control);
     await setup.mockInput.pressKey("F2");
     const first = await frame(setup, "Demo agent");
-    expect(first).toContain("Local / demo");
+    expect(first).toContain("AGENT");
 
     await setup.mockInput.pressArrow("right");
-    await setup.mockInput.pressArrow("right");
-    await down(setup, 1);
+
     const anthropic = await frame(setup, "Anthropic");
     expect(anthropic).toContain("API key");
     expect(anthropic).toContain("not set");
@@ -160,9 +159,8 @@ describe("Model tab", () => {
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
     await setup.mockInput.pressArrow("right");
-    await setup.mockInput.pressArrow("right");
     await frame(setup, "Anthropic");
-    await down(setup, 1);
+
     await down(setup, 5);
     await setup.mockInput.pressEnter();
     await frame(setup, "Anthropic needs an API key");
@@ -175,8 +173,7 @@ describe("Model tab", () => {
     const { setup, hooks } = await mount(session(), control);
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
-    await down(setup, 1);
-    await setup.mockInput.pressArrow("right");
+    for (let step = 0; step < 12; step += 1) await setup.mockInput.pressArrow("right");
     await frame(setup, "Ollama (local)");
     await down(setup, 5);
     await setup.mockInput.pressEnter();
@@ -206,16 +203,12 @@ describe("Model tab", () => {
     const { setup } = await mount(session(), control);
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
-    await setup.mockInput.pressArrow("right");
-    await setup.mockInput.pressArrow("right");
-    await down(setup, 1);
-    await frame(setup, "Anthropic");
-    for (let step = 0; step < 8; step += 1) await setup.mockInput.pressArrow("right");
+    for (let step = 0; step < 13; step += 1) await setup.mockInput.pressArrow("right");
     await frame(setup, "Custom endpoint");
     const custom = await frame(setup, "Endpoint");
     expect(custom).toContain("Context window");
     expect(custom).toContain("API key (optional)");
-    await down(setup, 5);
+    await down(setup, 6);
     await setup.mockInput.pressEnter();
     await setup.mockInput.typeText("4096");
     await setup.mockInput.pressEnter();
@@ -228,8 +221,7 @@ describe("Model tab", () => {
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
     await setup.mockInput.pressArrow("right");
-    await setup.mockInput.pressArrow("right");
-    await down(setup, 1);
+
     await frame(setup, "Anthropic");
     await down(setup, 1);
     await setup.mockInput.pressEnter();
@@ -244,11 +236,7 @@ describe("Model tab", () => {
     const { setup } = await mount(session(), control);
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
-    await setup.mockInput.pressArrow("right");
-    await setup.mockInput.pressArrow("right");
-    await down(setup, 1);
-    await setup.mockInput.pressArrow("right");
-    await setup.mockInput.pressArrow("right");
+    for (let step = 0; step < 6; step += 1) await setup.mockInput.pressArrow("right");
     const gemini = await frame(setup, "Google Gemini");
     expect(gemini).toContain("0000");
     expect(gemini).toContain("gemini-2.5-pro");
@@ -262,8 +250,7 @@ describe("Model tab", () => {
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Demo agent");
     await setup.mockInput.pressArrow("right");
-    await setup.mockInput.pressArrow("right");
-    await down(setup, 1);
+
     await frame(setup, "Anthropic");
     await down(setup, 1);
     await setup.mockInput.pressEnter();
@@ -282,14 +269,14 @@ describe("Model tab", () => {
     await frame(setup, "The agent belongs to the host");
   });
 
-  test("the first launch opens the settings with a welcome and closing it is remembered", async () => {
+  test("the first launch opens the provider setup and skipping it is remembered", async () => {
     const { setup, hooks } = await mount(session(), new FakeControl(), { ...DEFAULT_SETTINGS });
-    const text = await frame(setup, "Welcome");
-    expect(text).toContain("Pick a model to start");
+    const text = await frame(setup, "Welcome to Plural");
+    expect(text).toContain("Pick the agent that will do the work");
     await setup.mockInput.pressEscape();
     await tick(100);
     await setup.renderOnce();
-    expect(setup.captureCharFrame()).not.toContain("Welcome");
+    expect(setup.captureCharFrame()).not.toContain("Welcome to Plural");
     expect(hooks.settings.at(-1)).toMatchObject({ setupSeen: true });
   });
 
@@ -297,17 +284,17 @@ describe("Model tab", () => {
     const real = await mount(session("host", "anthropic · claude-opus-5-5"), new FakeControl(), { ...DEFAULT_SETTINGS });
     await tick(150);
     await real.setup.renderOnce();
-    expect(real.setup.captureCharFrame()).not.toContain("Welcome");
+    expect(real.setup.captureCharFrame()).not.toContain("Welcome to Plural");
 
     const seen = await mount(session(), new FakeControl(), { ...DEFAULT_SETTINGS, setupSeen: true });
     await tick(150);
     await seen.setup.renderOnce();
-    expect(seen.setup.captureCharFrame()).not.toContain("Welcome");
+    expect(seen.setup.captureCharFrame()).not.toContain("Welcome to Plural");
 
     const guest = await mount(session("participant"), null, { ...DEFAULT_SETTINGS });
     await tick(150);
     await guest.setup.renderOnce();
-    expect(guest.setup.captureCharFrame()).not.toContain("Welcome");
+    expect(guest.setup.captureCharFrame()).not.toContain("Welcome to Plural");
   });
 });
 

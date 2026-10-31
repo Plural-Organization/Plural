@@ -8,12 +8,14 @@ import { beginOAuth, clearOAuth, exchangeCode, hasOAuth, openOAuth, saveOAuth, t
 import type { Keys } from "../credentials";
 import { presetOf, problemWith, toConfig, type AgentChoice, type PresetId } from "../presets";
 import type { Settings } from "../settings";
+import { actionFor, stepFor } from "../setup";
 import { relayProblem, type ShareMode } from "../share";
 import {
   friendlyError,
   maskKey,
   nextFast,
   nextModel,
+  landing,
   rowsFor,
   switchConnection,
   switchPreset,
@@ -57,7 +59,7 @@ export interface DialogProps {
   control: AgentControl | null;
   keys: Keys;
   initialTab: Tab;
-  welcome: boolean;
+  onChooseProvider?: () => void;
   onSettings: (next: Settings) => void;
   onKeys: (preset: PresetId, key: string, remember: boolean) => void;
   onMode: (mode: "open" | "review") => void;
@@ -234,7 +236,7 @@ export function SettingsDialog(props: DialogProps) {
       const switched = switchConnection(choice, local.current.savedChoices, direction);
       set({ choice: switched.choice, savedChoices: switched.saved, status: null });
     } else if (row.id === "preset") {
-      const switched = switchPreset(choice, local.current.savedChoices, direction, true);
+      const switched = switchPreset(choice, local.current.savedChoices, direction, false);
       set({ choice: switched.choice, savedChoices: switched.saved, status: null });
     } else if (row.id === "model") {
       set({ choice: { ...choice, model: nextModel(choice, direction) }, status: null });
@@ -258,7 +260,11 @@ export function SettingsDialog(props: DialogProps) {
         toggleSetting(row.id);
         break;
       case "choice":
-        change(row, 1);
+        if (row.id === "preset" && live.current.onChooseProvider) {
+          live.current.onChooseProvider();
+        } else {
+          change(row, 1);
+        }
         break;
       case "radio":
         if (row.id.startsWith("join-")) {
@@ -295,11 +301,11 @@ export function SettingsDialog(props: DialogProps) {
     }
   };
 
-  const switchTab = (tab: Tab): void => set({ tab, index: 0, editing: null, status: null });
+  const switchTab = (tab: Tab): void => set({ tab, index: landing(rowsFor(tab, state()), 0), editing: null, status: null });
 
   useKeyboard((key) => {
     key.preventDefault();
-    const { editing, tab, index } = local.current;
+    const { editing, tab } = local.current;
     if (editing) {
       if (key.name === "escape") {
         set({ editing: null, oauthAttempt: editing.id === "oauth_code" ? null : local.current.oauthAttempt });
@@ -315,6 +321,7 @@ export function SettingsDialog(props: DialogProps) {
       return;
     }
     const list = rows();
+    const index = landing(list, local.current.index);
     const row = list[index];
     if (key.name === "escape" || key.name === "f2") {
       live.current.onClose();
@@ -322,9 +329,9 @@ export function SettingsDialog(props: DialogProps) {
       const at = TABS.findIndex((entry) => entry.id === tab);
       switchTab((TABS[(at + (key.shift ? TABS.length - 1 : 1)) % TABS.length] as { id: Tab }).id);
     } else if (key.name === "up") {
-      set({ index: (index + list.length - 1) % list.length });
+      set({ index: landing(list, index - 1, -1) });
     } else if (key.name === "down") {
-      set({ index: (index + 1) % list.length });
+      set({ index: landing(list, index + 1, 1) });
     } else if (key.name === "left" && row) {
       change(row, -1);
     } else if (key.name === "right" && row) {
@@ -347,7 +354,8 @@ export function SettingsDialog(props: DialogProps) {
   const { width, height } = props;
   const boxWidth = Math.min(DIALOG_WIDTH, Math.max(34, width - 4));
   const list = rows();
-  const { tab, index, editing, status } = local.current;
+  const { tab, editing, status } = local.current;
+  const index = landing(list, local.current.index);
   const selected = list[index];
   void height;
 
@@ -383,9 +391,6 @@ export function SettingsDialog(props: DialogProps) {
             <text fg={theme.dim}>✕ esc</text>
           </box>
         </box>
-        {props.welcome ? (
-          <text fg={theme.warn}>Welcome. Pick a model to start, or keep the demo agent for now.</text>
-        ) : null}
         <text>{" "}</text>
         <box flexDirection="row">
           {TABS.map((entry) => (
@@ -398,11 +403,13 @@ export function SettingsDialog(props: DialogProps) {
           ))}
         </box>
         <text fg={theme.line}>{"─".repeat(Math.max(10, boxWidth - 6))}</text>
+        {tab === "model" && props.control !== null && props.role === "host" ? <ReadyLine choice={local.current.choice} apiKey={currentKey()} settings={props.settings} /> : null}
         {list.map((row, position) => (
           <RowView
             key={row.id}
             row={row}
             active={position === index}
+            first={position === 0}
             editing={editing?.id === row.id ? editing.buffer : null}
             onClick={() => {
               set({ index: position });
@@ -443,7 +450,22 @@ function Value({ row, editing }: { row: Row; editing: string | null }) {
   );
 }
 
-function RowView({ row, active, editing, onClick }: { row: Row; active: boolean; editing: string | null; onClick: () => void }) {
+function RowView({ row, active, editing, first, onClick }: { row: Row; active: boolean; editing: string | null; first: boolean; onClick: () => void }) {
+  if (row.kind === "header") {
+    return (
+      <box marginTop={first ? 0 : 1}>
+        <text fg={theme.dim}>{row.label.toUpperCase()}</text>
+      </box>
+    );
+  }
+  return (
+    <box flexDirection="column" backgroundColor={active ? theme.bg : undefined}>
+      <RowBody row={row} active={active} editing={editing} onClick={onClick} />
+    </box>
+  );
+}
+
+function RowBody({ row, active, editing, onClick }: { row: Row; active: boolean; editing: string | null; onClick: () => void }) {
   const color = !row.enabled ? theme.dim : active ? theme.accent : theme.text;
   const marker = active ? "› " : "  ";
   if (row.kind === "note") {
@@ -502,6 +524,31 @@ function RowView({ row, active, editing, onClick }: { row: Row; active: boolean;
       </text>
       <Value row={row} editing={editing} />
     </box>
+  );
+}
+
+function ReadyLine({ choice, apiKey, settings }: { choice: AgentChoice; apiKey: string; settings: Settings }) {
+  const preset = presetOf(choice.preset);
+  const step = stepFor(preset, apiKey, hasOAuth(), settings.agentChoices);
+  if (preset.provider === "fake") {
+    return <text fg={theme.dim}>○ the demo agent follows a script. Pick a provider to use a real model</text>;
+  }
+  if (step.kind === "use") {
+    return (
+      <text>
+        <span fg={theme.ok}>● </span>
+        <span fg={theme.text}>{preset.label} is ready</span>
+        <span fg={theme.dim}> · Save and use switches to it</span>
+      </text>
+    );
+  }
+  return (
+    <text>
+      <span fg={theme.warn}>○ </span>
+      <span fg={theme.text}>{preset.label} needs a step: </span>
+      <span fg={theme.warn}>{actionFor(preset, step).label}</span>
+      <span fg={theme.dim}> · enter on Provider sets it up</span>
+    </text>
   );
 }
 

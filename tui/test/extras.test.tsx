@@ -119,48 +119,32 @@ async function gone(setup: Setup, text: string, timeout = 3000): Promise<void> {
 
 const FIRST_RUN: Settings = { ...DEFAULT_SETTINGS, setupSeen: true };
 
+async function openOffer(control: FakeControl): Promise<{ setup: Setup; saved: Settings[] }> {
+  setExtras(MISSING);
+  const mounted = await mount(control, { ...FIRST_RUN, extrasSeen: true });
+  const { setup } = mounted;
+  await setup.mockInput.pressKey("F2");
+  await frame(setup, "Demo agent");
+  await setup.mockInput.pressArrow("right");
+  await frame(setup, "Anthropic");
+  await setup.mockInput.pressArrow("down");
+  await setup.mockInput.pressEnter();
+  await setup.mockInput.typeText("sk-ant-abcdefghijklmnop1234");
+  await setup.mockInput.pressEnter();
+  for (let step = 0; step < 5; step += 1) {
+    await setup.mockInput.pressArrow("down");
+  }
+  await setup.mockInput.pressEnter();
+  return mounted;
+}
+
 describe("the offer to install the model SDKs", () => {
-  test("a first run without them offers both and names what works without", async () => {
+  test("nothing is offered on a first run any more: the provider setup installs what a choice needs", async () => {
     setExtras(MISSING);
     const { setup } = await mount(new FakeControl(), FIRST_RUN);
-    const text = await frame(setup, "model SDKs");
-    expect(text).toContain("Anthropic SDK");
-    expect(text).toContain("OpenAI SDK");
-    expect(text).toContain("Claude Code and Codex CLI work without any");
-    expect(text).toContain("Install selected");
-    expect(text).toContain("Skip for now");
-  });
-
-  test("skipping installs nothing and is remembered so it is not asked again", async () => {
-    setExtras(MISSING);
-    const control = new FakeControl();
-    const { setup, saved } = await mount(control, FIRST_RUN);
-    await frame(setup, "model SDKs");
-    await setup.mockInput.pressEscape();
-    await gone(setup, "model SDKs");
-    expect(control.installed).toEqual([]);
-    expect(saved.at(-1)).toMatchObject({ extrasSeen: true });
-  });
-
-  test("it is not offered again once answered", async () => {
-    setExtras(MISSING);
-    const { setup } = await mount(new FakeControl(), { ...FIRST_RUN, extrasSeen: true });
     await tick(100);
     await setup.renderOnce();
     expect(setup.captureCharFrame()).not.toContain("model SDKs");
-  });
-
-  test("nothing is offered when the SDKs are there or the host does not report them", async () => {
-    setExtras(MISSING.map((extra) => ({ ...extra, installed: true })));
-    const first = await mount(new FakeControl(), FIRST_RUN);
-    await tick(100);
-    await first.setup.renderOnce();
-    expect(first.setup.captureCharFrame()).not.toContain("model SDKs");
-    setExtras([]);
-    const second = await mount(new FakeControl(), FIRST_RUN);
-    await tick(100);
-    await second.setup.renderOnce();
-    expect(second.setup.captureCharFrame()).not.toContain("model SDKs");
   });
 
   test("a participant is never asked: only the host can install", async () => {
@@ -175,64 +159,9 @@ describe("the offer to install the model SDKs", () => {
     expect(setup.captureCharFrame()).not.toContain("model SDKs");
   });
 
-  test("ticking one and confirming installs only that one", async () => {
-    setExtras(MISSING);
-    const control = new FakeControl();
-    const { setup } = await mount(control, FIRST_RUN);
-    await frame(setup, "model SDKs");
-    await setup.mockInput.pressKey(" ");
-    await frame(setup, "[x] Anthropic SDK");
-    await setup.mockInput.pressArrow("down");
-    await setup.mockInput.pressArrow("down");
-    await setup.mockInput.pressEnter();
-    await gone(setup, "model SDKs");
-    expect(control.installed).toEqual(["anthropic"]);
-  });
-
-  test("confirming with nothing ticked asks to tick something and installs nothing", async () => {
-    setExtras(MISSING);
-    const control = new FakeControl();
-    const { setup } = await mount(control, FIRST_RUN);
-    await frame(setup, "model SDKs");
-    await setup.mockInput.pressArrow("down");
-    await setup.mockInput.pressArrow("down");
-    await setup.mockInput.pressEnter();
-    await frame(setup, "tick what to install");
-    expect(control.installed).toEqual([]);
-  });
-
-  test("a failed install stays open and shows why", async () => {
-    setExtras(MISSING);
-    const control = new FakeControl();
-    control.nextInstall = { ok: false, error: "the install failed, run: uv tool install --force 'plural-agent[anthropic]'" };
-    const { setup } = await mount(control, FIRST_RUN);
-    await frame(setup, "model SDKs");
-    await setup.mockInput.pressKey(" ");
-    await setup.mockInput.pressArrow("down");
-    await setup.mockInput.pressArrow("down");
-    await setup.mockInput.pressEnter();
-    const text = await frame(setup, "the install failed, run: uv tool install --force");
-    expect(text).toContain("model SDKs");
-  });
-
   test("saving a provider whose SDK is missing offers it instead of failing, then comes back", async () => {
-    setExtras(MISSING);
     const control = new FakeControl();
-    const { setup } = await mount(control, { ...FIRST_RUN, extrasSeen: true });
-    await setup.mockInput.pressKey("F2");
-    await frame(setup, "Demo agent");
-    await setup.mockInput.pressArrow("right");
-    await setup.mockInput.pressArrow("right");
-    await frame(setup, "Anthropic");
-    await setup.mockInput.pressArrow("down");
-    await setup.mockInput.pressArrow("down");
-    await setup.mockInput.pressEnter();
-    await setup.mockInput.typeText("sk-ant-abcdefghijklmnop1234");
-    await setup.mockInput.pressEnter();
-    for (let step = 0; step < 5; step += 1) {
-      await setup.mockInput.pressArrow("down");
-    }
-    await setup.mockInput.pressEnter();
+    const { setup } = await openOffer(control);
     const text = await frame(setup, "This provider needs the Anthropic SDK");
     expect(text).toContain("[x] Anthropic SDK");
     expect(text).toContain("[ ] OpenAI SDK");
@@ -244,5 +173,38 @@ describe("the offer to install the model SDKs", () => {
     await gone(setup, "model SDKs");
     expect(control.installed).toEqual(["anthropic"]);
     await frame(setup, "settings");
+  });
+
+  test("skipping installs nothing", async () => {
+    const control = new FakeControl();
+    const { setup } = await openOffer(control);
+    await frame(setup, "model SDKs");
+    await setup.mockInput.pressEscape();
+    await gone(setup, "model SDKs");
+    expect(control.installed).toEqual([]);
+  });
+
+  test("confirming with nothing ticked asks to tick something and installs nothing", async () => {
+    const control = new FakeControl();
+    const { setup } = await openOffer(control);
+    await frame(setup, "model SDKs");
+    await setup.mockInput.pressKey(" ");
+    await setup.mockInput.pressArrow("down");
+    await setup.mockInput.pressArrow("down");
+    await setup.mockInput.pressEnter();
+    await frame(setup, "tick what to install");
+    expect(control.installed).toEqual([]);
+  });
+
+  test("a failed install stays open and shows why", async () => {
+    const control = new FakeControl();
+    control.nextInstall = { ok: false, error: "the install failed, run: uv tool install --force 'plural-agent[anthropic]'" };
+    const { setup } = await openOffer(control);
+    await frame(setup, "model SDKs");
+    await setup.mockInput.pressArrow("down");
+    await setup.mockInput.pressArrow("down");
+    await setup.mockInput.pressEnter();
+    const text = await frame(setup, "the install failed, run: uv tool install --force");
+    expect(text).toContain("model SDKs");
   });
 });
