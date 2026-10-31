@@ -103,6 +103,12 @@ exception becomes an error result the model reads, so raise with a clear message
 an error string. Every call goes through the host's policy: a tool without a rule asks the host, and
 the host can allow it for good with `/policy allow <tool> *`.
 
+## Keeping state
+
+`plural.store.get(key, default)`, `.set(key, value)`, `.delete(key)` and `.all()` keep JSON values in
+`~/.plural/plugins/.data/<name>.json` across reloads and restarts (1 MB at most). Use it instead of
+module variables for anything that must survive `/plugins reload`.
+
 ## A status line
 
 `plural.status(text)` (on the `plural` object from `setup`, usable anywhere) sets the plugin's one line in
@@ -135,7 +141,7 @@ agent changed files.
 
 - Keep handlers `async`. Wrap blocking work in `await asyncio.to_thread(...)` so the room does not
   freeze.
-- Module-level variables keep state between calls until the next `/plugins reload`.
+- Module-level variables keep state between calls until the next `/plugins reload`; `plural.store` keeps it for good.
 - Read settings from the environment, never hard-code tokens, and never put secrets in replies or tool
   results.
 - Trim large output (`text[:20000]`) before replying or prompting.

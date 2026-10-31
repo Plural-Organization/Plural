@@ -126,6 +126,21 @@ The handler receives the arguments as a dict and a context with `ctx.workspace`,
 streams progress to the room, and `await ctx.run(*argv)`. A string result goes to the model as is, any
 other value as JSON. If the handler raises, the model gets the error as the tool's result.
 
+## Keeping state
+
+Module variables reset on `/plugins reload`. What must last goes in `plural.store`, a JSON file of the
+plugin's own at `~/.plural/plugins/.data/<name>.json`:
+
+```python
+runs = plural.store.get("runs", 0)
+plural.store.set("runs", runs + 1)
+plural.store.delete("old")
+plural.store.all()
+```
+
+Values are anything JSON can hold. Every `set` and `delete` writes the file at once, through a temporary
+file, and a store holds at most 1 MB. `/plugins rm` leaves the file, so a plugin added back finds its data.
+
 ## A line in the side panel
 
 `plural.status(text)` keeps a short line for the plugin in the side panel, under the session, for

@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 
 import pytest
@@ -214,6 +215,7 @@ def test_tool_names_cannot_clash(tmp_path: Path) -> None:
 
 GUARDS = """
 import asyncio
+import json
 
 
 def setup(plural):
@@ -309,3 +311,37 @@ async def test_run_end_hooks_report_failures_and_only_they_can_prompt(tmp_path: 
     asked = await plugins.guard_tool(BASH, HOST)
     assert asked is not None
     assert asked.reason == "its guard failed: only a run_end hook can prompt the agent"
+
+
+COUNTER = """
+def setup(plural):
+    @plural.command("count")
+    async def count(ctx):
+        plural.store.set("runs", plural.store.get("runs", 0) + 1)
+        await ctx.reply(str(plural.store.get("runs")))
+"""
+
+
+async def test_a_plugin_store_survives_a_reload(tmp_path: Path) -> None:
+    inbox = Inbox()
+    plugins = host_with(tmp_path, counter=COUNTER)
+    for _ in range(2):
+        command = plugins.get("count")
+        assert command is not None
+        await command.handler(context(tmp_path, inbox))
+        plugins.load()
+    saved = tmp_path / "plugins" / ".data" / "counter.json"
+    assert json.loads(saved.read_text()) == {"runs": 2}
+    assert [view.name for view in plugins.views()] == ["counter"]
+
+
+def test_a_store_keeps_json_and_refuses_the_rest(tmp_path: Path) -> None:
+    store = plugin_module.PluginStore(tmp_path / "s.json")
+    store.set("seen", ["a", "b"])
+    store.delete("missing")
+    assert store.all() == {"seen": ["a", "b"]}
+    with pytest.raises(PluginError, match="must be JSON"):
+        store.set("bad", object())  # pyright: ignore[reportArgumentType]
+    assert plugin_module.PluginStore(tmp_path / "s.json").get("seen") == ["a", "b"]
+    store.delete("seen")
+    assert plugin_module.PluginStore(tmp_path / "s.json").all() == {}

@@ -67,6 +67,7 @@ ASK_TIMEOUT_S: Final = 120.0
 GUARD_TIMEOUT_S: Final = 5.0
 HOOK_TIMEOUT_S: Final = 120.0
 MAX_OPTIONS: Final = 20
+MAX_STORE_BYTES: Final = 1_000_000
 MAX_CONTEXT_CHARS: Final = 8000
 HOOK_EVENTS: Final = frozenset({"session_start", "before_run", "tool_call", "run_end"})
 MAX_OUTPUT_CHARS: Final = 64_000
@@ -100,6 +101,56 @@ def setup(plural):
 
 class PluginError(Exception):
     pass
+
+
+class PluginStore:
+    """A plugin's own JSON values, kept in a file across reloads and restarts.
+
+    Every change is written at once, through a temporary file, so a crash never leaves half a file.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._values: dict[str, JsonValue] | None = None
+
+    def get(self, key: str, default: JsonValue = None) -> JsonValue:
+        return self._load().get(key, default)
+
+    def set(self, key: str, value: JsonValue) -> None:
+        values = {**self._load(), key: value}
+        self._save(values)
+
+    def delete(self, key: str) -> None:
+        values = self._load()
+        if key in values:
+            self._save({name: value for name, value in values.items() if name != key})
+
+    def all(self) -> dict[str, JsonValue]:
+        return dict(self._load())
+
+    def _load(self) -> dict[str, JsonValue]:
+        if self._values is None:
+            try:
+                loaded = json.loads(self._path.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                loaded = {}
+            except (OSError, ValueError) as error:
+                raise PluginError(f"cannot read {self._path}: {error}") from None
+            self._values = loaded if isinstance(loaded, dict) else {}
+        return self._values
+
+    def _save(self, values: dict[str, JsonValue]) -> None:
+        try:
+            text = json.dumps(values, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError) as error:
+            raise PluginError(f"store values must be JSON: {error}") from None
+        if len(text.encode()) > MAX_STORE_BYTES:
+            raise PluginError(f"a plugin's store holds at most {MAX_STORE_BYTES:,} bytes")
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self._path.with_suffix(".tmp")
+        temporary.write_text(text, encoding="utf-8")
+        temporary.replace(self._path)
+        self._values = values
 
 
 # Answers one question with the session's model: (question, with_history, main_model) -> text.
@@ -420,10 +471,18 @@ class PluginCommand:
 
 
 class PluginApi:
-    def __init__(self, plugin: str, *, workspace: Path, inbox: Inbox | None = None) -> None:
+    def __init__(
+        self,
+        plugin: str,
+        *,
+        workspace: Path,
+        inbox: Inbox | None = None,
+        store: PluginStore | None = None,
+    ) -> None:
         self._plugin = plugin
         self._workspace = workspace
         self._inbox = inbox
+        self.store = store
         self.commands: list[PluginCommand] = []
         self.tools: list[PluginTool] = []
         self.hooks: list[Hook] = []
@@ -545,7 +604,8 @@ class PluginHost:
             if name.startswith("_"):
                 continue
             try:
-                api = PluginApi(name, workspace=self.workspace, inbox=self._inbox)
+                store = PluginStore(self.directory / ".data" / f"{name}.json")
+                api = PluginApi(name, workspace=self.workspace, inbox=self._inbox, store=store)
                 setup = getattr(_import(path, f"plural_plugin_{generation}_{name}"), "setup", None)
                 if not callable(setup):
                     raise PluginError("the file defines no setup(plural) function")
