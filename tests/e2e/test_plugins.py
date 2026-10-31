@@ -19,6 +19,7 @@ from plural.protocol.events import (
     ApprovalRequested,
     CommandInvoked,
     CommandReplied,
+    PluginLineSet,
     PluginsChanged,
     PluginShown,
     PromptAccepted,
@@ -324,3 +325,32 @@ async def test_a_run_end_hook_reports_the_run_and_can_start_one_more(tmp_path: P
         await asyncio.sleep(0.2)
         replies = [e.text for e in owner.events if isinstance(e, CommandReplied)]
         assert replies == ["stop host hello.txt"]
+
+
+STATUS = """
+def setup(plural):
+    @plural.command("progress")
+    async def progress(ctx):
+        for step in ("1/3", "2/3", "3/3"):
+            plural.status(f"tests {step}")
+"""
+
+
+async def test_a_plugin_status_line_is_shared_throttled_and_dropped_with_the_plugin(
+    tmp_path: Path,
+) -> None:
+    install(tmp_path, "ci", STATUS)
+    async with running_session(tmp_path, relayed=False, provider=FakeProvider()) as session:
+        owner = await session.owner()
+        guest = await session.guest("Alia")
+        await owner.client.send(CommandRun(name="progress"))
+        first = await guest.next(PluginLineSet)
+        assert (first.plugin, first.text) == ("ci", "tests 1/3")
+        last = await guest.next(PluginLineSet, timeout=3)
+        assert last.text == "tests 3/3"
+        assert [
+            (line.plugin, line.text) for line in guest.client.projection.state.plugin_lines
+        ] == [("ci", "tests 3/3")]
+        await owner.client.send(PluginsRemove(name="ci"))
+        await guest.next(PluginsChanged)
+        assert guest.client.projection.state.plugin_lines == ()

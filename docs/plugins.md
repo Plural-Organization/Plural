@@ -107,6 +107,13 @@ The handler receives the arguments as a dict and a context with `ctx.workspace`,
 streams progress to the room, and `await ctx.run(*argv)`. A string result goes to the model as is, any
 other value as JSON. If the handler raises, the model gets the error as the tool's result.
 
+## A line in the side panel
+
+`plural.status(text)` keeps a short line for the plugin in the side panel, under the session, for
+everyone in the room: `ci  tests 3/3 ✓`. Call it from a command, a tool or a hook; an empty text removes
+the line. It is one line of at most 80 characters, the host shows at most one change a second (the
+latest wins), and the line goes away when the plugin is removed or fails to load.
+
 ## Hooks
 
 `plural.on(event)` runs a function when something happens instead of when someone calls it.

@@ -25,6 +25,7 @@ export function emptyState(): SessionState {
     loaded_tools: [],
     plugins: [],
     commands: [],
+    plugin_lines: [],
     queue: [],
     agent: "",
     fast_agent: "",
@@ -152,8 +153,14 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return { ...state, skills: event.skills };
     case "tools.loaded":
       return { ...state, loaded_tools: [...new Set([...state.loaded_tools, ...event.tools])] };
-    case "plugins.changed":
-      return { ...state, plugins: event.plugins, commands: event.commands };
+    case "plugins.changed": {
+      const loaded = new Set(event.plugins.filter((plugin) => plugin.status === "loaded").map((plugin) => plugin.name));
+      return { ...state, plugins: event.plugins, commands: event.commands, plugin_lines: state.plugin_lines.filter((line) => loaded.has(line.plugin)) };
+    }
+    case "plugin.line": {
+      const kept = state.plugin_lines.filter((line) => line.plugin !== event.plugin);
+      return { ...state, plugin_lines: event.text ? [...kept, { plugin: event.plugin, text: event.text }] : kept };
+    }
     case "proposal.created":
       return { ...state, proposals: { ...state.proposals, [event.proposal.id]: event.proposal } };
     case "proposal.approved":

@@ -117,6 +117,17 @@ class PluginPrompt:
 
 
 @dataclass(frozen=True, slots=True)
+class PluginLineUpdate:
+    plugin: str
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class PluginLineFlush:
+    plugin: str
+
+
+@dataclass(frozen=True, slots=True)
 class PluginShow:
     command: str
     invoker_id: str
@@ -142,6 +153,8 @@ InboxMessage = (
     | PluginReply
     | PluginPrompt
     | PluginShow
+    | PluginLineUpdate
+    | PluginLineFlush
 )
 
 

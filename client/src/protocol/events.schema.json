@@ -1349,6 +1349,7 @@
               "participant.role_changed": "#/$defs/ParticipantRoleChanged",
               "participant.selected": "#/$defs/ParticipantSelected",
               "participant.typing": "#/$defs/ParticipantTyping",
+              "plugin.line": "#/$defs/PluginLineSet",
               "plugin.shown": "#/$defs/PluginShown",
               "plugins.changed": "#/$defs/PluginsChanged",
               "policy.rule_added": "#/$defs/PolicyRuleAdded",
@@ -1532,6 +1533,9 @@
             },
             {
               "$ref": "#/$defs/CommandReplied"
+            },
+            {
+              "$ref": "#/$defs/PluginLineSet"
             },
             {
               "$ref": "#/$defs/ToolStarted"
@@ -2141,6 +2145,44 @@
         "description",
         "usage",
         "host_only"
+      ],
+      "type": "object"
+    },
+    "PluginLine": {
+      "description": "A short status line a plugin keeps in the side panel, such as \"tests \u2713\".",
+      "properties": {
+        "plugin": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plugin",
+        "text"
+      ],
+      "type": "object"
+    },
+    "PluginLineSet": {
+      "description": "A plugin's status line changed; empty text removes it.",
+      "properties": {
+        "plugin": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "plugin.line",
+          "default": "plugin.line",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "plugin",
+        "text"
       ],
       "type": "object"
     },
@@ -2816,6 +2858,13 @@
           "$ref": "#/$defs/PermissionMode",
           "default": "default"
         },
+        "plugin_lines": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginLine"
+          },
+          "type": "array"
+        },
         "plugins": {
           "default": [],
           "items": {
@@ -2914,6 +2963,7 @@
         "loaded_tools",
         "plugins",
         "commands",
+        "plugin_lines",
         "queue",
         "agent",
         "fast_agent",
@@ -3457,6 +3507,7 @@
           "participant.role_changed": "#/$defs/ParticipantRoleChanged",
           "participant.selected": "#/$defs/ParticipantSelected",
           "participant.typing": "#/$defs/ParticipantTyping",
+          "plugin.line": "#/$defs/PluginLineSet",
           "plugin.shown": "#/$defs/PluginShown",
           "plugins.changed": "#/$defs/PluginsChanged",
           "policy.rule_added": "#/$defs/PolicyRuleAdded",
@@ -3640,6 +3691,9 @@
         },
         {
           "$ref": "#/$defs/CommandReplied"
+        },
+        {
+          "$ref": "#/$defs/PluginLineSet"
         },
         {
           "$ref": "#/$defs/ToolStarted"

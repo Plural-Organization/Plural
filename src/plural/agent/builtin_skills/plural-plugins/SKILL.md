@@ -101,6 +101,12 @@ exception becomes an error result the model reads, so raise with a clear message
 an error string. Every call goes through the host's policy: a tool without a rule asks the host, and
 the host can allow it for good with `/policy allow <tool> *`.
 
+## A status line
+
+`plural.status(text)` (on the `plural` object from `setup`, usable anywhere) sets the plugin's one line in
+the side panel that the whole room sees, at most 80 characters and one change a second; `""` removes it.
+Use it for state that matters while people work, such as `tests 3/3 ✓` after a `run_end` hook.
+
 ## Hooks
 
 `@plural.on("tool_call")` runs before the policy on every tool call the agent makes. The handler gets

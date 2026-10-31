@@ -18,7 +18,7 @@ from pydantic import JsonValue
 from plural.agent.providers.base import ToolSchema
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
 from plural.agent.tools.registry import Exposure
-from plural.host.inbox import Inbox, PluginPrompt, PluginReply, PluginShow
+from plural.host.inbox import Inbox, PluginLineUpdate, PluginPrompt, PluginReply, PluginShow
 from plural.protocol.models import (
     HOST_PARTICIPANT_ID,
     PluginCommandView,
@@ -364,9 +364,10 @@ class PluginCommand:
 
 
 class PluginApi:
-    def __init__(self, plugin: str, *, workspace: Path) -> None:
+    def __init__(self, plugin: str, *, workspace: Path, inbox: Inbox | None = None) -> None:
         self._plugin = plugin
         self._workspace = workspace
+        self._inbox = inbox
         self.commands: list[PluginCommand] = []
         self.tools: list[PluginTool] = []
         self.hooks: list[Hook] = []
@@ -382,6 +383,14 @@ class PluginApi:
             return handler
 
         return register
+
+    def status(self, text: str) -> None:
+        """Set this plugin's line in the side panel, such as "tests ✓"; an empty text removes it.
+
+        Everyone in the room sees it. The host shows at most one change a second.
+        """
+        if self._inbox is not None:
+            self._inbox.put(PluginLineUpdate(self._plugin, text))
 
     def ask(self, reason: str) -> Verdict:
         """From a tool_call hook: have the host approve this call even if the policy allows it."""
@@ -480,7 +489,7 @@ class PluginHost:
             if name.startswith("_"):
                 continue
             try:
-                api = PluginApi(name, workspace=self.workspace)
+                api = PluginApi(name, workspace=self.workspace, inbox=self._inbox)
                 setup = getattr(_import(path, f"plural_plugin_{generation}_{name}"), "setup", None)
                 if not callable(setup):
                     raise PluginError("the file defines no setup(plural) function")

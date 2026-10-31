@@ -184,6 +184,7 @@ export interface EventsSchema {
     | PluginsChanged
     | CommandInvoked
     | CommandReplied
+    | PluginLineSet
     | ToolStarted
     | ToolOutput
     | ToolEnded
@@ -935,6 +936,17 @@ export interface CommandReplied {
   type: "command.replied";
 }
 /**
+ * A plugin's status line changed; empty text removes it.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginLineSet".
+ */
+export interface PluginLineSet {
+  plugin: string;
+  text: string;
+  type: "plugin.line";
+}
+/**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "ToolStarted".
  */
@@ -1113,6 +1125,7 @@ export interface SessionState {
     [k: string]: Participant;
   };
   permission_mode: "default" | "accept_edits" | "plan" | "auto";
+  plugin_lines: PluginLine[];
   plugins: PluginView[];
   policy: PolicyRuleView[];
   prompt_mode: "open" | "review";
@@ -1145,6 +1158,16 @@ export interface ChatEntry {
   text: string;
   to: string | null;
   ts: string;
+}
+/**
+ * A short status line a plugin keeps in the side panel, such as "tests ✓".
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginLine".
+ */
+export interface PluginLine {
+  plugin: string;
+  text: string;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -1260,6 +1283,7 @@ export interface EventRecord {
     | PluginsChanged
     | CommandInvoked
     | CommandReplied
+    | PluginLineSet
     | ToolStarted
     | ToolOutput
     | ToolEnded

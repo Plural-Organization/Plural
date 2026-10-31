@@ -97,6 +97,14 @@ class SkillsFound(TransientEvent):
     hits: tuple[SkillHit, ...]
 
 
+class PluginLineSet(EventBase):
+    """A plugin's status line changed; empty text removes it."""
+
+    type: Literal["plugin.line"] = "plugin.line"
+    plugin: str
+    text: str
+
+
 class PluginShown(TransientEvent):
     """What a plugin command shows the person who ran it, and nobody else. It is not logged."""
 
@@ -516,6 +524,7 @@ Event = Annotated[
     | PluginsChanged
     | CommandInvoked
     | CommandReplied
+    | PluginLineSet
     | ToolStarted
     | ToolOutput
     | ToolEnded

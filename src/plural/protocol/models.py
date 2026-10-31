@@ -259,6 +259,13 @@ class PluginView(Model):
     error: str | None = None
 
 
+class PluginLine(Model):
+    """A short status line a plugin keeps in the side panel, such as "tests ✓"."""
+
+    plugin: str
+    text: str
+
+
 class PluginCommandView(Model):
     name: str
     plugin: str
@@ -450,6 +457,7 @@ class SessionState(Model):
     loaded_tools: tuple[str, ...] = ()
     plugins: tuple[PluginView, ...] = ()
     commands: tuple[PluginCommandView, ...] = ()
+    plugin_lines: tuple[PluginLine, ...] = ()
     queue: tuple[QueuedPrompt, ...] = ()
     agent: str = ""
     fast_agent: str = ""

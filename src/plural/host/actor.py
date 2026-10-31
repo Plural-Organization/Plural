@@ -51,6 +51,8 @@ from plural.host.inbox import (
     Incoming,
     JoinExpired,
     McpUpdated,
+    PluginLineFlush,
+    PluginLineUpdate,
     PluginPrompt,
     PluginReply,
     PluginShow,
@@ -165,6 +167,7 @@ from plural.protocol.events import (
     ParticipantSelected,
     ParticipantTyping,
     PermissionModeChanged,
+    PluginLineSet,
     PluginsChanged,
     PluginShown,
     PolicyRuleAdded,
@@ -205,6 +208,7 @@ from plural.protocol.models import (
     JoinDecision,
     Participant,
     PermissionMode,
+    PluginStatus,
     PromptMode,
     Provenance,
     Role,
@@ -225,6 +229,8 @@ PLAN_NOTE = (
 MAX_REPLY_CHARS = 8000
 MAX_DISPLAY_CHARS = 500
 MAX_SHOWN_CHARS = 20_000
+MAX_LINE_CHARS = 80
+LINE_INTERVAL_S = 1.0
 
 
 def _check_points(kind: BoardShape, points: tuple[float, ...]) -> None:
@@ -289,6 +295,9 @@ class SessionActor:
         # What the agent changed in the current run, for run_end hooks.
         self._run_changes: ChangeLedger | None = None
         self._hook_prompts: set[str] = set()
+        # Plugin status lines waiting for their one-a-second slot, and when each last changed.
+        self._lines_waiting: dict[str, str] = {}
+        self._lines_at: dict[str, float] = {}
         self._briefing_at: dict[str, datetime] = {}
         self._team = team
         self._conflicts = conflicts
@@ -489,6 +498,12 @@ class SessionActor:
                     ok=ok,
                 )
                 await self._emit(replied, actor_id=invoker_id)
+            case PluginLineUpdate(plugin=plugin, text=text):
+                await self._plugin_line(plugin, text)
+            case PluginLineFlush(plugin=plugin):
+                text = self._lines_waiting.pop(plugin, None)
+                if text is not None:
+                    await self._plugin_line(plugin, text)
             case PluginShow(command=command, invoker_id=invoker_id, title=title, text=text):
                 shown = PluginShown(
                     command=command,
@@ -1267,6 +1282,28 @@ class SessionActor:
             log.exception("actor.plugin_command_failed", command=context.command)
             text = f"/{context.command} failed: {type(error).__name__}: {error}"
             self._inbox.put(PluginReply(context.command, context.author_id, text, ok=False))
+
+    async def _plugin_line(self, plugin: str, text: str) -> None:
+        line = " ".join(text.split())[:MAX_LINE_CHARS]
+        if plugin in self._lines_waiting:
+            self._lines_waiting[plugin] = line
+            return
+        now = asyncio.get_running_loop().time()
+        wait = self._lines_at.get(plugin, -LINE_INTERVAL_S) + LINE_INTERVAL_S - now
+        if wait > 0:
+            self._lines_waiting[plugin] = line
+            asyncio.get_running_loop().call_later(wait, self._inbox.put, PluginLineFlush(plugin))
+            return
+        lines = self._state.plugin_lines
+        current = next((each.text for each in lines if each.plugin == plugin), "")
+        loaded = self._plugins is not None and any(
+            view.name == plugin and view.status is PluginStatus.LOADED
+            for view in self._plugins.views()
+        )
+        if line == current or not loaded:
+            return
+        self._lines_at[plugin] = now
+        await self._emit(PluginLineSet(plugin=plugin, text=line), actor_id=self._host.id)
 
     async def _plugin_ask(self, question: str, history: bool, main: bool) -> str:
         try:
