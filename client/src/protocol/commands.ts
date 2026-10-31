@@ -52,6 +52,11 @@ export type PolicyAction = "allow" | "ask" | "deny";
 export type BoardShape = "pen" | "line" | "arrow" | "rect" | "ellipse" | "text" | "image" | "erase";
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "CursorSurface".
+ */
+export type CursorSurface = "board" | "preview";
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "Delivery".
  */
 export type Delivery = "now" | "steer" | "follow_up";
@@ -486,7 +491,7 @@ export interface CursorSet {
   type?: "presence.cursor";
 }
 /**
- * Where someone points on the board; with ink, the pen is down and draws.
+ * Where someone points on the board or the site preview; with ink, the pen draws.
  *
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "BoardCursor".
@@ -494,6 +499,7 @@ export interface CursorSet {
 export interface BoardCursor {
   color?: string | null;
   ink?: boolean;
+  surface?: "board" | "preview";
   width?: number | null;
   x: number;
   y: number;

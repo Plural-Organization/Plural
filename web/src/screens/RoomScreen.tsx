@@ -5,6 +5,7 @@ import { Canvas } from "../components/Canvas";
 import { Composer } from "../components/Composer";
 import { QuoteButton } from "../components/QuoteButton";
 import { SelectionLayer, type Selector } from "../components/SelectionLayer";
+import { SitePreview } from "../components/SitePreview";
 import { Feed } from "../components/feed/Feed";
 import { Inbox } from "../components/inbox/Inbox";
 import { inboxItems } from "../components/inbox/items";
@@ -21,6 +22,7 @@ import { useToast } from "../hooks/useToast";
 import { useTyping } from "../hooks/useTyping";
 import { activity } from "../lib/activity";
 import { canvasDocs } from "../lib/canvas";
+import { siteFiles } from "../lib/site";
 import { copyText } from "../lib/clipboard";
 import { upload } from "../lib/upload";
 import { cx } from "../lib/cx";
@@ -43,7 +45,8 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
   const [editing, setEditing] = useState<ProposalView | null>(null);
   const [panel, setPanel] = useState(false);
   const { toast, flash } = useToast();
-  const docs = useMemo(() => canvasDocs(feed.items), [feed.items]);
+  const site = useMemo(() => siteFiles(feed.items), [feed.items]);
+  const docs = useMemo(() => canvasDocs(feed.items, site), [feed.items, site]);
   const [canvasId, setCanvasId] = useState<string | null>(null);
   const [quote, setQuote] = useState<{ text: string; key: number } | null>(null);
   const seen = useRef<Set<string> | null>(null);
@@ -115,13 +118,16 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
     }
   };
   const pointerKey = JSON.stringify([...projection.cursors]);
-  const pointers: Pointer[] = useMemo(
+  const everyPointer: Pointer[] = useMemo(
     () =>
       [...projection.cursors]
         .filter(([id]) => id !== projection.meId)
         .map(([id, cursor]) => ({ id, cursor, name: state.participants[id] ? label(state, state.participants[id]!) : "someone" })),
     [pointerKey, state.participants, projection.meId],
   );
+  // A pointer is on the board or on the site preview, and shows only there.
+  const pointers = useMemo(() => everyPointer.filter((pointer) => pointer.cursor.surface !== "preview"), [everyPointer]);
+  const previewPointers = useMemo(() => everyPointer.filter((pointer) => pointer.cursor.surface === "preview"), [everyPointer]);
 
   const files = useAttachments(projection, send, (text) => session.notify("warn", text));
   const submitText = useSubmit({ session, editing, onEdited: () => setEditing(null), onLeave: leave, flash, onDraw: draw });
@@ -288,7 +294,30 @@ export function RoomScreen({ link, name, onLeave }: RoomScreenProps) {
           onToggleFull={() => setWide((value) => !value)}
         />
       ) : doc ? (
-        <Canvas doc={doc} docs={docs} selectors={selectors} full={wide} onToggleFull={() => setWide((value) => !value)} onPick={setCanvasId} onClose={() => setCanvasId(null)} />
+        <Canvas
+          doc={doc}
+          docs={docs}
+          selectors={selectors}
+          full={wide}
+          onToggleFull={() => setWide((value) => !value)}
+          onPick={setCanvasId}
+          onClose={() => setCanvasId(null)}
+          site={(page) => (
+            <SitePreview
+              entry={page.text}
+              site={site}
+              pointers={previewPointers}
+              echo={projection.meId === null ? undefined : projection.cursors.get(projection.meId)}
+              canPick={canDraw}
+              sendPresence={sendPresence}
+              onAsk={(text) => {
+                scroll.pin();
+                submit(text);
+              }}
+              onNotice={flash}
+            />
+          )}
+        />
       ) : (
         <Sidebar
           projection={projection}

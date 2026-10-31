@@ -14,7 +14,7 @@ from plural.protocol.events import (
     ParticipantCursor,
     SessionSnapshot,
 )
-from plural.protocol.models import BoardCursor, BoardShape, Role
+from plural.protocol.models import BoardCursor, BoardShape, CursorSurface, Role
 from tests.e2e.support import Session
 
 LINE = BoardDraw(color="#b9b4ff", width=3, points=(0.1, 0.1, 0.5, 0.4, 0.9, 0.2))
@@ -116,6 +116,17 @@ async def test_viewers_point_but_do_not_draw(session: Session) -> None:
     with pytest.raises(CommandRejected) as rejected:
         await viewer.client.send(LINE)
     assert rejected.value.error.code is ErrorCode.FORBIDDEN
+
+
+async def test_a_pointer_on_the_site_preview_keeps_its_surface(session: Session) -> None:
+    owner = await session.owner()
+    guest = await session.guest("Alia")
+    await guest.client.send(
+        CursorSet(cursor=BoardCursor(x=0.4, y=2.5, surface=CursorSurface.PREVIEW))
+    )
+    cursor = (await owner.next(ParticipantCursor)).cursor
+    assert cursor is not None
+    assert cursor.surface is CursorSurface.PREVIEW
 
 
 async def test_leaving_hides_the_cursor(session: Session) -> None:

@@ -12,7 +12,8 @@
   "dependencies": {
     "@plural/client": "*",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "sucrase": "^3.35.1"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

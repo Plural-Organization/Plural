@@ -355,11 +355,19 @@ class BoardView(Model):
     strokes: tuple[BoardStroke, ...] = ()
 
 
+class CursorSurface(StrEnum):
+    BOARD = "board"
+    # A site the agent wrote, shown in the canvas: x runs across its width and y down the page, both
+    # in widths of the page, so a pointer lands on the same spot at any window size.
+    PREVIEW = "preview"
+
+
 class BoardCursor(Model):
-    """Where someone points on the board; with ink, the pen is down and draws."""
+    """Where someone points on the board or the site preview; with ink, the pen draws."""
 
     x: Unit
     y: Unit
+    surface: CursorSurface = CursorSurface.BOARD
     ink: bool = False
     color: Color | None = None
     width: float | None = Field(default=None, ge=0.5, le=40)
