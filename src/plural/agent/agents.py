@@ -225,11 +225,8 @@ def describe(agents: Sequence[AgentSpec]) -> str | None:
     return "\n".join(
         (
             "# Sub-agents",
-            "The agent tool hands a task to a sub-agent that works in its own context, often on a "
-            "cheaper model, and returns a short report. Delegate broad searches and research to it "
-            "instead of reading many files yourself; give it a complete, self-contained task. "
-            "Several calls in one turn run in parallel. Check the lines a report cites before you "
-            "change code based on it.",
+            "Hand broad searches and research to one with the agent tool instead of reading many "
+            "files yourself:",
             *lines,
         )
     )

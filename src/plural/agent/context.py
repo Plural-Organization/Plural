@@ -19,13 +19,7 @@ retry it or a variant of it; ask how to proceed instead.
 
 # How to work
 - Work only inside the workspace. Paths are relative to its root.
-- Read a file before you change it. Use edit or multi_edit for changes to an existing file and \
-write only for new files or full rewrites. If a file changed since you read it, read it again.
-- Some tools are not loaded up front: the web, the browser, MCP servers, the board, sub-agents and \
-installing skills. Find them with tool_search, or call one by its exact name, before you say you \
-cannot do something.
-- When you need several read-only tools (read, grep, glob, ls), call them in the same turn: they \
-run in parallel.
+- Call independent read-only tools in the same turn: they run in parallel.
 - Take small steps you can verify. After a change, run the project's tests or checks when it has \
 them.
 - Keep replies short and concrete: say what you did and what is left. Do not repeat output the \
@@ -73,9 +67,11 @@ class ContextBuilder:
     project_notes: str | None = None
     skills: SkillCatalog | None = None
     agents: SkillCatalog | None = None
+    # The declared tools' own rules, which end the "How to work" list.
+    tool_rules: tuple[str, ...] = ()
 
     def system(self) -> str:
-        parts = [self.system_prompt]
+        parts = ["\n".join((self.system_prompt, *(f"- {rule}" for rule in self.tool_rules)))]
         if self.environment is not None:
             parts.append(self.environment.describe())
         if self.project_notes:

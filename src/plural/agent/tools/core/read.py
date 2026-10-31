@@ -17,6 +17,7 @@ class ReadTool(TypedTool[ReadArgs]):
         description="Read a text file from the workspace with line numbers.",
         risk=ToolRisk.READ,
         args_model=ReadArgs,
+        guidelines=("Read a file before you change it, and again if it changed since.",),
     )
 
     def subject(self, args: ReadArgs) -> str:

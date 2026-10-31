@@ -116,6 +116,11 @@ class ToolSearchTool:
     """Finds deferred tools by keyword and declares the matches from the next model call."""
 
     name = TOOL_SEARCH
+    guidelines = (
+        "The web, MCP servers, the board, sub-agents and installing skills load on demand: find "
+        "them with tool_search, or call one by its exact name, before you say you cannot do "
+        "something.",
+    )
 
     def __init__(self, registry: ToolRegistry) -> None:
         self._registry = registry

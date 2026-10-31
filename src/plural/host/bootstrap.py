@@ -246,6 +246,7 @@ async def _assemble(
             project_notes=await _project_notes(workspace),
             skills=skills,
             agents=agents,
+            tool_rules=tools.guidelines(),
         ),
         tool_ctx=ToolCtx(workspace=workspace, backend=LocalBackend()),
         ids=ids,

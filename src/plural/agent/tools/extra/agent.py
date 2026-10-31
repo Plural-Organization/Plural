@@ -98,7 +98,12 @@ class AgentTool:
         parameters["properties"]["agent"]["enum"] = names
         return ToolSchema(
             name=AGENT_TOOL,
-            description="Hand a self-contained task to a sub-agent and get its report back.",
+            description=(
+                "Hand a task to a sub-agent that works in its own context, often on a cheaper "
+                "model, and returns a short report. Give it a complete, self-contained task. "
+                "Several calls in one turn run in parallel. Check the lines a report cites "
+                "before you change code based on it."
+            ),
             parameters=parameters,
         )
 

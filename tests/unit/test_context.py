@@ -2,6 +2,7 @@ from datetime import date
 from pathlib import Path
 
 from plural.agent.context import ContextBuilder, Environment
+from plural.agent.tools.registry import builtin_tools
 
 
 def test_system_prompt_describes_the_room_environment_and_project() -> None:
@@ -28,3 +29,15 @@ def test_system_prompt_is_stable_for_prompt_caching() -> None:
     builder = ContextBuilder(environment=environment)
     assert builder.system() == builder.system()
     assert "not a git repository" in builder.system()
+
+
+def test_tool_rules_end_the_how_to_work_list() -> None:
+    system = ContextBuilder(tool_rules=("Use write only for new files.",)).system()
+    assert "- Never print or copy secrets" in system
+    assert system.endswith("- Use write only for new files.")
+
+
+def test_only_tools_declared_up_front_bring_rules() -> None:
+    rules = builtin_tools().guidelines()
+    assert "Use write only for new files or full rewrites." in rules
+    assert len(rules) == len(set(rules))

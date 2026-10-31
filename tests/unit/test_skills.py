@@ -126,7 +126,7 @@ async def test_the_agent_is_told_to_find_a_skill_even_when_none_is_installed(
     skills = library(tmp_path)
     await skills.refresh()
     catalog = skills.describe()
-    assert "call skill_search first" in catalog
+    assert "look for one with skill_search" in catalog
     assert "No skills are installed yet." in catalog
 
 

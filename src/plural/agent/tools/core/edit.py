@@ -56,6 +56,7 @@ class EditTool(TypedTool[EditArgs]):
         description="Replace exact text in a file. Read the file first.",
         risk=ToolRisk.WRITE,
         args_model=EditArgs,
+        guidelines=("Change an existing file with edit, or multi_edit for several changes.",),
     )
 
     def subject(self, args: EditArgs) -> str:

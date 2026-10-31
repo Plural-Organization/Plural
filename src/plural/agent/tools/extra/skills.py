@@ -17,8 +17,11 @@ class SkillSearchTool(TypedTool[SkillSearchArgs]):
     spec = ToolSpec(
         name="skill_search",
         description=(
-            "Search the public skills.sh catalog for installable skills. Prefer well-known "
-            "sources with many installs, and suggest one to the host before installing it."
+            "Search the public skills.sh catalog for installable skills. Prefer a well-known "
+            "source with many installs that matches the task closely, say in one line which one "
+            "you chose and why, then install it with skill_install and load it. Do not search "
+            "for small tasks you can already do well, and never install a skill the room did "
+            "not need."
         ),
         risk=ToolRisk.READ,
         args_model=SkillSearchArgs,

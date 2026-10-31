@@ -104,6 +104,8 @@ class ToolSpec[A: ToolArgs]:
     description: str
     risk: ToolRisk
     args_model: type[A]
+    # Rules for the system prompt, there only while the tool is declared on every request.
+    guidelines: tuple[str, ...] = ()
 
 
 class Tool(Protocol):
@@ -121,6 +123,10 @@ class TypedTool[A: ToolArgs](ABC):
     @property
     def name(self) -> str:
         return self.spec.name
+
+    @property
+    def guidelines(self) -> tuple[str, ...]:
+        return self.spec.guidelines
 
     def schema(self) -> ToolSchema:
         return ToolSchema(

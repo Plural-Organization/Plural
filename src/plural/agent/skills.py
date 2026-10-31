@@ -169,18 +169,9 @@ class SkillLibrary:
         return "\n".join(
             (
                 "# Skills",
-                "Skills are folders of expert instructions for one kind of task. Pick them by "
-                "description, the way you pick a tool:",
-                "- When a task matches an installed skill, call the skill tool with its name "
-                "before you start and follow what it says, loading its other files when it "
-                "points to them.",
-                "- When a task needs specialist know-how that no installed skill covers, such as "
-                "a file format (pdf, docx, xlsx, pptx), a framework's conventions or a deploy "
-                "target, call skill_search first. Prefer a well-known source with many installs "
-                "that matches the task closely, say in one line which one you chose and why, "
-                "install it with skill_install (the host approves it) and then load it.",
-                "- Do not search or install for small tasks you can already do well, and never "
-                "install a skill the room did not need.",
+                "Expert instructions for one kind of task, picked by description. For "
+                "specialist know-how none of them covers, such as a file format, a framework's "
+                "conventions or a deploy target, look for one with skill_search.",
                 "Installed skills:" if installed else "No skills are installed yet.",
                 *installed,
             )
