@@ -149,14 +149,32 @@ async def remember_session(
 
 
 async def build_host(settings: HostSettings, *, provider: LLMProvider | None = None) -> Host:
+    room = settings.room or UlidGenerator().new("r_")
+    try:
+        workspace = await asyncio.to_thread(Workspace.at, settings.workspace)
+    except FileNotFoundError as error:
+        raise ConfigError(f"the workspace {settings.workspace} does not exist") from error
+    store = await SqliteEventStore.open(settings.state_dir / "sessions" / f"{room}.db")
+    try:
+        return await _assemble(settings, provider, room, workspace, store)
+    except BaseException:
+        # The store's thread would keep a host that failed to start from exiting.
+        await store.close()
+        raise
+
+
+async def _assemble(
+    settings: HostSettings,
+    provider: LLMProvider | None,
+    room: str,
+    workspace: Workspace,
+    store: SqliteEventStore,
+) -> Host:
     api_key = resolve_api_key(settings, os.environ)
     ids, clock = UlidGenerator(), SystemClock()
     helper = build_helper(settings) if provider is None else None
-    room = settings.room or ids.new("r_")
     state_dir = settings.state_dir
     signer = TokenSigner(await asyncio.to_thread(load_or_create_host_key, state_dir / "host_key"))
-    store = await SqliteEventStore.open(state_dir / "sessions" / f"{room}.db")
-    workspace = await asyncio.to_thread(Workspace.at, settings.workspace)
     profile = await _team_profile(settings) if settings.team else None
     await remember_session(
         store, workspace.root, settings, clock.now(), profile.team_name if profile else None

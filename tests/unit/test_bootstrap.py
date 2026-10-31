@@ -1,9 +1,12 @@
+from pathlib import Path
+
 import pytest
 from pydantic import SecretStr
 
 from plural.agent.providers.api.anthropic.adapter import AnthropicProvider
 from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
 from plural.agent.providers.fake import DemoProvider
+from plural.host.bootstrap import build_host
 from plural.host.config import HostSettings
 from plural.host.providers import ConfigError, build_provider, resolve_api_key
 
@@ -56,3 +59,12 @@ def test_the_agent_label_says_what_answers() -> None:
     assert HostSettings(provider="openai", model="gpt-5").agent_label({}) == "openai · gpt-5"
     local = HostSettings(provider="openai", model="qwen3:4b", base_url="http://localhost:11434/v1")
     assert local.agent_label({}) == "openai · qwen3:4b · local"
+
+
+async def test_a_missing_workspace_fails_before_the_session_is_created(tmp_path: Path) -> None:
+    settings = HostSettings(
+        provider="fake", workspace=tmp_path / "gone", data_dir=tmp_path / "data", room="r_test"
+    )
+    with pytest.raises(ConfigError, match="does not exist"):
+        await build_host(settings)
+    assert not (tmp_path / "data" / "sessions" / "r_test.db").exists()
