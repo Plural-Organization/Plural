@@ -21,7 +21,7 @@ def test_system_prompt_describes_the_room_environment_and_project() -> None:
     assert "- Platform: Darwin 24.6.0 (arm64)" in system
     assert "- Git: branch main" in system
     assert "- Session started on 2026-10-27" in system
-    assert system.endswith("# Project notes (AGENTS.md)\nRun make test.")
+    assert system.endswith('<project_notes path="AGENTS.md">\nRun make test.\n</project_notes>')
 
 
 def test_system_prompt_is_stable_for_prompt_caching() -> None:
@@ -31,10 +31,10 @@ def test_system_prompt_is_stable_for_prompt_caching() -> None:
     assert "not a git repository" in builder.system()
 
 
-def test_tool_rules_end_the_how_to_work_list() -> None:
+def test_tool_rules_follow_the_how_to_work_list() -> None:
     system = ContextBuilder(tool_rules=("Use write only for new files.",)).system()
     assert "- Never print or copy secrets" in system
-    assert system.endswith("- Use write only for new files.")
+    assert system.endswith("<tool_rules>\n- Use write only for new files.\n</tool_rules>")
 
 
 def test_only_tools_declared_up_front_bring_rules() -> None:

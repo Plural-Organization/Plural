@@ -1,0 +1,1 @@
+The reader already has the earlier briefing of the same session inside <earlier>. Write only what changed or was decided since then, in the same sections, and leave out the sections with nothing new. If nothing changed, say so in one line.

@@ -42,6 +42,8 @@ src/plural/
 ├── core/       state reducer, roles, policy engine   (pure)
 ├── security/   tokens, host keys, redaction
 ├── agent/      loop, tools, sandbox, providers
+│   ├── prompts/    the agent's prompts as Markdown, their parts in XML tags
+│   ├── builtin_agents/, builtin_skills/   explore and plural-plugins, in the user format
 │   ├── providers/  api/anthropic, api/openai_compat, cli/: each adapter with its presets.py
 │   └── tools/  core/ declared on every request, extra/ loaded with tool_search
 ├── storage/    SQLite event store, migrations, export

@@ -13,6 +13,7 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from plural.agent.prompts import tag
 from plural.protocol.models import SkillHit, SkillScope, SkillView
 from plural.security.secrets import is_denied_path
 
@@ -191,15 +192,17 @@ class SkillLibrary:
             for skill in self._skills
             if not skill.hidden
         ]
-        return "\n".join(
-            (
-                "# Skills",
-                "Expert instructions for one kind of task, picked by description. For "
-                "specialist know-how none of them covers, such as a file format, a framework's "
-                "conventions or a deploy target, look for one with skill_search.",
-                "Installed skills:" if installed else "No skills are installed yet.",
-                *installed,
-            )
+        return tag(
+            "skills",
+            "\n".join(
+                (
+                    "Expert instructions for one kind of task, picked by description. For "
+                    "specialist know-how none of them covers, such as a file format, a "
+                    "framework's conventions or a deploy target, look for one with skill_search.",
+                    "Installed skills:" if installed else "No skills are installed yet.",
+                    *installed,
+                )
+            ),
         )
 
     async def expand(self, text: str) -> tuple[str, str, str]:
@@ -212,10 +215,10 @@ class SkillLibrary:
         content = await asyncio.to_thread(
             (skill.path / SKILL_FILE).read_text, encoding="utf-8", errors="replace"
         )
-        block = (
-            f'<skill name="{skill.name}">\n'
-            f'Load its other files with skill(name="{skill.name}", file=...).\n\n'
-            f"{body(content)}\n</skill>"
+        block = tag(
+            "skill",
+            f'Load its other files with skill(name="{skill.name}", file=...).\n\n{body(content)}',
+            name=skill.name,
         )
         args = args.strip()
         return skill.name, args, f"{block}\n\n{args}" if args else block

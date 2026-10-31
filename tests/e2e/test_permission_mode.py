@@ -38,5 +38,5 @@ async def test_plan_mode_refuses_changes_and_tells_the_agent_why(tmp_path: Path)
         assert not ended.ok
         assert PLAN_MODE in ended.output
         assert not (tmp_path / "ws" / "made.txt").exists()
-        assert "plan mode" in str(provider.requests[0].messages[-1])
+        assert "<plan_mode>" in str(provider.requests[0].messages[-1])
         assert not any(isinstance(e, ApprovalRequested) for e in owner.events)

@@ -16,6 +16,7 @@ from plural.agent.agents import AgentError, AgentLibrary, AgentSpec, agent_tools
 from plural.agent.loop import AskFailed, BriefingFailed
 from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.messages import Message, NotesTurn, UserTurn
+from plural.agent.prompts import prompt
 from plural.agent.providers.base import LlmImage
 from plural.agent.skills import SKILL_COMMAND, Package, SkillError, SkillLibrary, parse_package
 from plural.agent.tools.extra.board import AGENT_AUTHOR, BoardRefused
@@ -236,10 +237,7 @@ from plural.security.secrets import Redactor, is_denied_path
 
 log = structlog.get_logger(__name__)
 
-PLAN_NOTE = (
-    "[plan mode: research only. Read the code, do not change files or run commands that change "
-    "anything. End with a concrete step-by-step plan; the host approves it before you start]"
-)
+PLAN_NOTE = prompt("plan")
 MAX_REPLY_CHARS = 8000
 MAX_DISPLAY_CHARS = 500
 MAX_SHOWN_CHARS = 20_000

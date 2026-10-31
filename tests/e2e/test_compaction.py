@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from plural.agent.compaction import SUMMARY_PROMPT
-from plural.agent.messages import SUMMARY_HEADER
+from plural.agent.messages import summary_message
 from plural.agent.providers.base import UsageReport
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
@@ -47,7 +47,7 @@ async def test_automatic_compaction_is_shared_and_survives_a_restart(tmp_path: P
         await owner.client.send(PromptSubmit(text="continue"))
         await owner.next(RunEnded)
         first = resumed.requests[0].messages
-        assert first[0].content == f"{SUMMARY_HEADER}\nlisted the workspace"
+        assert first[0].content == summary_message("listed the workspace")
         assert "look around" in first[1].content
         assert (first[2].role, first[2].content) == ("assistant", "all done")
         assert "continue" in first[3].content

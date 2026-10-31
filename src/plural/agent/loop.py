@@ -39,6 +39,7 @@ from plural.agent.messages import (
     settled,
     to_llm,
 )
+from plural.agent.prompts import prompt
 from plural.agent.providers.base import (
     ContextOverflow,
     LlmEvent,
@@ -89,10 +90,7 @@ class AskFailed(Exception):
     pass
 
 
-ASIDE = (
-    "\n\n[An aside, outside the task: answer this in plain text. Do not call tools. Your answer is "
-    "not added to the conversation]"
-)
+ASIDE = f"\n\n{prompt('aside')}"
 
 
 SHARED = Provenance(initiator_id="shared-context", initiator_role=Role.VIEWER, origin=Origin.DIRECT)

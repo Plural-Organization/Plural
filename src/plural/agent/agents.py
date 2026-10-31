@@ -7,13 +7,15 @@ them next to skills; `explore` is built in.
 
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final, Literal
 
+from plural.agent.prompts import tag
 from plural.agent.skills import NAME, frontmatter
 from plural.protocol.models import AgentView, SkillScope
 
+BUILTIN_DIR: Final = Path(__file__).parent / "builtin_agents"
 AGENT_DIRS: Final = ((".agents", "agents"), (".claude", "agents"), (".plural", "agents"))
 DEFAULT_TURNS: Final = 20
 MAX_TURNS: Final = 50
@@ -39,17 +41,6 @@ TOOL_NAMES: Final = {
     "skill": "skill",
 }
 READ_ONLY: Final = ("read", "grep", "glob", "ls", "web_search", "web_fetch", "skill")
-
-EXPLORE_PROMPT: Final = """\
-You are explore, a read-only research agent working for another agent in a shared Plural session.
-
-- You get one task. Investigate it with the read-only tools you have, then answer and stop.
-- Search broadly first (glob, grep, ls), then read only the parts that matter. Call several \
-read-only tools in the same turn: they run in parallel.
-- You cannot change anything. Never suggest that you did.
-- Your final message is the whole report: lead with the answer, then the evidence. Cite every \
-claim as path:line. Say plainly what you could not find or did not check.
-- Keep the report short and concrete; the other agent reads it, not a person."""
 
 
 class AgentError(Exception):
@@ -91,17 +82,6 @@ class AgentSpec:
             f"max_turns: {self.max_turns}",
         )
         return "---\n" + "\n".join(header) + f"\n---\n\n{self.prompt.strip()}\n"
-
-
-EXPLORE: Final = AgentSpec(
-    name="explore",
-    description=(
-        "Broad read-only research across the codebase or the web: finding where something lives, "
-        "how a flow works, every place a name is used. Returns findings with path:line. Use it "
-        "instead of many reads of your own when the answer needs looking through many files."
-    ),
-    prompt=EXPLORE_PROMPT,
-)
 
 
 def agent_tools(raw: str | None) -> tuple[str, ...]:
@@ -151,6 +131,16 @@ def read_agent(path: Path, scope: SkillScope) -> AgentSpec | None:
         scope=scope,
         path=path,
     )
+
+
+def _builtin(name: str) -> AgentSpec:
+    spec = read_agent(BUILTIN_DIR / f"{name}.md", SkillScope.GLOBAL)
+    if spec is None:
+        raise AgentError(f"the built-in agent {name} is missing")
+    return replace(spec, scope=None, path=None)
+
+
+EXPLORE: Final = _builtin("explore")
 
 
 class AgentLibrary:
@@ -222,11 +212,13 @@ def describe(agents: Sequence[AgentSpec]) -> str | None:
     if not agents:
         return None
     lines = [f"- {agent.name}: {agent.description}" for agent in agents]
-    return "\n".join(
-        (
-            "# Sub-agents",
-            "Hand broad searches and research to one with the agent tool instead of reading many "
-            "files yourself:",
-            *lines,
-        )
+    return tag(
+        "sub_agents",
+        "\n".join(
+            (
+                "Hand broad searches and research to one with the agent tool instead of reading "
+                "many files yourself:",
+                *lines,
+            )
+        ),
     )

@@ -7,7 +7,7 @@ from tests.loop_support import StubGate, collect, make_loop, turn
 from plural.agent.compaction import SUMMARY_PROMPT, extract_summary
 from plural.agent.events import AgentEvent, Compacted, MessageEnd, RunEnd
 from plural.agent.loop import AgentLoop, LoopLimits
-from plural.agent.messages import SUMMARY_HEADER, SummaryTurn, ToolResultTurn
+from plural.agent.messages import SummaryTurn, ToolResultTurn, summary_message
 from plural.agent.providers.base import (
     ContextOverflow,
     LlmEvent,
@@ -73,7 +73,7 @@ async def test_large_prompt_is_summarized_between_tool_rounds(tmp_path: Path) ->
     assert any(m.role == "tool" for m in summarizing.messages)
 
     assert [m.role for m in resumed.messages] == ["user", "user"]
-    assert resumed.messages[0].content == f"{SUMMARY_HEADER}\nlisted the workspace"
+    assert resumed.messages[0].content == summary_message("listed the workspace")
     assert "go" in resumed.messages[1].content
     assert isinstance(loop.conversation[0], SummaryTurn)
     assert not any(isinstance(m, ToolResultTurn) for m in loop.conversation[:2])
@@ -143,7 +143,7 @@ async def test_requested_compaction_applies_to_the_next_run(tmp_path: Path) -> N
     events = await collect(loop, turn("two"))
 
     assert [e.summary for e in compacted(events)] == ["S"]
-    assert provider.requests[2].messages[0].content == f"{SUMMARY_HEADER}\nS"
+    assert provider.requests[2].messages[0].content == summary_message("S")
     assert "two" in provider.requests[2].messages[1].content
 
 
@@ -162,7 +162,7 @@ async def test_restored_summary_seeds_the_conversation(tmp_path: Path) -> None:
     loop.restore([SummaryTurn(text="earlier work")])
     await collect(loop, turn("continue"))
     messages = provider.requests[0].messages
-    assert messages[0].content == f"{SUMMARY_HEADER}\nearlier work"
+    assert messages[0].content == summary_message("earlier work")
     assert "continue" in messages[1].content
 
 

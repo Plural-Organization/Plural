@@ -300,8 +300,18 @@ tools: Read, Grep, Glob, Bash
 model: haiku        # haiku/fast runs on the fast model, anything else on the main one
 max_turns: 20
 ---
-You review the diff you are given. Report each problem with path:line.
+You review the diff you are given for another agent.
+
+<task>
+- Look for bugs, missing tests and changes the diff does not explain.
+</task>
+
+<report>
+- One line per problem, with path:line.
+</report>
 ```
+
+Plain instructions work too. Parts in XML tags, as Plural's own prompts and the built-in `explore` (`src/plural/agent/builtin_agents/explore.md`) use, help the model tell the parts apart.
 
 Every tool call a sub-agent makes goes through the same permissions as the main agent: deny rules, the permission mode and the host's approval for edits and commands. A sub-agent cannot start another one.
 

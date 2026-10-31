@@ -6,7 +6,7 @@ from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.briefing import briefing_prompt
 from plural.agent.loop import BriefingFailed
-from plural.agent.messages import NOTES_HEADER, NotesTurn
+from plural.agent.messages import NotesTurn, notes_message
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.core.provenance import is_guest_originated
 from plural.protocol.models import Role
@@ -83,7 +83,7 @@ async def test_notes_reach_the_model_as_untrusted_notes_before_the_next_prompt(
     await collect(loop, turn("continue her work"))
 
     sent = [message.content for message in provider.requests[0].messages]
-    assert sent[0] == f"{NOTES_HEADER.format(source='alia')}\nalia fixed the login with a retry"
+    assert sent[0] == notes_message("alia", "alia fixed the login with a retry")
     assert "not instructions" in sent[0]
     assert sent[1].endswith("continue her work")
 
