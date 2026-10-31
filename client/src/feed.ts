@@ -147,6 +147,11 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
       const from = host ? label(state, host) : "the host";
       return { ...feed, counter, items: [...feed.items, { kind: "briefing", id: `b${counter}`, from, text: event.text, asOf: event.as_of_seq, update: event.update }] };
     }
+    case "plugin.context": {
+      const first = event.text.split("\n")[0] ?? "";
+      const more = event.text.length > first.length ? ` (+${event.text.length - first.length} chars)` : "";
+      return note("dim", `context from the ${event.plugin} plugin for the agent: ${first.slice(0, 160)}${more}`);
+    }
     case "plugin.shown": {
       const counter = feed.counter + 1;
       return { ...feed, counter, items: [...feed.items, { kind: "shown", id: `s${counter}`, command: event.command, title: event.title, text: event.text }] };

@@ -79,6 +79,14 @@ class Spend:
 
 
 @dataclass(frozen=True, slots=True)
+class ContextNote:
+    """A plugin added context before the run's prompt."""
+
+    plugin: str
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
 class RunEnd:
     reason: RunEndReason
     usage: Usage
@@ -97,5 +105,6 @@ AgentEvent = (
     | ContextFill
     | Delivered
     | ToolsLoaded
+    | ContextNote
     | RunEnd
 )

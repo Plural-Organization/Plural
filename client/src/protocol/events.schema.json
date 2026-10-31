@@ -1349,6 +1349,7 @@
               "participant.role_changed": "#/$defs/ParticipantRoleChanged",
               "participant.selected": "#/$defs/ParticipantSelected",
               "participant.typing": "#/$defs/ParticipantTyping",
+              "plugin.context": "#/$defs/PluginContextAdded",
               "plugin.line": "#/$defs/PluginLineSet",
               "plugin.shown": "#/$defs/PluginShown",
               "plugins.changed": "#/$defs/PluginsChanged",
@@ -1536,6 +1537,9 @@
             },
             {
               "$ref": "#/$defs/PluginLineSet"
+            },
+            {
+              "$ref": "#/$defs/PluginContextAdded"
             },
             {
               "$ref": "#/$defs/ToolStarted"
@@ -2145,6 +2149,32 @@
         "description",
         "usage",
         "host_only"
+      ],
+      "type": "object"
+    },
+    "PluginContextAdded": {
+      "description": "A plugin's before_run hook gave the agent context ahead of the run's prompt.",
+      "properties": {
+        "plugin": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "plugin.context",
+          "default": "plugin.context",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "run_id",
+        "plugin",
+        "text"
       ],
       "type": "object"
     },
@@ -3507,6 +3537,7 @@
           "participant.role_changed": "#/$defs/ParticipantRoleChanged",
           "participant.selected": "#/$defs/ParticipantSelected",
           "participant.typing": "#/$defs/ParticipantTyping",
+          "plugin.context": "#/$defs/PluginContextAdded",
           "plugin.line": "#/$defs/PluginLineSet",
           "plugin.shown": "#/$defs/PluginShown",
           "plugins.changed": "#/$defs/PluginsChanged",
@@ -3694,6 +3725,9 @@
         },
         {
           "$ref": "#/$defs/PluginLineSet"
+        },
+        {
+          "$ref": "#/$defs/PluginContextAdded"
         },
         {
           "$ref": "#/$defs/ToolStarted"

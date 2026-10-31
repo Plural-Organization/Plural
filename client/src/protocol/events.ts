@@ -185,6 +185,7 @@ export interface EventsSchema {
     | CommandInvoked
     | CommandReplied
     | PluginLineSet
+    | PluginContextAdded
     | ToolStarted
     | ToolOutput
     | ToolEnded
@@ -947,6 +948,18 @@ export interface PluginLineSet {
   type: "plugin.line";
 }
 /**
+ * A plugin's before_run hook gave the agent context ahead of the run's prompt.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginContextAdded".
+ */
+export interface PluginContextAdded {
+  plugin: string;
+  run_id: string;
+  text: string;
+  type: "plugin.context";
+}
+/**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "ToolStarted".
  */
@@ -1284,6 +1297,7 @@ export interface EventRecord {
     | CommandInvoked
     | CommandReplied
     | PluginLineSet
+    | PluginContextAdded
     | ToolStarted
     | ToolOutput
     | ToolEnded

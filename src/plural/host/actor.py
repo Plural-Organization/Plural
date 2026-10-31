@@ -64,7 +64,14 @@ from plural.host.inbox import (
 )
 from plural.host.invites import InviteBook, RoomLink
 from plural.host.ledger import ChangeLedger
-from plural.host.plugins import CommandContext, PluginCommand, PluginError, PluginHost, RunInfo
+from plural.host.plugins import (
+    CommandContext,
+    PluginCommand,
+    PluginError,
+    PluginHost,
+    PromptInfo,
+    RunInfo,
+)
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.publisher import Publisher
 from plural.host.team_admission import (
@@ -167,6 +174,7 @@ from plural.protocol.events import (
     ParticipantSelected,
     ParticipantTyping,
     PermissionModeChanged,
+    PluginContextAdded,
     PluginLineSet,
     PluginsChanged,
     PluginShown,
@@ -1411,7 +1419,22 @@ class SessionActor:
         if self._plugins is not None and self._plugins.hooks("run_end"):
             self._run_changes = ChangeLedger(self._plugins.workspace)
         await self._emit(RunStarted(run_id=run_id, prompt_id=turn.id, provenance=turn.provenance))
-        self._agent.start(run_id, turn)
+        plugins = self._plugins
+        if plugins is None or not plugins.hooks("before_run"):
+            self._agent.start(run_id, turn)
+            return
+
+        async def prepare(prompt: UserTurn) -> list[tuple[str, str]]:
+            info = PromptInfo(
+                prompt_id=prompt.id,
+                text=prompt.text,
+                author_id=prompt.provenance.initiator_id,
+                role=prompt.provenance.initiator_role.value,
+            )
+            added = await plugins.before_run(info)
+            return [(name, self._redactor.redact(text)) for name, text in added]
+
+        self._agent.start(run_id, turn, prepare)
 
     async def _on_agent(self, run_id: str, event: agent.AgentEvent) -> None:
         if self._state.run is None or self._state.run.id != run_id:
@@ -1431,6 +1454,8 @@ class SessionActor:
                 )
             case agent.ToolsLoaded(names=names):
                 await self._emit(ToolsLoaded(tools=names))
+            case agent.ContextNote(plugin=plugin, text=text):
+                await self._emit(PluginContextAdded(run_id=run_id, plugin=plugin, text=text))
             case agent.Delivered(prompt_ids=prompt_ids):
                 for prompt_id in prompt_ids:
                     await self._emit(

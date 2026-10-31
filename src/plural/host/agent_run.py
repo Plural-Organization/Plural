@@ -1,11 +1,11 @@
 import asyncio
-from collections.abc import AsyncIterator, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 
 import structlog
 
-from plural.agent.events import AgentEvent, ContextFill, RunEnd, Spend
+from plural.agent.events import AgentEvent, ContextFill, ContextNote, RunEnd, Spend
 from plural.agent.loop import AgentLoop
-from plural.agent.messages import Message, NotesTurn, UserTurn
+from plural.agent.messages import PLUGIN_SOURCE, Message, NotesTurn, UserTurn
 from plural.agent.providers.base import LLMProvider
 from plural.host.inbox import AgentOutput, Inbox
 from plural.protocol.models import RunEndReason
@@ -13,6 +13,9 @@ from plural.protocol.models import RunEndReason
 log = structlog.get_logger(__name__)
 
 ABORT_GRACE_S = 5.0
+
+# Plugin before_run hooks: the prompt in, (plugin, text) pairs out.
+Prepare = Callable[[UserTurn], Awaitable[Sequence[tuple[str, str]]]]
 
 
 class AgentRun:
@@ -27,8 +30,18 @@ class AgentRun:
     def active(self) -> bool:
         return self._task is not None and not self._task.done()
 
-    def start(self, run_id: str, turn: UserTurn) -> None:
-        self._launch(run_id, lambda cancel: self._loop.run(turn, cancel=cancel))
+    def start(self, run_id: str, turn: UserTurn, prepare: Prepare | None = None) -> None:
+        self._launch(run_id, lambda cancel: self._run(turn, prepare, cancel))
+
+    async def _run(
+        self, turn: UserTurn, prepare: Prepare | None, cancel: asyncio.Event
+    ) -> AsyncIterator[AgentEvent]:
+        # Plugin hooks run in the run's task, so a slow one never holds up the room.
+        for plugin, text in await prepare(turn) if prepare is not None else ():
+            self._loop.add_context(NotesTurn(source=f"{PLUGIN_SOURCE}{plugin}", text=text))
+            yield ContextNote(plugin, text)
+        async for event in self._loop.run(turn, cancel=cancel):
+            yield event
 
     def compact(self, run_id: str) -> None:
         self._launch(run_id, lambda cancel: self._loop.compact(cancel=cancel))

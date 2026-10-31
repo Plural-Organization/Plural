@@ -58,6 +58,7 @@ RUN_TIMEOUT_S: Final = 120.0
 ASK_TIMEOUT_S: Final = 120.0
 GUARD_TIMEOUT_S: Final = 5.0
 HOOK_TIMEOUT_S: Final = 120.0
+MAX_CONTEXT_CHARS: Final = 8000
 HOOK_EVENTS: Final = frozenset({"session_start", "before_run", "tool_call", "run_end"})
 MAX_OUTPUT_CHARS: Final = 64_000
 
@@ -236,6 +237,16 @@ class Verdict:
     action: Literal["ask", "deny"]
     reason: str
     plugin: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class PromptInfo:
+    """The prompt a run starts with, as a before_run hook sees it."""
+
+    prompt_id: str
+    text: str
+    author_id: str
+    role: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -552,6 +563,23 @@ class PluginHost:
         return HookContext(
             plugin=plugin, workspace=self.workspace, inbox=self._inbox, can_prompt=can_prompt
         )
+
+    async def before_run(self, prompt: PromptInfo) -> list[tuple[str, str]]:
+        """Collect what before_run hooks add for the agent, 8,000 characters at most in all."""
+        added: list[tuple[str, str]] = []
+        room = MAX_CONTEXT_CHARS
+        for hook in self.hooks("before_run"):
+            try:
+                text = await asyncio.wait_for(
+                    hook.handler(prompt, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                )
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                continue
+            if isinstance(text, str) and text.strip() and room > 0:
+                added.append((hook.plugin, text.strip()[:room]))
+                room -= len(added[-1][1])
+        return added
 
     async def run_ended(self, run: RunInfo) -> None:
         """Run every run_end hook in turn; one that fails is reported and the rest still run."""

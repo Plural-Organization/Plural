@@ -1,6 +1,12 @@
 from datetime import UTC, datetime
 
-from plural.agent.messages import AssistantTurn, SummaryTurn, ToolResultTurn, UserTurn
+from plural.agent.messages import (
+    AssistantTurn,
+    NotesTurn,
+    SummaryTurn,
+    ToolResultTurn,
+    UserTurn,
+)
 from plural.core.provenance import direct
 from plural.host.history import INTERRUPTED, replay
 from plural.protocol.events import (
@@ -8,6 +14,7 @@ from plural.protocol.events import (
     Event,
     EventRecord,
     MessageEnded,
+    PluginContextAdded,
     PromptAccepted,
     PromptDequeued,
     RunEnded,
@@ -106,3 +113,18 @@ def test_results_follow_call_order_and_orphans_are_dropped() -> None:
 
     results = [m for m in conversation if isinstance(m, ToolResultTurn)]
     assert [r.call_id for r in results] == ["c1", "c2"]
+
+
+def test_plugin_context_is_restored_before_the_prompt_it_came_with() -> None:
+    log = records(
+        prompt("pm_1", "fix it"),
+        RunStarted(run_id="run_1", prompt_id="pm_1", provenance=direct("p_host", Role.HOST)),
+        PluginContextAdded(run_id="run_1", plugin="git", text="branch feat/x"),
+        MessageEnded(run_id="run_1", message_id="m1", text="fixed"),
+        RunEnded(run_id="run_1", reason=RunEndReason.STOP),
+    )
+    conversation = replay(log, names={}, texts={})
+    assert conversation[0] == NotesTurn(source="plugin:git", text="branch feat/x")
+    assert isinstance(conversation[1], UserTurn)
+    assert conversation[1].text == "fix it"
+    assert conversation[2] == AssistantTurn(text="fixed")

@@ -145,6 +145,27 @@ Any deny wins. There is no allow: a call the policy refuses, or one plan mode fo
 hook. A hook gets 5 seconds; one that raises or takes longer counts as `ask`, so a broken guard makes the
 host ask rather than let a call through. `ctx.reply(text)` and `ctx.run(*argv)` work as in commands.
 
+### Before a run
+
+A `before_run` hook can hand the agent context just before a run starts, such as the branch or the tests
+that fail:
+
+```python
+def setup(plural):
+    @plural.on("before_run")
+    async def branch(prompt, ctx):
+        name = (await ctx.run("git", "branch", "--show-current")).strip()
+        return f"current branch: {name}"
+```
+
+It gets `prompt.prompt_id`, `prompt.text`, `prompt.author_id` and `prompt.role`, and returns text or
+nothing. The text goes to the agent as a note from the plugin right before the prompt, never into the
+system prompt, and is kept in the session log, so a restored session gives the agent the same note. The
+room sees a short line saying the plugin added context. Notes from all plugins together are capped at
+8,000 characters; a hook gets 5 seconds and one that fails or is late adds nothing. It runs when a run
+starts, not for a prompt that joins a run already going. Unlike a briefing, a plugin's note does not
+make the agent ask before every change: it is the host's own code.
+
 ### After a run
 
 A `run_end` hook runs after every run of the agent, in the background:

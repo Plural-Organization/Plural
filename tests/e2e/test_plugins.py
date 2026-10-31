@@ -19,6 +19,7 @@ from plural.protocol.events import (
     ApprovalRequested,
     CommandInvoked,
     CommandReplied,
+    PluginContextAdded,
     PluginLineSet,
     PluginsChanged,
     PluginShown,
@@ -354,3 +355,31 @@ async def test_a_plugin_status_line_is_shared_throttled_and_dropped_with_the_plu
         await owner.client.send(PluginsRemove(name="ci"))
         await guest.next(PluginsChanged)
         assert guest.client.projection.state.plugin_lines == ()
+
+
+BEFORE = """
+def setup(plural):
+    @plural.on("before_run")
+    async def branch(prompt, ctx):
+        return f"branch feat/x, asked by {prompt.role}"
+"""
+
+
+async def test_a_before_run_hook_gives_the_agent_context_without_tainting_the_run(
+    tmp_path: Path,
+) -> None:
+    install(tmp_path, "git", BEFORE)
+    provider = FakeProvider([use_tool("write", path="a.txt", content="a\n"), reply("done")])
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        owner = await session.owner()
+        await owner.client.send(PermissionModeSet(mode=PermissionMode.AUTO))
+        await owner.client.send(PromptSubmit(text="write a"))
+        added = await owner.next(PluginContextAdded)
+        assert (added.plugin, added.text) == ("git", "branch feat/x, asked by host")
+        assert (await owner.next(ToolEnded)).ok
+        await owner.next(RunEnded)
+        assert not any(isinstance(event, ApprovalRequested) for event in owner.events)
+        contents = [message.content for message in provider.requests[0].messages]
+        context = next(i for i, text in enumerate(contents) if "branch feat/x" in text)
+        assert "git plugin" in contents[context]
+        assert "write a" in contents[context + 1]

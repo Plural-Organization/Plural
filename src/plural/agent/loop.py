@@ -29,6 +29,7 @@ from plural.agent.events import (
 from plural.agent.gate import PolicyGate
 from plural.agent.interrupt import Interrupted, TimedOut, interruptible
 from plural.agent.messages import (
+    PLUGIN_SOURCE,
     AssistantTurn,
     Message,
     NotesTurn,
@@ -265,13 +266,20 @@ class AgentLoop:
         self._notes.append(turn)
         self._shared = True
 
+    def add_context(self, turn: NotesTurn) -> None:
+        """Notes from the host's own plugins: unlike a briefing, they do not mark the run shared."""
+        self._notes.append(turn)
+
     def load_tools(self, names: Sequence[str]) -> None:
         """Declare deferred tools loaded in an earlier session, before the next run."""
         self._tools.load(names)
 
     def restore(self, conversation: Sequence[Message]) -> None:
         self._conversation = list(conversation)
-        self._shared = any(isinstance(message, NotesTurn) for message in conversation)
+        self._shared = any(
+            isinstance(message, NotesTurn) and not message.source.startswith(PLUGIN_SOURCE)
+            for message in conversation
+        )
         self._context_tokens = sum(_estimate_tokens(message) for message in conversation)
 
     def cancel_pending(self, prompt_id: str) -> bool:

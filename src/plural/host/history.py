@@ -1,6 +1,7 @@
 from collections.abc import Iterable, Mapping
 
 from plural.agent.messages import (
+    PLUGIN_SOURCE,
     AssistantTurn,
     Message,
     NotesTurn,
@@ -14,6 +15,7 @@ from plural.protocol.events import (
     ContextCompacted,
     EventRecord,
     MessageEnded,
+    PluginContextAdded,
     PromptAccepted,
     PromptDequeued,
     RunEnded,
@@ -82,6 +84,13 @@ def replay(
                         is_error=not ok,
                     )
                 )
+            case PluginContextAdded(plugin=plugin, text=text) if run_prompt is not None:
+                # Recorded after run.started, but the agent read it just before the prompt.
+                at = next(
+                    (i for i in range(len(messages) - 1, -1, -1) if messages[i] is run_prompt),
+                    len(messages),
+                )
+                messages.insert(at, NotesTurn(source=f"{PLUGIN_SOURCE}{plugin}", text=text))
             case BriefingImported(item=item, text=text):
                 turn = NotesTurn(source=item.source, text=text)
                 (notes if run_prompt is not None else messages).append(turn)

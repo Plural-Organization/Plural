@@ -97,6 +97,15 @@ class SkillsFound(TransientEvent):
     hits: tuple[SkillHit, ...]
 
 
+class PluginContextAdded(EventBase):
+    """A plugin's before_run hook gave the agent context ahead of the run's prompt."""
+
+    type: Literal["plugin.context"] = "plugin.context"
+    run_id: str
+    plugin: str
+    text: str
+
+
 class PluginLineSet(EventBase):
     """A plugin's status line changed; empty text removes it."""
 
@@ -525,6 +534,7 @@ Event = Annotated[
     | CommandInvoked
     | CommandReplied
     | PluginLineSet
+    | PluginContextAdded
     | ToolStarted
     | ToolOutput
     | ToolEnded
