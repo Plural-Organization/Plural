@@ -1,20 +1,32 @@
 import { useEffect, useState } from "react";
 import { PERMISSION_LABELS, shortTokens, type PermissionMode } from "@plural/client";
 import { theme } from "../theme";
+import { VERBS, verbAt } from "../verbs";
 import { Spinner, useElapsed } from "./Spinner";
 
-export function Working({ status, canAbort, queued }: { status: string; canAbort: boolean; queued: number }) {
+const GLYPHS = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
+const GENERIC = /^(waiting for the model|thinking)/;
+
+export function Working({ status, verb, canAbort, queued }: { status: string; verb: number; canAbort: boolean; queued: number }) {
   const elapsed = useElapsed(true);
-  const text = status.replace(/^…\s*/, "") || "working";
-  const verb = text === "waiting for the model" ? "thinking" : text;
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setFrame((value) => (value + 1) % GLYPHS.length), 110);
+    return () => clearInterval(timer);
+  }, []);
+  const word = VERBS[verbAt(verb, elapsed * 1000)]?.[0] ?? "Working";
+  const detail = status.replace(/^…\s*/, "");
   return (
     <box paddingX={2} height={1} flexShrink={0}>
       <text fg={theme.dim}>
-        <Spinner color={theme.accent} />
-        <span fg={theme.accent}> {verb}…</span>
-        {` ${elapsed}s`}
-        {queued > 0 ? <span fg={theme.warn}> · {queued} queued</span> : null}
+        <span fg={theme.accent}>
+          {GLYPHS[frame]} {word}…
+        </span>
+        {` (${elapsed}s`}
         {canAbort ? " · esc to interrupt" : ""}
+        {detail && !GENERIC.test(detail) ? ` · ${detail}` : ""}
+        {")"}
+        {queued > 0 ? <span fg={theme.warn}> · {queued} queued</span> : null}
       </text>
     </box>
   );

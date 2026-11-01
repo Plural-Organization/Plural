@@ -55,6 +55,8 @@ import type { AgentChoice, PresetId } from "./presets";
 import type { Tab } from "./settingsModel";
 import { copyToClipboard, IMAGE_LIMIT_BYTES, pasteImage } from "./lib/clipboard";
 import { createSyntaxStyle } from "./syntax";
+import { toolRuns } from "./steps";
+import { doneText, firstVerb } from "./verbs";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { setTheme, theme } from "./theme";
 import * as sound from "./lib/sound";
@@ -102,6 +104,7 @@ const TYPING_IDLE_MS = 2500;
 const PLAN_APPROVED = "The host approved the plan. Implement it now.";
 const UPLOAD_WAIT_MS = 10_000;
 const LONG_RUN_MS = 15_000;
+const DONE_MIN_MS = 2000;
 const DELIVERED_MS = 1500;
 const FAILED_MS = 8000;
 
@@ -196,6 +199,8 @@ export function App({
   const [behind, setBehind] = useState({ away: false, fresh: 0, chat: 0 });
   const anchor = useRef(0);
   const [finished, setFinished] = useState(false);
+  const [verb, setVerb] = useState(0);
+  const runClock = useRef<{ at: number; verb: number } | null>(null);
   const runStart = useRef<number | null>(null);
   const deliveryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [images, setImages] = useState<PastedImage[]>([]);
@@ -269,6 +274,16 @@ export function App({
           const pending = trayRef.current?.kind === "busy";
           if (!(pending && event.type === "error")) {
             commit(absorb(feedRef.current, event, client.projection));
+          }
+          if (event.type === "run.started") {
+            runClock.current = { at: Date.now(), verb: firstVerb() };
+            setVerb(runClock.current.verb);
+          } else if (event.type === "run.ended" && runClock.current !== null) {
+            const { at, verb: base } = runClock.current;
+            runClock.current = null;
+            if (Date.now() - at >= DONE_MIN_MS) {
+              commit(withNotice(feedRef.current, "dim", doneText(base, Date.now() - at, new Date()), "done"));
+            }
           }
           publish();
           if (event.type === "chat.posted" && mentionsMe(event, client.projection.meId)) {
@@ -354,6 +369,7 @@ export function App({
   const searching = focus === "search";
   const hits = useMemo(() => (searching ? findInFeed(feed.items, query).reverse() : []), [feed.items, query, searching]);
   const hitSet = useMemo(() => new Set(hits), [hits]);
+  const runs = useMemo(() => toolRuns(feed.items, (startId) => allOpen || opened.has(`run:${startId}`), hitSet), [feed.items, allOpen, opened, hitSet]);
   const hitIndex = Math.max(0, found === null ? 0 : hits.indexOf(found));
   const current = hits[hitIndex] ?? null;
 
@@ -1454,6 +1470,7 @@ export function App({
                   width={width - (showPanel ? SIDEBAR_WIDTH : 0) - 9}
                   expanded={allOpen || opened.has(item.id)}
                   queued={queuedIds.get(item.id) ?? null}
+                  runs={runs}
                   onToggle={toggle}
                   onCopy={(text) => copy(text, "Copied", `${text.length} characters`)}
                 />
@@ -1474,7 +1491,7 @@ export function App({
         {projection.compacting ? (
           <Compacting tokens={projection.compacting.tokens} />
         ) : running ? (
-          <Working status={runStatus} canAbort={isHost} queued={state.queue.length} />
+          <Working status={runStatus} verb={verb} canAbort={isHost} queued={state.queue.length} />
         ) : null}
         {typers.length > 0 ? (
           <box paddingX={2} height={1} flexShrink={0}>
