@@ -52,7 +52,7 @@ describe("the installer pins both parts to one release", () => {
 
   test("the host is refreshed from the index so a stale cache cannot keep an old one", async () => {
     const text = await Bun.file(SCRIPT).text();
-    expect(text).toContain('uv tool install --force --refresh "$package"');
+    expect(text).toContain('uv tool install --force --refresh-package plural-agent "$package"');
   });
 
   test("the host runs on any Python the machine has, so uv does not fetch one it does not need", async () => {
@@ -118,5 +118,46 @@ describe("the optional model SDKs", () => {
     expect(await extrasFor({}, tools)).toBe("openai");
     expect(await extrasFor({ PLURAL_PROVIDER: "anthropic" }, tools)).toBe("anthropic,openai");
     writeFileSync(join(tools, "sdks"), "");
+  });
+});
+
+async function currentWith(version: string, installed: string, sdks: string, env: Record<string, string> = {}): Promise<number> {
+  const tools = mkdtempSync(join(tmpdir(), "plural-current-"));
+  const bin = join(tools, "env", "plural-agent", "bin");
+  Bun.spawnSync(["mkdir", "-p", bin]);
+  writeFileSync(join(tools, "sdks"), sdks);
+  writeFileSync(join(bin, "python"), `#!/bin/sh\ngrep -qx "\${2#import }" "${join(tools, "sdks")}"\n`);
+  chmodSync(join(bin, "python"), 0o755);
+  const listing = installed ? `plural-agent v${installed}\n- plural-host` : "";
+  writeFileSync(join(tools, "uv"), `#!/bin/sh\nif [ "$2" = dir ]; then echo "${join(tools, "env")}"; else printf '${listing}\\n'; fi\n`);
+  chmodSync(join(tools, "uv"), 0o755);
+  const child = Bun.spawn(["sh", "-c", `PLURAL_INSTALL_SOURCE_ONLY=1 . "${SCRIPT}"; VERSION=${version}; host_is_current`], {
+    env: { ...(process.env as Record<string, string>), PLURAL_PROVIDER: "", PLURAL_EXTRAS: "", PATH: `${tools}:${process.env["PATH"]}`, ...env },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  return child.exited;
+}
+
+describe("a host that is already current is not downloaded again", () => {
+  test("the same release with nothing new asked for is skipped", async () => {
+    expect(await currentWith("0.2.11", "0.2.11", "")).toBe(0);
+    expect(await currentWith("v0.2.11", "0.2.11", "")).toBe(0);
+  });
+
+  test("another release, no host, or a version that could not be resolved still installs", async () => {
+    expect(await currentWith("0.2.12", "0.2.11", "")).not.toBe(0);
+    expect(await currentWith("0.2.11", "", "")).not.toBe(0);
+    expect(await currentWith("latest", "0.2.11", "")).not.toBe(0);
+  });
+
+  test("an SDK that is asked for but missing installs, one that is kept does not", async () => {
+    expect(await currentWith("0.2.11", "0.2.11", "", { PLURAL_PROVIDER: "anthropic" })).not.toBe(0);
+    expect(await currentWith("0.2.11", "0.2.11", "anthropic\n", { PLURAL_PROVIDER: "anthropic" })).toBe(0);
+    expect(await currentWith("0.2.11", "0.2.11", "openai\n")).toBe(0);
+  });
+
+  test("a host package given by hand always installs", async () => {
+    expect(await currentWith("0.2.11", "0.2.11", "", { PLURAL_HOST_PACKAGE: "./dist/plural_agent.whl" })).not.toBe(0);
   });
 });

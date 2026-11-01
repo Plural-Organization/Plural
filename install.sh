@@ -108,6 +108,22 @@ host_extras() {
   printf '%s\n' "$chosen" | awk '{ gsub(/^ +| +$/, ""); gsub(/ +/, ","); print }'
 }
 
+# The host of this release is already installed with every SDK asked for: nothing to download.
+# Only a pinned version can be compared, so "latest" that could not be resolved still installs.
+host_is_current() {
+  [ -z "$HOST_PACKAGE" ] || return 1
+  [ "$VERSION" != "latest" ] || return 1
+  have="$(uv tool list 2>/dev/null | awk '$1 == "plural-agent" { sub(/^v/, "", $2); print $2; exit }')"
+  [ "$have" = "${VERSION#v}" ] || return 1
+  have_extras=" $(installed_extras | tr '\n' ' ') "
+  for extra in $(host_extras | tr ',' ' '); do
+    case "$have_extras" in
+      *" $extra "*) ;;
+      *) return 1 ;;
+    esac
+  done
+}
+
 install_host() {
   if ! command -v uv >/dev/null 2>&1; then
     step "Installing uv"
@@ -125,9 +141,15 @@ install_host() {
       package="$package==${VERSION#v}"
     fi
   fi
+  if host_is_current; then
+    step "plural-host is already up to date"
+    return
+  fi
   step "Installing the host (plural-host)"
   # No --python: any Python >= 3.12 on the machine works, and uv fetches one only when none does.
-  uv tool install --force --refresh "$package"
+  # Only plural-agent is revalidated against the index, so a stale cache cannot keep an old host;
+  # its dependencies are pinned by that release and come straight from uv's cache when it has them.
+  uv tool install --force --refresh-package plural-agent "$package"
 }
 
 checksum_of() {
