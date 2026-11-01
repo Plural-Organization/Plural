@@ -164,14 +164,24 @@ download() {
   fi
 }
 
+# tar reads xz itself on macOS; elsewhere it calls the xz program.
+can_unpack_xz() {
+  [ "$(uname -s)" = Darwin ] || command -v xz >/dev/null 2>&1
+}
+
 install_client() {
   os="$(detect_os)"
   arch="$(detect_arch)"
-  asset="plural-$os-$arch.tar.gz"
   cache="${XDG_CACHE_HOME:-$HOME/.cache}/plural"
   work="$(mktemp -d)"
   trap 'rm -rf "$work"' EXIT
-  curl -fsSL --retry 3 --connect-timeout 20 "$(asset_url "$asset.sha256")" -o "$work/$asset.sha256" || fail "could not download the checksum for $asset from $RELEASES"
+  # The xz archive is a third smaller, so it is what a slow connection should wait for. A release
+  # from before it existed, or a machine that cannot unpack it, takes the gzip one.
+  asset="plural-$os-$arch.tar.xz"
+  if ! can_unpack_xz || ! curl -fsSL --retry 3 --connect-timeout 20 "$(asset_url "$asset.sha256")" -o "$work/$asset.sha256" 2>/dev/null; then
+    asset="plural-$os-$arch.tar.gz"
+    curl -fsSL --retry 3 --connect-timeout 20 "$(asset_url "$asset.sha256")" -o "$work/$asset.sha256" || fail "could not download the checksum for $asset from $RELEASES"
+  fi
   hash="$(checksum_of "$work/$asset.sha256")"
   [ -n "$hash" ] || fail "the checksum for $asset is empty"
   if [ -x "$BIN_DIR/plural" ] && [ "$(cat "$cache/installed-$os-$arch" 2>/dev/null || true)" = "$hash" ]; then
@@ -191,7 +201,7 @@ install_client() {
       fail "checksum mismatch for $asset, run the installer again"
     }
   fi
-  tar -xzf "$download_dir/$asset" -C "$work"
+  tar -xf "$download_dir/$asset" -C "$work"
   mkdir -p "$BIN_DIR"
   mv -f "$work/plural" "$BIN_DIR/plural"
   chmod +x "$BIN_DIR/plural"

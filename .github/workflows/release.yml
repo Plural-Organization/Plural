@@ -65,13 +65,20 @@ jobs:
           script -qec "timeout 30 ./stage/plural --selftest" /dev/null
       - name: Package
         run: |
-          name=plural-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
-          tar -czf "$name" -C stage plural
-          sha256sum "$name" > "$name.sha256"
+          base=plural-${{ matrix.os }}-${{ matrix.arch }}
+          # The xz archive is a third smaller than gzip (the Bun runtime is most of the binary),
+          # which is what a slow connection waits for. The gzip one stays for hosts without xz
+          # and for installers older than the xz archive.
+          tar -cf - -C stage plural | xz -9e -T0 > "$base.tar.xz"
+          tar -czf "$base.tar.gz" -C stage plural
+          sha256sum "$base.tar.xz" > "$base.tar.xz.sha256"
+          sha256sum "$base.tar.gz" > "$base.tar.gz.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: bin-${{ matrix.os }}-${{ matrix.arch }}
           path: |
+            plural-*.tar.xz
+            plural-*.tar.xz.sha256
             plural-*.tar.gz
             plural-*.tar.gz.sha256
 

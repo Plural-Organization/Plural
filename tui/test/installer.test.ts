@@ -161,3 +161,17 @@ describe("a host that is already current is not downloaded again", () => {
     expect(await currentWith("0.2.11", "0.2.11", "", { PLURAL_HOST_PACKAGE: "./dist/plural_agent.whl" })).not.toBe(0);
   });
 });
+
+describe("the client download is as small as the machine allows", () => {
+  test("the installer takes the xz archive and falls back to gzip for older releases", async () => {
+    const text = await Bun.file(SCRIPT).text();
+    expect(text).toContain('asset="plural-$os-$arch.tar.xz"');
+    expect(text).toContain('asset="plural-$os-$arch.tar.gz"');
+    expect(text).toContain('tar -xf "$download_dir/$asset"');
+  });
+
+  test("the release publishes both archives with their checksums", async () => {
+    const text = await Bun.file(resolve(import.meta.dir, "../../.github/workflows/release.yml")).text();
+    for (const name of ["tar.xz", "tar.xz.sha256", "tar.gz", "tar.gz.sha256"]) expect(text).toContain(`plural-*.${name}`);
+  });
+});
