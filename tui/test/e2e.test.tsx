@@ -66,10 +66,10 @@ test("a guest proposes, the host approves from the keyboard and the tool runs", 
   await tick(500);
   await owner.setup.mockInput.pressKey("y");
 
-  await until(owner.setup, (frame) => frame.includes("approval needed"));
+  await until(owner.setup, (frame) => frame.includes("Approve "));
   await owner.setup.mockInput.pressKey("y");
   await tick(100);
-  expect(owner.setup.captureCharFrame()).toContain("approval needed");
+  expect(owner.setup.captureCharFrame()).toContain("Approve ");
 
   await tick(500);
   await owner.setup.mockInput.pressKey("y");
