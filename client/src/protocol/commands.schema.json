@@ -1059,6 +1059,66 @@
       ],
       "type": "object"
     },
+    "PreviewFetch": {
+      "properties": {
+        "path": {
+          "default": "/",
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "preview_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "request_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "preview.fetch",
+          "default": "preview.fetch",
+          "type": "string"
+        }
+      },
+      "required": [
+        "preview_id",
+        "request_id"
+      ],
+      "type": "object"
+    },
+    "PreviewSet": {
+      "description": "The host explicitly shares one loopback HTTP server; None disables it.",
+      "properties": {
+        "port": {
+          "anyOf": [
+            {
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "title": {
+          "default": "Local preview",
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "preview.set",
+          "default": "preview.set",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "PromptMode": {
       "enum": [
         "open",
@@ -1480,6 +1540,8 @@
           "presence.cursor": "#/$defs/CursorSet",
           "presence.select": "#/$defs/SelectionSet",
           "presence.typing": "#/$defs/TypingSet",
+          "preview.fetch": "#/$defs/PreviewFetch",
+          "preview.set": "#/$defs/PreviewSet",
           "prompt.submit": "#/$defs/PromptSubmit",
           "proposal.decide": "#/$defs/ProposalDecide",
           "queue.cancel": "#/$defs/QueueCancel",
@@ -1626,6 +1688,12 @@
         },
         {
           "$ref": "#/$defs/AttachmentFetch"
+        },
+        {
+          "$ref": "#/$defs/PreviewSet"
+        },
+        {
+          "$ref": "#/$defs/PreviewFetch"
         },
         {
           "$ref": "#/$defs/BoardErase"

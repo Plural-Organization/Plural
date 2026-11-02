@@ -76,6 +76,7 @@ from plural.host.plugins import (
     RunInfo,
 )
 from plural.host.policy_gate import HostPolicyGate
+from plural.host.preview import PreviewError, PreviewFetcher
 from plural.host.publisher import Publisher
 from plural.host.team_admission import (
     TeamAdmission,
@@ -126,6 +127,8 @@ from plural.protocol.commands import (
     PluginsRemove,
     PolicyAdd,
     PolicyRemove,
+    PreviewFetch,
+    PreviewSet,
     PromptModeSet,
     PromptSubmit,
     ProposalDecide,
@@ -186,6 +189,8 @@ from plural.protocol.events import (
     PluginShown,
     PolicyRuleAdded,
     PolicyRuleRemoved,
+    PreviewChanged,
+    PreviewData,
     PromptAccepted,
     PromptDequeued,
     PromptModeChanged,
@@ -224,6 +229,7 @@ from plural.protocol.models import (
     Participant,
     PermissionMode,
     PluginStatus,
+    PreviewView,
     PromptMode,
     Provenance,
     Role,
@@ -351,6 +357,8 @@ class SessionActor:
         self._typing: dict[str, asyncio.TimerHandle] = {}
         self._selecting: set[str] = set()
         self._pointing: set[str] = set()
+        self._preview_fetcher = PreviewFetcher()
+        self._preview_pending: dict[str, int] = {}
         self._state = SessionState()
         self._streaming: dict[str, str] = {}
         self._timers: dict[str, asyncio.TimerHandle] = {}
@@ -363,6 +371,8 @@ class SessionActor:
         records = await self._store.read()
         for record in records:
             self._state = reduce(self._state, record)
+        if self._state.preview is not None:
+            await self._emit(PreviewChanged(preview=None))
         self._sync_policy()
         if conversation := await self._history(records):
             self._agent.restore(conversation)
@@ -677,6 +687,26 @@ class SessionActor:
                 await self._set_cursor(participant.id, command)
             case BoardOpen() | BoardDraw() | BoardMove():
                 await self._board(command, participant.id, privileged=participant.role is Role.HOST)
+            case PreviewSet(port=None) if self._state.preview is None:
+                pass
+            case PreviewSet():
+                preview = (
+                    PreviewView(id=self._ids.new("pv_"), port=command.port, title=command.title)
+                    if command.port is not None
+                    else None
+                )
+                await self._emit(PreviewChanged(preview=preview), actor_id=participant.id)
+            case PreviewFetch():
+                preview = self._state.preview
+                if preview is None or preview.id != command.preview_id:
+                    raise NotFound("this preview is no longer shared")
+                pending = self._preview_pending.get(participant.id, 0)
+                if pending >= 4:
+                    raise Conflict("too many pending preview requests")
+                self._preview_pending[participant.id] = pending + 1
+                self._background(
+                    self._fetch_preview(connection, token, participant.id, command, preview)
+                )
             case AttachmentFetch():
                 if not any(s.image == command.attachment_id for s in self._state.board.strokes):
                     raise NotFound("no such picture on the board")
@@ -1155,6 +1185,45 @@ class SessionActor:
         task = asyncio.create_task(job)
         self._jobs.add(task)
         task.add_done_callback(self._jobs.discard)
+
+    async def _fetch_preview(
+        self,
+        connection: Connection,
+        token: str | None,
+        participant_id: str,
+        command: PreviewFetch,
+        preview: PreviewView,
+    ) -> None:
+        try:
+            try:
+                resource = await self._preview_fetcher.fetch(preview.port, command.path)
+                response = PreviewData(
+                    preview_id=preview.id,
+                    request_id=command.request_id,
+                    status=resource.status,
+                    media_type=resource.media_type,
+                    content_b64=base64.b64encode(resource.body).decode(),
+                )
+            except PreviewError as error:
+                response = PreviewData(
+                    preview_id=preview.id,
+                    request_id=command.request_id,
+                    status=502,
+                    media_type="text/plain",
+                    error=str(error),
+                )
+            try:
+                self._authenticate(connection, token)
+            except DomainError:
+                return
+            if self._state.preview is not None and self._state.preview.id == preview.id:
+                self._publisher.deliver(connection, response)
+        finally:
+            pending = self._preview_pending.get(participant_id, 1) - 1
+            if pending > 0:
+                self._preview_pending[participant_id] = pending
+            else:
+                self._preview_pending.pop(participant_id, None)
 
     async def _search_skills(self, connection: Connection, query: str) -> None:
         try:

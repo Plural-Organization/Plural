@@ -187,6 +187,8 @@ export interface EventsSchema {
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PreviewChanged
+    | PreviewData
     | PluginShown
     | PluginAsked
     | PluginNotified
@@ -641,6 +643,38 @@ export interface AttachmentData {
   content_b64: string;
   media_type: string;
   type: "attachment.data";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PreviewChanged".
+ */
+export interface PreviewChanged {
+  preview: PreviewView | null;
+  type: "preview.changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PreviewView".
+ */
+export interface PreviewView {
+  id: string;
+  port: number;
+  title: string;
+}
+/**
+ * A bounded resource response delivered only to its requester.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PreviewData".
+ */
+export interface PreviewData {
+  content_b64: string;
+  error: string | null;
+  media_type: string;
+  preview_id: string;
+  request_id: string;
+  status: number;
+  type: "preview.data";
 }
 /**
  * What a plugin command shows the person who ran it, and nobody else. It is not logged.
@@ -1209,6 +1243,7 @@ export interface SessionState {
   plugin_lines: PluginLine[];
   plugins: PluginView[];
   policy: PolicyRuleView[];
+  preview: PreviewView | null;
   prompt_mode: "open" | "review";
   proposals: {
     [k: string]: ProposalView;
@@ -1341,6 +1376,8 @@ export interface EventRecord {
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PreviewChanged
+    | PreviewData
     | PluginShown
     | PluginAsked
     | PluginNotified

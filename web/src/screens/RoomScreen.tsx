@@ -73,7 +73,11 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
     }
   }, [notice]);
   const site = useMemo(() => siteFiles(feed.items), [feed.items]);
-  const docs = useMemo(() => canvasDocs(feed.items, site), [feed.items, site]);
+  const docs = useMemo(() => {
+    const documents = canvasDocs(feed.items, site);
+    if (state.preview) documents.push({ id: `dev:${state.preview.id}`, title: state.preview.title, kind: "site", lang: "html", text: "/", live: false, auto: true, previewId: state.preview.id });
+    return documents;
+  }, [feed.items, site, state.preview]);
   const [canvasId, setCanvasId] = useState<string | null>(null);
   const [quote, setQuote] = useState<{ text: string; key: number } | null>(null);
   const seen = useRef<Set<string> | null>(null);
@@ -254,7 +258,7 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
                 {projection.waiting ? "waiting for the host to let you in…" : connection === "online" ? "loading the session…" : "connecting to the host…"}
               </div>
             ) : null}
-            <Feed items={feed.items} meId={projection.meId} activity={current} onOpenBoard={state.board.open ? showBoard : undefined} onOpenDoc={(id) => {
+            <Feed items={feed.items} people={mentionable(state, null)} meId={projection.meId} activity={current} onOpenBoard={state.board.open ? showBoard : undefined} onOpenDoc={(id) => {
                 setBoardShown(false);
                 setCanvasId(id);
               }} />
@@ -333,7 +337,9 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
           onClose={() => setCanvasId(null)}
           site={(page) => (
             <SitePreview
+              key={page.id}
               entry={page.text}
+              remote={page.previewId ? { id: page.previewId, fetch: session.fetchPreview } : undefined}
               site={site}
               pointers={previewPointers}
               echo={projection.meId === null ? undefined : projection.cursors.get(projection.meId)}

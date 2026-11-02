@@ -5,6 +5,7 @@ import { colorFor } from "../lib/colors";
 import { componentPrompt } from "../lib/quote";
 import { buildSite, localTarget, siteEntries, type Site } from "../lib/site";
 import { cx } from "../lib/cx";
+import { buildDevPreview, previewPath, type FetchPreview } from "../lib/devPreview";
 import type { Pointer } from "./Board";
 import styles from "./SitePreview.module.css";
 
@@ -16,6 +17,7 @@ const NOTE_HEIGHT = 120;
 
 interface SitePreviewProps {
   entry: string;
+  remote?: { id: string; fetch: FetchPreview };
   site: Site;
   pointers: Pointer[];
   // My own pointer as the host sent it back.
@@ -26,7 +28,7 @@ interface SitePreviewProps {
   onNotice: (text: string) => void;
 }
 
-export function SitePreview({ entry, site, pointers, echo, canPick, sendPresence, onAsk, onNotice }: SitePreviewProps) {
+export function SitePreview({ entry, remote, site, pointers, echo, canPick, sendPresence, onAsk, onNotice }: SitePreviewProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(entry);
@@ -48,18 +50,21 @@ export function SitePreview({ entry, site, pointers, echo, canPick, sendPresence
   useEffect(() => {
     let alive = true;
     const timer = setTimeout(() => {
-      void buildSite(site.files, page, bridgeScript(scrolled.current), root).then((next) => {
+      const building = remote ? buildDevPreview(remote.id, page, remote.fetch, bridgeScript(scrolled.current)) : buildSite(site.files, page, bridgeScript(scrolled.current), root);
+      void building.then((next) => {
         if (alive) {
           setBuilt(next);
           setError(null);
         }
+      }).catch((reason: unknown) => {
+        if (alive) setError(reason instanceof Error ? reason.message : String(reason));
       });
     }, built === null ? 0 : REBUILD_MS);
     return () => {
       alive = false;
       clearTimeout(timer);
     };
-  }, [site.version, page, reload]);
+  }, [remote ? 0 : site.version, page, reload, remote?.id, remote?.fetch]);
 
   const tell = (message: ToFrame) => frame.current?.contentWindow?.postMessage({ from: TO_FRAME, ...message }, "*");
 
@@ -144,6 +149,12 @@ export function SitePreview({ entry, site, pointers, echo, canPick, sendPresence
           setPicking(false);
           break;
         case "navigate": {
+          if (remote) {
+            const next = previewPath(page, message.href);
+            if (next !== null) { scrolled.current = 0; closeNote(); setPage(next); }
+            else onNotice("the preview only opens pages from the shared server");
+            break;
+          }
           const target = localTarget(page, message.href, root);
           const html = target === null ? null : [target, `${target}/index.html`].find((path) => siteEntries(site.files).includes(path) || site.files.has(path));
           if (html && /\.html?$/.test(html)) {
@@ -165,7 +176,7 @@ export function SitePreview({ entry, site, pointers, echo, canPick, sendPresence
     };
     window.addEventListener("message", listen);
     return () => window.removeEventListener("message", listen);
-  }, [page, site, canPick]);
+  }, [page, site, canPick, remote?.id]);
 
   const send = () => {
     if (picked === null || note.trim() === "") {

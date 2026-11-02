@@ -121,6 +121,18 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
       case "leave":
         onLeave();
         return true;
+      case "preview": {
+        if (!isHost) { notify("warn", "only the host shares a local server"); return true; }
+        const value = rest[0];
+        if (value === "off") {
+          send({ type: "preview.set", port: null });
+          notify("dim", "the local preview is no longer shared");
+        } else if (value && /^\d+$/.test(value) && Number(value) >= 1 && Number(value) <= 65535) {
+          send({ type: "preview.set", port: Number(value), title: rest.slice(1).join(" ") || `localhost:${value}` });
+          notify("accent", `localhost:${value} opens in the canvas of everyone on the web`);
+        } else notify("warn", "usage: /preview <port> [title] or /preview off");
+        return true;
+      }
       case "draw":
         onDraw();
         return true;
