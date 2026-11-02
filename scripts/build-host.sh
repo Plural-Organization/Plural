@@ -13,7 +13,7 @@ trap 'rm -rf "$work"' EXIT
 uv run --python 3.12 --extra anthropic --extra openai --with pyinstaller sh -c '
   set -eu
   pyi-makespec --onedir --strip --name plural-host --specpath "$1" \
-    --collect-submodules plural --collect-submodules pydantic_ai \
+    --collect-submodules plural --collect-data plural --collect-submodules pydantic_ai \
     --collect-submodules anthropic --collect-submodules openai \
     --recursive-copy-metadata plural-agent --recursive-copy-metadata pydantic-ai-slim \
     --recursive-copy-metadata anthropic --recursive-copy-metadata openai \

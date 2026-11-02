@@ -2,6 +2,7 @@
 
 import importlib
 import sys
+from importlib import resources
 
 SELFTEST_MODULES = (
     "anthropic",
@@ -9,12 +10,27 @@ SELFTEST_MODULES = (
     "pydantic_ai.models.anthropic",
     "pydantic_ai.models.openai",
     "plural.host.providers",
+    "plural.agent.agents",
+)
+
+
+# Files the host reads at run time. --collect-submodules gathers code only, so each kind of data
+# file is checked here, and the built-in agents are loaded by importing the module that reads them.
+SELFTEST_DATA = (
+    ("plural.agent", "builtin_agents/explore.md"),
+    ("plural.agent", "builtin_skills/plural-plugins/SKILL.md"),
+    ("plural.agent.prompts", "system.md"),
+    ("plural.storage.migrations", "0001_init.sql"),
 )
 
 
 def selftest() -> int:
     for module in SELFTEST_MODULES:
         importlib.import_module(module)
+    for package, name in SELFTEST_DATA:
+        if not resources.files(package).joinpath(name).is_file():
+            print(f"frozen host is missing {package}/{name}", file=sys.stderr)
+            return 1
     from plural.host.extras import is_installed
 
     if not (is_installed("anthropic") and is_installed("openai")):
