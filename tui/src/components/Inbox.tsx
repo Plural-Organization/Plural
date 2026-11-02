@@ -70,15 +70,17 @@ export function Inbox({ items, state, selected, focused, now, approvalChoice }: 
       marginX={2}
       flexShrink={0}
     >
+      {item.kind === "approval" ? null : (
       <text>
         <span fg={theme.warn}>
-          <b>{item.kind === "join" ? "wants to join" : item.kind === "access" ? "wants to write" : item.kind === "briefing" ? "wants a briefing" : item.kind === "approval" ? "approval needed" : item.kind === "plan" ? "plan ready" : "proposal"}</b>
+          <b>{item.kind === "join" ? "wants to join" : item.kind === "access" ? "wants to write" : item.kind === "briefing" ? "wants a briefing" : item.kind === "plan" ? "plan ready" : "proposal"}</b>
         </span>
         <span fg={theme.dim}>
           {"  "}
           {index + 1}/{items.length}
         </span>
       </text>
+      )}
       {item.kind === "join" ? (
         <JoinBody request={item.request} now={now} focused={focused} />
       ) : item.kind === "access" ? (
@@ -86,7 +88,7 @@ export function Inbox({ items, state, selected, focused, now, approvalChoice }: 
       ) : item.kind === "briefing" ? (
         <BriefingBody request={item.request} now={now} focused={focused} />
       ) : item.kind === "approval" ? (
-        <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} selected={approvalChoice?.id === item.id ? approvalChoice.index : 0} />
+        <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} selected={approvalChoice?.id === item.id ? approvalChoice.index : 0} place={items.length > 1 ? `${index + 1}/${items.length}` : ""} />
       ) : item.kind === "plan" ? (
         <PlanBody focused={focused} />
       ) : (
@@ -150,35 +152,53 @@ function AccessBody({ request, now, focused }: { request: AccessRequestView; now
   );
 }
 
-function ApprovalBody({ approval, state, now, focused, selected }: { approval: ApprovalView; state: SessionState; now: number; focused: boolean; selected: number }) {
+function ApprovalBody({ approval, state, now, focused, selected, place }: { approval: ApprovalView; state: SessionState; now: number; focused: boolean; selected: number; place: string }) {
   const call = approval.call;
   const seconds = Math.max(0, Math.round((Date.parse(approval.timeout_at) - now) / 1000));
   const origin = approval.provenance.origin === "proposal" ? "via proposal" : "direct";
   const pattern = approval.suggested_patterns[0];
+  const what = call.name === "bash" ? call.subject : `${call.name} ${call.subject}`.trim();
+  const meaning = [
+    "run it this once",
+    pattern ? `allow ${pattern} for the session` : "allow it for the session",
+    "refuse this call",
+    "refuse this kind of call",
+  ];
+  const risk = call.risk === "exec" ? theme.danger : call.risk === "write" ? theme.warn : theme.dim;
   return (
     <>
-      <text>
-        <b>{call.name}</b>
-        <span fg={call.risk === "exec" ? theme.danger : call.risk === "write" ? theme.warn : theme.dim}> {call.risk}</span>
-        <span fg={theme.dim}>
-          {" "}
-          · {from(state, approval.provenance.initiator_id)} ({origin}) · expires in {seconds}s
+      <text wrapMode="word">
+        <b>Approve </b>
+        <span fg={theme.warn}>
+          <b>{what}</b>
         </span>
+        <b>?</b>
+        {"  "}
+        {APPROVAL_DECISIONS.map((decision, index) => (
+          <span key={decision}>
+            {index > 0 ? "  " : ""}
+            {focused && index === selected ? (
+              <span fg={theme.bg} bg={theme.text}>
+                {` ${decision} `}
+              </span>
+            ) : (
+              <span fg={focused ? theme.text : theme.dim}>{decision}</span>
+            )}
+          </span>
+        ))}
       </text>
-      <text fg={theme.info}>{call.name === "bash" ? `$ ${call.subject}` : call.subject}</text>
       {(approval.warnings ?? []).map((warning) => (
         <text key={warning} fg={theme.warn}>
           ⚠ {warning}
         </text>
       ))}
-      {focused ? (
-        <box flexDirection="column">
-          <Keys items={[["y", "once"], ["a", pattern ? `always ${pattern}` : "always"], ["n", "reject"], ["b", "block this kind"]]} selected={selected} />
-          <text fg={theme.dim}>←/→ choose · enter confirm</text>
-        </box>
-      ) : (
-        <text fg={theme.dim}>tab to answer</text>
-      )}
+      <text fg={theme.dim}>
+        {focused ? `←/→ choose · enter confirm · ${meaning[selected] ?? ""}` : "tab to answer"}
+      </text>
+      <text fg={theme.dim}>
+        <span fg={risk}>{call.risk}</span>
+        {` · ${from(state, approval.provenance.initiator_id)} (${origin}) · expires in ${seconds}s${place ? ` · ${place}` : ""}`}
+      </text>
     </>
   );
 }

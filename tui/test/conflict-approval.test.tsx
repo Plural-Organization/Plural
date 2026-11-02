@@ -54,13 +54,13 @@ async function mount(warnings: string[]): Promise<Setup> {
 
 test("an edit of a file a teammate changed shows the warning on the approval card", async () => {
   const setup = await mount(["src/auth.py was also changed by alia 3 min ago on feat/x", "src/auth.py was also changed by bek 9 min ago"]);
-  const text = await frame(setup, "approval needed");
+  const text = await frame(setup, "Approve ");
   expect(text).toContain("⚠ src/auth.py was also changed by alia 3 min ago on feat/x");
   expect(text).toContain("⚠ src/auth.py was also changed by bek 9 min ago");
 });
 
 test("an approval with nothing to warn about shows no warning", async () => {
   const setup = await mount([]);
-  const text = await frame(setup, "approval needed");
+  const text = await frame(setup, "Approve ");
   expect(text).not.toContain("⚠");
 });

@@ -159,7 +159,7 @@ describe("App", () => {
       type: "approval.requested",
       approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [], warnings: [] },
     });
-    await frame(setup, "approval needed");
+    await frame(setup, "Approve ");
     await frame(setup, "answer above");
     const text = setup.captureCharFrame().split("\n");
     const row = text.findIndex((line) => line.includes("send ·"));
@@ -434,8 +434,8 @@ describe("App", () => {
       type: "approval.requested",
       approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: ["rm *"], warnings: [] },
     });
-    const text = await frame(setup, "approval needed");
-    expect(text).toContain("$ rm a.txt");
+    const text = await frame(setup, "Approve ");
+    expect(text).toContain("Approve rm a.txt?");
     expect(text).toContain("Alia");
     expect(text).toContain("NEEDS YOU");
     await tick(500);
@@ -451,7 +451,7 @@ describe("App", () => {
       type: "approval.requested",
       approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [], warnings: [] },
     });
-    await frame(setup, "approval needed");
+    await frame(setup, "Approve ");
     await setup.mockInput.pressKey("y");
     await tick(100);
     expect(fake.commands).toEqual([]);
