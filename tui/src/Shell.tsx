@@ -2,7 +2,7 @@ import { useRenderer } from "@opentui/react";
 import type { Session } from "@plural/client";
 import { useEffect, useMemo, useState } from "react";
 import { App, type AppProps } from "./App";
-import { buildSpaces, neighbour, OWN, ownConflicts, type Phase, type Summary, type Visit } from "./spaces";
+import { buildSpaces, OWN, ownConflicts, type Phase, type Summary, type Visit } from "./spaces";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { createTeamInvite, teamJoinCommand, type SessionCard, type Team, type TeamView, type TeamWatcher } from "./team";
 
@@ -73,7 +73,6 @@ export function Shell({ app, team, watcher, home, shareHost, connect }: ShellPro
     teamName: view?.name ?? null,
     teamError: view?.error ?? null,
     onOpenSpace: open,
-    onCycleSpace: (direction: 1 | -1) => open(neighbour(rows, active, direction)),
   };
   const inviteTeam =
     team !== null && team.profile.member.role === "owner"

@@ -104,9 +104,3 @@ export function buildSpaces({ home, team, visits, active, summaries }: SpacesInp
   }
   return rows;
 }
-
-export function neighbour(rows: SpaceRow[], active: string, direction: 1 | -1): string {
-  const index = rows.findIndex((row) => row.id === active);
-  const next = rows[(Math.max(0, index) + direction + rows.length) % rows.length];
-  return next?.id ?? OWN;
-}

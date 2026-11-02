@@ -255,7 +255,7 @@ export function AssistantCard({ item, syntax, expanded, onToggle }: AssistantPro
   const view = long && !expanded ? collapseText(item.text, REPLY_LINES) : { text: item.text, hidden: 0 };
   return (
     <box flexDirection="row" marginBottom={1}>
-      <text fg={theme.text}>⏺ </text>
+      <text fg={theme.text} marginRight={1}>⏺</text>
       <box flexDirection="column" flexGrow={1} flexShrink={1}>
         <markdown content={view.text} syntaxStyle={syntax} streaming={item.streaming} renderNode={renderNode} tableOptions={table()} />
         {long ? (

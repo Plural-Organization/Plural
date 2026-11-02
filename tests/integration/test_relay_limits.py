@@ -181,6 +181,14 @@ async def test_one_address_cannot_hold_more_rooms_than_the_limit() -> None:
         assert await alive(await relay.host("r_4"))
 
 
+async def test_by_default_one_address_hosts_five_rooms() -> None:
+    async with running_relay(RelayLimits()) as relay:
+        hosts = [await relay.host(f"r_{number}") for number in range(5)]
+        sixth = await relay.host("r_6")
+        assert await closed_with(sixth) == CLOSE_RATE_LIMITED
+        assert all([await alive(host) for host in hosts])
+
+
 async def test_one_address_cannot_hold_more_guests_than_the_limit() -> None:
     async with running_relay(RelayLimits(max_guests_per_peer=2)) as relay:
         host = await relay.host("r_1")

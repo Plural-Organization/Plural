@@ -22,7 +22,8 @@ plural
 | `--permission-mode default\|acceptEdits\|plan\|auto` | Start in that permission mode |
 | `--allowedTools <tools>`, `--disallowedTools <tools>` | Allow or deny tools for this run, for example `"Bash(git log *)" Read` |
 | `--port <n>`, `--bind <addr>` | Where the host listens in direct mode |
-| `--relay <url>`, `--public-url <url>` | Connect through a relay and set the address in invite links |
+| `--relay <url>`, `--public-url <url>` | Connect through another relay than the Plural relay and set the address in invite links |
+| `--local` | Stay on this machine: no relay, the invite works only here |
 | `--tunnel cloudflared\|ngrok` | Start a tunnel and put its address in the invite links, see [sharing a session](self-hosting.md) |
 
 An option that does not exist is refused, so a typing mistake does not reach the host by accident. A long dash typed by a chat or a keyboard (`—tunnel`) is read as `--tunnel`.
@@ -72,7 +73,7 @@ Nobody is there to approve an action, so one that needs approval is **refused**:
 
 ## Share a session
 
-By default the invite works only on your computer. To let others in, open `F2` → Session and choose *Same network* or *Over the internet*, then start `plural` again. [Sharing a session](self-hosting.md) explains the three ways and how to run a relay.
+By default the session goes through the Plural relay (`relay.plrl.host`), so a link works for anyone you let in. To keep it to your computer, open `F2` → Session and choose *This machine* (or start with `--local`); *Same network* serves it on your network instead. [Sharing a session](self-hosting.md) explains the three ways and how to run a relay.
 
 ## Join a session
 
@@ -130,8 +131,9 @@ A private message is private from the other guests, not from the host: it is sto
 A team is a group of people who run their own plural, each with their own agent and key, and trust each other enough to see who is around. You see every session shared with the team and can open a teammate's session from the side panel.
 
 ```bash
-plural team create Backend --relay wss://relay.example.com --as vlad
-plural team join tm-7f3k9-xq2m4 --relay wss://relay.example.com --as alia
+plural team create Backend --as vlad
+plural team join tm-7f3k9-xq2m4 --as alia
+plural team create Backend --relay wss://relay.example.com   # a relay of your own instead
 plural team members
 plural team invite          # a new code, owner only
 plural team kick alia       # owner only
@@ -140,7 +142,7 @@ plural team disband         # owner only, deletes the team for everyone
 plural team status
 ```
 
-`create` prints an invite code that works once and for an hour; give it to a teammate, who runs `join` with the same relay. After a successful join, Plural opens automatically and the side panel shows every session currently shared with the team; no separate room link is needed. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
+`create` prints a reusable invite code that does not expire; give it to teammates, who run `join` with the same relay. Without `--relay` both use the Plural relay. One key owns at most 3 teams on a relay: delete one with `plural team disband` to make another. After a successful join, Plural opens automatically and the side panel shows every session currently shared with the team; no separate room link is needed. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
 
 ### A team in the browser
 
@@ -154,7 +156,7 @@ With no server at hand, one command starts the relay with a team directory, open
 plural team create Backend --tunnel ngrok        # or cloudflared
 ```
 
-The banner of the session shows two links: the room link (`plural join "…"`, for someone you want in this session) and the team link (`plural team join <code> --relay <address>`, for someone who should join the team; one use, valid for an hour, `plural team invite` makes another). Quit the session and the relay and the tunnel stop with it. The directory file is `~/.plural/teams.db`.
+The banner of the session shows two links: the room link (`plural join "…"`, for someone you want in this session) and the team link (`plural team join <code> --relay <address>`, for people who should join the team; reusable, with no expiry, and `plural team invite` can make another). Quit the session and the relay and the tunnel stop with it. The directory file is `~/.plural/teams.db`.
 
 Your machine is the directory, so while that session is closed nobody can join or see the team's cards; sessions that are already open go on. A free ngrok address and a cloudflared quick tunnel change on every start, and the team is bound to the relay's address, so after a restart everyone has to join again. For a team that stays, run the relay on a server or behind a fixed domain and use `--relay`. `--tunnel` and `--relay` cannot be combined.
 
@@ -172,7 +174,7 @@ Once you are in a team (`team create` or `team join`), every session you start i
 
 The side panel has a SPACES section: your own session first, then the team's, refreshed every few seconds: `●` working, `◆` waiting for its host, `○` idle, with who, repository and branch, and `👁 2` when two people watch.
 
-**Click a teammate to open their session** in the main area. You see all of it, live, as a viewer, and your own session keeps running in the background: a click on `you` takes you back, `alt+←` and `alt+→` move between spaces, `ctrl+w` closes the one you are in. What you type goes to the session you are looking at. If your own agent needs you while you are away, its row turns `◆ waiting`, the bell rings and the terminal title says so.
+**Click a teammate to open their session** in the main area. You see all of it, live, as a viewer, and your own session keeps running in the background: a click on `you` takes you back, and `ctrl+w` closes the space you are in. What you type goes to the session you are looking at; `alt+←` and `alt+→` remain available for moving between words in the prompt. If your own agent needs you while you are away, its row turns `◆ waiting`, the bell rings and the terminal title says so.
 
 ### Watching a teammate
 

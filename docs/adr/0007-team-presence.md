@@ -13,7 +13,7 @@ around. The relay is deliberately dumb: it routes frames, never decides permissi
 
 - **Identity.** Every person has a long-lived ed25519 key in the local data folder. No accounts.
 - **Team.** A team has a signing key held by the directory, a relay URL and a list of members. `plural team
-  create` makes it and prints a one-time invite code with a short lifetime. `plural team join <code>` sends
+  create` makes it and prints a reusable invite code with no expiry. `plural team join <code>` sends
   the code and the person's public key and receives a **member certificate**: team id, public key, name,
   issue and expiry time, signed with the team key. Certificates are renewed before they expire and revoked by
   removing the member.

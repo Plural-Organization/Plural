@@ -18,7 +18,7 @@ Every host setting can be passed as an environment variable with the `PLURAL_` p
 | `PLURAL_DATA_DIR` | `~/.plural` | Event logs, host key, attachments, client preferences |
 | `PLURAL_BIND_HOST` | `127.0.0.1` | Bind address for direct mode |
 | `PLURAL_PORT` | `7777` | Port for direct mode |
-| `PLURAL_RELAY_URL` | none | Relay URL |
+| `PLURAL_RELAY_URL` | `wss://relay.plrl.host` | Relay URL. A host with no address of its own uses the Plural relay; `--local`, `--bind` and `--public-url` opt out |
 | `PLURAL_PUBLIC_URL` | none | Public URL used in invite links |
 | `PLURAL_ADMISSION` | `approve` | `approve`: the host lets in everyone who uses the room link; `open`: anyone with it goes in at once |
 | `PLURAL_JOIN_TIMEOUT_S` | `120` | Seconds before an unanswered request to join lapses |

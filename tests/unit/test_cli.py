@@ -10,10 +10,12 @@ from typer.testing import CliRunner
 from plural import __version__
 from plural.cli import main
 from plural.cli.main import app
-from plural.host.config import HostSettings
+from plural.host.config import DEFAULT_RELAY_URL, HostSettings
+from plural.host.team import TeamProfile, TeamStore
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.events import ParticipantLeft
 from plural.protocol.models import PromptMode
+from plural.protocol.team import MemberView, TeamRole
 from plural.relay import app as relay_app
 from plural.relay.limits import RelayLimits
 from plural.storage.sqlite_store import SqliteEventStore
@@ -159,15 +161,69 @@ def test_a_flag_wins_over_the_environment(monkeypatch: pytest.MonkeyPatch, tmp_p
     assert settings.port == 9200
 
 
-def test_host_without_settings_keeps_the_local_defaults(
+def clean_address_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    for name in (
+        "PLURAL_RELAY_URL",
+        "PLURAL_PORT",
+        "PLURAL_BIND_HOST",
+        "PLURAL_PUBLIC_URL",
+        "PLURAL_HOST_NAME",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("PLURAL_DATA_DIR", str(tmp_path / "data"))
+
+
+def test_host_without_an_address_uses_the_plural_relay(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
-    for name in ("PLURAL_RELAY_URL", "PLURAL_PORT", "PLURAL_BIND_HOST", "PLURAL_HOST_NAME"):
-        monkeypatch.delenv(name, raising=False)
+    clean_address_environment(monkeypatch, tmp_path)
     settings = host_settings(monkeypatch, ["--workspace", str(tmp_path)])
-    assert settings.relay_url is None
-    assert (settings.bind_host, settings.port) == ("127.0.0.1", 7777)
+    assert settings.relay_url == DEFAULT_RELAY_URL
     assert settings.host_name != ""
+
+
+def test_a_host_stays_on_this_machine_when_asked_or_given_its_own_address(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clean_address_environment(monkeypatch, tmp_path)
+    workspace = ["--workspace", str(tmp_path)]
+    local = host_settings(monkeypatch, [*workspace, "--local"])
+    assert (local.relay_url, local.bind_host, local.port) == (None, "127.0.0.1", 7777)
+    bound = host_settings(monkeypatch, [*workspace, "--bind", "0.0.0.0"])
+    assert bound.relay_url is None
+    public = host_settings(monkeypatch, [*workspace, "--public-url", "wss://host.example.com"])
+    assert public.relay_url is None
+    ported = host_settings(monkeypatch, [*workspace, "--port", "9300"])
+    assert ported.relay_url == DEFAULT_RELAY_URL
+
+
+def test_the_environment_can_give_a_host_its_own_address(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clean_address_environment(monkeypatch, tmp_path)
+    monkeypatch.setenv("PLURAL_BIND_HOST", "0.0.0.0")
+    assert host_settings(monkeypatch, ["--workspace", str(tmp_path)]).relay_url is None
+
+
+def test_a_team_host_uses_the_relay_of_its_team(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clean_address_environment(monkeypatch, tmp_path)
+    member = MemberView(
+        id="m_1", name="ann", key="k", role=TeamRole.OWNER, joined_at=datetime.now(UTC)
+    )
+    TeamStore(tmp_path / "data").save(
+        TeamProfile(
+            relay="wss://team.example.com",
+            team_id="t_1",
+            team_name="core",
+            team_key="k",
+            certificate="c",
+            member=member,
+        )
+    )
+    settings = host_settings(monkeypatch, ["--workspace", str(tmp_path), "--team"])
+    assert settings.relay_url == "wss://team.example.com"
 
 
 def test_relay_listens_on_the_port_the_platform_assigns(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -183,11 +239,34 @@ def test_relay_listens_on_the_port_the_platform_assigns(monkeypatch: pytest.Monk
     assert (seen["host"], seen["port"]) == ("0.0.0.0", 4321)
 
 
+def test_the_relay_can_serve_only_plural_clients(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_create_app(_limits: object = None, **options: object) -> object:
+        seen.update(options)
+        return object()
+
+    def fake_run(_app: object, **_options: object) -> None:
+        return None
+
+    monkeypatch.setattr(relay_app, "create_app", fake_create_app)
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    monkeypatch.setenv("PLURAL_RELAY_CLIENTS_ONLY", "true")
+    monkeypatch.setenv("PLURAL_RELAY_WEB_ORIGINS", "https://a.example, https://b.example ,")
+    assert runner.invoke(app, ["relay"]).exit_code == 0
+    assert seen["clients_only"] is True
+    assert seen["web_origins"] == ["https://a.example", "https://b.example"]
+
+
 def test_relay_limits_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[tuple[RelayLimits | None, int, Path | None]] = []
 
     def fake_create_app(
-        limits: RelayLimits | None = None, *, proxy_hops: int = 0, teams: Path | None = None
+        limits: RelayLimits | None = None,
+        *,
+        proxy_hops: int = 0,
+        teams: Path | None = None,
+        **_: object,
     ) -> object:
         seen.append((limits, proxy_hops, teams))
         return object()

@@ -61,9 +61,10 @@ describe("settings", () => {
     });
   });
 
-  test("the sharing choice falls back to this machine when it is not valid", () => {
-    expect(parseSettings({}).share).toBe("local");
-    expect(parseSettings({ share: "everywhere", relayUrl: 7 })).toMatchObject({ share: "local", relayUrl: "" });
+  test("the sharing choice falls back to the Plural relay when it is not valid", () => {
+    expect(parseSettings({}).share).toBe("relay");
+    expect(parseSettings({ share: "everywhere", relayUrl: 7 })).toMatchObject({ share: "relay", relayUrl: "" });
+    expect(parseSettings({ share: "local" }).share).toBe("local");
     expect(parseSettings({ share: "network", relayUrl: "wss://r.example.com" })).toMatchObject({
       share: "network",
       relayUrl: "wss://r.example.com",

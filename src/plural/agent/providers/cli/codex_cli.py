@@ -118,6 +118,22 @@ def _as_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
+_LIMIT_WORDS = ("usagelimit", "usage limit", "rate limit", "ratelimit", "quota", "limit reached")
+
+
+def _failure(error: dict[str, object] | None, fallback: str) -> str:
+    """Say why a Codex turn failed; a spent usage limit is named as such."""
+    detail = _as_str(error.get("message")) if error else None
+    info = error.get("codexErrorInfo") if error else None
+    if isinstance(info, dict):
+        info = " ".join(cast("dict[str, object]", info))
+    marker = f"{info if isinstance(info, str) else ''} {detail or ''}".lower()
+    if any(word in marker for word in _LIMIT_WORDS):
+        base = "Codex usage limit reached, try again after it resets"
+        return f"{base} ({detail})" if detail else base
+    return detail or fallback
+
+
 def _string_end(raw: str, start: int) -> int | None:
     index = start + 1
     while index < len(raw):
@@ -591,8 +607,9 @@ class CodexCliProvider:
                         status = turn.get("status")
                         if status != "completed":
                             turn_error = _as_dict(turn.get("error"))
-                            detail = _as_str(turn_error.get("message")) if turn_error else None
-                            raise ProviderError(f"Codex turn failed: {detail or status}")
+                            raise ProviderError(
+                                _failure(turn_error, f"Codex turn failed: {status}")
+                            )
                         items = turn.get("items")
                         if isinstance(items, list):
                             for raw_item in cast("list[object]", items):
@@ -603,8 +620,8 @@ class CodexCliProvider:
                                         final_text = item_text
                         completed = True
                     elif method == "error":
-                        detail = _as_str(event.get("message"))
-                        raise ProviderError(f"Codex app server: {detail or 'turn failed'}")
+                        nested = _as_dict(event.get("error")) or event
+                        raise ProviderError(_failure(nested, "Codex app server: turn failed"))
 
                 if final_text is None:
                     raise ProviderError("Codex app server returned no answer")

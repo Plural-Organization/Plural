@@ -1,5 +1,5 @@
 import time
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import AsyncGenerator, Callable, Collection
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,6 +12,7 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.websockets import WebSocket
 
 from plural.relay.directory import TeamDirectory, TeamLimits
+from plural.relay.gate import ClientGate
 from plural.relay.limits import RelayLimits
 from plural.relay.presence import Presence
 from plural.relay.rooms import Rooms
@@ -25,6 +26,8 @@ def create_app(
     clock: Callable[[], float] = time.monotonic,
     teams: Path | None = None,
     team_limits: TeamLimits | None = None,
+    clients_only: bool = False,
+    web_origins: Collection[str] = (),
 ) -> Starlette:
     rooms = Rooms(limits or RelayLimits(), proxy_hops=proxy_hops, clock=clock)
 
@@ -58,13 +61,14 @@ def create_app(
         # The team directory answers browsers too. Requests are signed, never sent with cookies,
         # so any page may ask. The ngrok header gets a page past ngrok's browser warning.
         middleware=[
+            *([Middleware(ClientGate, origins=web_origins)] if clients_only else []),
             Middleware(
                 CORSMiddleware,
                 allow_origins=["*"],
                 allow_methods=["GET", "POST", "DELETE"],
                 allow_headers=["authorization", "content-type", "ngrok-skip-browser-warning"],
                 max_age=600,
-            )
+            ),
         ],
         routes=[
             Route("/healthz", healthz),

@@ -18,7 +18,7 @@ export interface ShareLaunch {
   note: string | null;
 }
 
-export const ADDRESS_FLAGS = ["--relay", "--public-url", "--bind"];
+export const ADDRESS_FLAGS = ["--relay", "--public-url", "--bind", "--local"];
 
 export function relayProblem(value: string): string | null {
   let url: URL;
@@ -55,17 +55,24 @@ export function shareLaunch(
   port: number,
   lan: string | null,
 ): ShareLaunch {
-  if (choice.share === "local" || args.some((arg) => ADDRESS_FLAGS.includes(arg))) {
+  if (args.some((arg) => ADDRESS_FLAGS.includes(arg))) {
     return { args, note: null };
   }
+  const local = [...args, "--local"];
+  if (choice.share === "local") {
+    return { args: local, note: null };
+  }
   if (choice.share === "relay") {
-    const problem = choice.relayUrl === "" ? "no relay address is set" : relayProblem(choice.relayUrl);
-    return problem === null
-      ? { args: [...args, "--relay", choice.relayUrl.trim()], note: null }
-      : { args, note: `sharing over the internet is off: ${problem}. Open the settings (F2) → Session.` };
+    // No address means the host's own default relay, which only the host knows.
+    const address = choice.relayUrl.trim();
+    const problem = address === "" ? null : relayProblem(address);
+    if (problem !== null) {
+      return { args: local, note: `sharing over the internet is off: ${problem}. Open the settings (F2) → Session.` };
+    }
+    return { args: address === "" ? args : [...args, "--relay", address], note: null };
   }
   if (lan === null) {
-    return { args, note: "sharing on the network is off: no network address was found." };
+    return { args: local, note: "sharing on the network is off: no network address was found." };
   }
   return {
     args: [...args, "--bind", "0.0.0.0", "--port", String(port), "--public-url", `ws://${lan}:${port}`],

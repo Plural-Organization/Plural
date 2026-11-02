@@ -13,6 +13,7 @@ from urllib.request import Request, urlopen
 from pydantic import ValidationError
 
 from plural.protocol.models import Model
+from plural.protocol.relay import USER_AGENT
 from plural.protocol.team import (
     Invite,
     MemberList,
@@ -97,7 +98,8 @@ def profile_from(relay: str, grant: TeamGrant) -> TeamProfile:
 
 
 def _call(method: str, url: str, body: bytes | None, headers: dict[str, str]) -> Any:
-    request = Request(url, data=body, method=method, headers=headers)
+    # Cloudflare in front of a relay refuses urllib's default agent (error 1010).
+    request = Request(url, data=body, method=method, headers={"user-agent": USER_AGENT, **headers})
     try:
         with urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
             payload = response.read()

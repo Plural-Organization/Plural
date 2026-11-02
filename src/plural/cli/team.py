@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from plural.cli.format import ago
-from plural.host.config import HostSettings
+from plural.host.config import DEFAULT_RELAY_URL, HostSettings
 from plural.host.team import (
     DirectoryClient,
     TeamError,
@@ -26,7 +26,10 @@ console = Console()
 
 RelayOption = Annotated[
     str | None,
-    typer.Option(help="The team's relay, wss://host or ws://host:port.", envvar="PLURAL_RELAY_URL"),
+    typer.Option(
+        help="The team's relay, wss://host or ws://host:port. Default: the Plural relay.",
+        envvar="PLURAL_RELAY_URL",
+    ),
 ]
 NameOption = Annotated[
     str | None, typer.Option("--as", help="The name teammates see. Default: your user name.")
@@ -49,10 +52,7 @@ def _name(chosen: str | None) -> str:
 
 
 def _relay(given: str | None) -> str:
-    if not given:
-        console.print("[red]Say which relay with --relay wss://host.[/red]")
-        raise typer.Exit(2)
-    return given
+    return given or DEFAULT_RELAY_URL
 
 
 def _joined(store: TeamStore) -> TeamProfile:
@@ -81,8 +81,8 @@ def _already(store: TeamStore) -> None:
         raise typer.Exit(1)
 
 
-def _share(relay: str, code: str, minutes: int) -> None:
-    console.print(f"Invite code [bold]{code}[/bold], valid for {minutes} minutes, one use.")
+def _share(relay: str, code: str) -> None:
+    console.print(f"Invite code [bold]{code}[/bold], reusable and does not expire.")
     console.print(f"Teammates run: plural team join {code} --relay {relay}", soft_wrap=True)
 
 
@@ -106,12 +106,18 @@ def create(
     if as_json:
         typer.echo(
             json.dumps(
-                {"team": profile.team_name, "relay": address, "code": invite.code, "minutes": 60}
+                {
+                    "team": profile.team_name,
+                    "relay": address,
+                    "code": invite.code,
+                    "minutes": None,
+                    "permanent": True,
+                }
             )
         )
         return
     console.print(f"Team [bold]{escape(profile.team_name)}[/bold] created, you are {member}.")
-    _share(address, invite.code, 60)
+    _share(address, invite.code)
 
 
 @team_app.command()
@@ -144,7 +150,7 @@ def invite() -> None:
     store = _store()
     profile = _joined(store)
     created = _run(DirectoryClient(store, profile).invite())
-    _share(profile.relay, created.code, 60)
+    _share(profile.relay, created.code)
 
 
 @team_app.command()

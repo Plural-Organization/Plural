@@ -12,6 +12,7 @@ from websockets.exceptions import ConnectionClosed
 from plural.protocol.codec import encode_command
 from plural.protocol.commands import Command
 from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo, Kind
+from plural.protocol.relay import USER_AGENT
 
 MAX_MESSAGE_BYTES = 4 * 1024 * 1024
 
@@ -32,7 +33,8 @@ class Wire:
 
     @classmethod
     async def open(cls, url: str, *, room: str) -> Self:
-        return cls(await connect(url, max_size=MAX_MESSAGE_BYTES), room=room)
+        socket = await connect(url, max_size=MAX_MESSAGE_BYTES, user_agent_header=USER_AGENT)
+        return cls(socket, room=room)
 
     async def __aenter__(self) -> Self:
         return self
