@@ -95,6 +95,12 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
     }
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
       event.preventDefault();
+      // With a suggestion open, Enter takes it, as Tab does; once nothing is left to complete, it sends.
+      const hint = hints[pick] ?? hints[0];
+      if (hint !== undefined && hint.insert.trimEnd() !== value.trimEnd()) {
+        setValue(hint.insert);
+        return;
+      }
       submit();
     } else if (event.key === "Escape" && editing) {
       event.preventDefault();
