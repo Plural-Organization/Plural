@@ -161,13 +161,14 @@ Your machine is the directory, so while that session is closed nobody can join o
 ### Showing your session to the team
 
 ```bash
-plural --team                 # uses the team's relay as the way in
-plural --team --tunnel ngrok  # or your own tunnel
+plural                        # in a team, this session is shared with it
+plural --private              # keep this one to yourself
+plural --tunnel ngrok         # shared through your own tunnel instead of the team relay
 plural ls                     # who shares what right now
 plural ls --json
 ```
 
-A session is private unless you start it with `--team`. A team session needs an address others can reach, so it uses the team relay, `--relay`, `--public-url` or a tunnel; plural says so and stops if there is none. The team sees your name, the repository and branch, the title, whether the agent is working or waiting for you, and how many people watch. It does not see prompts, replies or files. The card goes away when you quit, or about a minute after your machine drops off.
+Once you are in a team (`team create` or `team join`), every session you start is shared with it, and the top bar says `◆ Backend`. `plural --private` starts one that the team does not see; the bar then reads `this session is private`. Outside a team nothing is shared. A shared session needs an address others can reach, so it uses the team relay, `--relay`, `--public-url` or a tunnel. The team sees your name, the repository and branch, the title, whether the agent is working or waiting for you, and how many people watch. A teammate who opens the session sees everything in it as a viewer, prompts and replies included, so use `--private` for work you do not want shown. The card goes away when you quit, or about a minute after your machine drops off.
 
 The side panel has a SPACES section: your own session first, then the team's, refreshed every few seconds: `●` working, `◆` waiting for its host, `○` idle, with who, repository and branch, and `👁 2` when two people watch.
 

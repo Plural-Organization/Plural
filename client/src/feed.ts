@@ -38,7 +38,7 @@ export type FeedItem =
     }
   | { kind: "assistant"; id: string; text: string; streaming: boolean }
   | { kind: "tool"; id: string; call: ToolCallView; status: ToolStatus; output: string; diff: string | null; live: string }
-  | { kind: "notice"; id: string; tone: Tone; text: string; action?: "board" }
+  | { kind: "notice"; id: string; tone: Tone; text: string; action?: "board" | "done" }
   | { kind: "briefing"; id: string; from: string; text: string; asOf: number; update: boolean }
   | { kind: "shown"; id: string; command: string; title: string; text: string };
 
@@ -57,9 +57,9 @@ export function withBanner(feed: Feed, banner: Extract<FeedItem, { kind: "banner
   return { ...feed, items: [banner, ...feed.items] };
 }
 
-export function withNotice(feed: Feed, tone: Tone, text: string): Feed {
+export function withNotice(feed: Feed, tone: Tone, text: string, action?: "done"): Feed {
   const counter = feed.counter + 1;
-  return { ...feed, counter, items: [...feed.items, { kind: "notice", id: `n${counter}`, tone, text }] };
+  return { ...feed, counter, items: [...feed.items, { kind: "notice", id: `n${counter}`, tone, text, ...(action ? { action } : {}) }] };
 }
 
 export function lastReply(feed: Feed): string {

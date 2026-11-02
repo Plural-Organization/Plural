@@ -3,12 +3,12 @@ import { useRenderer } from "@opentui/react";
 import { useMemo, type ReactNode } from "react";
 import { codeBlockRenderer } from "../code";
 import type { FeedItem, Tone } from "../feed";
-import { gutterWidth, languageFor, parseDiff } from "../lib/diff";
-import { highlightLines } from "../lib/highlight";
 import { bodyLines, displayName, kindOf, lastLine, metaOf, oneLine } from "../lib/tools";
 import { truncate } from "../lib/wrap";
 import { colorFor, theme } from "../theme";
 import { collapseText } from "@plural/client";
+import type { Run } from "../steps";
+import { DiffView } from "./DiffView";
 import { Spinner, useElapsed } from "./Spinner";
 
 const TONES: Record<Tone, { color: string; mark: string }> = {
@@ -50,7 +50,17 @@ const KEYS: readonly (readonly [string, string])[] = [
   ["ctrl+c", "twice to quit"],
 ];
 
-export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }) {
+export function Banner({ item, compact }: { item: Extract<FeedItem, { kind: "banner" }>; compact: boolean }) {
+  if (compact) {
+    return (
+      <box marginBottom={1}>
+        <text fg={theme.dim}>
+          Plural v{item.version}
+          {item.guestLink || item.teamLink ? " · /invite shows the link" : ""} · /help
+        </text>
+      </box>
+    );
+  }
   return (
     <box flexDirection="column" border borderStyle="rounded" borderColor={theme.line} title={` Plural  v${item.version} `} paddingX={2} paddingY={1} marginBottom={1}>
       {item.guestLink || item.teamLink ? (
@@ -162,6 +172,8 @@ export function ShownCard({ item, expanded, onToggle, onCopy }: { item: Extract<
   );
 }
 
+const SOLO: Run = { startId: "", first: true, last: true, count: 1, added: 0, removed: 0, failed: 0, hidden: false, earlier: 0 };
+
 export type Queued = "steer" | "follow_up" | null;
 
 export function UserCard({ item, queued, expanded, onToggle }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued; expanded: boolean; onToggle: () => void }) {
@@ -259,56 +271,25 @@ export function AssistantCard({ item, syntax, expanded, onToggle }: AssistantPro
 const EXPANDED_LINES = 40;
 const LIVE_LINES = 15;
 const DIFF_LINES = 60;
+const DIFF_PREVIEW = 14;
 
 function trimLines(lines: string[], limit: number): { shown: string; more: number } {
   return { shown: lines.slice(0, limit).join("\n"), more: Math.max(0, lines.length - limit) };
 }
 
-function DiffView({ diff, path }: { diff: string; path: string }) {
-  const rows = parseDiff(diff);
-  const language = languageFor(path);
-  const width = gutterWidth(rows);
-  const shown = rows.slice(0, DIFF_LINES);
-  const tint = { add: theme.addBg, del: theme.removeBg, ctx: theme.diffBg, gap: theme.diffBg } as const;
-  const sign = { add: "+", del: "-", ctx: " ", gap: " " } as const;
-  const signColor = { add: theme.ok, del: theme.danger, ctx: theme.dim, gap: theme.dim } as const;
-  return (
-    <box flexDirection="column" backgroundColor={theme.diffBg}>
-      {shown.map((row, index) =>
-        row.kind === "gap" ? (
-          <text key={index} fg={theme.dim} bg={theme.diffBg}>
-            {" ".repeat(width)} ⋯
-          </text>
-        ) : (
-          <box key={index} flexDirection="row" backgroundColor={tint[row.kind]}>
-            <text wrapMode="char">
-              <span fg={theme.dim}>{String(row.newNo ?? row.oldNo ?? "").padStart(width)} </span>
-              <span fg={signColor[row.kind]}>{sign[row.kind]} </span>
-              {(highlightLines(row.text, language)[0] ?? []).map((part, position) => (
-                <span key={position} fg={part.color ?? (row.kind === "ctx" ? theme.dim : theme.text)}>
-                  {part.text}
-                </span>
-              ))}
-            </text>
-          </box>
-        ),
-      )}
-      {rows.length > DIFF_LINES ? <text fg={theme.dim}>… +{rows.length - DIFF_LINES} more lines</text> : null}
-    </box>
-  );
-}
-
-function Body({ item, onCopy }: { item: Extract<FeedItem, { kind: "tool" }>; onCopy: (text: string) => void }) {
+function Body({ item, onCopy, limit, expanded }: { item: Extract<FeedItem, { kind: "tool" }>; onCopy: (text: string) => void; limit: number; expanded: boolean }) {
   const kind = kindOf(item.call.name);
   const failed = item.status === "failed";
   const running = item.status === "running";
   if (item.diff !== null && !running && (kind === "edit" || kind === "write")) {
     return (
       <box flexDirection="column">
-        <DiffView diff={item.diff} path={item.call.subject} />
-        <box alignSelf="flex-end" onMouseDown={() => onCopy(item.diff ?? "")}>
-          <text fg={theme.dim}>copy</text>
-        </box>
+        <DiffView diff={item.diff} path={item.call.subject} limit={limit} />
+        {expanded ? (
+          <box alignSelf="flex-end" onMouseDown={() => onCopy(item.diff ?? "")}>
+            <text fg={theme.dim}>copy</text>
+          </box>
+        ) : null}
       </box>
     );
   }
@@ -338,29 +319,58 @@ interface ToolCardProps {
   item: Extract<FeedItem, { kind: "tool" }>;
   expanded: boolean;
   onToggle: () => void;
+  onRun: () => void;
   onCopy: (text: string) => void;
   width: number;
+  run: Run;
 }
 
-export function ToolCard({ item, expanded, onToggle, onCopy, width }: ToolCardProps) {
+function summary(run: Run): string {
+  const parts = [`${run.count} steps`];
+  if (run.added + run.removed > 0) {
+    parts.push(`+${run.added} −${run.removed}`);
+  }
+  if (run.failed > 0) {
+    parts.push(`${run.failed} failed`);
+  }
+  return parts.join(" · ");
+}
+
+const ERROR_LINES = 4;
+
+export function ToolCard({ item, expanded, onToggle, onRun, onCopy, width, run }: ToolCardProps) {
   const running = item.status === "running";
   const failed = item.status === "failed";
   const elapsed = useElapsed(running);
+  if (run.hidden) {
+    return null;
+  }
   const name = displayName(item.call.name);
+  const kind = kindOf(item.call.name);
   const meta = running
     ? `${elapsed}s`
     : metaOf({ name, tool: item.call.name, status: item.status, subject: item.call.subject, output: item.output, diff: item.diff, live: item.live });
-  const peek = running && kindOf(item.call.name) === "agent" ? lastLine(item.live) : "";
+  const peek = running ? lastLine(item.live) : "";
+  const inner = width - 2;
   const fixed = name.length + meta.length + 12;
-  const subject = truncate(oneLine(item.call.subject), Math.max(0, width - fixed - (peek ? 24 : 0)));
-  const room = Math.max(0, width - fixed - subject.length - 3);
+  const subject = truncate(oneLine(item.call.subject), Math.max(0, inner - fixed - (peek ? 24 : 0)));
+  const room = Math.max(0, inner - fixed - subject.length - 3);
+  const diffShown = !running && item.diff !== null && (kind === "edit" || kind === "write");
+  const errorTail = failed && !expanded && !diffShown ? bodyLines(item.output).slice(-ERROR_LINES) : [];
   return (
-    <box flexDirection="column" marginBottom={expanded ? 1 : 0}>
+    <box flexDirection="column" backgroundColor={theme.panel} paddingX={1} marginTop={run.first ? 1 : 0} marginBottom={run.last ? 1 : 0}>
+      {run.earlier > 0 ? (
+        <box onMouseDown={() => onRun()}>
+          <text fg={theme.accent}>▸ {run.earlier} earlier steps · click to show</text>
+        </box>
+      ) : null}
       <box flexDirection="row" onMouseDown={() => onToggle()}>
         <text wrapMode="none">
           {running ? <Spinner color={theme.info} /> : <span fg={failed ? theme.danger : theme.ok}>⏺</span>}
           <span> </span>
-          <b>{name}</b>
+          <span fg={theme.text}>
+            <b>{name}</b>
+          </span>
           <span fg={theme.dim}>(</span>
           <span fg={theme.text}>{subject}</span>
           <span fg={theme.dim}>)</span>
@@ -368,19 +378,34 @@ export function ToolCard({ item, expanded, onToggle, onCopy, width }: ToolCardPr
           {peek && room > 8 ? <span fg={theme.dim}> · {truncate(peek, room)}</span> : null}
         </text>
       </box>
-      {expanded ? (
-        <box flexDirection="row" marginLeft={2}>
+      {expanded || diffShown ? (
+        <box flexDirection="row" marginLeft={2} marginBottom={diffShown && !expanded ? 0 : 1} onMouseDown={() => onToggle()}>
           <text fg={theme.dim}>⎿ </text>
           <box flexDirection="column" flexGrow={1} flexShrink={1}>
-            <Body item={item} onCopy={onCopy} />
+            <Body item={item} onCopy={onCopy} limit={expanded ? DIFF_LINES : DIFF_PREVIEW} expanded={expanded} />
           </box>
         </box>
+      ) : errorTail.length > 0 ? (
+        <box flexDirection="row" marginLeft={2} onMouseDown={() => onToggle()}>
+          <text fg={theme.dim}>⎿ </text>
+          <text fg={theme.danger} wrapMode="char">
+            {errorTail.join("\n")}
+          </text>
+        </box>
       ) : null}
+      {run.last && run.count > 1 ? <text fg={theme.dim}>{summary(run)}</text> : null}
     </box>
   );
 }
 
 export function NoticeCard({ item }: { item: Extract<FeedItem, { kind: "notice" }> }) {
+  if (item.action === "done") {
+    return (
+      <box marginBottom={1}>
+        <text fg={theme.dim}>✻ {item.text}</text>
+      </box>
+    );
+  }
   const tone = TONES[item.tone];
   return (
     <box flexDirection="row" marginBottom={item.text.includes("\n") ? 1 : 0}>
@@ -396,14 +421,16 @@ interface ViewProps {
   width: number;
   expanded: boolean;
   queued?: Queued;
+  runs: Map<string, Run>;
+  started: boolean;
   onToggle: (id: string) => void;
   onCopy: (text: string) => void;
 }
 
-export function FeedItemView({ item, syntax, width, expanded, queued = null, onToggle, onCopy }: ViewProps) {
+export function FeedItemView({ item, syntax, width, expanded, queued = null, runs, started, onToggle, onCopy }: ViewProps) {
   switch (item.kind) {
     case "banner":
-      return <Banner item={item} />;
+      return <Banner item={item} compact={started} />;
     case "user":
       return <UserCard item={item} queued={queued} expanded={expanded} onToggle={() => onToggle(item.id)} />;
     case "chat":
@@ -411,7 +438,7 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, onT
     case "assistant":
       return <AssistantCard item={item} syntax={syntax} expanded={expanded} onToggle={() => onToggle(item.id)} />;
     case "tool":
-      return <ToolCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} width={width} />;
+      return <ToolCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onRun={() => onToggle(`run:${(runs.get(item.id) ?? SOLO).startId}`)} onCopy={onCopy} width={width} run={runs.get(item.id) ?? SOLO} />;
     case "notice":
       return <NoticeCard item={item} />;
     case "briefing":
