@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.compaction import SUMMARY_PROMPT
+from plural.agent.compaction import SUMMARY_SYSTEM
 from plural.agent.messages import summary_message
 from plural.agent.providers.base import UsageReport
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
@@ -69,7 +69,7 @@ async def test_host_can_request_compaction_and_guests_cannot(tmp_path: Path) -> 
         await owner.client.send(PromptSubmit(text="two"))
         compacted = await owner.next(ContextCompacted)
         assert compacted.summary == "S"
-        assert provider.requests[1].messages[-1].content == SUMMARY_PROMPT
+        assert provider.requests[1].system == SUMMARY_SYSTEM
 
 
 async def test_an_idle_compaction_runs_now_and_everyone_watches_it(tmp_path: Path) -> None:

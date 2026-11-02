@@ -822,6 +822,7 @@ export interface ContextCompacting {
  * via the `definition` "ContextCompacted".
  */
 export interface ContextCompacted {
+  kept_from: string | null;
   run_id: string;
   summary: string;
   tokens_before: number;

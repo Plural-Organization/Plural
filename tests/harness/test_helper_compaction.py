@@ -2,7 +2,7 @@ from pathlib import Path
 
 from tests.loop_support import StubGate, collect, make_loop, turn
 
-from plural.agent.compaction import SUMMARY_PROMPT
+from plural.agent.compaction import SUMMARY_SYSTEM
 from plural.agent.events import AgentEvent, Compacted
 from plural.agent.loop import LoopLimits
 from plural.agent.providers.base import LlmEvent, UsageReport
@@ -28,8 +28,8 @@ async def test_the_fast_model_writes_the_summary_when_there_is_one(tmp_path: Pat
     events = await collect(loop, turn("look around"))
 
     assert summaries(events) == ["listed the workspace cheaply"]
-    assert fast.requests[0].messages[-1].content == SUMMARY_PROMPT
-    assert all(request.messages[-1].content != SUMMARY_PROMPT for request in main.requests)
+    assert fast.requests[0].system == SUMMARY_SYSTEM
+    assert all(request.system != SUMMARY_SYSTEM for request in main.requests)
 
 
 async def test_the_main_model_takes_over_when_the_fast_one_fails(tmp_path: Path) -> None:

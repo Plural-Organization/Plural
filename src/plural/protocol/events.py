@@ -420,6 +420,8 @@ class ContextCompacted(EventBase):
     run_id: str
     summary: str
     tokens_before: int
+    # The first message kept as it is after the summary: "prompt:<id>" or "call:<tool call id>".
+    kept_from: str | None = None
 
 
 class ToolStarted(EventBase):

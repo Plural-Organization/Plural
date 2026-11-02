@@ -1,6 +1,6 @@
 # ADR 0003: simple, host-side context compaction
 
-Status: accepted
+Status: superseded by ADR 0012
 
 ## Context
 

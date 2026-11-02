@@ -1533,9 +1533,11 @@ class SessionActor:
                 await self._emit(ContextCompacting(run_id=run_id, tokens_before=tokens_before))
             case agent.ContextFill() as fill:
                 await self._sync_context(fill)
-            case agent.Compacted(summary=summary, tokens_before=tokens_before):
+            case agent.Compacted(summary=summary, tokens_before=tokens_before, kept_from=kept):
                 await self._emit(
-                    ContextCompacted(run_id=run_id, summary=summary, tokens_before=tokens_before)
+                    ContextCompacted(
+                        run_id=run_id, summary=summary, tokens_before=tokens_before, kept_from=kept
+                    )
                 )
             case agent.ToolStart(call=call):
                 await self._emit(ToolStarted(run_id=run_id, call=call))

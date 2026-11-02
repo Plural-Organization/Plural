@@ -44,6 +44,8 @@ class ToolEnd:
 class Compacted:
     summary: str
     tokens_before: int
+    # The first message kept after the summary, as `messages.kept_from` names it; None kept none.
+    kept_from: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

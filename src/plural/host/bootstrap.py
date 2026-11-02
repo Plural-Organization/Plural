@@ -265,6 +265,7 @@ async def _assemble(
             idle_timeout_s=settings.idle_timeout_s,
             context_window=settings.context_window,
             compact_reserve=settings.compact_reserve,
+            keep_recent=settings.compact_keep,
         ),
     )
     delegate.attach(lambda: loop)

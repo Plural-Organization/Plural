@@ -94,10 +94,12 @@ def replay(
             case BriefingImported(item=item, text=text):
                 turn = NotesTurn(source=item.source, text=text)
                 (notes if run_prompt is not None else messages).append(turn)
-            case ContextCompacted(summary=summary):
-                messages = [SummaryTurn(text=summary)]
-                if run_prompt is not None:
-                    messages.append(run_prompt)
+            case ContextCompacted(summary=summary, kept_from=kept):
+                tail = _kept(messages, kept)
+                again = (
+                    [run_prompt] if run_prompt and all(m is not run_prompt for m in tail) else []
+                )
+                messages = [SummaryTurn(text=summary), *again, *tail]
                 assistant_at = None
             case RunEnded():
                 _settle(messages)
@@ -113,6 +115,24 @@ def replay(
         for message in messages
         if not isinstance(message, AssistantTurn) or message.text or message.tool_calls
     ]
+
+
+def _kept(messages: list[Message], kept: str | None) -> list[Message]:
+    """The messages a compaction kept after its summary, from the one `kept` names."""
+    if kept is None:
+        return []
+    kind, _, key = kept.partition(":")
+    for index, message in enumerate(messages):
+        match message:
+            case UserTurn(id=prompt_id) if kind == "prompt" and prompt_id == key:
+                return messages[index:]
+            case AssistantTurn(tool_calls=calls) if kind == "call" and any(
+                call.id == key for call in calls
+            ):
+                return messages[index:]
+            case _:
+                pass
+    return []
 
 
 def _order_results(messages: list[Message]) -> None:

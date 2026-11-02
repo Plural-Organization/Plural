@@ -1,0 +1,1 @@
+<previous_summary> holds the checkpoint written earlier in this session, before the messages in <conversation>. Write the updated checkpoint: keep everything in it that still holds, add what the conversation brought, move finished work from In progress to Done, and rewrite Next steps.

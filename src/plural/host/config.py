@@ -48,6 +48,7 @@ class HostSettings(BaseSettings):
     # None: the provider says how much its model takes; set it for a model that cannot.
     context_window: int | None = Field(default=None, gt=0)
     compact_reserve: int = Field(default=16_384, ge=0)
+    compact_keep: int = Field(default=20_000, ge=0)
     dump_requests: bool = False
     approval_timeout_s: float = Field(default=120, gt=0)
     token_ttl_s: int = Field(default=86_400, gt=0, le=86_400)

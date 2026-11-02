@@ -1,16 +1,36 @@
-Summarize the transcript inside <summary></summary> tags, so that a new context window can continue this conversation without redoing work or being given the constraints and context again.
+The messages inside <conversation> are the older part of the session. Write a checkpoint of them inside <summary></summary> tags. The newest messages stay as they are after the checkpoint, so they need no repeating.
 
-<preserve>
-1. Any difficulties or problems that came up, and how they were handled or resolved.
-2. Any possibilities, options or approaches that were raised, tried or set aside, and why.
-3. Anything that was asked for, decided, agreed, ruled out, or established as a preference, constraint or boundary, stated exactly.
-4. Exactly where things stand now: what has been covered, settled or completed so far, including files created or changed.
-5. Anything still open, unresolved, promised or expected to happen next.
-6. Specific details that would be hard to reconstruct: names, paths, numbers, commands, exact wording, links or references, kept exactly.
-</preserve>
+Use this format:
 
-<voices>
-Keep what the users said, asked for, shared or established carefully and close to their own words, including who said it. Your own explanations and reasoning can be condensed much further, to what they concluded or produced.
-</voices>
+## Goal
+[What the people in the session are trying to get done; several items if the session moved between tasks.]
 
-Be complete on the points above even at the cost of length; keep everything else concise. Do not call any tools while writing this summary; respond with text only.
+## People
+- [Who asked for what, decided or ruled out what, close to their own words.]
+
+## Constraints and preferences
+- [Requirements, boundaries and preferences stated so far, or "(none)".]
+
+## Progress
+### Done
+- [x] [Work completed, files created or changed.]
+### In progress
+- [ ] [Work under way.]
+### Blocked
+- [What is in the way, or "(none)".]
+
+## Key decisions
+- **[Decision]**: [Why.]
+
+## Next steps
+1. [What should happen next, in order.]
+
+## Critical context
+- [Details needed to continue: data, examples, references, or "(none)".]
+
+<rules>
+- Keep what people said, asked for and established close to their own words, with who said it. The agent's own explanations can shrink to what they concluded or produced.
+- Keep exact file paths, names, commands, numbers, error messages and links.
+- Long tool results are shortened in this request only; the agent read them whole, and its own messages say what it concluded. Never write that a result was cut or that the agent saw only part of it.
+- Keep each section short. Respond with text only and call no tools.
+</rules>

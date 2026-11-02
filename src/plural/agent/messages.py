@@ -60,6 +60,18 @@ class ToolResultTurn(Model):
 Message = UserTurn | AssistantTurn | ToolResultTurn | SummaryTurn | NotesTurn
 
 
+def kept_from(message: Message) -> str | None:
+    """How a compaction names the first message it kept, so replay finds it again: a prompt by
+    its id, a turn by its first tool call. Other messages cannot start the kept part."""
+    match message:
+        case UserTurn(id=prompt_id):
+            return f"prompt:{prompt_id}"
+        case AssistantTurn(tool_calls=(first, *_)):
+            return f"call:{first.id}"
+        case _:
+            return None
+
+
 def _last_tool_round(items: list[Message]) -> int | None:
     for index in range(len(items) - 1, -1, -1):
         turn = items[index]

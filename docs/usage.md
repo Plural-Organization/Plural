@@ -349,7 +349,7 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | `/policy` | Show the permission rules (host) |
 | `/policy allow\|ask\|deny <tool> <pattern>` | Add a rule (host) |
 | `/policy rm <id>` | Remove a rule (host) |
-| `/compact` | Summarize the conversation now, or before the agent's next step when it is busy (host) |
+| `/compact` | Summarize the older conversation now, keeping the newest turns as they are, or before the agent's next step when it is busy (host) |
 | `/skills [search\|add\|rm …]` | List, find and install skills, see [Skills](#skills) |
 | `/agents [rm <name>]` | The sub-agents; the host creates one with a short form, see [Sub-agents](#sub-agents) |
 | `/usage` | Tokens spent in this session per model, for the conversation, summaries and each sub-agent |

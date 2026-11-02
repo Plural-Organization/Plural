@@ -233,7 +233,7 @@ describe("App", () => {
     fake.emit({ type: "run.started", run_id: "rc", prompt_id: "", provenance: GUEST });
     fake.emit({ type: "context.compacting", run_id: "rc", tokens_before: 96_000 });
     expect(await frame(setup, "compacting the context")).toContain("96K tokens into a summary");
-    fake.emit({ type: "context.compacted", run_id: "rc", summary: "S", tokens_before: 96_000 });
+    fake.emit({ type: "context.compacted", run_id: "rc", summary: "S", tokens_before: 96_000, kept_from: null });
     fake.emit({ type: "context.usage", context: { tokens: 3_000, window: 128_000, compact_at: 0.75 } });
     fake.emit({ type: "run.ended", run_id: "rc", reason: "stop", usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 }, error: null });
     const done = await frame(setup, "context compacted: 96K tokens summarized");

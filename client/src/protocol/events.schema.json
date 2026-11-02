@@ -1016,6 +1016,17 @@
     },
     "ContextCompacted": {
       "properties": {
+        "kept_from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "run_id": {
           "type": "string"
         },
@@ -1035,7 +1046,8 @@
         "type",
         "run_id",
         "summary",
-        "tokens_before"
+        "tokens_before",
+        "kept_from"
       ],
       "type": "object"
     },

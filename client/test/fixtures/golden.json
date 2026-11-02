@@ -5387,7 +5387,8 @@
           "type": "context.compacted",
           "run_id": "run_1",
           "summary": "notes were read",
-          "tokens_before": 900
+          "tokens_before": 900,
+          "kept_from": null
         }
       },
       "state": {
