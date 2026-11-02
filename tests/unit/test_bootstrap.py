@@ -8,7 +8,7 @@ from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
 from plural.agent.providers.fake import DemoProvider
 from plural.host.bootstrap import build_host
 from plural.host.config import HostSettings
-from plural.host.providers import ConfigError, build_provider, resolve_api_key
+from plural.host.providers import ConfigError, build_provider, extra_missing, resolve_api_key
 
 
 def test_explicit_key_wins_over_environment() -> None:
@@ -68,3 +68,13 @@ async def test_a_missing_workspace_fails_before_the_session_is_created(tmp_path:
     with pytest.raises(ConfigError, match="does not exist"):
         await build_host(settings)
     assert not (tmp_path / "data" / "sessions" / "r_test.db").exists()
+
+
+def test_a_missing_sdk_becomes_an_install_hint() -> None:
+    with pytest.raises(ConfigError, match=r"plural-agent\[anthropic\]"):
+        extra_missing("anthropic", ModuleNotFoundError(name="anthropic.types"))
+
+
+def test_any_other_missing_module_is_not_hidden() -> None:
+    with pytest.raises(ModuleNotFoundError):
+        extra_missing("anthropic", ModuleNotFoundError(name="some_other_package"))

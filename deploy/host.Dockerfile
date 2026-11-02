@@ -9,7 +9,7 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH" PLURAL_DATA_DIR=/data
 COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --all-extras
 COPY deploy/host-entrypoint.sh /usr/local/bin/plural-host-entrypoint
 RUN chmod +x /usr/local/bin/plural-host-entrypoint
 USER plural

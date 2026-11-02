@@ -1,4 +1,6 @@
+import type { ExtraStatus } from "./extras";
 import type { AgentConfig, Preset } from "./presets";
+import type { ToolStatus } from "./tools";
 
 export interface ControlResult {
   ok: boolean;
@@ -6,6 +8,8 @@ export interface ControlResult {
   message?: string;
   error?: string;
   presets?: Preset[];
+  extras?: ExtraStatus[];
+  tools?: ToolStatus[];
 }
 
 export interface AgentControl {
@@ -13,13 +17,22 @@ export interface AgentControl {
   test(config: AgentConfig): Promise<ControlResult>;
   /** The host's provider catalog, which the client renders and keeps no copy of. */
   catalog(): Promise<Preset[]>;
+  /** Which optional model SDKs the host has; empty when it does not say. */
+  extras(): Promise<ExtraStatus[]>;
+  /** Install one of them into the host's environment; this can take minutes on a slow network. */
+  install(extra: string): Promise<ControlResult>;
+  tools?(): Promise<ToolStatus[]>;
+  installTool?(tool: string): Promise<ControlResult>;
 }
 
 export const CONTROL_TIMEOUT_MS = 60_000;
+/** A little over the host's own install limit, so the host's answer is the one the user sees. */
+export const INSTALL_TIMEOUT_MS = 11 * 60_000;
 
 export class ControlLink implements AgentControl {
   private counter = 0;
   private readonly pending = new Map<string, (result: ControlResult) => void>();
+  private inventory: Promise<ControlResult> | null = null;
   private buffered = "";
 
   constructor(private readonly write: (line: string) => boolean) {}
@@ -49,23 +62,59 @@ export class ControlLink implements AgentControl {
   }
 
   async catalog(): Promise<Preset[]> {
-    const result = await this.request("catalog", null);
+    const result = await this.snapshot();
     return result.ok ? (result.presets ?? []) : [];
   }
 
-  private request(type: "configure" | "test" | "catalog", config: AgentConfig | null): Promise<ControlResult> {
+  async extras(): Promise<ExtraStatus[]> {
+    const result = await this.snapshot();
+    return result.ok ? (result.extras ?? []) : [];
+  }
+
+  install(extra: string): Promise<ControlResult> {
+    return this.request("install", null, { extra }, INSTALL_TIMEOUT_MS);
+  }
+
+  async tools(): Promise<ToolStatus[]> {
+    const result = await this.snapshot();
+    return result.ok ? (result.tools ?? []) : [];
+  }
+
+  installTool(tool: string): Promise<ControlResult> {
+    return this.request("install", null, { tool }, INSTALL_TIMEOUT_MS);
+  }
+
+  private snapshot(): Promise<ControlResult> {
+    if (this.inventory === null) {
+      const asked = this.request("catalog", null);
+      this.inventory = asked;
+      void asked.finally(() => {
+        if (this.inventory === asked) {
+          this.inventory = null;
+        }
+      });
+    }
+    return this.inventory;
+  }
+
+  private request(
+    type: "configure" | "test" | "catalog" | "install",
+    config: AgentConfig | null,
+    more: Record<string, string> = {},
+    timeout: number = CONTROL_TIMEOUT_MS,
+  ): Promise<ControlResult> {
     this.counter += 1;
     const id = `k${this.counter}`;
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         resolve({ ok: false, error: "the host did not answer in time" });
-      }, CONTROL_TIMEOUT_MS);
+      }, timeout);
       this.pending.set(id, (result) => {
         clearTimeout(timer);
         resolve(result);
       });
-      if (!this.write(`${JSON.stringify(config === null ? { id, type } : { id, type, config })}\n`)) {
+      if (!this.write(`${JSON.stringify(config === null ? { id, type, ...more } : { id, type, config, ...more })}\n`)) {
         this.pending.delete(id);
         clearTimeout(timer);
         resolve({ ok: false, error: "the host is not reachable" });
@@ -95,6 +144,8 @@ export class ControlLink implements AgentControl {
       ...(typeof message["message"] === "string" ? { message: message["message"] } : {}),
       ...(typeof message["error"] === "string" ? { error: message["error"] } : {}),
       ...(Array.isArray(message["presets"]) ? { presets: message["presets"] as Preset[] } : {}),
+      ...(Array.isArray(message["extras"]) ? { extras: message["extras"] as ExtraStatus[] } : {}),
+      ...(Array.isArray(message["tools"]) ? { tools: message["tools"] as ToolStatus[] } : {}),
     });
   }
 }

@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { App, type AppProps } from "./App";
 import { buildSpaces, neighbour, OWN, ownConflicts, type Phase, type Summary, type Visit } from "./spaces";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
-import type { SessionCard, Team, TeamView, TeamWatcher } from "./team";
+import { createTeamInvite, teamJoinCommand, type SessionCard, type Team, type TeamView, type TeamWatcher } from "./team";
 
 export interface ShellProps {
   app: AppProps;
   team: Team | null;
   watcher?: TeamWatcher;
   home: string;
+  shareHost?: (folder: string) => Promise<void>;
   connect: (card: SessionCard, team: Team) => Session;
 }
 
@@ -25,7 +26,7 @@ const TITLES: Record<Phase, string> = {
   idle: "plural",
 };
 
-export function Shell({ app, team, watcher, home, connect }: ShellProps) {
+export function Shell({ app, team, watcher, home, shareHost, connect }: ShellProps) {
   const renderer = useRenderer();
   const [settings, setSettings] = useState<Settings>(app.settings ?? DEFAULT_SETTINGS);
   const [view, setView] = useState<TeamView | null>(watcher?.view ?? null);
@@ -74,6 +75,10 @@ export function Shell({ app, team, watcher, home, connect }: ShellProps) {
     onOpenSpace: open,
     onCycleSpace: (direction: 1 | -1) => open(neighbour(rows, active, direction)),
   };
+  const inviteTeam =
+    team !== null && team.profile.member.role === "owner"
+      ? async (): Promise<string> => teamJoinCommand(team, (await createTeamInvite(team)).code)
+      : undefined;
   const change = (next: Settings): void => {
     setSettings(next);
     app.onSettings?.(next);
@@ -81,7 +86,7 @@ export function Shell({ app, team, watcher, home, connect }: ShellProps) {
 
   return (
     <>
-      <App {...app} {...shared} conflicts={conflicts} settings={settings} onSettings={change} active={active === OWN} onSummary={summary(OWN)} />
+      <App {...app} {...shared} onInviteTeam={inviteTeam} onShareHost={team === null ? undefined : shareHost} conflicts={conflicts} settings={settings} onSettings={change} active={active === OWN} onSummary={summary(OWN)} />
       {visits.map((visit) => (
         <App
           key={visit.id}
