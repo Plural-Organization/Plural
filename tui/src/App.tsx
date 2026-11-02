@@ -83,6 +83,7 @@ export interface AppProps {
   viewing?: string | null;
   spaces?: SpaceRow[];
   teamName?: string | null;
+  sharing?: boolean;
   teamError?: string | null;
   onOpenSpace?: (id: string) => void;
   onCycleSpace?: (direction: 1 | -1) => void;
@@ -135,6 +136,7 @@ export function App({
   viewing = null,
   spaces,
   teamName = null,
+  sharing = true,
   teamError = null,
   onOpenSpace,
   onCycleSpace,
@@ -1420,7 +1422,7 @@ export function App({
   return (
     <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg} visible={active}>
       <box flexDirection="column" flexGrow={1} minWidth={0}>
-        <TopBar state={state} update={update} team={teamName ?? null} onSettings={() => setDialog(true)} />
+        <TopBar state={state} update={update} team={teamName ?? null} sharing={sharing} onSettings={() => setDialog(true)} />
         {viewing !== null ? (
           <box flexShrink={0} height={1} paddingX={2} backgroundColor={theme.panel}>
             <text fg={theme.info} wrapMode="none">
