@@ -45,7 +45,7 @@ export function skewNote(client: string, host: string): string | null {
   if (parseVersion(client) === null || parseVersion(host) === null || compareVersions(host, client) >= 0) {
     return null;
   }
-  return `the host (plural-host ${host}) is older than this plural ${client}, so some commands will not work. Run plural update, or: uv tool install --force --refresh plural-agent==${client}`;
+  return `the host (plural-host ${host}) is older than this plural ${client}, so some commands will not work. Run plural update`;
 }
 
 export type Installer = (environment: Record<string, string>) => Promise<number>;

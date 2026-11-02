@@ -65,15 +65,64 @@ jobs:
           script -qec "timeout 30 ./stage/plural --selftest" /dev/null
       - name: Package
         run: |
-          name=plural-${{ matrix.os }}-${{ matrix.arch }}.tar.gz
-          tar -czf "$name" -C stage plural
-          sha256sum "$name" > "$name.sha256"
+          base=plural-${{ matrix.os }}-${{ matrix.arch }}
+          # The xz archive is a third smaller than gzip (the Bun runtime is most of the binary),
+          # which is what a slow connection waits for. The gzip one stays for hosts without xz
+          # and for installers older than the xz archive.
+          tar -cf - -C stage plural | xz -9e -T0 > "$base.tar.xz"
+          tar -czf "$base.tar.gz" -C stage plural
+          sha256sum "$base.tar.xz" > "$base.tar.xz.sha256"
+          sha256sum "$base.tar.gz" > "$base.tar.gz.sha256"
       - uses: actions/upload-artifact@v4
         with:
           name: bin-${{ matrix.os }}-${{ matrix.arch }}
           path: |
+            plural-*.tar.xz
+            plural-*.tar.xz.sha256
             plural-*.tar.gz
             plural-*.tar.gz.sha256
+
+  hosts:
+    # PyInstaller cannot cross-compile, so every platform builds on its own runner. The frozen host
+    # carries Python and the model SDKs, which is what lets the installer skip uv and the resolve.
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { os: darwin, arch: arm64, runner: macos-14 }
+          - { os: darwin, arch: x64, runner: macos-13 }
+          - { os: linux, arch: x64, runner: ubuntu-22.04 }
+          - { os: linux, arch: arm64, runner: ubuntu-22.04-arm }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+          enable-cache: true
+      - name: Freeze the host
+        run: sh scripts/build-host.sh stage
+      - name: Smoke test
+        run: |
+          ./stage/plural-host/plural-host --help
+          ./stage/plural-host/plural-host doctor
+          ./stage/plural-host/plural-host --frozen-selftest
+      - name: Package
+        run: |
+          base=plural-host-${{ matrix.os }}-${{ matrix.arch }}
+          tar -cf - -C stage plural-host | xz -9e -T0 > "$base.tar.xz"
+          tar -czf "$base.tar.gz" -C stage plural-host
+          if command -v sha256sum >/dev/null; then sum="sha256sum"; else sum="shasum -a 256"; fi
+          $sum "$base.tar.xz" > "$base.tar.xz.sha256"
+          $sum "$base.tar.gz" > "$base.tar.gz.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: host-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            plural-host-*.tar.xz
+            plural-host-*.tar.xz.sha256
+            plural-host-*.tar.gz
+            plural-host-*.tar.gz.sha256
 
   publish:
     needs: build
@@ -89,7 +138,7 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
 
   github-release:
-    needs: [publish, binaries]
+    needs: [publish, binaries, hosts]
     runs-on: ubuntu-latest
     permissions:
       contents: write

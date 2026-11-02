@@ -79,6 +79,10 @@ asset_url() {
   fi
 }
 
+fetch_small() {
+  curl -fsSL --retry 2 --connect-timeout 8 "$(asset_url "$1")" -o "$2" 2>/dev/null
+}
+
 # The model SDKs are optional extras, so a demo or Claude Code install does not download them.
 # An update keeps the SDKs the installed host already has, so it never drops a provider.
 installed_extras() {
@@ -108,6 +112,22 @@ host_extras() {
   printf '%s\n' "$chosen" | awk '{ gsub(/^ +| +$/, ""); gsub(/ +/, ","); print }'
 }
 
+# The host of this release is already installed with every SDK asked for: nothing to download.
+# Only a pinned version can be compared, so "latest" that could not be resolved still installs.
+host_is_current() {
+  [ -z "$HOST_PACKAGE" ] || return 1
+  [ "$VERSION" != "latest" ] || return 1
+  have="$(uv tool list 2>/dev/null | awk '$1 == "plural-agent" { sub(/^v/, "", $2); print $2; exit }')"
+  [ "$have" = "${VERSION#v}" ] || return 1
+  have_extras=" $(installed_extras | tr '\n' ' ') "
+  for extra in $(host_extras | tr ',' ' '); do
+    case "$have_extras" in
+      *" $extra "*) ;;
+      *) return 1 ;;
+    esac
+  done
+}
+
 install_host() {
   if ! command -v uv >/dev/null 2>&1; then
     step "Installing uv"
@@ -125,9 +145,15 @@ install_host() {
       package="$package==${VERSION#v}"
     fi
   fi
+  if host_is_current; then
+    step "plural-host is already up to date"
+    return
+  fi
   step "Installing the host (plural-host)"
   # No --python: any Python >= 3.12 on the machine works, and uv fetches one only when none does.
-  uv tool install --force --refresh "$package"
+  # Only plural-agent is revalidated against the index, so a stale cache cannot keep an old host;
+  # its dependencies are pinned by that release and come straight from uv's cache when it has them.
+  uv tool install --force --refresh-package plural-agent "$package"
 }
 
 checksum_of() {
@@ -142,39 +168,80 @@ download() {
   fi
 }
 
-install_client() {
+# tar reads xz itself on macOS; elsewhere it calls the xz program.
+can_unpack_xz() {
+  [ "$(uname -s)" = Darwin ] || command -v xz >/dev/null 2>&1
+}
+
+# Download, verify and place one frozen executable (plural, or plural-host). Returns 2 when this
+# release has no such asset, so the caller can fall back.
+install_binary() {
+  name="$1"
   os="$(detect_os)"
   arch="$(detect_arch)"
-  asset="plural-$os-$arch.tar.gz"
   cache="${XDG_CACHE_HOME:-$HOME/.cache}/plural"
   work="$(mktemp -d)"
   trap 'rm -rf "$work"' EXIT
-  curl -fsSL --retry 3 --connect-timeout 20 "$(asset_url "$asset.sha256")" -o "$work/$asset.sha256" || fail "could not download the checksum for $asset from $RELEASES"
+  # The xz archive is a third smaller, so it is what a slow connection should wait for. A release
+  # from before it existed, or a machine that cannot unpack it, takes the gzip one.
+  asset="$name-$os-$arch.tar.xz"
+  if ! can_unpack_xz || ! fetch_small "$asset.sha256" "$work/$asset.sha256"; then
+    asset="$name-$os-$arch.tar.gz"
+    fetch_small "$asset.sha256" "$work/$asset.sha256" || return 2
+  fi
   hash="$(checksum_of "$work/$asset.sha256")"
   [ -n "$hash" ] || fail "the checksum for $asset is empty"
-  if [ -x "$BIN_DIR/plural" ] && [ "$(cat "$cache/installed-$os-$arch" 2>/dev/null || true)" = "$hash" ]; then
-    step "plural is already up to date"
-    return
+  if [ -x "$BIN_DIR/$name" ] && [ "$(cat "$cache/installed-$name-$os-$arch" 2>/dev/null || true)" = "$hash" ]; then
+    step "$name is already up to date"
+    return 0
   fi
   download_dir="$cache/$hash"
   mkdir -p "$download_dir"
   cp "$work/$asset.sha256" "$download_dir/$asset.sha256"
   if [ -f "$download_dir/$asset" ] && (cd "$download_dir" && sha256_check "$asset.sha256"); then
-    step "Using the download from an earlier run"
+    step "Using the download of $name from an earlier run"
   else
-    step "Downloading plural for $os-$arch"
+    step "Downloading $name for $os-$arch"
     download "$(asset_url "$asset")" "$download_dir/$asset" || fail "could not download $asset from $RELEASES, run the installer again to continue where it stopped"
     (cd "$download_dir" && sha256_check "$asset.sha256") || {
       rm -f "$download_dir/$asset"
       fail "checksum mismatch for $asset, run the installer again"
     }
   fi
-  tar -xzf "$download_dir/$asset" -C "$work"
+  tar -xf "$download_dir/$asset" -C "$work"
   mkdir -p "$BIN_DIR"
-  mv -f "$work/plural" "$BIN_DIR/plural"
-  chmod +x "$BIN_DIR/plural"
-  printf '%s\n' "$hash" > "$cache/installed-$os-$arch"
+  if [ -d "$work/$name" ]; then
+    # The host is a folder (its libraries sit beside it), so it lives in the data directory and
+    # only a link to it goes on the PATH. It is swapped in whole, so a failed update leaves the old one.
+    app_dir="${XDG_DATA_HOME:-$HOME/.local/share}/plural"
+    mkdir -p "$app_dir"
+    rm -rf "$app_dir/$name.new"
+    mv "$work/$name" "$app_dir/$name.new"
+    rm -rf "$app_dir/$name"
+    mv "$app_dir/$name.new" "$app_dir/$name"
+    ln -sf "$app_dir/$name/$name" "$BIN_DIR/$name"
+  else
+    mv -f "$work/$name" "$BIN_DIR/$name"
+    chmod +x "$BIN_DIR/$name"
+  fi
+  printf '%s\n' "$hash" > "$cache/installed-$name-$os-$arch"
   rm -rf "$download_dir"
+}
+
+install_client() {
+  install_binary plural || fail "could not download the checksum for plural from $RELEASES"
+}
+
+# The frozen host needs no Python or uv. A release without one, or PLURAL_HOST_PACKAGE (a custom
+# build to install from an index), takes the uv install.
+install_host_any() {
+  if [ -z "$HOST_PACKAGE" ]; then
+    status=0
+    install_binary plural-host || status=$?
+    [ "$status" = 2 ] || return "$status"
+    step "This release has no frozen host, installing it with uv"
+  fi
+  install_host
 }
 
 on_path() {
@@ -198,23 +265,25 @@ if [ "$VERSION" = "latest" ]; then
   fi
 fi
 
-# The client download and the host install each wait on the network, so they run side by side.
+# The client and the host each wait on the network, so they download side by side.
 client_log="$(mktemp)"
+host_log="$(mktemp)"
 install_client >"$client_log" 2>&1 &
 client_pid=$!
-trap 'kill "$client_pid" 2>/dev/null || true; rm -f "$client_log"' EXIT
-step "Downloading the client in the background"
-install_host
-if wait "$client_pid"; then
-  trap - EXIT
-  cat "$client_log"
-  rm -f "$client_log"
-else
-  trap - EXIT
-  cat "$client_log" >&2
-  rm -f "$client_log"
+install_host_any >"$host_log" 2>&1 &
+host_pid=$!
+trap 'kill "$client_pid" "$host_pid" 2>/dev/null || true; rm -f "$client_log" "$host_log"' EXIT
+step "Downloading plural and plural-host"
+failed=0
+wait "$client_pid" || failed=1
+cat "$client_log"
+wait "$host_pid" || failed=1
+cat "$host_log"
+if [ "$failed" = 1 ]; then
   exit 1
 fi
+trap - EXIT
+rm -f "$client_log" "$host_log"
 
 path_missing=0
 if ! on_path "$BIN_DIR"; then
@@ -232,9 +301,7 @@ say ""
 say "  cd your-project"
 say "  plural"
 say ""
-say "${DIM}The demo agent needs no key. plural offers to add the Anthropic or OpenAI SDK${RESET}"
-say "${DIM}the first time you start it, or add one now:${RESET}"
-say "  uv tool install --force 'plural-agent[anthropic]'   ${DIM}(or [openai])${RESET}"
+say "${DIM}The demo agent needs no key. For a model, set a provider and its key:${RESET}"
 say "  ANTHROPIC_API_KEY=... PLURAL_PROVIDER=anthropic plural"
 if [ "$path_missing" = 1 ]; then
   say ""

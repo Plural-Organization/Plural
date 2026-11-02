@@ -134,7 +134,7 @@ describe("a host older than the client", () => {
     const note = skewNote("0.2.2", "0.2.1");
     expect(note).toContain("plural-host 0.2.1");
     expect(note).toContain("plural update");
-    expect(note).toContain("plural-agent==0.2.2");
+    expect(note).toContain("Run plural update");
   });
 
   test("an equal or newer host, or a version that cannot be read, says nothing", () => {

@@ -71,7 +71,7 @@ export async function startLocalHost(args: string[]): Promise<HostHandle> {
         clearTimeout(timer);
         reject(
           error.code === "ENOENT"
-            ? new HostUnavailable(`"${command}" was not found. Install the host: uv tool install plural-agent`)
+            ? new HostUnavailable(`"${command}" was not found. Install it: curl -fsSL https://raw.githubusercontent.com/Plural-Organization/Plural/main/install.sh | sh`)
             : error,
         );
       });
