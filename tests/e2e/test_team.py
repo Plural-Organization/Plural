@@ -191,7 +191,7 @@ async def test_a_browser_may_ask_the_directory(relay: RelayServer) -> None:
             headers={
                 "origin": "https://plural-room.vercel.app",
                 "access-control-request-method": "GET",
-                "access-control-request-headers": "authorization",
+                "access-control-request-headers": "authorization,ngrok-skip-browser-warning",
             },
         )
         with urlopen(request) as response:
@@ -199,4 +199,6 @@ async def test_a_browser_may_ask_the_directory(relay: RelayServer) -> None:
 
     headers = {key.lower(): value for key, value in (await asyncio.to_thread(preflight)).items()}
     assert headers["access-control-allow-origin"] == "*"
-    assert "authorization" in headers["access-control-allow-headers"].lower()
+    allowed = headers["access-control-allow-headers"].lower()
+    assert "authorization" in allowed
+    assert "ngrok-skip-browser-warning" in allowed

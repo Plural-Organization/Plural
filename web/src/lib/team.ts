@@ -215,9 +215,20 @@ async function answer<T>(response: Response): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function reach(url: string, init: RequestInit): Promise<Response> {
+const NGROK_SKIP = "ngrok-skip-browser-warning";
+
+export async function reach(url: string, init: RequestInit): Promise<Response> {
+  const ask = (headers: HeadersInit): Promise<Response> => fetch(url, { ...init, headers, signal: AbortSignal.timeout(TIMEOUT_MS) });
+  const headers = (init.headers ?? {}) as Record<string, string>;
   try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(TIMEOUT_MS) });
+    return await ask(headers);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "TimeoutError") {
+      throw new Error(`could not reach the team's relay at ${new URL(url).host}`);
+    }
+  }
+  try {
+    return await ask({ ...headers, [NGROK_SKIP]: "1" });
   } catch {
     throw new Error(`could not reach the team's relay at ${new URL(url).host}`);
   }

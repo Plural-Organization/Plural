@@ -56,13 +56,13 @@ def create_app(
 
     return Starlette(
         # The team directory answers browsers too. Requests are signed, never sent with cookies,
-        # so any page may ask.
+        # so any page may ask. The ngrok header gets a page past ngrok's browser warning.
         middleware=[
             Middleware(
                 CORSMiddleware,
                 allow_origins=["*"],
                 allow_methods=["GET", "POST", "DELETE"],
-                allow_headers=["authorization", "content-type"],
+                allow_headers=["authorization", "content-type", "ngrok-skip-browser-warning"],
                 max_age=600,
             )
         ],

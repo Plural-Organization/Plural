@@ -1,5 +1,5 @@
-import { expect, test } from "vitest";
-import { authorization, base64url, certificateWindow, httpBase, joinMessage, parseTeamInvite, renewalDue, reachable, requestMessage, teamJoinCommand, teamJoinLink, teamProof, type SessionCard, type Team, type TeamProfile } from "./team";
+import { afterEach, expect, test, vi } from "vitest";
+import { authorization, base64url, certificateWindow, httpBase, joinMessage, parseTeamInvite, renewalDue, reach, reachable, requestMessage, teamJoinCommand, teamJoinLink, teamProof, type SessionCard, type Team, type TeamProfile } from "./team";
 
 const PROFILE: TeamProfile = {
   relay: "wss://relay.example.com",
@@ -76,4 +76,34 @@ test("an https page opens only a wss endpoint", () => {
   expect(reachable(card, "https:")).toBe("wss://relay.example.com/r_1");
   expect(reachable(card, "http:")).toBe("ws://10.0.0.2:7000/r_1");
   expect(reachable({ endpoints: [{ kind: "direct", url: "ws://10.0.0.2:7000/r_1" }] } as SessionCard, "https:")).toBeNull();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+test("a page asks plainly first and past the ngrok warning only when that fails", async () => {
+  const seen: Array<Record<string, string>> = [];
+  vi.stubGlobal("fetch", async (_url: string, init: RequestInit) => {
+    seen.push((init.headers ?? {}) as Record<string, string>);
+    if (seen.length === 1) throw new TypeError("Failed to fetch");
+    return new Response("{}");
+  });
+  const response = await reach("https://relay.example/teams/join", { method: "POST", headers: { "content-type": "application/json" } });
+  expect(response.ok).toBe(true);
+  expect(seen).toEqual([{ "content-type": "application/json" }, { "content-type": "application/json", "ngrok-skip-browser-warning": "1" }]);
+});
+
+test("a relay that stays out of reach is named in the error", async () => {
+  vi.stubGlobal("fetch", async () => {
+    throw new TypeError("Failed to fetch");
+  });
+  await expect(reach("https://relay.example/teams/join", {})).rejects.toThrow("could not reach the team's relay at relay.example");
+});
+
+test("a relay that answers plainly is asked once", async () => {
+  const fetcher = vi.fn(async () => new Response("{}"));
+  vi.stubGlobal("fetch", fetcher);
+  await reach("https://relay.example/teams/join", {});
+  expect(fetcher).toHaveBeenCalledTimes(1);
 });
