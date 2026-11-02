@@ -62,6 +62,10 @@ export async function buildDevPreview(id: string, page: string, fetchResource: F
   if (!response.media_type.toLowerCase().includes("text/html")) throw new Error("preview entry must return HTML");
   const doc = new DOMParser().parseFromString(decode(response.content_b64), "text/html");
   const problems = ["Server-rendered preview · reload to update · application JavaScript and HMR are not supported yet"];
+  // The app's JS never runs here, so what it would hide until it loads (Next's dev `body{display:none}`) goes,
+  // and what it shows without JS stays.
+  doc.querySelectorAll("style[data-next-hide-fouc]").forEach(node => node.remove());
+  doc.querySelectorAll("noscript").forEach(node => node.replaceWith(...node.childNodes));
   doc.querySelectorAll("script,base,iframe,object,embed,meta[http-equiv],link:not([rel=stylesheet])").forEach(node => node.remove());
   const originalStyles = [...doc.querySelectorAll("style")];
   for (const link of [...doc.querySelectorAll<HTMLLinkElement>("link[rel=stylesheet]")]) {
