@@ -1,4 +1,5 @@
 import type { ChildProcess, StdioOptions } from "node:child_process";
+import { promises as dns } from "node:dns";
 import { mkdirSync } from "node:fs";
 import { connect } from "node:net";
 import { join } from "node:path";
@@ -23,7 +24,7 @@ export interface TeamHostDeps {
 }
 
 const STARTUP_MS = 15_000;
-const TUNNEL_MS = 45_000;
+const TUNNEL_MS = 60_000;
 const POLL_MS = 100;
 
 export function relayArgs(port: number, teams: string): string[] {
@@ -55,9 +56,57 @@ function accepting(port: number): Promise<boolean> {
   });
 }
 
-async function healthy(url: string): Promise<boolean> {
+const published = new Set<string>();
+
+export type Lookup = (host: string) => Promise<"found" | "missing" | "unknown">;
+
+// Asks the zone's own name servers, which cache nothing. A quick tunnel's name exists only seconds after
+// its address is printed, and any resolver asked before then (the system's, the router's, even 1.1.1.1)
+// keeps the "no such name" for a minute, past the wait.
+const authoritative: Lookup = async (host) => {
+  let servers: string[];
   try {
-    const response = await fetch(`${url.replace(/^ws/, "http")}/healthz`, { signal: AbortSignal.timeout(3000) });
+    const names = await dns.resolveNs(host.slice(host.indexOf(".") + 1));
+    servers = (await Promise.all(names.map((name) => dns.resolve4(name).catch(() => [] as string[])))).flat();
+  } catch {
+    // Not a zone of its own (a custom or reserved domain, or no dot at all): nothing to ask.
+    return "unknown";
+  }
+  if (servers.length === 0) {
+    return "unknown";
+  }
+  const resolver = new dns.Resolver({ timeout: 2000, tries: 1 });
+  resolver.setServers(servers);
+  try {
+    await resolver.resolve4(host);
+    return "found";
+  } catch (error) {
+    const code = (error as { code?: string }).code;
+    return code === "ENOTFOUND" || code === "ENODATA" ? "missing" : "unknown";
+  }
+};
+
+// True once the name exists, so the system resolver is not asked before; where the name servers cannot
+// be reached, it is left to the system resolver as before.
+export async function resolvable(host: string, lookup: Lookup = authoritative): Promise<boolean> {
+  if (published.has(host)) {
+    return true;
+  }
+  const answer = await lookup(host);
+  if (answer === "found") {
+    published.add(host);
+  }
+  // An unknown answer is asked again on the next poll, so one slow reply does not end the wait for good.
+  return answer !== "missing";
+}
+
+async function healthy(url: string): Promise<boolean> {
+  const http = url.replace(/^ws/, "http");
+  if (!(await resolvable(new URL(http).hostname))) {
+    return false;
+  }
+  try {
+    const response = await fetch(`${http}/healthz`, { signal: AbortSignal.timeout(3000) });
     return response.ok;
   } catch {
     return false;
