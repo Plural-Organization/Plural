@@ -72,7 +72,7 @@ test("muting requests keeps approval cards visible without ringing", async () =>
   fake.emit({ type: "approval.requested", approval: { id: "ap_1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60000).toISOString(), suggested_patterns: [], warnings: [] } });
   await settle(setup);
   expect(ringing).not.toHaveBeenCalled();
-  expect(setup.captureCharFrame()).toContain("approval needed");
+  expect(setup.captureCharFrame()).toContain("Approve ");
 });
 
 test("replacing a pending request rings even when the inbox count stays the same", async () => {

@@ -20,7 +20,7 @@ around. The relay is deliberately dumb: it routes frames, never decides permissi
 - **Directory.** A module of the relay application. It stores teams, members and invite codes in SQLite and
   live session cards in memory with a time to live. It answers only requests that carry a valid certificate
   and a signature over a fresh nonce. It never sees prompts, replies or files.
-- **Session card.** A host that runs with `--team` publishes a card: room, owner, repository name, branch,
+- **Session card.** A host that runs with `--team` (the TUI passes it by default inside a team, `--private` leaves it out) publishes a card: room, owner, repository name, branch,
   title, status, number of viewers, the files its agent changed lately, and a list of endpoints (relay,
   tunnel, LAN). The host refreshes it every 20 seconds, the directory drops it after 60. Sessions are
   `private` by default and are not published.

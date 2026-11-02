@@ -1,20 +1,32 @@
 import { useEffect, useState } from "react";
-import { PERMISSION_LABELS, shortTokens, type PermissionMode } from "@plural/client";
+import { shortTokens } from "@plural/client";
 import { theme } from "../theme";
+import { VERBS, verbAt } from "../verbs";
 import { Spinner, useElapsed } from "./Spinner";
 
-export function Working({ status, canAbort, queued }: { status: string; canAbort: boolean; queued: number }) {
+const GLYPHS = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
+const GENERIC = /^(waiting for the model|thinking)/;
+
+export function Working({ status, verb, canAbort, queued }: { status: string; verb: number; canAbort: boolean; queued: number }) {
   const elapsed = useElapsed(true);
-  const text = status.replace(/^…\s*/, "") || "working";
-  const verb = text === "waiting for the model" ? "thinking" : text;
+  const [frame, setFrame] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setFrame((value) => (value + 1) % GLYPHS.length), 110);
+    return () => clearInterval(timer);
+  }, []);
+  const word = VERBS[verbAt(verb, elapsed * 1000)]?.[0] ?? "Working";
+  const detail = status.replace(/^…\s*/, "");
   return (
     <box paddingX={2} height={1} flexShrink={0}>
       <text fg={theme.dim}>
-        <Spinner color={theme.accent} />
-        <span fg={theme.accent}> {verb}…</span>
-        {` ${elapsed}s`}
-        {queued > 0 ? <span fg={theme.warn}> · {queued} queued</span> : null}
+        <span fg={theme.accent}>
+          {GLYPHS[frame]} {word}…
+        </span>
+        {` (${elapsed}s`}
         {canAbort ? " · esc to interrupt" : ""}
+        {detail && !GENERIC.test(detail) ? ` · ${detail}` : ""}
+        {")"}
+        {queued > 0 ? <span fg={theme.warn}> · {queued} queued</span> : null}
       </text>
     </box>
   );
@@ -55,26 +67,6 @@ export function Busy({ text }: { text: string }) {
         <Spinner color={theme.info} />
         <span fg={theme.info}> {text}…</span>
         {elapsed > 0 ? ` ${elapsed}s` : ""}
-      </text>
-    </box>
-  );
-}
-
-const MARKS: Record<PermissionMode, string> = { default: "⏵", accept_edits: "⏵⏵", plan: "⏸", auto: "⏵⏵⏵" };
-
-export function ModeLine({ mode, canCycle }: { mode: PermissionMode; canCycle: boolean }) {
-  if (mode === "default" && !canCycle) {
-    return null;
-  }
-  const color = mode === "plan" ? theme.info : mode === "auto" ? theme.danger : mode === "accept_edits" ? theme.warn : theme.dim;
-  return (
-    <box paddingX={2} height={1} flexShrink={0} backgroundColor={theme.panel}>
-      <text fg={theme.dim}>
-        <span fg={color}>
-          {MARKS[mode]} {PERMISSION_LABELS[mode]}
-          {mode === "default" ? "" : " on"}
-        </span>
-        {canCycle ? " (shift+tab to cycle)" : ""}
       </text>
     </box>
   );

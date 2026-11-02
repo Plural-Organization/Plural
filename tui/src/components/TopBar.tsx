@@ -4,7 +4,7 @@ import { theme } from "../theme";
 import type { UpdateState } from "../update";
 import { UpdateDot } from "./UpdateDot";
 
-export function TopBar({ state, update, team, onSettings }: { state: SessionState; update: UpdateState | null; team: string | null; onSettings: () => void }) {
+export function TopBar({ state, update, team, sharing, onSettings }: { state: SessionState; update: UpdateState | null; team: string | null; sharing: boolean; onSettings: () => void }) {
   const [hover, setHover] = useState(false);
   return (
     <box flexDirection="row" paddingX={2} height={1} flexShrink={0} backgroundColor={theme.panel}>
@@ -12,6 +12,7 @@ export function TopBar({ state, update, team, onSettings }: { state: SessionStat
         {team ? (
           <text fg={theme.accent} wrapMode="none">
             ◆ {team}
+            {sharing ? null : <span fg={theme.dim}> · this session is private</span>}
           </text>
         ) : null}
       </box>

@@ -1,8 +1,16 @@
-import { contextMeter, label, type ConnectionStatus, type Participant, type SessionState } from "@plural/client";
+import { contextMeter, label, PERMISSION_LABELS, type ConnectionStatus, type Participant, type PermissionMode, type SessionState } from "@plural/client";
 import { theme } from "../theme";
 import { Spinner } from "./Spinner";
 
+const MARKS: Record<PermissionMode, string> = { default: "⏵", accept_edits: "⏵⏵", plan: "⏸", auto: "⏵⏵⏵" };
+
+function modeColor(mode: PermissionMode): string {
+  return mode === "plan" ? theme.info : mode === "auto" ? theme.danger : mode === "accept_edits" ? theme.warn : theme.dim;
+}
+
 interface StatusBarProps {
+  mode: PermissionMode;
+  canCycle: boolean;
   me: Participant | undefined;
   state: SessionState;
   connection: ConnectionStatus;
@@ -11,7 +19,7 @@ interface StatusBarProps {
   hint: string | null;
 }
 
-export function StatusBar({ me, state, connection, inbox, focused, hint }: StatusBarProps) {
+export function StatusBar({ mode, canCycle, me, state, connection, inbox, focused, hint }: StatusBarProps) {
   const others = Object.values(state.participants).filter((participant) => participant.connected && participant.id !== me?.id);
   const names = others.slice(0, 3).map((participant) => label(state, participant));
   const extra = others.length - names.length;
@@ -25,14 +33,22 @@ export function StatusBar({ me, state, connection, inbox, focused, hint }: Statu
         ? "connecting to the session…"
         : "connection lost, reconnecting…";
   const loading = connection !== "online" || me === undefined;
-  const right = hint ?? (inbox > 0 ? (focused ? "answer above · tab: back to the prompt" : `tab: ${inbox} waiting for you`) : "/help");
+  const right = hint ?? (inbox > 0 ? (focused ? "answer above · tab: prompt" : `tab: ${inbox} waiting for you`) : "/help");
+  const showMode = canCycle || mode !== "default";
   return (
-    <box flexDirection="row" justifyContent="space-between" paddingX={2} height={1} flexShrink={0} backgroundColor={theme.panel}>
-      <text fg={theme.dim}>
+    <box flexDirection="row" justifyContent="space-between" gap={2} paddingX={2} height={1} flexShrink={0} backgroundColor={theme.panel}>
+      <text fg={theme.dim} flexShrink={1} wrapMode="none">
+        {showMode ? (
+          <span fg={modeColor(mode)}>
+            {MARKS[mode]} {PERMISSION_LABELS[mode]}
+            {mode === "default" ? "" : " on"}
+            <span fg={theme.dim}> · </span>
+          </span>
+        ) : null}
         {loading ? <Spinner color={dot} /> : <span fg={dot}>●</span>} {who} · <span fg={state.prompt_mode === "review" ? theme.warn : theme.dim}>{state.prompt_mode}</span>
         {names.length > 0 ? ` · with ${names.join(", ")}${extra > 0 ? ` +${extra}` : ""}` : ""}
       </text>
-      <box flexDirection="row">
+      <box flexDirection="row" flexShrink={0}>
         <ContextMeterView state={state} />
         <text fg={theme.dim}>
           {contextMeter(state) !== null ? "  ·  " : ""}

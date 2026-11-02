@@ -40,7 +40,7 @@ import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
 import { SCOPES, TrayView, type Form, type FormStep, type McpWizard, type Row, type Tray } from "./components/Tray";
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
-import { Compacting, ModeLine, Working } from "./components/Working";
+import { Compacting, Working } from "./components/Working";
 import { InviteDialog } from "./components/InviteDialog";
 import { ShareDialog } from "./components/ShareDialog";
 import { candidateFolders } from "./folders";
@@ -57,6 +57,8 @@ import type { AgentChoice, PresetId } from "./presets";
 import type { Tab } from "./settingsModel";
 import { copyToClipboard, IMAGE_LIMIT_BYTES, pasteImage } from "./lib/clipboard";
 import { createSyntaxStyle } from "./syntax";
+import { toolRuns } from "./steps";
+import { doneText, firstVerb } from "./verbs";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { setTheme, theme } from "./theme";
 import * as sound from "./lib/sound";
@@ -83,6 +85,7 @@ export interface AppProps {
   viewing?: string | null;
   spaces?: SpaceRow[];
   teamName?: string | null;
+  sharing?: boolean;
   teamError?: string | null;
   onOpenSpace?: (id: string) => void;
   onCycleSpace?: (direction: 1 | -1) => void;
@@ -104,6 +107,7 @@ const TYPING_IDLE_MS = 2500;
 const PLAN_APPROVED = "The host approved the plan. Implement it now.";
 const UPLOAD_WAIT_MS = 10_000;
 const LONG_RUN_MS = 15_000;
+const DONE_MIN_MS = 2000;
 const DELIVERED_MS = 1500;
 const FAILED_MS = 8000;
 
@@ -134,6 +138,7 @@ export function App({
   viewing = null,
   spaces,
   teamName = null,
+  sharing = true,
   teamError = null,
   onOpenSpace,
   onCycleSpace,
@@ -198,6 +203,8 @@ export function App({
   const [behind, setBehind] = useState({ away: false, fresh: 0, chat: 0 });
   const anchor = useRef(0);
   const [finished, setFinished] = useState(false);
+  const [verb, setVerb] = useState(0);
+  const runClock = useRef<{ at: number; verb: number } | null>(null);
   const runStart = useRef<number | null>(null);
   const deliveryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [images, setImages] = useState<PastedImage[]>([]);
@@ -272,6 +279,16 @@ export function App({
           if (!(pending && event.type === "error")) {
             commit(absorb(feedRef.current, event, client.projection));
           }
+          if (event.type === "run.started") {
+            runClock.current = { at: Date.now(), verb: firstVerb() };
+            setVerb(runClock.current.verb);
+          } else if (event.type === "run.ended" && runClock.current !== null) {
+            const { at, verb: base } = runClock.current;
+            runClock.current = null;
+            if (Date.now() - at >= DONE_MIN_MS) {
+              commit(withNotice(feedRef.current, "dim", doneText(base, Date.now() - at, new Date()), "done"));
+            }
+          }
           publish();
           if (event.type === "chat.posted" && mentionsMe(event, client.projection.meId)) {
             const author = client.projection.state.participants[event.author_id];
@@ -285,7 +302,6 @@ export function App({
             if (liveSettings.current.joinBell) {
               sound.ring();
             }
-            showToast(`${label(client.projection.state, event.participant)} joined`, `as ${event.participant.role}`, "accent", "+");
           }
           if (event.type === "invite.created") {
             if (event.reusable) {
@@ -368,9 +384,11 @@ export function App({
     () => new Map(state.queue.map((entry) => [entry.prompt_id, entry.delivery === "follow_up" ? ("follow_up" as const) : ("steer" as const)])),
     [state.queue],
   );
+  const chatting = useMemo(() => feed.items.some((item) => item.kind === "user" || item.kind === "assistant" || item.kind === "tool"), [feed.items]);
   const searching = focus === "search";
   const hits = useMemo(() => (searching ? findInFeed(feed.items, query).reverse() : []), [feed.items, query, searching]);
   const hitSet = useMemo(() => new Set(hits), [hits]);
+  const runs = useMemo(() => toolRuns(feed.items, (startId) => allOpen || opened.has(`run:${startId}`), hitSet), [feed.items, allOpen, opened, hitSet]);
   const hitIndex = Math.max(0, found === null ? 0 : hits.indexOf(found));
   const current = hits[hitIndex] ?? null;
 
@@ -1451,7 +1469,7 @@ export function App({
   return (
     <box flexDirection="row" width={width} height={height} backgroundColor={theme.bg} visible={active}>
       <box flexDirection="column" flexGrow={1} minWidth={0}>
-        <TopBar state={state} update={update} team={teamName ?? null} onSettings={() => setDialog(true)} />
+        <TopBar state={state} update={update} team={teamName ?? null} sharing={sharing} onSettings={() => setDialog(true)} />
         {viewing !== null ? (
           <box flexShrink={0} height={1} paddingX={2} backgroundColor={theme.panel}>
             <text fg={theme.info} wrapMode="none">
@@ -1501,6 +1519,8 @@ export function App({
                   width={width - (showPanel ? SIDEBAR_WIDTH : 0) - 9}
                   expanded={allOpen || opened.has(item.id)}
                   queued={queuedIds.get(item.id) ?? null}
+                  runs={runs}
+                  started={chatting}
                   onToggle={toggle}
                   onCopy={(text) => copy(text, "Copied", `${text.length} characters`)}
                 />
@@ -1521,7 +1541,7 @@ export function App({
         {projection.compacting ? (
           <Compacting tokens={projection.compacting.tokens} />
         ) : running ? (
-          <Working status={runStatus} canAbort={isHost} queued={state.queue.length} />
+          <Working status={runStatus} verb={verb} canAbort={isHost} queued={state.queue.length} />
         ) : null}
         {typers.length > 0 ? (
           <box paddingX={2} height={1} flexShrink={0}>
@@ -1539,7 +1559,6 @@ export function App({
           disabled={disabled}
           placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
           remember={!asking?.secret}
-          tips={!asking}
           role={me?.role}
           people={mentionable(state, projection.meId)}
           commands={suggested}
@@ -1581,8 +1600,7 @@ export function App({
             }}
           />
         ) : null}
-        <ModeLine mode={mode} canCycle={isHost} />
-        <StatusBar me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
+        <StatusBar mode={mode} canCycle={isHost} me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
       </box>
       {toast ? <Toast message={toast} right={(showPanel ? SIDEBAR_WIDTH : 0) + 2} /> : null}
       {dialog ? (
