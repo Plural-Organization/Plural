@@ -129,7 +129,7 @@ export function teamJoinCommand(team: Team, code: string): string {
   return `plural team join ${code} --relay ${team.profile.relay}`;
 }
 
-export async function createTeamInvite(team: Team, fetcher: typeof fetch = fetch): Promise<{ code: string; expires_at: string }> {
+export async function createTeamInvite(team: Team, fetcher: typeof fetch = fetch): Promise<{ code: string; expires_at: string | null }> {
   const path = `/teams/${team.profile.team_id}/invites`;
   const response = await fetcher(`${httpBase(team.profile.relay)}${path}`, {
     method: "POST",
@@ -140,7 +140,7 @@ export async function createTeamInvite(team: Team, fetcher: typeof fetch = fetch
     const detail = (await response.json().catch(() => ({}))) as { error?: string };
     throw new Error(detail.error ?? `the relay answered ${response.status}`);
   }
-  return (await response.json()) as { code: string; expires_at: string };
+  return (await response.json()) as { code: string; expires_at: string | null };
 }
 
 export interface TeamView {

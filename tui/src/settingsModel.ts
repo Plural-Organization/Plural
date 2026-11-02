@@ -218,7 +218,7 @@ export function modelRows(state: ModelState): Row[] {
 const SHARING: { mode: ShareMode; label: string; description: string }[] = [
   { mode: "local", label: "This machine", description: "only you. Invite links work on this computer, good for trying things out" },
   { mode: "network", label: "Same network", description: "teammates on your Wi-Fi, office network or VPN join with a link that carries your network address" },
-  { mode: "relay", label: "Over the internet", description: "through a relay server, so nobody needs an open port. Needs the address of a relay" },
+  { mode: "relay", label: "Over the internet", description: "through a relay server, so nobody needs an open port. The Plural relay unless you set your own address" },
 ];
 
 function joiningRows(state: ModelState, host: boolean): Row[] {
@@ -271,8 +271,8 @@ function shareRows(state: ModelState, host: boolean): Row[] {
       id: "relay",
       kind: "text",
       label: "Relay address",
-      value: state.settings.relayUrl || "not set",
-      hint: problem ?? "for example wss://relay.example.com, see docs/self-hosting.md",
+      value: state.settings.relayUrl || "the Plural relay",
+      hint: problem ?? "leave empty for the Plural relay, or your own such as wss://relay.example.com, see docs/self-hosting.md",
       enabled: host,
     });
   }

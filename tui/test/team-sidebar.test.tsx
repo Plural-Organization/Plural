@@ -184,13 +184,17 @@ test("what I type goes to the session I am looking at and nowhere else", async (
   expect(visits.get("r_alia")?.commands).toEqual([]);
 });
 
-test("alt+right and alt+left move between spaces, ctrl+w closes the one I am in", async () => {
+test("alt+left and alt+right stay in the composer, while ctrl+w closes the space I opened", async () => {
   const { setup, visits } = await mount([card("alia", "idle", "main"), card("bek", "idle", "main")]);
   await frame(setup, "bek");
   await setup.mockInput.pressKey("\u001b[1;3C");
+  expect(setup.captureCharFrame()).not.toContain("viewing alia");
+
+  await clickRow(setup, "alia");
   await frame(setup, "viewing alia");
   await setup.mockInput.pressKey("\u001b[1;3C");
-  await frame(setup, "viewing bek");
+  const stayed = await frame(setup, "viewing alia");
+  expect(stayed).not.toContain("viewing bek");
   await setup.mockInput.pressKey("\u001b[1;3D");
   await frame(setup, "viewing alia");
 

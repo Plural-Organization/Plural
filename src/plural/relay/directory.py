@@ -56,9 +56,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS members_name ON members (team_id, lower(name))
 CREATE TABLE IF NOT EXISTS invites (
     hash TEXT PRIMARY KEY,
     team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
-    created_by TEXT NOT NULL,
-    expires_at TEXT NOT NULL,
-    used_by TEXT
+    created_by TEXT NOT NULL
 );
 """
 
@@ -77,8 +75,8 @@ class DirectoryError(Exception):
 @dataclass(frozen=True, slots=True)
 class TeamLimits:
     max_teams: int = 500
+    max_teams_per_owner: int = 3
     max_members: int = 50
-    invite_ttl_s: int = 3600
     certificate_ttl_s: int = 30 * 86_400
     clock_skew_s: int = 60
 
@@ -151,8 +149,31 @@ class TeamDirectory:
         db.row_factory = aiosqlite.Row
         await db.execute("PRAGMA foreign_keys = ON")
         await db.executescript(SCHEMA)
+        await cls._migrate_invites(db)
         await db.commit()
         return cls(db, limits=limits, clock=clock)
+
+    @staticmethod
+    async def _migrate_invites(db: aiosqlite.Connection) -> None:
+        async with db.execute("PRAGMA table_info(invites)") as cursor:
+            columns = {row["name"] for row in await cursor.fetchall()}
+        if "expires_at" not in columns and "used_by" not in columns:
+            return
+        await db.executescript(
+            """
+            BEGIN IMMEDIATE;
+            CREATE TABLE invites_new (
+                hash TEXT PRIMARY KEY,
+                team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+                created_by TEXT NOT NULL
+            );
+            INSERT INTO invites_new (hash, team_id, created_by)
+                SELECT hash, team_id, created_by FROM invites;
+            DROP TABLE invites;
+            ALTER TABLE invites_new RENAME TO invites;
+            COMMIT;
+            """
+        )
 
     async def close(self) -> None:
         await self._db.close()
@@ -162,12 +183,25 @@ class TeamDirectory:
             row = await cursor.fetchone()
         return int(row[0]) if row else 0
 
+    async def _owned_count(self, key: str) -> int:
+        async with self._db.execute(
+            "SELECT count(*) FROM members WHERE key = ? AND role = ?", (key, TeamRole.OWNER.value)
+        ) as cursor:
+            row = await cursor.fetchone()
+        return int(row[0]) if row else 0
+
     async def create(self, request: TeamCreate) -> TeamGrant:
         async with self._transaction():
             if not valid_public_key(request.key):
                 raise DirectoryError(400, "that is not a public key")
             if await self.team_count() >= self._limits.max_teams:
                 raise DirectoryError(429, "this relay cannot take more teams")
+            if await self._owned_count(request.key) >= self._limits.max_teams_per_owner:
+                raise DirectoryError(
+                    429,
+                    f"you already own {self._limits.max_teams_per_owner} teams on this relay, "
+                    "delete one with plural team disband",
+                )
             now = self._clock()
             signer = CertSigner.generate()
             team_id = f"t_{secrets.token_hex(8)}"
@@ -179,8 +213,8 @@ class TeamDirectory:
             member = await self._add_member(
                 team_id, request.member_name, request.key, TeamRole.OWNER, now
             )
-            code, expires = await self._new_invite(team_id, member.id, now)
-        return self._grant(team_id, request.name, signer, member, request.key, now, code, expires)
+            code = await self._new_invite(team_id, member.id)
+        return self._grant(team_id, request.name, signer, member, request.key, now, code)
 
     async def join(self, request: TeamJoin) -> TeamGrant:
         async with self._transaction():
@@ -188,26 +222,16 @@ class TeamDirectory:
                 raise DirectoryError(400, "that is not a public key")
             now = self._clock()
             async with self._db.execute(
-                "SELECT i.team_id, i.expires_at, i.used_by, t.name, t.signing_key"
+                "SELECT i.team_id, t.name, t.signing_key"
                 " FROM invites i JOIN teams t ON t.id = i.team_id WHERE i.hash = ?",
                 (code_hash(request.code),),
             ) as cursor:
                 row = await cursor.fetchone()
-            if (
-                row is None
-                or row["used_by"] is not None
-                or datetime.fromisoformat(row["expires_at"]) <= now
-            ):
-                raise DirectoryError(403, "that invite code is wrong, used or expired")
+            if row is None:
+                raise DirectoryError(403, "that invite code is wrong")
             team_id: str = row["team_id"]
             if await self._member_count(team_id) >= self._limits.max_members:
                 raise DirectoryError(409, "this team is full")
-            claimed = await self._db.execute(
-                "UPDATE invites SET used_by = ? WHERE hash = ? AND used_by IS NULL",
-                (member_id(request.key), code_hash(request.code)),
-            )
-            if claimed.rowcount != 1:
-                raise DirectoryError(403, "that invite code is wrong, used or expired")
             member = await self._add_member(
                 team_id, request.name, request.key, TeamRole.MEMBER, now
             )
@@ -274,8 +298,8 @@ class TeamDirectory:
             self._owner_only(claims)
             if await self._member_count(claims.team) >= self._limits.max_members:
                 raise DirectoryError(409, "this team is full")
-            code, expires = await self._new_invite(claims.team, claims.member, self._clock())
-        return Invite(code=code, expires_at=expires)
+            code = await self._new_invite(claims.team, claims.member)
+        return Invite(code=code)
 
     async def remove(self, claims: MemberClaims, target: str) -> MemberView:
         async with self._transaction():
@@ -349,16 +373,13 @@ class TeamDirectory:
             ) from error
         return view
 
-    async def _new_invite(
-        self, team_id: str, created_by: str, now: datetime
-    ) -> tuple[str, datetime]:
+    async def _new_invite(self, team_id: str, created_by: str) -> str:
         code = new_code()
-        expires = now + timedelta(seconds=self._limits.invite_ttl_s)
         await self._db.execute(
-            "INSERT INTO invites (hash, team_id, created_by, expires_at) VALUES (?, ?, ?, ?)",
-            (code_hash(code), team_id, created_by, _iso(expires)),
+            "INSERT INTO invites (hash, team_id, created_by) VALUES (?, ?, ?)",
+            (code_hash(code), team_id, created_by),
         )
-        return code, expires
+        return code
 
     def _grant(
         self,

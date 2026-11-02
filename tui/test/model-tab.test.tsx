@@ -302,7 +302,7 @@ describe("Sharing", () => {
   const sharing = (settings: Partial<Settings> = {}): Settings => ({ ...DEFAULT_SETTINGS, setupSeen: true, ...settings });
 
   test("the host sees three ways to share and chooses one", async () => {
-    const { setup, hooks } = await mount(session(), new FakeControl(), sharing());
+    const { setup, hooks } = await mount(session(), new FakeControl(), sharing({ share: "local" }));
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Model");
     await setup.mockInput.pressTab();
@@ -323,7 +323,7 @@ describe("Sharing", () => {
     await frame(setup, "Model");
     await setup.mockInput.pressTab();
     const text = await frame(setup, "Relay address");
-    expect(text).toContain("not set");
+    expect(text).toContain("the Plural relay");
 
     await down(setup, 9);
     await setup.mockInput.pressEnter();

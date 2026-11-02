@@ -59,7 +59,7 @@ class TeamGrant(Model):
 
 class Invite(Model):
     code: str
-    expires_at: datetime
+    expires_at: datetime | None = None
 
 
 class MemberList(Model):

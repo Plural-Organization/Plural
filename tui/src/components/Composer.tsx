@@ -1,9 +1,10 @@
-import { decodePasteBytes, type KeyBinding, type PasteEvent, type TextareaRenderable } from "@opentui/core";
+import { decodePasteBytes, stripAnsiSequences, type KeyBinding, type PasteEvent, type TextareaRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
 import type { Mentionable, Role, Route } from "@plural/client";
 import { suggestions as suggest, visibleSuggestionWindow, type CommandHint } from "../commands";
 import { imagePath } from "../lib/image-paste";
+import { expandPastes, pasteLabel, shouldCollapse } from "../lib/paste";
 import { theme } from "../theme";
 
 export type Delivery = { state: "sending" } | { state: "sent" } | { state: "failed"; reason: string; restored: boolean };
@@ -66,6 +67,8 @@ export function Composer(props: ComposerProps) {
   const history = useRef<string[]>([]);
   const position = useRef(-1);
   const draft = useRef("");
+  const pasted = useRef(new Map<string, string>());
+  const pasteCount = useRef(0);
 
   const hints = dismissed ? [] : suggest(value, role, props.people ?? [], props.commands);
   const selected: CommandHint | undefined = hints[Math.min(choice, Math.max(0, hints.length - 1))];
@@ -73,6 +76,9 @@ export function Composer(props: ComposerProps) {
   const completion = selected ? (selected.insert ?? `/${selected.name} `) : "";
 
   const put = (text: string): void => {
+    if (text === "") {
+      pasted.current.clear();
+    }
     area.current?.setText(text);
     area.current?.gotoBufferEnd();
     setValue(text);
@@ -90,7 +96,7 @@ export function Composer(props: ComposerProps) {
   }, [value === ""]);
 
   const submit = (): void => {
-    const text = (area.current?.plainText ?? "").trim();
+    const text = expandPastes(area.current?.plainText ?? "", pasted.current).trim();
     if (text === "" && (props.images ?? []).length === 0) {
       return;
     }
@@ -103,24 +109,34 @@ export function Composer(props: ComposerProps) {
   };
 
   // Cmd+V with an image on the clipboard pastes nothing, so the image is taken from the clipboard as with
-  // Ctrl+V; a pasted or dragged image file is attached, and a path to no image stays text.
+  // Ctrl+V; a pasted or dragged image file is attached, and a path to no image stays text. A long text paste
+  // shows as a short label and is sent in full.
   const paste = (event: PasteEvent): void => {
-    const text = decodePasteBytes(event.bytes);
-    if (text.trim() === "" && props.onPasteImage) {
+    const raw = decodePasteBytes(event.bytes);
+    if (raw.trim() === "" && props.onPasteImage) {
       event.preventDefault();
       props.onPasteImage();
       return;
     }
-    const path = imagePath(text);
-    if (path === null || !props.onPasteImageFile) {
+    const path = imagePath(raw);
+    if (path !== null && props.onPasteImageFile) {
+      event.preventDefault();
+      void props.onPasteImageFile(path).then((attached) => {
+        if (!attached) {
+          area.current?.insertText(raw);
+        }
+      });
+      return;
+    }
+    const text = stripAnsiSequences(raw).replace(/\r\n?/g, "\n");
+    if (!shouldCollapse(text)) {
       return;
     }
     event.preventDefault();
-    void props.onPasteImageFile(path).then((attached) => {
-      if (!attached) {
-        area.current?.insertText(text);
-      }
-    });
+    pasteCount.current += 1;
+    const label = pasteLabel(pasteCount.current, text);
+    pasted.current.set(label, text);
+    area.current?.insertText(label);
   };
 
   const recall = (direction: 1 | -1): void => {
@@ -178,7 +194,10 @@ export function Composer(props: ComposerProps) {
     }
     if (key.name === "escape") {
       key.preventDefault();
-      if (hints.length > 0) {
+      if (position.current >= 0) {
+        position.current = -1;
+        put(draft.current);
+      } else if (hints.length > 0) {
         setDismissed(true);
       } else {
         props.onEscape();
@@ -225,6 +244,16 @@ export function Composer(props: ComposerProps) {
   const head = route !== null ? `→ ${route.label} · ${route.note}` : (label ?? "");
   const more = value === "" ? "" : `${lines > 1 ? ` · ${lines} lines` : ""} · ⇧↵ new line`;
   const title = `${head}${more}${progress}`;
+  const HISTORY_ROWS = 6;
+  const recalled = history.current;
+  const browsing = position.current >= 0 && recalled.length > 0;
+  const firstShown = Math.max(0, Math.min(position.current - 2, recalled.length - HISTORY_ROWS));
+  const pastRows = browsing
+    ? recalled
+        .slice(firstShown, firstShown + HISTORY_ROWS)
+        .map((text, offset) => ({ text, index: firstShown + offset }))
+        .reverse()
+    : [];
   return (
     <box flexDirection="column" flexShrink={0} paddingX={1} onMouseDown={() => props.onFocus()}>
       <box
@@ -273,6 +302,21 @@ export function Composer(props: ComposerProps) {
           />
         </box>
       </box>
+      {pastRows.length > 0 ? (
+        <box flexDirection="column" paddingLeft={4}>
+          {pastRows.map((row) => {
+            const on = row.index === position.current;
+            const line = (row.text.split("\n")[0] ?? "").slice(0, 80);
+            return (
+              <text key={row.index} fg={on ? theme.accent : theme.dim} wrapMode="none">
+                {on ? "› " : "  "}
+                {line}
+              </text>
+            );
+          })}
+          <text fg={theme.dim}>  ↑↓ earlier prompts · enter sends · esc keeps typing</text>
+        </box>
+      ) : null}
       {hints.length > 0 ? (
         <box flexDirection="column" paddingLeft={4}>
           {hintWindow.items.map((hint, index) => {

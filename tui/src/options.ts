@@ -224,6 +224,9 @@ function session(args: string[]): SessionOptions {
       case "--private":
         options.private = true;
         break;
+      case "--local":
+        options.hostArgs.push("--local");
+        break;
       case "--name":
         options.displayName = valueOf(args, index, arg);
         index += 1;

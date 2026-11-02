@@ -168,3 +168,18 @@ def test_codex_turn_usage_counts_the_cached_prompt_apart() -> None:
     usage = codex_cli._usage({"tokenUsage": {"last": last, "total": last}})  # pyright: ignore[reportPrivateUsage]
     assert usage == Usage(input_tokens=100, cache_read_tokens=900, output_tokens=7)
     assert codex_cli._usage({}) is None  # pyright: ignore[reportPrivateUsage]
+
+
+def test_codex_usage_limit_is_named_instead_of_turn_failed() -> None:
+    failure = codex_cli._failure  # pyright: ignore[reportPrivateUsage]
+    limited = failure(
+        {"message": "You've hit your usage limit.", "codexErrorInfo": "usageLimitExceeded"},
+        "Codex app server: turn failed",
+    )
+    assert limited.startswith("Codex usage limit reached, try again after it resets")
+    assert "hit your usage limit" in limited
+    assert failure({"codexErrorInfo": "usageLimitExceeded"}, "x") == (
+        "Codex usage limit reached, try again after it resets"
+    )
+    assert failure({"message": "boom"}, "fallback") == "boom"
+    assert failure(None, "fallback") == "fallback"

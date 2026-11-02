@@ -88,7 +88,7 @@ test("cmd+v with an image on the clipboard attaches it", async () => {
 
 test("a dragged image file is attached instead of its path", async () => {
   const { fake, setup } = await mount();
-  await setup.mockInput.pasteBracketedText(gifFile.replace(/ /g, "\\ "));
+  await setup.mockInput.pasteBracketedText(gifFile.replace(/[\\ ]/g, "\\$&"));
   await until(setup, () => setup.captureCharFrame().includes("[image-1.gif]"));
   expect(fake.commands.find((command) => command.type === "file.attach")).toMatchObject({ name: "image-1.gif", content_b64: GIF.toString("base64") });
   expect(setup.captureCharFrame()).not.toContain("my shot");

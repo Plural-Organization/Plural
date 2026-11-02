@@ -10,6 +10,10 @@ from plural.agent.providers.base import Effort
 from plural.agent.providers.catalog import Preset, preset
 from plural.protocol.models import AdmissionMode, PromptMode
 
+# The relay a host and a team use when none is named. Everything else is opt-in: --local stays on
+# this machine, --bind and --public-url serve directly, --relay picks another relay.
+DEFAULT_RELAY_URL = "wss://relay.plrl.host"
+
 
 class HostSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PLURAL_", extra="ignore")

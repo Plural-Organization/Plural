@@ -65,14 +65,12 @@ async def test_two_people_form_a_team_and_see_each_other(
         )
 
 
-async def test_an_invite_code_is_used_once_over_the_wire(
-    relay: RelayServer, tmp_path: Path
-) -> None:
+async def test_an_invite_code_is_reusable_over_the_wire(relay: RelayServer, tmp_path: Path) -> None:
     _, code = await founder(relay, tmp_path)
     alia, bek = Person(tmp_path, "alia"), Person(tmp_path, "bek")
-    await join_team(relay.url, alia.store.identity(), code=code, member="alia")
-    with pytest.raises(TeamError, match="wrong, used or expired"):
-        await join_team(relay.url, bek.store.identity(), code=code, member="bek")
+    alia_profile = await join_team(relay.url, alia.store.identity(), code=code, member="alia")
+    bek_profile = await join_team(relay.url, bek.store.identity(), code=code, member="bek")
+    assert alia_profile.team_id == bek_profile.team_id
 
 
 async def test_a_stranger_sees_nothing_of_a_team(relay: RelayServer, tmp_path: Path) -> None:
@@ -175,7 +173,12 @@ async def test_create_can_print_the_invite_as_json(
     )
     assert result.exit_code == 0, result.output
     printed = json.loads(result.output)
-    assert (printed["team"], printed["relay"], printed["minutes"]) == ("Backend", relay.url, 60)
+    assert (printed["team"], printed["relay"], printed["minutes"], printed["permanent"]) == (
+        "Backend",
+        relay.url,
+        None,
+        True,
+    )
     assert printed["code"].startswith("tm-")
 
     alia = Person(tmp_path, "alia")
