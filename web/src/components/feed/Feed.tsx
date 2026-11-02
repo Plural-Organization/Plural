@@ -208,6 +208,15 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
           </div>
         );
       }
+      if (item.code && item.text.startsWith(item.code)) {
+        // A long command stays on one line, cut short; the whole of it is in the title.
+        return (
+          <div className={cx(styles.notice, styles.decision, styles[item.tone])}>
+            <code title={item.code}>{item.code}</code>
+            <span>{item.text.slice(item.code.length).replace(/^:\s*/, "")}</span>
+          </div>
+        );
+      }
       return <div className={cx(styles.notice, styles[item.tone])}>{item.text}</div>;
   }
 }

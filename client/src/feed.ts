@@ -38,7 +38,8 @@ export type FeedItem =
     }
   | { kind: "assistant"; id: string; text: string; streaming: boolean }
   | { kind: "tool"; id: string; call: ToolCallView; status: ToolStatus; output: string; diff: string | null; live: string }
-  | { kind: "notice"; id: string; tone: Tone; text: string; action?: "board" | "done" }
+  // `code`, when given, is the command or call the text starts with, for a client that sets it apart.
+  | { kind: "notice"; id: string; tone: Tone; text: string; action?: "board" | "done"; code?: string }
   | { kind: "briefing"; id: string; from: string; text: string; asOf: number; update: boolean }
   | { kind: "shown"; id: string; command: string; title: string; text: string };
 
@@ -57,9 +58,9 @@ export function withBanner(feed: Feed, banner: Extract<FeedItem, { kind: "banner
   return { ...feed, items: [banner, ...feed.items] };
 }
 
-export function withNotice(feed: Feed, tone: Tone, text: string, action?: "done"): Feed {
+export function withNotice(feed: Feed, tone: Tone, text: string, action?: "done", code?: string): Feed {
   const counter = feed.counter + 1;
-  return { ...feed, counter, items: [...feed.items, { kind: "notice", id: `n${counter}`, tone, text, ...(action ? { action } : {}) }] };
+  return { ...feed, counter, items: [...feed.items, { kind: "notice", id: `n${counter}`, tone, text, ...(action ? { action } : {}), ...(code ? { code } : {}) }] };
 }
 
 export function lastReply(feed: Feed): string {
@@ -330,10 +331,10 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
       const subject = call ? `${call.name} ${call.subject}`.trim() : "tool call";
       const who = event.resolved_by === null ? "timeout" : nameOf(event.resolved_by);
       if (event.decision === "reject" || event.decision === "block") {
-        return withNotice(next, "danger", `${subject}: ${event.decision === "block" ? "blocked" : "rejected"} (${who})`);
+        return withNotice(next, "danger", `${subject}: ${event.decision === "block" ? "blocked" : "rejected"} (${who})`, undefined, call ? subject : undefined);
       }
       if (event.resolved_by !== projection.meId) {
-        return withNotice(next, "ok", `${subject}: allowed${event.decision === "always" ? " for the session" : ""} (${who})`);
+        return withNotice(next, "ok", `${subject}: allowed${event.decision === "always" ? " for the session" : ""} (${who})`, undefined, call ? subject : undefined);
       }
       return next;
     }

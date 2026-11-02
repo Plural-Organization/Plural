@@ -6,6 +6,7 @@ import { Composer } from "../components/Composer";
 import { QuoteButton } from "../components/QuoteButton";
 import { SelectionLayer, type Selector } from "../components/SelectionLayer";
 import { SitePreview } from "../components/SitePreview";
+import { Spaces } from "../components/Spaces";
 import { Feed } from "../components/feed/Feed";
 import { Inbox } from "../components/inbox/Inbox";
 import { askItems, inboxItems } from "../components/inbox/items";
@@ -23,6 +24,7 @@ import { useToast } from "../hooks/useToast";
 import { useTyping } from "../hooks/useTyping";
 import type { TeamState } from "../hooks/useTeam";
 import type { SessionCard, Team } from "../lib/team";
+import type { Space } from "../App";
 import { activity } from "../lib/activity";
 import { canvasDocs } from "../lib/canvas";
 import { siteFiles } from "../lib/site";
@@ -38,11 +40,21 @@ interface RoomScreenProps {
   // The team this room was opened through, if it was.
   member: Team | null;
   team: TeamState;
+  // Shown now; the others stay connected in the background.
+  active: boolean;
+  // Why another space closed, said here when this one takes its place.
+  notice?: string | null;
+  spaces: Space[];
+  onSwitch: (room: string) => void;
+  onClose: (room: string) => void;
   onWatch: (card: SessionCard, url: string) => void;
   onLeave: (reason: string | null) => void;
 }
-export function RoomScreen({ link, name, member, team, onWatch, onLeave }: RoomScreenProps) {
-  const session = useSession(link, name, (reason) => onLeave(reason), member);
+export function RoomScreen({ link, name, member, team, active, notice = null, spaces, onSwitch, onClose, onWatch, onLeave }: RoomScreenProps) {
+  // The session keeps the callback it started with, so it calls the latest one through a ref.
+  const leaving = useRef(onLeave);
+  leaving.current = onLeave;
+  const session = useSession(link, name, (reason) => leaving.current(reason), member);
   const { projection, feed, connection, invite, send, sendPresence } = session;
   const state = projection.state;
   const me = projection.me;
@@ -55,13 +67,18 @@ export function RoomScreen({ link, name, member, team, onWatch, onLeave }: RoomS
   const [editing, setEditing] = useState<ProposalView | null>(null);
   const [panel, setPanel] = useState(false);
   const { toast, flash } = useToast();
+  useEffect(() => {
+    if (notice) {
+      flash(notice);
+    }
+  }, [notice]);
   const site = useMemo(() => siteFiles(feed.items), [feed.items]);
   const docs = useMemo(() => canvasDocs(feed.items, site), [feed.items, site]);
   const [canvasId, setCanvasId] = useState<string | null>(null);
   const [quote, setQuote] = useState<{ text: string; key: number } | null>(null);
   const seen = useRef<Set<string> | null>(null);
   const doc = docs.find((item) => item.id === canvasId) ?? null;
-  useShareSelection(projection.ready, connection, sendPresence);
+  useShareSelection(projection.ready && active, connection, sendPresence);
   const selectionKey = JSON.stringify([...projection.selections]);
   const selectors: Selector[] = useMemo(
     () =>
@@ -184,14 +201,16 @@ export function RoomScreen({ link, name, member, team, onWatch, onLeave }: RoomS
       }
     });
   };
-  const focusInput = useCallback(() => document.getElementById("composer")?.focus(), []);
+  // Each open space has its own composer, so the lookup stays inside this room.
+  const root = useRef<HTMLDivElement>(null);
+  const focusInput = useCallback(() => root.current?.querySelector<HTMLElement>("#composer")?.focus(), []);
   const canAbort = isHost && state.run !== null && editing === null;
 
-  useHotkeys({ enabled: invite === null, first: items[0], canAbort, send, onEdit: setEditing, onFocusInput: focusInput });
+  useHotkeys({ enabled: invite === null && active, first: items[0], canAbort, send, onEdit: setEditing, onFocusInput: focusInput });
 
   const writing = feed.items.some((item) => item.kind === "assistant" && item.streaming);
   const current = activity(projection, feed);
-  const scroll = useStickToBottom(feed, current?.text);
+  const scroll = useStickToBottom(feed, current?.text, active);
   const runStatus = writing ? "writing…" : status(projection).replace(/^… /, "");
   const typers = [...projection.typing]
     .filter((id) => id !== projection.meId)
@@ -208,7 +227,7 @@ export function RoomScreen({ link, name, member, team, onWatch, onLeave }: RoomS
         : "Message the agent, / for commands";
 
   return (
-    <div className={cx(styles.room, (doc || boardShown) && styles.withCanvas)}>
+    <div ref={root} className={cx(styles.room, (doc || boardShown) && styles.withCanvas)}>
       <TopBar
         room={link.room}
         projection={projection}
@@ -281,7 +300,7 @@ export function RoomScreen({ link, name, member, team, onWatch, onLeave }: RoomS
         </div>
       </main>
 
-      {boardShown ? (
+      {boardShown && active ? (
         <Board
           strokes={state.board.strokes}
           pointers={pointers}
@@ -297,7 +316,7 @@ export function RoomScreen({ link, name, member, team, onWatch, onLeave }: RoomS
           onSendToAgent={(image) => {
             void files.add(image, `board-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}.png`);
             flash("the board is attached; add a note and send");
-            document.getElementById("composer")?.focus();
+            focusInput();
           }}
           onClose={() => setBoardShown(false)}
           full={wide}
@@ -336,15 +355,13 @@ export function RoomScreen({ link, name, member, team, onWatch, onLeave }: RoomS
           open={panel}
           send={send}
           onInvite={(role) => send({ type: "invite.create", role, ttl_s: 3600, reusable: role === "participant" })}
+          spaces={spaces.length > 1 ? <Spaces spaces={spaces} current={link.room} onSwitch={onSwitch} onClose={onClose} /> : null}
           team={
             team.team === null ? null : (
               <TeamPanel
                 state={team}
                 current={link.room}
-                onOpen={(card, url) => {
-                  session.close();
-                  onWatch(card, url);
-                }}
+                onOpen={onWatch}
                 onNotice={flash}
               />
             )
@@ -352,8 +369,8 @@ export function RoomScreen({ link, name, member, team, onWatch, onLeave }: RoomS
         />
       )}
 
-      <QuoteButton enabled={me !== undefined && me.role !== "viewer"} onQuote={(text) => setQuote((current) => ({ text, key: (current?.key ?? 0) + 1 }))} />
-      {invite ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}
+      <QuoteButton enabled={active && me !== undefined && me.role !== "viewer"} onQuote={(text) => setQuote((current) => ({ text, key: (current?.key ?? 0) + 1 }))} />
+      {invite && active ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}
     </div>
   );
 }

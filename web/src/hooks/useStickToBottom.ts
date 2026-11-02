@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type UIEvent } from "react";
 
 const THRESHOLD = 80;
 
-export function useStickToBottom(feed: unknown, status: string | undefined) {
+// Hidden, the feed cannot scroll, so it catches up when shown again.
+export function useStickToBottom(feed: unknown, status: string | undefined, visible = true) {
   const ref = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const [behind, setBehind] = useState(false);
@@ -12,7 +13,7 @@ export function useStickToBottom(feed: unknown, status: string | undefined) {
     if (element && pinned.current) {
       element.scrollTop = element.scrollHeight;
     }
-  }, [feed, status]);
+  }, [feed, status, visible]);
 
   const onScroll = (event: UIEvent<HTMLDivElement>) => {
     const element = event.currentTarget;
