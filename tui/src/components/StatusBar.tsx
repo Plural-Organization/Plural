@@ -33,11 +33,11 @@ export function StatusBar({ mode, canCycle, me, state, connection, inbox, focuse
         ? "connecting to the session…"
         : "connection lost, reconnecting…";
   const loading = connection !== "online" || me === undefined;
-  const right = hint ?? (inbox > 0 ? (focused ? "answer above · tab: back to the prompt" : `tab: ${inbox} waiting for you`) : "/help");
+  const right = hint ?? (inbox > 0 ? (focused ? "answer above · tab: prompt" : `tab: ${inbox} waiting for you`) : "/help");
   const showMode = canCycle || mode !== "default";
   return (
-    <box flexDirection="row" justifyContent="space-between" paddingX={2} height={1} flexShrink={0} backgroundColor={theme.panel}>
-      <text fg={theme.dim}>
+    <box flexDirection="row" justifyContent="space-between" gap={2} paddingX={2} height={1} flexShrink={0} backgroundColor={theme.panel}>
+      <text fg={theme.dim} flexShrink={1} wrapMode="none">
         {showMode ? (
           <span fg={modeColor(mode)}>
             {MARKS[mode]} {PERMISSION_LABELS[mode]}
@@ -48,7 +48,7 @@ export function StatusBar({ mode, canCycle, me, state, connection, inbox, focuse
         {loading ? <Spinner color={dot} /> : <span fg={dot}>●</span>} {who} · <span fg={state.prompt_mode === "review" ? theme.warn : theme.dim}>{state.prompt_mode}</span>
         {names.length > 0 ? ` · with ${names.join(", ")}${extra > 0 ? ` +${extra}` : ""}` : ""}
       </text>
-      <box flexDirection="row">
+      <box flexDirection="row" flexShrink={0}>
         <ContextMeterView state={state} />
         <text fg={theme.dim}>
           {contextMeter(state) !== null ? "  ·  " : ""}

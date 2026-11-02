@@ -430,6 +430,10 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   process.exit(0);
 }
 
+function teamMemberName(): string {
+  return loadTeam()?.profile.member.name ?? userInfo().username;
+}
+
 async function main(): Promise<void> {
   let parsed;
   try {
@@ -479,9 +483,9 @@ async function main(): Promise<void> {
     if (parsed.link === null) {
       fail("usage: plural join <link|@name> [--name <name>], or plural -r to go back to a room you were in");
     }
-    await run(emptyOptions(), parsed.link, parsed.displayName ?? userInfo().username);
+    await run(emptyOptions(), parsed.link, parsed.displayName ?? teamMemberName());
   } else {
-    await run(parsed.options, null, parsed.options.displayName ?? userInfo().username);
+    await run(parsed.options, null, parsed.options.displayName ?? teamMemberName());
   }
 }
 
