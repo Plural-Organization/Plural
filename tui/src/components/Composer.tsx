@@ -1,8 +1,9 @@
-import type { KeyBinding, TextareaRenderable } from "@opentui/core";
+import { decodePasteBytes, type KeyBinding, type PasteEvent, type TextareaRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
 import type { Mentionable, Role, Route } from "@plural/client";
 import { suggestions as suggest, visibleSuggestionWindow, type CommandHint } from "../commands";
+import { imagePath } from "../lib/image-paste";
 import { theme } from "../theme";
 
 export type Delivery = { state: "sending" } | { state: "sent" } | { state: "failed"; reason: string; restored: boolean };
@@ -42,6 +43,7 @@ interface ComposerProps {
   onIdleKey?: (key: string) => boolean;
   images?: string[];
   onPasteImage?: () => void;
+  onPasteImageFile?: (path: string) => Promise<boolean>;
   onDropImage?: () => void;
   remember?: boolean;
 }
@@ -98,6 +100,27 @@ export function Composer(props: ComposerProps) {
     position.current = -1;
     put("");
     props.onSubmit(text);
+  };
+
+  // Cmd+V with an image on the clipboard pastes nothing, so the image is taken from the clipboard as with
+  // Ctrl+V; a pasted or dragged image file is attached, and a path to no image stays text.
+  const paste = (event: PasteEvent): void => {
+    const text = decodePasteBytes(event.bytes);
+    if (text.trim() === "" && props.onPasteImage) {
+      event.preventDefault();
+      props.onPasteImage();
+      return;
+    }
+    const path = imagePath(text);
+    if (path === null || !props.onPasteImageFile) {
+      return;
+    }
+    event.preventDefault();
+    void props.onPasteImageFile(path).then((attached) => {
+      if (!attached) {
+        area.current?.insertText(text);
+      }
+    });
   };
 
   const recall = (direction: 1 | -1): void => {
@@ -237,6 +260,7 @@ export function Composer(props: ComposerProps) {
             backgroundColor={theme.panel}
             focusedBackgroundColor={theme.panel}
             keyBindings={BINDINGS}
+            onPaste={paste}
             onContentChange={() => {
               const text = area.current?.plainText ?? "";
               setValue(text);

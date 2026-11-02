@@ -56,6 +56,7 @@ import type { Keys } from "./credentials";
 import type { AgentChoice, PresetId } from "./presets";
 import type { Tab } from "./settingsModel";
 import { copyToClipboard, IMAGE_LIMIT_BYTES, pasteImage } from "./lib/clipboard";
+import { imageKind, readImageFile } from "./lib/image-paste";
 import { createSyntaxStyle } from "./syntax";
 import { toolRuns } from "./steps";
 import { doneText, firstVerb } from "./verbs";
@@ -985,13 +986,26 @@ export function App({
       flash("no image in the clipboard");
       return;
     }
+    attachImage(data);
+  };
+
+  const pasteImageFile = async (path: string): Promise<boolean> => {
+    const data = await readImageFile(path);
+    if (data === null) {
+      return false;
+    }
+    attachImage(data);
+    return true;
+  };
+
+  const attachImage = (data: Buffer): void => {
     if (data.length > IMAGE_LIMIT_BYTES) {
       notify("warn", `the image is ${(data.length / 1e6).toFixed(1)} MB, more than ${IMAGE_LIMIT_BYTES / 1e6} MB`);
       return;
     }
     pastes.current += 1;
     const image = {
-      name: `image-${pastes.current}.${data[0] === 0xff ? "jpg" : "png"}`,
+      name: `image-${pastes.current}.${imageKind(data) ?? "png"}`,
       sha256: createHash("sha256").update(data).digest("hex"),
     };
     setImages((current) => [...current, image]);
@@ -1569,6 +1583,7 @@ export function App({
           onSubmit={submit}
           images={images.map((image) => image.name)}
           onPasteImage={() => void pasteFromClipboard()}
+          onPasteImageFile={pasteImageFile}
           onDropImage={() => setImages((current) => current.slice(0, -1))}
           onEscape={escape}
           onTab={() => {
