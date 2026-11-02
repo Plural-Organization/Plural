@@ -38,7 +38,7 @@ import { TopBar } from "./components/TopBar";
 import { SCOPES, TrayView, type Form, type FormStep, type McpWizard, type Row, type Tray } from "./components/Tray";
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, ModeLine, Working } from "./components/Working";
-import { helpRows, pluginRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
+import { contextRows, helpRows, pluginRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
 import { describeConflict, type SpaceRow, type Summary } from "./spaces";
@@ -1139,6 +1139,10 @@ export function App({
         }
         if (parsed.type === "show.usage") {
           show("usage · this session", usageRows(projection));
+          return;
+        }
+        if (parsed.type === "show.context") {
+          show("context · the agent's prompt", contextRows(projection));
           return;
         }
         if (parsed.type === "show.agents") {

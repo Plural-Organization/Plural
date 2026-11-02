@@ -100,6 +100,22 @@ export type Origin = "direct" | "proposal";
 export type RunEndReason = "stop" | "aborted" | "error" | "limit";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ContextPartKind".
+ */
+export type ContextPartKind =
+  | "system"
+  | "tool_rules"
+  | "environment"
+  | "project_notes"
+  | "skills"
+  | "agents"
+  | "tools"
+  | "messages"
+  | "tool_results"
+  | "summary"
+  | "notes";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "McpStatus".
  */
 export type McpStatus = "connecting" | "ready" | "failed" | "off";
@@ -842,8 +858,19 @@ export interface ContextUsage {
  */
 export interface ContextView {
   compact_at: number;
+  hit: number | null;
+  parts: ContextPart[];
   tokens: number;
   window: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ContextPart".
+ */
+export interface ContextPart {
+  kind: ContextPartKind;
+  name: string | null;
+  tokens: number;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema

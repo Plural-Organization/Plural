@@ -30,7 +30,7 @@ from plural.agent.telemetry import RequestDump, hit_rate, observed
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.registry import builtin_tools
 from plural.host.system import UlidGenerator
-from plural.protocol.models import Usage
+from plural.protocol.models import ContextPartKind, Usage
 
 REQUEST = LlmRequest(system="s", messages=(LlmMessage(role="user", content="hi"),))
 
@@ -188,3 +188,29 @@ def test_prefix_diff_names_what_broke_the_shared_beginning() -> None:
         "messages": [{"role": "user", "content": "A"}, longer["messages"][1]],
     }
     assert compare(longer, edited).startswith("message 0 (user) changed at character 0")
+
+
+async def test_the_context_is_broken_down_and_scaled_to_the_provider_count(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "a.txt").write_text("alpha\n" * 400)
+    usage = Usage(input_tokens=1000, cache_read_tokens=3000)
+    provider = ScriptedProvider(
+        [
+            (UsageReport(usage=usage), *use_tool("read", "c1", path="a.txt")),
+            (UsageReport(usage=usage), *reply("done")),
+        ]
+    )
+    loop = make_loop(tmp_path, provider, StubGate())
+    await collect(loop, turn("go"))
+
+    fill = loop.fill()
+    kinds = {(part.kind, part.name) for part in fill.parts}
+    assert {
+        (ContextPartKind.SYSTEM, None),
+        (ContextPartKind.TOOLS, None),
+        (ContextPartKind.MESSAGES, None),
+        (ContextPartKind.TOOL_RESULTS, "read"),
+    } <= kinds
+    assert abs(sum(part.tokens for part in fill.parts) - fill.tokens) <= len(fill.parts)
+    assert fill.hit == 0.75

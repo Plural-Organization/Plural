@@ -281,10 +281,38 @@ class PluginCommandView(Model):
     host_only: bool = False
 
 
+class ContextPartKind(StrEnum):
+    # The system prompt's sections.
+    SYSTEM = "system"
+    TOOL_RULES = "tool_rules"
+    ENVIRONMENT = "environment"
+    PROJECT_NOTES = "project_notes"
+    SKILLS = "skills"
+    AGENTS = "agents"
+    # The declared tools' schemas.
+    TOOLS = "tools"
+    # The conversation.
+    MESSAGES = "messages"
+    TOOL_RESULTS = "tool_results"
+    SUMMARY = "summary"
+    NOTES = "notes"
+
+
+class ContextPart(Model):
+    kind: ContextPartKind
+    tokens: int
+    # The tool whose results these are.
+    name: str | None = None
+
+
 class ContextView(Model):
     tokens: int
     window: int
     compact_at: float
+    # What the tokens are spent on: estimated from length, scaled to the provider's count.
+    parts: tuple[ContextPart, ...] = ()
+    # The share of the latest request the provider read from its cache.
+    hit: float | None = None
 
 
 class RunView(Model):

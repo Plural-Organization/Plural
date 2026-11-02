@@ -212,7 +212,7 @@ describe("App", () => {
   test("switching to OAuth hides the context meter and switching back restores it", async () => {
     const fake = session();
     const setup = await mount(fake);
-    fake.emit({ type: "context.usage", context: { tokens: 96000, window: 128000, compact_at: 0.75 } });
+    fake.emit({ type: "context.usage", context: { tokens: 96000, window: 128000, compact_at: 0.75, parts: [], hit: null } });
     await frame(setup, "96K/128K");
     fake.emit({ type: "agent.changed", agent: "Claude OAuth · claude-haiku-4-5", fast: "" });
     await tick(50);
@@ -228,13 +228,13 @@ describe("App", () => {
   test("everyone sees the context fill up and a compaction squeeze it", async () => {
     const fake = session();
     const setup = await mount(fake);
-    fake.emit({ type: "context.usage", context: { tokens: 96_000, window: 128_000, compact_at: 0.75 } });
+    fake.emit({ type: "context.usage", context: { tokens: 96_000, window: 128_000, compact_at: 0.75, parts: [], hit: null } });
     expect(await frame(setup, "75%")).toContain("96K/128K");
     fake.emit({ type: "run.started", run_id: "rc", prompt_id: "", provenance: GUEST });
     fake.emit({ type: "context.compacting", run_id: "rc", tokens_before: 96_000 });
     expect(await frame(setup, "compacting the context")).toContain("96K tokens into a summary");
     fake.emit({ type: "context.compacted", run_id: "rc", summary: "S", tokens_before: 96_000, kept_from: null });
-    fake.emit({ type: "context.usage", context: { tokens: 3_000, window: 128_000, compact_at: 0.75 } });
+    fake.emit({ type: "context.usage", context: { tokens: 3_000, window: 128_000, compact_at: 0.75, parts: [], hit: null } });
     fake.emit({ type: "run.ended", run_id: "rc", reason: "stop", usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 }, error: null });
     const done = await frame(setup, "context compacted: 96K tokens summarized");
     expect(done).toContain("2%");
@@ -398,6 +398,31 @@ describe("App", () => {
     expect(tray).toContain("in 20K");
     expect(tray).toContain("75% cached");
     expect(tray).toContain("in 160K · out 10K tokens  56% cached · 10K written to the cache");
+  });
+
+  test("/context shows what fills the prompt and flags a cache miss", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({
+      type: "context.usage",
+      context: {
+        tokens: 40_000,
+        window: 200_000,
+        compact_at: 0.9,
+        hit: 0.2,
+        parts: [
+          { kind: "system", name: null, tokens: 2_000 },
+          { kind: "tool_results", name: "read", tokens: 30_000 },
+          { kind: "messages", name: null, tokens: 8_000 },
+        ],
+      },
+    });
+    await setup.mockInput.typeText("/context");
+    await setup.mockInput.pressEnter();
+    const tray = await frame(setup, "context · the agent's prompt");
+    expect(tray).toMatch(/read results\s+30K\s+15%/);
+    expect(tray).toContain("40K of 200K");
+    expect(tray).toContain("20% cached  most of it was sent at full price");
   });
 
   test("/agents lists the sub-agents and the host creates one step by step", async () => {

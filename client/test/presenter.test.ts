@@ -37,7 +37,7 @@ test("the run status follows what the run is waiting for", () => {
 });
 
 test.each(["Claude OAuth · claude-haiku-4-5", "Claude Code · claude-sonnet-5-5", "Codex CLI · gpt-6.1-sol"])("OAuth connections hide the context meter: %s", (agent) => {
-  const state = { ...emptyState(), agent, context: { tokens: 96000, window: 128000, compact_at: 0.75 } };
+  const state = { ...emptyState(), agent, context: { tokens: 96000, window: 128000, compact_at: 0.75, parts: [], hit: null } };
   expect(contextMeter(state)).toBeNull();
   expect(state.context.tokens).toBe(96000);
   expect(contextMeter({ ...state, agent: "Anthropic · claude-opus-5-5" })).toEqual({ percent: 75, tokens: "96K", window: "128K", level: "danger" });

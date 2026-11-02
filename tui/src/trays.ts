@@ -1,4 +1,4 @@
-import { cacheHitLabel, label, ruleLine, type Projection, type Role } from "@plural/client";
+import { cacheHitLabel, contextLines, label, missedCache, ruleLine, type Projection, type Role } from "@plural/client";
 import { visibleCommands, type CommandHint } from "./commands";
 import type { Row } from "./components/Tray";
 import { colorFor, theme } from "./theme";
@@ -158,5 +158,38 @@ export function usageRows(projection: Projection): Row[] {
       { text: total.cache_write_tokens > 0 ? ` · ${tokens(total.cache_write_tokens)} written to the cache` : "", fg: theme.dim },
     ],
     [{ text: "in counts the whole prompt, the part read from the cache too", fg: theme.dim }],
+  ];
+}
+
+export function contextRows(projection: Projection): Row[] {
+  const context = projection.state.context;
+  if (context === null || context.parts.length === 0) {
+    return [[{ text: "the agent has not been asked anything yet", fg: theme.dim }]];
+  }
+  const lines = contextLines(context);
+  const width = Math.max(...lines.map((line) => line.label.length));
+  const percent = (share: number): string => `${share > 0 && share < 0.01 ? "<1" : Math.round(share * 100)}%`;
+  return [
+    ...lines.map((line): Row => [
+      { text: line.label.padEnd(width + 2), fg: theme.text },
+      { text: tokens(line.tokens).padStart(6), fg: theme.text },
+      { text: percent(line.share).padStart(6), fg: theme.dim },
+    ]),
+    [""],
+    [
+      { text: "total  ", fg: theme.dim },
+      { text: `${tokens(context.tokens)} of ${tokens(context.window)}`, fg: theme.text, bold: true },
+      { text: `  summarized at ${Math.round(context.compact_at * 100)}%`, fg: theme.dim },
+    ],
+    ...(context.hit === null
+      ? []
+      : [
+          [
+            { text: "latest request  ", fg: theme.dim },
+            { text: `${Math.round(context.hit * 100)}% cached`, fg: missedCache(context) ? theme.warn : theme.text },
+            { text: missedCache(context) ? "  most of it was sent at full price" : "", fg: theme.warn },
+          ] as Row,
+        ]),
+    [{ text: "parts are estimated from their length and scaled to the provider's count", fg: theme.dim }],
   ];
 }

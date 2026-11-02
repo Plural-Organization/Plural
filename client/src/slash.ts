@@ -27,6 +27,7 @@ export type Slash =
   | { type: "show.mcp" }
   | { type: "show.agents" }
   | { type: "show.usage" }
+  | { type: "show.context" }
   | { type: "show.plugins" };
 
 /** `plugins` names the commands the host's plugins provide; they are sent to the host as `command.run`. */
@@ -53,6 +54,8 @@ export function parseSlash(text: string, plugins: ReadonlySet<string> = new Set(
       return mcp(argument);
     case "usage":
       return { type: "show.usage" };
+    case "context":
+      return { type: "show.context" };
     case "agents": {
       const [verb, name] = argument.split(/\s+/).filter(Boolean);
       if (verb === undefined) {

@@ -1072,6 +1072,49 @@
       ],
       "type": "object"
     },
+    "ContextPart": {
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ContextPartKind"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tokens": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "tokens",
+        "name"
+      ],
+      "type": "object"
+    },
+    "ContextPartKind": {
+      "enum": [
+        "system",
+        "tool_rules",
+        "environment",
+        "project_notes",
+        "skills",
+        "agents",
+        "tools",
+        "messages",
+        "tool_results",
+        "summary",
+        "notes"
+      ],
+      "type": "string"
+    },
     "ContextUsage": {
       "properties": {
         "context": {
@@ -1094,6 +1137,24 @@
         "compact_at": {
           "type": "number"
         },
+        "hit": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "parts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ContextPart"
+          },
+          "type": "array"
+        },
         "tokens": {
           "type": "integer"
         },
@@ -1104,7 +1165,9 @@
       "required": [
         "tokens",
         "window",
-        "compact_at"
+        "compact_at",
+        "parts",
+        "hit"
       ],
       "type": "object"
     },

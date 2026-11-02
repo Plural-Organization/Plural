@@ -1260,7 +1260,13 @@ class SessionActor:
             await self._emit(UsageRecorded(lines=lines))
 
     async def _sync_context(self, fill: agent.ContextFill) -> None:
-        context = ContextView(tokens=fill.tokens, window=fill.window, compact_at=fill.compact_at)
+        context = ContextView(
+            tokens=fill.tokens,
+            window=fill.window,
+            compact_at=fill.compact_at,
+            parts=fill.parts,
+            hit=fill.hit,
+        )
         if context != self._state.context:
             await self._emit(ContextUsage(context=context))
 

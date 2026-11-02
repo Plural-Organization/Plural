@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from plural.agent.tools.base import ToolResult
-from plural.protocol.models import RunEndReason, ToolCallView, Usage
+from plural.protocol.models import ContextPart, RunEndReason, ToolCallView, Usage
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,6 +58,8 @@ class ContextFill:
     tokens: int
     window: int
     compact_at: float
+    parts: tuple[ContextPart, ...] = ()
+    hit: float | None = None
 
 
 @dataclass(frozen=True, slots=True)

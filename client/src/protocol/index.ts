@@ -20,6 +20,8 @@ export type {
   AccessRequestView,
   BriefingRequestView,
   JoinRequestView,
+  ContextPart,
+  ContextPartKind,
   ContextView,
   Envelope,
   ErrorCode,

@@ -10,7 +10,7 @@ from pydantic import ValidationError
 
 from plural.agent.briefing import BRIEFING_TAG
 from plural.agent.compaction import SUMMARY_SYSTEM, extract_tagged, summary_request, with_files
-from plural.agent.context import ContextBuilder
+from plural.agent.context import ContextBuilder, system_text
 from plural.agent.events import (
     AgentEvent,
     Compacted,
@@ -63,12 +63,14 @@ from plural.agent.providers.base import (
 )
 from plural.agent.providers.resilient import ResilientProvider
 from plural.agent.sandbox.base import SandboxError
-from plural.agent.telemetry import RequestDump, observed
+from plural.agent.telemetry import RequestDump, hit_rate, observed
 from plural.agent.tools.base import PreparedCall, ToolCtx, ToolError, ToolResult
 from plural.agent.tools.registry import ToolRegistry, UnknownTool
 from plural.core.ports import IdGenerator
 from plural.core.provenance import merge
 from plural.protocol.models import (
+    ContextPart,
+    ContextPartKind,
     Origin,
     Provenance,
     Role,
@@ -131,6 +133,7 @@ class _Turn:
         )
 
 
+Sections = tuple[tuple[ContextPartKind, str], ...]
 # The window assumed for a provider that does not say what its model takes.
 FALLBACK_WINDOW = 128_000
 
@@ -159,7 +162,7 @@ class AgentLoop:
         self._limits = limits or LoopLimits()
         self._provider = self._resilient(provider)
         self._helper = self._resilient(helper) if helper is not None else None
-        self._prompt: tuple[str, tuple[ToolSchema, ...]] | None = None
+        self._prompt: tuple[Sections, tuple[ToolSchema, ...]] | None = None
         self._conversation: list[Message] = []
         self._notes: list[NotesTurn] = []
         self._shared = False
@@ -169,6 +172,8 @@ class AgentLoop:
         # The prompt size the provider last reported, and how many messages that prompt held.
         self._context_tokens = 0
         self._measured = 0
+        # The share of the latest request read from the provider's cache.
+        self._hit: float | None = None
         self._window = self._limits.context_window
         self._compact_requested = False
         self._compaction_failed = False
@@ -259,7 +264,10 @@ class AgentLoop:
 
     def fill(self) -> ContextFill:
         window = self._window or FALLBACK_WINDOW
-        return ContextFill(self._tokens(), window, self._threshold_of(window) / window)
+        tokens = self._tokens()
+        return ContextFill(
+            tokens, window, self._threshold_of(window) / window, self._parts(tokens), self._hit
+        )
 
     @property
     def can_compact(self) -> bool:
@@ -338,7 +346,7 @@ class AgentLoop:
         self._usage = Usage()
         self.spend("main", "", Usage(), uses=1)
         self._gate.begin_run()
-        self._prompt = (self._context.system(), self._tools.schemas())
+        self._prompt = (self._context.sections(), self._tools.schemas())
         revision = self._tools.revision
         self._compaction_failed = False
         self._verify_compaction = False
@@ -382,6 +390,7 @@ class AgentLoop:
                                 if delta.prompt_tokens:
                                     self._context_tokens = delta.prompt_tokens
                                     self._measured = measured
+                                    self._hit = hit_rate(delta)
                                     self._check_compaction_helped()
                                 yield self.fill()
                             case Stop(reason=reason):
@@ -729,15 +738,34 @@ class AgentLoop:
             retry_delay_s=self._limits.retry_delay_s,
         )
 
-    def _prompt_parts(self) -> tuple[str, tuple[ToolSchema, ...]]:
+    def _prompt_parts(self) -> tuple[Sections, tuple[ToolSchema, ...]]:
         # A run keeps the system prompt and tool list it started with, so MCP servers or skills
         # changing mid-run do not rewrite the request prefix the provider has cached.
-        return self._prompt or (self._context.system(), self._tools.schemas())
+        return self._prompt or (self._context.sections(), self._tools.schemas())
+
+    def _parts(self, tokens: int) -> tuple[ContextPart, ...]:
+        """What the prompt is spent on, estimated, then scaled to the provider's count of it."""
+        sections, tools = self._prompt_parts()
+        sizes: dict[tuple[ContextPartKind, str | None], int] = {}
+        for kind, text in sections:
+            sizes[kind, None] = sizes.get((kind, None), 0) + len(text) // 4
+        sizes[ContextPartKind.TOOLS, None] = sum(len(t.model_dump_json()) for t in tools) // 4
+        for message in self._conversation:
+            key = _part_of(message)
+            sizes[key] = sizes.get(key, 0) + _estimate_tokens(message)
+        estimated = sum(sizes.values())
+        # Before the first call the provider has not counted the system prompt and tools.
+        scale = tokens / estimated if self._context_tokens and estimated else 1.0
+        return tuple(
+            ContextPart(kind=kind, name=name, tokens=round(size * scale))
+            for (kind, name), size in sizes.items()
+            if size
+        )
 
     def _request(self) -> LlmRequest:
-        system, tools = self._prompt_parts()
+        sections, tools = self._prompt_parts()
         return LlmRequest(
-            system=system,
+            system=system_text(sections),
             messages=to_llm(self._conversation),
             tools=tools,
         )
@@ -936,6 +964,18 @@ _UNFINISHED: dict[StopReason, str] = {
     "max_tokens": "Not executed: the response hit the output limit before the call was complete",
     "refusal": "Not executed: the model declined the request",
 }
+
+
+def _part_of(message: Message) -> tuple[ContextPartKind, str | None]:
+    match message:
+        case ToolResultTurn(name=name):
+            return ContextPartKind.TOOL_RESULTS, name
+        case SummaryTurn():
+            return ContextPartKind.SUMMARY, None
+        case NotesTurn():
+            return ContextPartKind.NOTES, None
+        case UserTurn() | AssistantTurn():
+            return ContextPartKind.MESSAGES, None
 
 
 def _estimate_tokens(message: Message) -> int:

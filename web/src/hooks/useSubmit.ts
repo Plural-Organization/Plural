@@ -1,6 +1,7 @@
 import { cacheHitLabel, findPerson, isSkillCommand, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
 import { commandName, helpText, isHostOnly, pluginHints } from "../lib/commands";
+import { contextText } from "../lib/context";
 import type { Session } from "./useSession";
 
 interface Submit {
@@ -152,6 +153,10 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
             `  ${line.role} · ${line.model}  ${line.agent || "conversation"}  ${line.uses}×  in ${line.usage.input_tokens}  out ${line.usage.output_tokens}  cache ${line.usage.cache_read_tokens}  wrote ${line.usage.cache_write_tokens}  ${cacheHitLabel(line.usage)}`.trimEnd(),
         );
         notify("accent", lines.length > 0 ? ["usage", ...lines].join("\n") : "nothing spent yet in this session");
+        return;
+      }
+      if (parsed.type === "show.context") {
+        notify("accent", contextText(state.context));
         return;
       }
       if (parsed.type === "show.plugins") {

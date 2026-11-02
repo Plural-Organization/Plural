@@ -22,6 +22,7 @@ export const COMMANDS: CommandHint[] = [
   { name: "mcp", usage: "/mcp [add <name> <command|url> [--global] | on|off|restart|rm <name> | import]", description: "connect MCP servers and their tools" },
   { name: "agents", usage: "/agents [rm <name>]", description: "sub-agents the agent can hand work to; create your own" },
   { name: "usage", usage: "/usage", description: "tokens spent per model and agent in this session" },
+  { name: "context", usage: "/context", description: "what fills the agent's context, and whether the cache was used" },
   { name: "plugins", usage: "/plugins [new <name> | reload]", description: "the host's plugins and their commands" },
   { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
   { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },

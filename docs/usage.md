@@ -353,6 +353,7 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | `/skills [search\|add\|rm …]` | List, find and install skills, see [Skills](#skills) |
 | `/agents [rm <name>]` | The sub-agents; the host creates one with a short form, see [Sub-agents](#sub-agents) |
 | `/usage` | Tokens spent in this session per model, for the conversation, summaries and each sub-agent |
+| `/context` | What fills the agent's prompt now (system prompt sections, tool definitions, messages, each tool's results, summary), and how much of the latest request came from the cache |
 | `/plugins [new <name>\|reload]` | List the host's plugins, create one or reload them (host), see [plugins](plugins.md) |
 | `/<plugin command>` | Run a command a plugin added; they appear in the suggestions |
 | `/abort` | Stop the current run (host) |
