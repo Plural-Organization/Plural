@@ -21,7 +21,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "ANTHROPIC_API_KEY"
-    ]
+    ],
+    "extra": "anthropic"
   },
   {
     "id": "anthropic_oauth",
@@ -49,7 +50,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Claude model IDs; Test connection checks access for your account",
     "connection": "oauth",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "anthropic"
   },
   {
     "id": "claude_code",
@@ -77,7 +79,9 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Uses the installed Claude Code CLI; sign in with claude auth login",
     "connection": "oauth",
-    "keyEnv": []
+    "tool": "claude",
+    "keyEnv": [],
+    "extra": null
   },
   {
     "id": "codex_cli",
@@ -97,7 +101,9 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Streams replies from Codex CLI and keeps one session for this room",
     "connection": "oauth",
-    "keyEnv": []
+    "tool": "codex",
+    "keyEnv": [],
+    "extra": null
   },
   {
     "id": "openai",
@@ -115,7 +121,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "OPENAI_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "gemini",
@@ -134,7 +141,8 @@ export const TEST_CATALOG: Preset[] = [
     "keyEnv": [
       "GEMINI_API_KEY",
       "GOOGLE_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "openrouter",
@@ -152,7 +160,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "OPENROUTER_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "groq",
@@ -169,7 +178,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "GROQ_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "deepseek",
@@ -187,7 +197,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "DEEPSEEK_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "nvidia",
@@ -206,7 +217,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "NVIDIA_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "azure",
@@ -219,7 +231,8 @@ export const TEST_CATALOG: Preset[] = [
     "models": [],
     "hint": "Enter your Azure resource endpoint and deployment name",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "ollama",
@@ -235,7 +248,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "A model on this machine, no key. Set the window the server really uses",
     "connection": "local",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "custom",
@@ -248,7 +262,8 @@ export const TEST_CATALOG: Preset[] = [
     "models": [],
     "hint": "Any OpenAI-compatible server",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "amazon_bedrock",
@@ -263,7 +278,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Use a Bedrock API key; enter the region's bedrock-runtime /openai/v1 URL",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "ant_ling",
@@ -278,7 +294,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "baseten",
@@ -291,7 +308,8 @@ export const TEST_CATALOG: Preset[] = [
     "models": [],
     "hint": "OpenAI-compatible endpoint; enter a model ID",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "cerebras",
@@ -308,7 +326,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "CEREBRAS_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "cloudflare_workers_ai",
@@ -321,7 +340,8 @@ export const TEST_CATALOG: Preset[] = [
     "models": [],
     "hint": "Enter the account-scoped OpenAI-compatible endpoint URL",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "fireworks",
@@ -338,7 +358,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "FIREWORKS_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "huggingface",
@@ -355,7 +376,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "HF_TOKEN"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "kimi_coding",
@@ -370,7 +392,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Kimi Coding OpenAI-compatible API; subscription OAuth is not configured here",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "mistral",
@@ -387,7 +410,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "MISTRAL_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "minimax",
@@ -402,7 +426,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Anthropic-compatible Messages API",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "anthropic"
   },
   {
     "id": "minimax_cn",
@@ -417,7 +442,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Anthropic-compatible Messages API",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "anthropic"
   },
   {
     "id": "moonshotai",
@@ -434,7 +460,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "MOONSHOT_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "moonshotai_cn",
@@ -451,7 +478,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "MOONSHOT_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "qwen_token_plan",
@@ -466,7 +494,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Qwen Token Plan OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "qwen_token_plan_cn",
@@ -481,7 +510,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Qwen Token Plan OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "qwen_token_plan_individual",
@@ -496,7 +526,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Qwen Token Plan OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "together",
@@ -513,7 +544,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "TOGETHER_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "vercel_ai_gateway",
@@ -526,7 +558,8 @@ export const TEST_CATALOG: Preset[] = [
     "models": [],
     "hint": "Anthropic-compatible Messages API; enter a model route",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "anthropic"
   },
   {
     "id": "xai",
@@ -543,7 +576,8 @@ export const TEST_CATALOG: Preset[] = [
     "connection": "api_key",
     "keyEnv": [
       "XAI_API_KEY"
-    ]
+    ],
+    "extra": "openai"
   },
   {
     "id": "xiaomi",
@@ -558,7 +592,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "xiaomi_token_plan_cn",
@@ -573,7 +608,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "xiaomi_token_plan_ams",
@@ -588,7 +624,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "xiaomi_token_plan_sgp",
@@ -603,7 +640,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "zai",
@@ -618,7 +656,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Z.AI Coding Plan OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "zai_coding_cn",
@@ -633,7 +672,8 @@ export const TEST_CATALOG: Preset[] = [
     ],
     "hint": "Z.AI Coding Plan OpenAI-compatible endpoint",
     "connection": "api_key",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": "openai"
   },
   {
     "id": "demo",
@@ -646,6 +686,7 @@ export const TEST_CATALOG: Preset[] = [
     "models": [],
     "hint": "A scripted agent that needs nothing, to try the interface",
     "connection": "local",
-    "keyEnv": []
+    "keyEnv": [],
+    "extra": null
   }
 ];

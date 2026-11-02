@@ -14,6 +14,7 @@ export interface Palette {
   danger: string;
   info: string;
   code: string;
+  diffBg: string;
   addBg: string;
   removeBg: string;
   people: string[];
@@ -36,6 +37,7 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       danger: "#f7768e",
       info: "#7dcfff",
       code: "#bb9af7",
+      diffBg: "#1c1e2b",
       addBg: "#1f3a2a",
       removeBg: "#3d1f2b",
       people: ["#7dcfff", "#bb9af7", "#e0af68", "#9ece6a", "#f7768e", "#73daca", "#ff9e64", "#7aa2f7"],
@@ -57,6 +59,7 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       danger: "#cf2552",
       info: "#0b8aa6",
       code: "#8239e0",
+      diffBg: "#f1f2f6",
       addBg: "#d9f2de",
       removeBg: "#f9dde4",
       people: ["#0b8aa6", "#8239e0", "#a86a00", "#2e8b3d", "#cf2552", "#00877a", "#c4540a", "#2f5bea"],
@@ -78,6 +81,7 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       danger: "#fb4934",
       info: "#8ec07c",
       code: "#d3869b",
+      diffBg: "#242424",
       addBg: "#32361a",
       removeBg: "#3c1f1e",
       people: ["#83a598", "#d3869b", "#fabd2f", "#b8bb26", "#fb4934", "#8ec07c", "#fe8019", "#458588"],
@@ -99,6 +103,7 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       danger: "#ff5f5f",
       info: "#5fd7ff",
       code: "#d7afff",
+      diffBg: "#161616",
       addBg: "#003d1f",
       removeBg: "#4a0016",
       people: ["#5fd7ff", "#d7afff", "#ffd700", "#00ff87", "#ff5f5f", "#87ffd7", "#ffaf5f", "#afd7ff"],

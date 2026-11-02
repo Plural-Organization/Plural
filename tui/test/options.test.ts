@@ -23,6 +23,13 @@ describe("commands", () => {
     }
   });
 
+  test("joining a team continues into the TUI", () => {
+    expect(parseArgs(["team", "join", "tm-abcde-fghj2", "--relay", "wss://r.example"])).toEqual({
+      kind: "team_join",
+      args: ["team", "join", "tm-abcde-fghj2", "--relay", "wss://r.example"],
+    });
+  });
+
   test("--team goes on to the host", () => {
     expect(parseArgs(["--team"])).toMatchObject({ kind: "session", options: { hostArgs: ["--team"] } });
   });

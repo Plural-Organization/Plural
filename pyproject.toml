@@ -19,12 +19,9 @@ classifiers = [
 ]
 dependencies = [
   "aiosqlite>=0.21",
-  "anthropic>=2.3.0",
   "cryptography>=44",
   "mcp>=1.20",
-  "openai>=3.37.0",
   "pydantic>=2.11",
-  "pydantic-ai-slim[anthropic,openai]>=2.63.0",
   "pydantic-settings>=2.8",
   "rich>=13.9",
   "starlette>=0.46",
@@ -33,6 +30,10 @@ dependencies = [
   "uvicorn>=0.34",
   "websockets>=15",
 ]
+
+[project.optional-dependencies]
+anthropic = ["anthropic>=2.3.0", "pydantic-ai-slim[anthropic]>=2.63.0"]
+openai = ["openai>=3.37.0", "pydantic-ai-slim[openai]>=2.63.0"]
 
 [project.urls]
 Homepage = "https://github.com/Plural-Organization/Plural"
@@ -44,6 +45,9 @@ plural-host = "plural.cli.main:app"
 
 [dependency-groups]
 dev = [
+  "anthropic>=2.3.0",
+  "openai>=3.37.0",
+  "pydantic-ai-slim[anthropic,openai]>=2.63.0",
   "coverage>=7.6",
   "hypothesis>=6.125",
   "import-linter>=2.2",

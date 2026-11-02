@@ -20,9 +20,20 @@ from plural.agent.providers.cli.codex_cli import CodexCliProvider
 from plural.core.errors import DomainError
 from plural.host.bootstrap import Host, build_web_search
 from plural.host.config import HostSettings, preset_values
+from plural.host.extras import (
+    EXTRAS,
+    LABELS,
+    Extra,
+    InstallError,
+    extra_for,
+    install,
+    is_installed,
+)
 from plural.host.inbox import Reconfigure
 from plural.host.providers import ConfigError, build_provider, provider_secrets, resolve_api_key
 from plural.host.routing import build_helper
+from plural.host.tools import Tool, ToolInstallError, inventory, tool_for
+from plural.host.tools import install as install_tool
 
 log = structlog.get_logger(__name__)
 
@@ -50,8 +61,10 @@ class Request(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     id: str
-    type: Literal["configure", "test", "catalog"]
+    type: Literal["configure", "test", "catalog", "install"]
     config: AgentConfig | None = None
+    extra: Extra | None = None
+    tool: Tool | None = None
 
 
 Reply = Callable[[dict[str, object]], None]
@@ -125,8 +138,37 @@ class Control:
             return
         try:
             if request.type == "catalog":
-                presets = [entry.to_json() for entry in PRESETS]
-                self._reply({"type": "result", "id": request.id, "ok": True, "presets": presets})
+                presets = [
+                    {
+                        **entry.to_json(),
+                        "extra": extra_for(entry.adapter),
+                        "tool": tool_for(entry.adapter),
+                    }
+                    for entry in PRESETS
+                ]
+                extras = [
+                    {"id": extra, "label": LABELS[extra], "installed": is_installed(extra)}
+                    for extra in EXTRAS
+                ]
+                self._reply(
+                    {
+                        "type": "result",
+                        "id": request.id,
+                        "ok": True,
+                        "presets": presets,
+                        "extras": extras,
+                        "tools": inventory(),
+                    }
+                )
+                return
+            if request.type == "install":
+                if request.tool is not None:
+                    await install_tool(request.tool)
+                elif request.extra is not None:
+                    await install(request.extra)
+                else:
+                    raise ConfigError("install needs an extra or a tool")
+                self._reply({"type": "result", "id": request.id, "ok": True})
                 return
             if request.config is None:
                 raise ConfigError(f"{request.type} needs a config")
@@ -137,7 +179,7 @@ class Control:
             else:
                 label = await self._configure(request.config)
                 self._reply({"type": "result", "id": request.id, "ok": True, "agent": label})
-        except (ConfigError, ProviderError, DomainError) as error:
+        except (ConfigError, ProviderError, DomainError, InstallError, ToolInstallError) as error:
             self._reply({"type": "result", "id": request.id, "ok": False, "error": str(error)})
         except Exception:
             log.exception("control.failed", request=request.type)

@@ -14,7 +14,7 @@ export const TABS: { id: Tab; label: string }[] = [
   { id: "appearance", label: "Appearance" },
 ];
 
-export type RowKind = "choice" | "toggle" | "text" | "secret" | "action" | "radio" | "swatch" | "note";
+export type RowKind = "choice" | "toggle" | "text" | "secret" | "action" | "radio" | "swatch" | "note" | "header";
 
 export interface Row {
   id: string;
@@ -68,6 +68,21 @@ export function maskKey(key: string): string {
   return key.length <= 8 ? "•".repeat(key.length) : `${"•".repeat(Math.min(key.length - 4, 16))}${key.slice(-4)}`;
 }
 
+function header(id: string, label: string): Row {
+  return { id: `h-${id}`, kind: "header", label, value: "", hint: "", enabled: false };
+}
+
+export function landing(list: readonly Row[], from: number, direction: 1 | -1 = 1): number {
+  const count = list.length;
+  for (let step = 0; step < count; step += 1) {
+    const at = (((from + step * direction) % count) + count) % count;
+    if (list[at]?.kind !== "header") {
+      return at;
+    }
+  }
+  return 0;
+}
+
 function toggle(id: string, label: string, value: boolean, hint: string, enabled = true): Row {
   return { id, kind: "toggle", label, value: value ? "on" : "off", hint, enabled };
 }
@@ -88,9 +103,20 @@ export function modelRows(state: ModelState): Row[] {
   }
   const preset = presetOf(choice.preset);
   const rows: Row[] = [
-    { id: "connection", kind: "choice", label: "Connection type", value: connectionLabel(preset.connection), hint: "OAuth sign-in, API key, or a local model", enabled: true },
-    { id: "preset", kind: "choice", label: "Provider", value: preset.label, hint: preset.hint, enabled: true },
+    header("agent", "Agent"),
+    {
+      id: "preset",
+      kind: "choice",
+      label: "Provider",
+      value: preset.label,
+      hint: `enter browses every provider and sets one up · ← → next one · ${preset.hint}`,
+      enabled: true,
+    },
   ];
+  const credentials = preset.needsKey || choice.preset === "custom" || choice.preset === "anthropic_oauth" || choice.preset === "claude_code" || choice.preset === "codex_cli";
+  if (credentials) {
+    rows.push(header("credentials", "Account"));
+  }
   if (preset.needsKey || choice.preset === "custom") {
     rows.push({
       id: "key",
@@ -124,6 +150,7 @@ export function modelRows(state: ModelState): Row[] {
     });
   }
   if (preset.provider !== "fake") {
+    rows.push(header("model", "Model"));
     rows.push({
       id: "model",
       kind: preset.models.length > 0 ? "choice" : "text",
@@ -176,8 +203,13 @@ export function modelRows(state: ModelState): Row[] {
     });
   }
   if (preset.needsKey || choice.preset === "custom") {
-    rows.push(toggle("remember", "Remember the key", settings.rememberKey, "keep it in ~/.plural/credentials.json, readable only by you"));
+    rows.splice(
+      rows.findIndex((row) => row.id === "key") + 1,
+      0,
+      toggle("remember", "Remember the key", settings.rememberKey, "keep it in ~/.plural/credentials.json, readable only by you"),
+    );
   }
+  rows.push(header("actions", "Apply"));
   rows.push({ id: "test", kind: "action", label: "Test connection", value: "", hint: "send a short real request and see if the model answers", enabled: preset.provider !== "fake" });
   rows.push({ id: "save", kind: "action", label: "Save and use", value: "", hint: "switch the agent now, the conversation is kept", enabled: true });
   return rows;

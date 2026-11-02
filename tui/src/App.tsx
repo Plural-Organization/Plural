@@ -28,8 +28,11 @@ import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
 import { SearchBar } from "./components/SearchBar";
-import { Inbox, inboxItems, type InboxItem } from "./components/Inbox";
+import { APPROVAL_DECISIONS, Inbox, inboxItems, type InboxItem } from "./components/Inbox";
+import { ExtrasDialog } from "./components/ExtrasDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { SetupDialog } from "./components/SetupDialog";
+import { type ExtraStatus } from "./extras";
 import { Splash } from "./components/Splash";
 import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { preview, Toast, TOAST_MS, type ToastMessage } from "./components/Toast";
@@ -38,6 +41,9 @@ import { TopBar } from "./components/TopBar";
 import { SCOPES, TrayView, type Form, type FormStep, type McpWizard, type Row, type Tray } from "./components/Tray";
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, ModeLine, Working } from "./components/Working";
+import { InviteDialog } from "./components/InviteDialog";
+import { ShareDialog } from "./components/ShareDialog";
+import { candidateFolders } from "./folders";
 import { contextRows, helpRows, pluginRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
@@ -47,7 +53,7 @@ import { explain } from "./failure";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
-import type { PresetId } from "./presets";
+import type { AgentChoice, PresetId } from "./presets";
 import type { Tab } from "./settingsModel";
 import { copyToClipboard, IMAGE_LIMIT_BYTES, pasteImage } from "./lib/clipboard";
 import { createSyntaxStyle } from "./syntax";
@@ -61,6 +67,8 @@ export interface AppProps {
   version: string;
   guestLink: string | null;
   teamLink?: string | null;
+  onInviteTeam?: () => Promise<string>;
+  onShareHost?: (folder: string) => Promise<void>;
   settings?: Settings;
   onSettings?: (settings: Settings) => void;
   control?: AgentControl | null;
@@ -89,6 +97,7 @@ export interface AppProps {
 type Focus = "composer" | "inbox" | "search";
 
 const GUARD_MS = 400;
+const FRAME_MS = 33;
 const MIN_WIDTH_FOR_PANEL = 90;
 const TYPING_REFRESH_MS = 3000;
 const TYPING_IDLE_MS = 2500;
@@ -109,6 +118,8 @@ export function App({
   version,
   guestLink,
   teamLink = null,
+  onInviteTeam,
+  onShareHost,
   settings: initialSettings,
   onSettings,
   control = null,
@@ -140,7 +151,10 @@ export function App({
   setTheme(settings.theme);
   const syntax = useMemo(() => createSyntaxStyle(renderer), [renderer, settings.theme]);
   const [dialog, setDialog] = useState(false);
-  const [welcome, setWelcome] = useState(false);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [setup, setSetup] = useState<{ first: boolean; back: boolean } | null>(null);
+  const [extrasPrompt, setExtrasPrompt] = useState<{ preselect: string | null; reason: string | null; back: boolean } | null>(null);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [allOpen, setAllOpen] = useState(false);
   const toggle = (id: string): void =>
@@ -160,6 +174,7 @@ export function App({
   const [connection, setConnection] = useState<ConnectionStatus>(client.status);
   const [focus, setFocus] = useState<Focus>("composer");
   const [selected, setSelected] = useState(0);
+  const [approvalChoice, setApprovalChoice] = useState<{ id: string; index: number } | null>(null);
   const [seed, setSeed] = useState<{ text: string; key: number } | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
@@ -206,9 +221,33 @@ export function App({
     setSettings(next);
     onSettings?.(next);
   };
+  const frames = useRef({ last: 0, timer: null as ReturnType<typeof setTimeout> | null });
+  const publish = (): void => {
+    const state = frames.current;
+    const wait = FRAME_MS - (Date.now() - state.last);
+    if (wait > 0) {
+      state.timer ??= setTimeout(publish, wait);
+      return;
+    }
+    if (state.timer !== null) {
+      clearTimeout(state.timer);
+      state.timer = null;
+    }
+    state.last = Date.now();
+    setFeed(feedRef.current);
+    bump();
+  };
+  useEffect(
+    () => () => {
+      if (frames.current.timer !== null) {
+        clearTimeout(frames.current.timer);
+      }
+    },
+    [],
+  );
   const commit = (next: Feed): void => {
     feedRef.current = next;
-    setFeed(next);
+    publish();
   };
   const notify = (tone: Tone, text: string): void => commit(withNotice(feedRef.current, tone, text));
   const showToast = (title: string, detail: string | null = null, tone: "ok" | "accent" = "ok", icon = "✓"): void => {
@@ -233,7 +272,7 @@ export function App({
           if (!(pending && event.type === "error")) {
             commit(absorb(feedRef.current, event, client.projection));
           }
-          bump();
+          publish();
           if (event.type === "chat.posted" && mentionsMe(event, client.projection.meId)) {
             const author = client.projection.state.participants[event.author_id];
             const who = author ? label(client.projection.state, author) : "someone";
@@ -497,19 +536,62 @@ export function App({
   }, [approvals]);
 
   const closeSettings = (): void => {
-    if (welcome) {
-      change({ ...settings, setupSeen: true });
-      setWelcome(false);
-    }
     setDialog(false);
   };
 
   useEffect(() => {
     if (control && isHost && !settings.setupSeen && settings.agent.preset === "demo" && state.agent.startsWith("demo")) {
-      setWelcome(true);
-      setDialog(true);
+      setSetup({ first: true, back: false });
     }
   }, [isHost, state.agent]);
+
+  const chooseProvider = (): void => {
+    setDialog(false);
+    setSetup({ first: false, back: true });
+  };
+
+  const closeSetup = (): void => {
+    const back = setup?.back ?? false;
+    setSetup(null);
+    if (!settings.setupSeen) {
+      change({ ...settings, setupSeen: true });
+    }
+    if (back) {
+      setDialog(true);
+    }
+  };
+
+  const applyProvider = (choice: AgentChoice, key: string, label: string): void => {
+    change({ ...settings, agent: choice, agentChoices: { ...settings.agentChoices, [choice.preset]: choice }, setupSeen: true });
+    onKeys?.(choice.preset, key, settings.rememberKey);
+    setSetup(null);
+    notify("ok", `Now using ${label}`);
+  };
+
+  const finishInSettings = (preset: string): void => {
+    change({ ...settings, agent: { preset, model: "", baseUrl: "", contextWindow: "" }, setupSeen: true });
+    setSetup(null);
+    setDialog(true);
+  };
+
+  const askForExtra = (extra: ExtraStatus): void => {
+    setDialog(false);
+    setExtrasPrompt({ preselect: extra.id, reason: `This provider needs the ${extra.label}.`, back: true });
+  };
+
+  const closeExtras = (installed: boolean): void => {
+    const back = extrasPrompt?.back ?? false;
+    setExtrasPrompt(null);
+    if (!settings.extrasSeen) {
+      change({ ...settings, extrasSeen: true });
+    }
+    if (back) {
+      setDialog(true);
+      if (installed) {
+        notify("ok", "SDK installed: choose Save and use");
+      }
+    }
+  };
 
   useEffect(() => {
     if (startupNote) {
@@ -1194,7 +1276,7 @@ export function App({
   };
 
   useKeyboard((key) => {
-    if (!active || dialog || intro) {
+    if (!active || dialog || inviteOpen || shareOpen || intro || extrasPrompt !== null || setup !== null) {
       return;
     }
     if (key.meta && (key.name === "left" || key.name === "right") && onCycleSpace) {
@@ -1253,10 +1335,18 @@ export function App({
     key.preventDefault();
     if (key.name === "tab" || key.name === "escape") {
       setFocus("composer");
+    } else if (item?.kind === "approval" && (key.name === "left" || key.name === "right")) {
+      const direction = key.name === "left" ? -1 : 1;
+      setApprovalChoice((current) => ({
+        id: item.id,
+        index: Math.max(0, Math.min(APPROVAL_DECISIONS.length - 1, (current?.id === item.id ? current.index : 0) + direction)),
+      }));
     } else if (key.name === "up" || key.name === "k") {
-      setSelected((value) => Math.max(0, value - 1));
+      setApprovalChoice(null);
+      setSelected(Math.max(0, Math.min(selected, items.length - 1) - 1));
     } else if (key.name === "down" || key.name === "j") {
-      setSelected((value) => Math.min(items.length - 1, value + 1));
+      setApprovalChoice(null);
+      setSelected(Math.min(items.length - 1, selected + 1));
     } else if (item?.kind === "join") {
       const choices: Record<string, "allow" | "viewer" | "deny"> = { y: "allow", return: "allow", v: "viewer", n: "deny", x: "deny" };
       const choice = choices[key.name];
@@ -1277,7 +1367,8 @@ export function App({
       }
     } else if (item?.kind === "approval") {
       const decisions: Record<string, "once" | "always" | "reject" | "block"> = { y: "once", a: "always", n: "reject", b: "block" };
-      const decision = key.name === "return" ? "once" : decisions[key.name];
+      const index = approvalChoice?.id === item.id ? approvalChoice.index : 0;
+      const decision = key.name === "return" ? APPROVAL_DECISIONS[index] : decisions[key.name];
       if (decision) {
         send({ type: "approval.respond", approval_id: item.id, decision });
       }
@@ -1426,7 +1517,7 @@ export function App({
             </text>
           </box>
         ) : null}
-        {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} /> : null}
+        {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} approvalChoice={approvalChoice} /> : null}
         {projection.compacting ? (
           <Compacting tokens={projection.compacting.tokens} />
         ) : running ? (
@@ -1444,7 +1535,7 @@ export function App({
           <SearchBar query={query} count={hits.length} position={hitIndex} preview={matched} onQuery={search} onStep={step} onClose={closeSearch} />
         ) : null}
         <Composer
-          focused={active && focus === "composer" && !dialog}
+          focused={active && focus === "composer" && !dialog && !inviteOpen && !shareOpen && extrasPrompt === null && setup === null}
           disabled={disabled}
           placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
           remember={!asking?.secret}
@@ -1506,7 +1597,7 @@ export function App({
           control={isHost ? control : null}
           keys={keys}
           initialTab="model"
-          welcome={welcome}
+          onChooseProvider={chooseProvider}
           onSettings={change}
           onKeys={(preset, key, remember) => onKeys?.(preset, key, remember)}
           onMode={(mode) => send({ type: "session.set_prompt_mode", mode })}
@@ -1514,13 +1605,59 @@ export function App({
           admission={state.admission}
           onAdmission={(mode) => send({ type: "link.set_admission", mode })}
           onCopyReply={copyReply}
+          onNeedExtra={askForExtra}
           update={update}
           version={version}
           onUpdate={() => void updater?.install()}
           onClose={closeSettings}
         />
       ) : null}
-      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} onInvite={() => send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true })} update={update} /> : null}
+      {setup !== null && control ? (
+        <SetupDialog
+          width={width}
+          height={height}
+          control={control}
+          settings={settings}
+          keys={keys}
+          first={setup.first}
+          current={settings.agent.preset}
+          onApplied={applyProvider}
+          onSettings={finishInSettings}
+          onClose={closeSetup}
+        />
+      ) : null}
+      {extrasPrompt !== null && control ? (
+        <ExtrasDialog width={width} height={height} control={control} preselect={extrasPrompt.preselect} reason={extrasPrompt.reason} onClose={closeExtras} />
+      ) : null}
+      {inviteOpen ? (
+        <InviteDialog
+          width={width}
+          height={height}
+          canTeam={onInviteTeam !== undefined}
+          teamName={teamName}
+          onRoom={() => {
+            setInviteOpen(false);
+            send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true });
+          }}
+          onTeam={async () => {
+            const command = await onInviteTeam!();
+            copy(command, "Team invite copied", "one use · valid for an hour");
+            setInviteOpen(false);
+          }}
+          onClose={() => setInviteOpen(false)}
+        />
+      ) : null}
+      {shareOpen && onShareHost ? (
+        <ShareDialog
+          width={width}
+          height={height}
+          teamName={teamName}
+          folders={candidateFolders(process.cwd())}
+          onShare={onShareHost}
+          onClose={() => setShareOpen(false)}
+        />
+      ) : null}
+      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} onInvite={() => setInviteOpen(true)} onShare={onShareHost ? () => setShareOpen(true) : undefined} update={update} /> : null}
     </box>
   );
 }

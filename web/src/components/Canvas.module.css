@@ -6,6 +6,7 @@
 .live { color: var(--accent); }
 .live::before { content: ""; display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); margin-right: 6px; animation: pulse 1.4s ease-in-out infinite; }
 .body { position: relative; overflow: auto; min-height: 0; }
+.site { position: relative; min-height: 0; overflow: hidden; }
 .diff { padding: 14px 0 40px; }
 .doc { max-width: 720px; margin: 0 auto; padding: 24px 28px 40px; }
 .code { margin: 0; padding: 16px 0 40px; font: 13px/1.6 var(--font-mono); counter-reset: line; min-width: max-content; }

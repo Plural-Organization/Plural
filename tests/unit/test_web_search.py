@@ -262,7 +262,7 @@ async def test_a_claude_login_searches_with_a_fresh_token_and_the_oauth_beta(
         transport = httpx2.MockTransport(recorder)
         return real(**kwargs, http_client=anthropic.DefaultAsyncHttpxClient(transport=transport))
 
-    monkeypatch.setattr("plural.agent.providers.web_search.AsyncAnthropic", routed)
+    monkeypatch.setattr("anthropic.AsyncAnthropic", routed)
     search = anthropic_oauth_search("claude-haiku-4-5", token, NativeWebSearch())
     await search.search("first")
     await search.search("second")
