@@ -161,7 +161,11 @@ the host stricter, never looser:
 def setup(plural):
     @plural.on("tool_call")
     async def guard(call, ctx):
-        if call.name == "bash" and "git push" in call.args.get("command", "") and "main" in call.subject:
+        if (
+            call.name == "bash"
+            and "git push" in call.args.get("command", "")
+            and "main" in call.subject
+        ):
             return plural.deny("pushes to main go through review")
         if call.name == "edit" and call.subject.startswith("migrations/"):
             return plural.ask("migrations need a second look")
