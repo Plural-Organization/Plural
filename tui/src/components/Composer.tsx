@@ -1,8 +1,9 @@
-import type { KeyBinding, TextareaRenderable } from "@opentui/core";
+import { decodePasteBytes, stripAnsiSequences, type KeyBinding, type PasteEvent, type TextareaRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
 import type { Mentionable, Role, Route } from "@plural/client";
 import { suggestions as suggest, visibleSuggestionWindow, type CommandHint } from "../commands";
+import { expandPastes, pasteLabel, shouldCollapse } from "../lib/paste";
 import { theme } from "../theme";
 
 export type Delivery = { state: "sending" } | { state: "sent" } | { state: "failed"; reason: string; restored: boolean };
@@ -64,6 +65,8 @@ export function Composer(props: ComposerProps) {
   const history = useRef<string[]>([]);
   const position = useRef(-1);
   const draft = useRef("");
+  const pasted = useRef(new Map<string, string>());
+  const pasteCount = useRef(0);
 
   const hints = dismissed ? [] : suggest(value, role, props.people ?? [], props.commands);
   const selected: CommandHint | undefined = hints[Math.min(choice, Math.max(0, hints.length - 1))];
@@ -71,6 +74,9 @@ export function Composer(props: ComposerProps) {
   const completion = selected ? (selected.insert ?? `/${selected.name} `) : "";
 
   const put = (text: string): void => {
+    if (text === "") {
+      pasted.current.clear();
+    }
     area.current?.setText(text);
     area.current?.gotoBufferEnd();
     setValue(text);
@@ -88,7 +94,7 @@ export function Composer(props: ComposerProps) {
   }, [value === ""]);
 
   const submit = (): void => {
-    const text = (area.current?.plainText ?? "").trim();
+    const text = expandPastes(area.current?.plainText ?? "", pasted.current).trim();
     if (text === "" && (props.images ?? []).length === 0) {
       return;
     }
@@ -98,6 +104,18 @@ export function Composer(props: ComposerProps) {
     position.current = -1;
     put("");
     props.onSubmit(text);
+  };
+
+  const paste = (event: PasteEvent): void => {
+    const text = stripAnsiSequences(decodePasteBytes(event.bytes)).replace(/\r\n?/g, "\n");
+    if (!shouldCollapse(text)) {
+      return;
+    }
+    event.preventDefault();
+    pasteCount.current += 1;
+    const label = pasteLabel(pasteCount.current, text);
+    pasted.current.set(label, text);
+    area.current?.insertText(label);
   };
 
   const recall = (direction: 1 | -1): void => {
@@ -237,6 +255,7 @@ export function Composer(props: ComposerProps) {
             backgroundColor={theme.panel}
             focusedBackgroundColor={theme.panel}
             keyBindings={BINDINGS}
+            onPaste={paste}
             onContentChange={() => {
               const text = area.current?.plainText ?? "";
               setValue(text);
