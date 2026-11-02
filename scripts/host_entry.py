@@ -1,6 +1,8 @@
 """Entry point of the frozen host. `--frozen-selftest` checks the bundle is complete."""
 
 import importlib
+import os
+import ssl
 import sys
 from importlib import resources
 
@@ -24,6 +26,12 @@ SELFTEST_DATA = (
 )
 
 
+def trust_bundled_certificates() -> None:
+    import certifi
+
+    os.environ.setdefault("SSL_CERT_FILE", certifi.where())
+
+
 def selftest() -> int:
     for module in SELFTEST_MODULES:
         importlib.import_module(module)
@@ -36,11 +44,15 @@ def selftest() -> int:
     if not (is_installed("anthropic") and is_installed("openai")):
         print("frozen host is missing a model SDK", file=sys.stderr)
         return 1
+    if ssl.create_default_context().cert_store_stats()["x509_ca"] == 0:
+        print("frozen host trusts no certificate authority", file=sys.stderr)
+        return 1
     print("frozen host ok")
     return 0
 
 
 if __name__ == "__main__":
+    trust_bundled_certificates()
     if sys.argv[1:] == ["--frozen-selftest"]:
         raise SystemExit(selftest())
     from plural.cli.main import app
