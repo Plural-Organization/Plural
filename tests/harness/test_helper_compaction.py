@@ -9,7 +9,7 @@ from plural.agent.providers.base import LlmEvent, UsageReport
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.protocol.models import Usage
 
-LIMITS = LoopLimits(context_window=1000, compact_at=0.5)
+LIMITS = LoopLimits(context_window=1000, compact_reserve=500)
 
 
 def used(events: tuple[LlmEvent, ...], tokens: int) -> tuple[LlmEvent, ...]:

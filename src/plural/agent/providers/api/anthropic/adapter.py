@@ -77,6 +77,21 @@ class AnthropicProvider:
         self._max_tokens = max_tokens
         self._effort: Effort | None = effort
         self._oauth = oauth
+        self._window: int | None = None
+        self._window_asked = False
+
+    async def context_window(self) -> int | None:
+        """How many tokens the model takes in, as the Models API says; asked once."""
+        if not self._window_asked:
+            self._window_asked = True
+            try:
+                info = await self._client.beta.models.retrieve(
+                    self._model, betas=[OAUTH_BETA] if self._oauth else omit
+                )
+            except anthropic.APIError:
+                return None
+            self._window = info.max_input_tokens
+        return self._window
 
     async def stream(
         self, request: LlmRequest, *, cancel: asyncio.Event

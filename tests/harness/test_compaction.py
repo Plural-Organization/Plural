@@ -6,8 +6,8 @@ from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.compaction import SUMMARY_PROMPT, extract_summary
 from plural.agent.events import AgentEvent, Compacted, MessageEnd, RunEnd
-from plural.agent.loop import AgentLoop, LoopLimits
-from plural.agent.messages import SummaryTurn, ToolResultTurn, summary_message
+from plural.agent.loop import FALLBACK_WINDOW, AgentLoop, LoopLimits
+from plural.agent.messages import AssistantTurn, SummaryTurn, ToolResultTurn, summary_message
 from plural.agent.providers.base import (
     ContextOverflow,
     LlmEvent,
@@ -17,7 +17,7 @@ from plural.agent.providers.base import (
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.protocol.models import RunEndReason, Usage
 
-LIMITS = LoopLimits(context_window=1000, compact_at=0.5)
+LIMITS = LoopLimits(context_window=1000, compact_reserve=500)
 
 
 def used(events: tuple[LlmEvent, ...], tokens: int) -> tuple[LlmEvent, ...]:
@@ -63,7 +63,8 @@ async def test_large_prompt_is_summarized_between_tool_rounds(tmp_path: Path) ->
 
     [event] = compacted(events)
     assert event.summary == "listed the workspace"
-    assert event.tokens_before == 900
+    # The reported 900, plus an estimate of the tool round that came after it.
+    assert 900 < event.tokens_before < 950
     assert last(events).reason is RunEndReason.STOP
 
     normal, summarizing, resumed = provider.requests
@@ -198,3 +199,66 @@ async def test_compaction_that_cannot_shrink_the_prompt_is_not_repeated(tmp_path
     assert last(events).reason is RunEndReason.STOP
     asked = [r for r in provider.requests if r.messages[-1].content == SUMMARY_PROMPT]
     assert len(asked) == 1
+
+
+async def test_tool_output_after_the_last_report_counts_toward_the_threshold(
+    tmp_path: Path,
+) -> None:
+    (tmp_path / "big.txt").write_text("word " * 800)
+    provider = FakeProvider(
+        [
+            used(use_tool("read", "c1", path="big.txt"), 300),
+            reply("<summary>read the big file</summary>"),
+            reply("done"),
+        ]
+    )
+    events = await collect(build(tmp_path, provider), turn("go"))
+    # The provider counted 300, but the file read after it pushes the prompt past 500.
+    [event] = compacted(events)
+    assert event.tokens_before > 500
+
+
+class WindowedProvider(FakeProvider):
+    """A provider that says how big its model's window is, as the real ones do."""
+
+    def __init__(self, window: int, script: list[tuple[LlmEvent, ...]]) -> None:
+        super().__init__(script)
+        self.window = window
+
+    async def context_window(self) -> int | None:
+        return self.window
+
+
+async def test_the_window_comes_from_the_provider(tmp_path: Path) -> None:
+    provider = WindowedProvider(
+        1000,
+        [
+            used(use_tool("ls", "c1", path="."), 900),
+            reply("<summary>listed</summary>"),
+            reply("done"),
+        ],
+    )
+    loop = make_loop(tmp_path, provider, StubGate(), LoopLimits(compact_reserve=200))
+    events = await collect(loop, turn("go"))
+    assert len(compacted(events)) == 1
+    fill = loop.fill()
+    assert (fill.window, fill.compact_at) == (1000, 0.8)
+
+
+async def test_a_provider_without_a_window_gets_the_fallback(tmp_path: Path) -> None:
+    provider = FakeProvider([used(use_tool("ls", "c1", path="."), 900), reply("done")])
+    loop = make_loop(tmp_path, provider, StubGate(), LoopLimits())
+    events = await collect(loop, turn("go"))
+    assert compacted(events) == []
+    assert loop.fill().window == FALLBACK_WINDOW
+
+
+async def test_nothing_is_summarized_before_the_window_is_known(tmp_path: Path) -> None:
+    # A resumed session may be long; until the first call says how big the window is, the
+    # conversation is left alone unless the provider says it overflows.
+    provider = WindowedProvider(1_000_000, [reply("still here")])
+    loop = make_loop(tmp_path, provider, StubGate(), LoopLimits())
+    loop.restore([turn("x" * 600_000), AssistantTurn(text="ok")])
+    events = await collect(loop, turn("go"))
+    assert compacted(events) == []
+    assert loop.fill().window == 1_000_000

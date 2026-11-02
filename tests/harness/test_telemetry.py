@@ -145,12 +145,13 @@ async def test_compaction_logs_why_and_how_much_it_saved(tmp_path: Path) -> None
             reply("finished"),
         ]
     )
-    limits = LoopLimits(context_window=1000, compact_at=0.5)
+    limits = LoopLimits(context_window=1000, compact_reserve=500)
     with capture_logs() as logs:
         await collect(make_loop(tmp_path, provider, StubGate(), limits), turn("go"))
 
     [line] = _logged(logs, "context.compacted")
-    assert (line["reason"], line["role"], line["tokens_before"]) == ("threshold", "main", 900)
+    assert (line["reason"], line["role"]) == ("threshold", "main")
+    assert line["tokens_before"] > 900
     assert line["tokens_after"] < 900
     assert [call["purpose"] for call in _logged(logs, "llm.call")] == ["turn", "compact", "turn"]
 

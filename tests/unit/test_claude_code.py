@@ -184,3 +184,18 @@ async def test_each_call_repeats_the_blocks_of_the_one_before_it(tmp_path: Path)
     assert sent[1][: len(sent[0])] == sent[0]
     assert len(sent[1]) == len(sent[0]) + 2
     assert '"read"' in str(sent[0][1]["text"])
+
+
+async def test_claude_code_reports_the_window_of_its_model(tmp_path: Path) -> None:
+    cli = fake_cli(
+        tmp_path,
+        {
+            "structured_output": {"text": "ok", "tool_calls": []},
+            "modelUsage": {"claude-sonnet-5-5": {"contextWindow": 1_000_000}},
+        },
+    )
+    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(cli))
+    assert await provider.context_window() is None
+    request = LlmRequest(system="", messages=(LlmMessage(role="user", content="hi"),))
+    [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    assert await provider.context_window() == 1_000_000

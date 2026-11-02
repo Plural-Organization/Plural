@@ -267,7 +267,12 @@ class CodexCliProvider:
         self._messages_snapshot: tuple[LlmMessage, ...] = ()
         # The system instructions and tools the thread was last sent.
         self._sent_head: dict[str, object] | None = None
+        self._window: int | None = None
         self._lock = asyncio.Lock()
+
+    async def context_window(self) -> int | None:
+        """The window Codex reported with its last turn's token usage."""
+        return self._window
 
     async def check_available(self) -> None:
         """Check installation and saved Codex login without making a model request."""
@@ -575,6 +580,10 @@ class CodexCliProvider:
                     elif method == "thread/tokenUsage/updated":
                         if (usage := _usage(event)) is not None:
                             yield UsageReport(usage=usage)
+                        token_usage = _as_dict(event.get("tokenUsage"))
+                        window = token_usage.get("modelContextWindow") if token_usage else None
+                        if isinstance(window, int) and window > 0:
+                            self._window = window
                     elif method == "turn/completed":
                         turn = _as_dict(event.get("turn"))
                         if turn is None:

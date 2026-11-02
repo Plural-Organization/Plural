@@ -12,7 +12,7 @@ from plural.protocol.events import ContextCompacted, ContextCompacting, ContextU
 from plural.protocol.models import EntryKind, Usage
 from tests.e2e.support import running_session
 
-SMALL_WINDOW = {"context_window": 1000, "compact_at": 0.5}
+SMALL_WINDOW = {"context_window": 1000, "compact_reserve": 500}
 
 
 async def test_automatic_compaction_is_shared_and_survives_a_restart(tmp_path: Path) -> None:
@@ -33,7 +33,8 @@ async def test_automatic_compaction_is_shared_and_survives_a_restart(tmp_path: P
         await owner.next(RunEnded)
 
         assert compacted.summary == "listed the workspace"
-        assert compacted.tokens_before == 900
+        # The reported 900, plus an estimate of the tool round that came after it.
+        assert 900 < compacted.tokens_before < 950
         state = guest.client.projection.state
         assert state.summary == "listed the workspace"
         assert any(entry.kind is EntryKind.COMPACTION for entry in state.transcript)
@@ -90,7 +91,7 @@ async def test_an_idle_compaction_runs_now_and_everyone_watches_it(tmp_path: Pat
 
         await owner.client.send(ContextCompact())
         compacting = await guest.next(ContextCompacting)
-        assert compacting.tokens_before == 400
+        assert 400 <= compacting.tokens_before <= 405
         assert (await guest.next(ContextCompacted)).summary == "talked about the repo"
         after = await guest.next(ContextUsage)
         assert after.context.tokens < 400

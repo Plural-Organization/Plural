@@ -105,8 +105,10 @@ class LoopLimits:
     tool_timeout_s: float = 600.0
     first_token_timeout_s: float = 120.0
     idle_timeout_s: float = 60.0
-    context_window: int = 128_000
-    compact_at: float = 0.75
+    # None until the provider says how much its model takes; set it to hold a window fixed.
+    context_window: int | None = None
+    # Room left for the reply: the conversation is summarized once it leaves less than this.
+    compact_reserve: int = 16_384
     retries: int = 3
     retry_delay_s: float = 2.0
 
@@ -124,6 +126,10 @@ class _Turn:
         return AssistantTurn(
             text="".join(self.text), tool_calls=tuple(self.calls), native=self.native
         )
+
+
+# The window assumed for a provider that does not say what its model takes.
+FALLBACK_WINDOW = 128_000
 
 
 class AgentLoop:
@@ -157,7 +163,10 @@ class AgentLoop:
         self._steer: deque[UserTurn] = deque()
         self._follow_up: deque[UserTurn] = deque()
         self._usage = Usage()
+        # The prompt size the provider last reported, and how many messages that prompt held.
         self._context_tokens = 0
+        self._measured = 0
+        self._window = self._limits.context_window
         self._compact_requested = False
         self._compaction_failed = False
         self._verify_compaction = False
@@ -223,8 +232,8 @@ class AgentLoop:
                 task = asyncio.create_task(close())
                 self._provider_close_tasks.add(task)
                 task.add_done_callback(self._provider_close_tasks.discard)
-        if context_window is not None:
-            self._limits = replace(self._limits, context_window=context_window)
+        self._limits = replace(self._limits, context_window=context_window)
+        self._window = context_window
         self._conversation = [
             message.model_copy(update={"native": None})
             if isinstance(message, AssistantTurn) and message.native is not None
@@ -232,6 +241,7 @@ class AgentLoop:
             for message in self._conversation
         ]
         self._context_tokens = 0
+        self._measured = 0
         self._compaction_failed = False
 
     async def close(self) -> None:
@@ -245,9 +255,8 @@ class AgentLoop:
         self._compact_requested = True
 
     def fill(self) -> ContextFill:
-        return ContextFill(
-            self._context_tokens, self._limits.context_window, self._limits.compact_at
-        )
+        window = self._window or FALLBACK_WINDOW
+        return ContextFill(self._tokens(), window, self._threshold_of(window) / window)
 
     @property
     def can_compact(self) -> bool:
@@ -256,7 +265,7 @@ class AgentLoop:
     async def compact(self, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         """Summarize the conversation now, outside a prompt, so everyone sees it happen."""
         self._usage = Usage()
-        yield Compacting(self._context_tokens)
+        yield Compacting(self._tokens())
         try:
             yield await self._compact(None, cancel, "manual")
         except CompactionFailed as error:
@@ -286,7 +295,8 @@ class AgentLoop:
             isinstance(message, NotesTurn) and not message.source.startswith(PLUGIN_SOURCE)
             for message in conversation
         )
-        self._context_tokens = sum(_estimate_tokens(message) for message in conversation)
+        self._context_tokens = 0
+        self._measured = 0
 
     def cancel_pending(self, prompt_id: str) -> bool:
         for queue in (self._steer, self._follow_up):
@@ -320,7 +330,7 @@ class AgentLoop:
             for _ in range(self._limits.max_turns):
                 if self._should_compact():
                     reason = "requested" if self._compact_requested else "threshold"
-                    yield Compacting(self._context_tokens)
+                    yield Compacting(self._tokens())
                     try:
                         yield await self._compact(prompt, cancel, reason)
                         yield self.fill()
@@ -332,6 +342,7 @@ class AgentLoop:
                         return
                 turn = _Turn(self._ids.new("m_"))
                 yield MessageStart(turn.message_id)
+                measured = len(self._conversation)
                 try:
                     async for event in self._events(self._request(), cancel):
                         match event:
@@ -350,8 +361,10 @@ class AgentLoop:
                             case UsageReport(usage=delta):
                                 self._usage = self._usage + delta
                                 self.spend("main", "", delta)
-                                self._context_tokens = delta.prompt_tokens
-                                self._check_compaction_helped()
+                                if delta.prompt_tokens:
+                                    self._context_tokens = delta.prompt_tokens
+                                    self._measured = measured
+                                    self._check_compaction_helped()
                                 yield self.fill()
                             case Stop(reason=reason):
                                 turn.stop = reason
@@ -361,7 +374,7 @@ class AgentLoop:
                         yield RunEnd(RunEndReason.ERROR, self._usage, str(error))
                         return
                     recovering = True
-                    yield Compacting(self._context_tokens)
+                    yield Compacting(self._tokens())
                     try:
                         yield await self._compact(prompt, cancel, "overflow")
                         yield self.fill()
@@ -377,6 +390,7 @@ class AgentLoop:
                     yield RunEnd(RunEndReason.ERROR, self._usage, reason)
                     return
                 recovering = False
+                await self._learn_window()
                 assistant = turn.assistant()
                 if assistant.text or assistant.tool_calls or not cancel.is_set():
                     self._conversation.append(assistant)
@@ -442,26 +456,49 @@ class AgentLoop:
             self._prompt = None
             self._settle()
 
-    def _threshold(self) -> float:
-        return self._limits.context_window * self._limits.compact_at
+    def _threshold_of(self, window: int) -> int:
+        # A window smaller than twice the reserve still gets half of itself for the conversation.
+        return max(window - self._limits.compact_reserve, window // 2)
+
+    def _threshold(self) -> int | None:
+        """The size at which the conversation is summarized; None before the window is known."""
+        return self._threshold_of(self._window) if self._window is not None else None
+
+    def _tokens(self) -> int:
+        """The provider's last count of the prompt, plus an estimate of what came after it."""
+        added = self._conversation[self._measured :]
+        return self._context_tokens + sum(_estimate_tokens(message) for message in added)
+
+    async def _learn_window(self) -> None:
+        if self._limits.context_window is not None:
+            return
+        ask = getattr(self._provider.inner, "context_window", None)
+        learned = await ask() if ask is not None else None
+        if learned:
+            self._window = learned
+        elif self._window is None:
+            self._window = FALLBACK_WINDOW
 
     def _should_compact(self) -> bool:
         if len(self._conversation) < 2:
             return False
         if self._compact_requested:
             return True
-        return not self._compaction_failed and self._context_tokens >= self._threshold()
+        # Until the first call says how big the window is, only an overflow compacts.
+        threshold = self._threshold()
+        return not self._compaction_failed and threshold is not None and self._tokens() >= threshold
 
     def _check_compaction_helped(self) -> None:
         if not self._verify_compaction:
             return
         self._verify_compaction = False
-        if self._context_tokens >= self._threshold():
+        threshold = self._threshold()
+        if threshold is not None and self._context_tokens >= threshold:
             self._compaction_failed = True
             log.warning(
                 "agent.compaction_ineffective",
                 prompt_tokens=self._context_tokens,
-                window=self._limits.context_window,
+                window=self._window,
             )
 
     async def _compact(
@@ -488,16 +525,17 @@ class AgentLoop:
                 if cancel.is_set() or provider is self._provider:
                     raise
                 log.warning("agent.helper_compaction_failed", error=str(error))
-        before = self._context_tokens
+        before = self._tokens()
         self._conversation = [SummaryTurn(text=summary), *([prompt] if prompt is not None else [])]
-        self._context_tokens = sum(_estimate_tokens(message) for message in self._conversation)
+        self._context_tokens = 0
+        self._measured = 0
         self._verify_compaction = True
         log.info(
             "context.compacted",
             reason=reason,
             role=role,
             tokens_before=before,
-            tokens_after=self._context_tokens,
+            tokens_after=self._tokens(),
             summary_chars=len(summary),
         )
         return Compacted(summary, before)

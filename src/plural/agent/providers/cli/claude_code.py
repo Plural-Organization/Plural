@@ -102,6 +102,20 @@ def _input(request: LlmRequest) -> bytes:
     return (json.dumps(line, ensure_ascii=False) + "\n").encode()
 
 
+def _window(result: dict[str, object]) -> int | None:
+    """The context window in a result's per-model usage, the largest if several models ran."""
+    models = result.get("modelUsage")
+    if not isinstance(models, dict):
+        return None
+    windows = [
+        window
+        for usage in cast("dict[str, object]", models).values()
+        if isinstance(usage, dict)
+        and isinstance(window := cast("dict[str, object]", usage).get("contextWindow"), int)
+    ]
+    return max(windows, default=None)
+
+
 def _string_end(raw: str, start: int) -> int | None:
     """Return the position after a complete JSON string, or None while it is partial."""
     index = start + 1
@@ -238,6 +252,11 @@ class ClaudeCodeProvider:
         self._cli = cli_path
         self._model = model
         self._workspace = workspace
+        self._window: int | None = None
+
+    async def context_window(self) -> int | None:
+        """The window Claude Code reported with its last answer."""
+        return self._window
 
     async def stream(
         self, request: LlmRequest, *, cancel: asyncio.Event
@@ -398,6 +417,7 @@ class ClaudeCodeProvider:
             yield ToolCallReady(
                 call=ToolCallRequest(id=f"toolu_{uuid4().hex}", name=name, args=tool_args)
             )
+        self._window = _window(result) or self._window
         usage = result.get("usage")
         if isinstance(usage, dict):
             usage_data = cast("dict[str, object]", usage)

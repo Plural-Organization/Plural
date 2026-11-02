@@ -8,7 +8,7 @@ from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.events import MessageEnd, RunEnd
 from plural.agent.loop import LoopLimits
-from plural.agent.providers.base import LlmImage, LlmMessage, LlmRequest
+from plural.agent.providers.base import LlmImage, LlmMessage, LlmRequest, UsageReport
 from plural.agent.providers.cli import codex_cli
 from plural.agent.providers.cli.codex_cli import CodexCliProvider
 from plural.protocol.models import RunEndReason, Usage
@@ -127,6 +127,9 @@ async def test_codex_receives_the_new_messages_images(tmp_path: Path) -> None:
         "    if msg['method'] != 'turn/start': continue\n"
         f"    open({str(record)!r}, 'a').write(json.dumps(msg['params']['input']) + '\\n')\n"
         "    answer = json.dumps({'text': 'red', 'tool_calls': []})\n"
+        "    last = {'inputTokens': 50, 'cachedInputTokens': 40, 'outputTokens': 3}\n"
+        "    print(json.dumps({'method': 'thread/tokenUsage/updated', 'params': {\n"
+        "        'tokenUsage': {'last': last, 'modelContextWindow': 475000}}}), flush=True)\n"
         "    print(json.dumps({'method': 'turn/completed', 'params': {'turn': {\n"
         "        'status': 'completed', 'items': [{'type': 'agentMessage', 'text': answer}]}}}),\n"
         "        flush=True)\n"
@@ -140,12 +143,17 @@ async def test_codex_receives_the_new_messages_images(tmp_path: Path) -> None:
         LlmMessage(role="assistant", content="red"),
         LlmMessage(role="user", content="sure?"),
     )
+    reports: list[UsageReport] = []
     try:
         for messages in (first, second):
             request = LlmRequest(system="", messages=messages)
-            [event async for event in provider.stream(request, cancel=asyncio.Event())]
+            async for event in provider.stream(request, cancel=asyncio.Event()):
+                if isinstance(event, UsageReport):
+                    reports.append(event)
     finally:
         await provider.close()
+    assert reports[0].usage == Usage(input_tokens=10, cache_read_tokens=40, output_tokens=3)
+    assert await provider.context_window() == 475000
     turns = [json.loads(line) for line in record.read_text().splitlines()]
     assert turns[0][1] == {"type": "image", "url": "data:image/png;base64,cmVk"}
     assert [item["type"] for item in turns[1]] == ["text"]
