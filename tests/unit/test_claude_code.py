@@ -199,3 +199,26 @@ async def test_claude_code_reports_the_window_of_its_model(tmp_path: Path) -> No
     request = LlmRequest(system="", messages=(LlmMessage(role="user", content="hi"),))
     [event async for event in provider.stream(request, cancel=asyncio.Event())]
     assert await provider.context_window() == 1_000_000
+
+
+async def test_text_written_beside_the_structured_answer_is_not_shown_twice(
+    tmp_path: Path,
+) -> None:
+    script = tmp_path / "claude"
+    script.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "sys.stdin.read()\n"
+        "def delta(d): print(json.dumps({'type': 'stream_event', "
+        "'event': {'type': 'content_block_delta', 'delta': d}}))\n"
+        "delta({'type': 'text_delta', 'text': 'The answer.'})\n"
+        "delta({'type': 'input_json_delta', 'partial_json': json.dumps("
+        "{'text': 'The answer.', 'tool_calls': []})})\n"
+        "print(json.dumps({'type': 'result', 'structured_output': "
+        "{'text': 'The answer.', 'tool_calls': []}}))\n"
+    )
+    script.chmod(0o755)
+    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(script))
+    request = LlmRequest(system="", messages=(LlmMessage(role="user", content="hi"),))
+    events = [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    assert "".join(e.text for e in events if isinstance(e, TextDelta)) == "The answer."

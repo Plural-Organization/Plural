@@ -310,6 +310,8 @@ class ClaudeCodeProvider:
         stopping = asyncio.create_task(cancel.wait())
         text_stream = _TextFieldStream()
         streamed_plain_text = ""
+        # Text written outside the structured answer, which usually repeats it.
+        loose_text = ""
         result: dict[str, object] | None = None
         try:
             while True:
@@ -350,9 +352,9 @@ class ClaudeCodeProvider:
                 match delta_data.get("type"):
                     case "text_delta":
                         text = delta_data.get("text")
-                        if isinstance(text, str) and text:
-                            streamed_plain_text += text
-                            yield TextDelta(text=text)
+                        if isinstance(text, str):
+                            loose_text += text
+                        yield ProviderActivity(source="text_delta")
                     case "input_json_delta":
                         partial = delta_data.get("partial_json")
                         text = text_stream.feed(partial) if isinstance(partial, str) else ""
@@ -397,6 +399,8 @@ class ClaudeCodeProvider:
         calls = answer.get("tool_calls")
         if not isinstance(text, str) or not isinstance(calls, list):
             raise ProviderError("Claude Code returned an invalid answer")
+        if not text and not streamed_plain_text:
+            text = loose_text.strip()
         if text.startswith(streamed_plain_text):
             remaining_text = text[len(streamed_plain_text) :]
         else:
