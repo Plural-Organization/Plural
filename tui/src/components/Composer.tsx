@@ -19,10 +19,6 @@ function Failure({ delivery }: { delivery: Extract<Delivery, { state: "failed" }
   );
 }
 
-function Progress({ delivery }: { delivery: Exclude<Delivery, { state: "failed" }> }) {
-  return delivery.state === "sending" ? <text fg={theme.dim}>sending…</text> : <text fg={theme.ok}>✓ delivered</text>;
-}
-
 interface ComposerProps {
   focused: boolean;
   disabled: string | null;
@@ -48,22 +44,7 @@ interface ComposerProps {
   onPasteImage?: () => void;
   onDropImage?: () => void;
   remember?: boolean;
-  tips?: boolean;
 }
-
-const TIPS = [
-  "shift+tab switches between ask, accept edits, plan and auto",
-  "/skills search react finds skills to install",
-  "/who shows who is in the room",
-  "esc stops the agent mid-run",
-  "ctrl+f searches the whole conversation",
-  "ctrl+o opens every tool call",
-  "shift+enter starts a new line",
-  "ctrl+v pastes an image from the clipboard",
-  "@name writes to one person, the agent does not see it",
-  "/team writes to everyone in the room, the agent does not see it",
-];
-const TIP_MS = 7000;
 
 const MAX_HISTORY = 100;
 
@@ -80,7 +61,6 @@ export function Composer(props: ComposerProps) {
   const [value, setValue] = useState("");
   const [choice, setChoice] = useState(0);
   const [dismissed, setDismissed] = useState(false);
-  const [tip, setTip] = useState(0);
   const history = useRef<string[]>([]);
   const position = useRef(-1);
   const draft = useRef("");
@@ -106,14 +86,6 @@ export function Composer(props: ComposerProps) {
   useEffect(() => {
     props.onDirty(value !== "");
   }, [value === ""]);
-
-  useEffect(() => {
-    if (value !== "" || disabled) {
-      return;
-    }
-    const timer = setInterval(() => setTip((current) => (current + 1) % TIPS.length), TIP_MS);
-    return () => clearInterval(timer);
-  }, [value === "", disabled]);
 
   const submit = (): void => {
     const text = (area.current?.plainText ?? "").trim();
@@ -221,11 +193,15 @@ export function Composer(props: ComposerProps) {
     }
   });
 
-  const color = disabled ? theme.line : focused ? theme.accent : theme.dim;
   const route = props.route?.(value.trimStart()) ?? null;
-  const routeColor = route === null ? theme.dim : route.blocked ? theme.warn : ROUTE_COLORS()[route.kind];
+  const routeColor = route === null ? theme.accent : route.blocked ? theme.warn : ROUTE_COLORS()[route.kind];
+  const color = disabled ? theme.line : focused ? routeColor : theme.dim;
   const lines = value === "" ? 0 : value.split("\n").length;
-  const shown = disabled ?? (focused ? (props.remember === false || props.tips === false ? placeholder : `${placeholder}  ·  tip: ${TIPS[tip]}`) : `${placeholder}  ·  click or press tab to type`);
+  const shown = disabled ?? (focused ? placeholder : `${placeholder}  ·  click or press tab to type`);
+  const progress = props.delivery?.state === "sending" ? " · sending…" : props.delivery?.state === "sent" ? " · ✓ delivered" : "";
+  const head = route !== null ? `→ ${route.label} · ${route.note}` : (label ?? "");
+  const more = value === "" ? "" : `${lines > 1 ? ` · ${lines} lines` : ""} · ⇧↵ new line`;
+  const title = `${head}${more}${progress}`;
   return (
     <box flexDirection="column" flexShrink={0} paddingX={1} onMouseDown={() => props.onFocus()}>
       <box
@@ -235,25 +211,10 @@ export function Composer(props: ComposerProps) {
         borderColor={color}
         backgroundColor={theme.panel}
         paddingX={1}
-        title={label ? ` ${label} ` : undefined}
+        title={title === "" ? undefined : ` ${title} `}
         titleAlignment="left"
       >
         {props.delivery?.state === "failed" ? <Failure delivery={props.delivery} /> : null}
-        {route !== null || (props.delivery && props.delivery.state !== "failed") ? (
-          <box flexDirection="row" justifyContent="space-between" height={1}>
-            {route !== null ? (
-              <text wrapMode="none">
-                <span fg={routeColor}>
-                  <b>→ {route.label}</b>
-                </span>
-                <span fg={route.blocked ? theme.warn : theme.dim}> · {route.note}</span>
-              </text>
-            ) : (
-              <text> </text>
-            )}
-            {props.delivery && props.delivery.state !== "failed" ? <Progress delivery={props.delivery} /> : null}
-          </box>
-        ) : null}
         {(props.images ?? []).length > 0 ? (
           <box flexDirection="row" height={1}>
             <text fg={theme.accent}>
@@ -267,7 +228,7 @@ export function Composer(props: ComposerProps) {
           <textarea
             ref={area}
             flexGrow={1}
-            minHeight={2}
+            minHeight={1}
             maxHeight={8}
             focused={focused && !disabled}
             placeholder={shown}
@@ -286,13 +247,6 @@ export function Composer(props: ComposerProps) {
             }}
             onSubmit={submit}
           />
-        </box>
-        <box flexDirection="row" justifyContent="flex-end" height={1}>
-          <text fg={theme.dim}>
-            {lines > 1 ? `${lines} lines · ` : ""}
-            {value.length > 0 ? `${value.length} chars · ` : ""}
-            <span fg={focused ? theme.accent : theme.dim}>↵</span> send · <span fg={focused ? theme.accent : theme.dim}>⇧↵</span> new line
-          </text>
         </box>
       </box>
       {hints.length > 0 ? (

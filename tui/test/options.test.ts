@@ -30,8 +30,9 @@ describe("commands", () => {
     });
   });
 
-  test("--team goes on to the host", () => {
-    expect(parseArgs(["--team"])).toMatchObject({ kind: "session", options: { hostArgs: ["--team"] } });
+  test("--private keeps the session out of the team", () => {
+    expect(parseArgs(["--private"])).toMatchObject({ kind: "session", options: { private: true, hostArgs: [] } });
+    expect(parseArgs([])).toMatchObject({ kind: "session", options: { private: false } });
   });
 
   test("join takes a link and a display name", () => {

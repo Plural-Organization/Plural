@@ -50,6 +50,7 @@ options
   --workspace <dir>           project directory the agent works in
   --prompts open|review       who may prompt directly
   --name <name>               your display name
+  --private                   in a team, keep this session to yourself
   --port <n>  --bind <addr>  --relay <url>  --public-url <url>
   --tunnel cloudflared|ngrok  share through a tunnel, the link carries its address
   -v, --version  -h, --help
@@ -76,10 +77,11 @@ interface Target {
   note: string | null;
   joined: boolean;
   visiting: Team | null;
+  shared: boolean;
 }
 
 function rejoin(link: string): Target {
-  return { link, room: parseLink(link).room, guestLink: null, host: null, tunnel: null, note: null, joined: true, visiting: null };
+  return { link, room: parseLink(link).room, guestLink: null, host: null, tunnel: null, note: null, joined: true, visiting: null, shared: false };
 }
 
 async function visit(spec: string): Promise<Target> {
@@ -106,6 +108,7 @@ async function visit(spec: string): Promise<Target> {
     note: `watching ${card.owner} · ${card.repo}${card.branch ? ` · ${card.branch}` : ""}. You can read; ask them if you want to write`,
     joined: false,
     visiting: team,
+    shared: false,
   };
 }
 
@@ -166,13 +169,10 @@ async function start(options: SessionOptions, joinLink: string | null, name: str
   if (kind !== null && ["--relay", "--public-url", "--bind"].some((flag) => plain.includes(flag))) {
     throw new UsageError("--tunnel cannot be combined with --relay, --public-url or --bind");
   }
-  const named = [...plain, "--name", name];
+  const sharing = options.private ? null : loadTeam();
+  const named = [...plain, ...(sharing === null ? [] : ["--team"]), "--name", name];
   const portFlag = plain.indexOf("--port");
   const port = (portFlag === -1 ? 0 : Number(plain[portFlag + 1])) || (await freePort());
-  const sharing = plain.includes("--team") ? loadTeam() : null;
-  if (plain.includes("--team") && sharing === null) {
-    throw new UsageError("you are not in a team: plural team create or plural team join");
-  }
   let launch = shareLaunch(loadSettings(), named, port, lanAddress());
   if (sharing !== null && kind === null && !plain.some((flag) => ADDRESS_FLAGS.includes(flag))) {
     launch = { args: [...named, "--relay", sharing.profile.relay], note: `showing this session to ${sharing.profile.team_name}` };
@@ -189,9 +189,12 @@ async function start(options: SessionOptions, joinLink: string | null, name: str
   progress.step("starting the host…");
   try {
     const host = await startLocalHost(launch.args);
-    return { link: host.hostLink, room: host.room, guestLink: host.guestLink, host, tunnel, note: launch.note, joined: false, visiting: null };
+    return { link: host.hostLink, room: host.room, guestLink: host.guestLink, host, tunnel, note: launch.note, joined: false, visiting: null, shared: sharing !== null };
   } catch (error) {
     await tunnel?.stop();
+    if (sharing !== null) {
+      throw new UsageError(`${problem(error)}\nthe session is shared with ${sharing.profile.team_name}; plural --private starts one without the team`);
+    }
     throw error;
   }
 }
@@ -388,6 +391,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
           version: pkg.version,
           guestLink: target.guestLink,
           teamLink: hosting?.joinCommand ?? null,
+          sharing: target.host === null || target.shared,
           settings,
           onSettings: saveSettings,
           control,
@@ -426,6 +430,10 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   process.exit(0);
 }
 
+function teamMemberName(): string {
+  return loadTeam()?.profile.member.name ?? userInfo().username;
+}
+
 async function main(): Promise<void> {
   let parsed;
   try {
@@ -455,7 +463,7 @@ async function main(): Promise<void> {
     } catch (error) {
       fail(problem(error));
     }
-    await run({ ...emptyOptions(), hostArgs: ["--team"], displayName: name }, null, name, hosting);
+    await run({ ...emptyOptions(), displayName: name }, null, name, hosting);
   } else if (parsed.kind === "team_join") {
     const child = runHostCommand(parsed.args);
     const code = await new Promise<number>((resolve, reject) => {
@@ -475,9 +483,9 @@ async function main(): Promise<void> {
     if (parsed.link === null) {
       fail("usage: plural join <link|@name> [--name <name>], or plural -r to go back to a room you were in");
     }
-    await run(emptyOptions(), parsed.link, parsed.displayName ?? userInfo().username);
+    await run(emptyOptions(), parsed.link, parsed.displayName ?? teamMemberName());
   } else {
-    await run(parsed.options, null, parsed.options.displayName ?? userInfo().username);
+    await run(parsed.options, null, parsed.options.displayName ?? teamMemberName());
   }
 }
 

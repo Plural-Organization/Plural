@@ -17,6 +17,8 @@ export interface Palette {
   diffBg: string;
   addBg: string;
   removeBg: string;
+  addMark: string;
+  removeMark: string;
   people: string[];
 }
 
@@ -40,6 +42,8 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       diffBg: "#1c1e2b",
       addBg: "#1f3a2a",
       removeBg: "#3d1f2b",
+      addMark: "#2f6b45",
+      removeMark: "#7a2f45",
       people: ["#7dcfff", "#bb9af7", "#e0af68", "#9ece6a", "#f7768e", "#73daca", "#ff9e64", "#7aa2f7"],
     },
   },
@@ -62,6 +66,8 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       diffBg: "#f1f2f6",
       addBg: "#d9f2de",
       removeBg: "#f9dde4",
+      addMark: "#a8e0b4",
+      removeMark: "#f0aebf",
       people: ["#0b8aa6", "#8239e0", "#a86a00", "#2e8b3d", "#cf2552", "#00877a", "#c4540a", "#2f5bea"],
     },
   },
@@ -84,6 +90,8 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       diffBg: "#242424",
       addBg: "#32361a",
       removeBg: "#3c1f1e",
+      addMark: "#5a6326",
+      removeMark: "#7a3330",
       people: ["#83a598", "#d3869b", "#fabd2f", "#b8bb26", "#fb4934", "#8ec07c", "#fe8019", "#458588"],
     },
   },
@@ -106,6 +114,8 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       diffBg: "#161616",
       addBg: "#003d1f",
       removeBg: "#4a0016",
+      addMark: "#00703a",
+      removeMark: "#8a0030",
       people: ["#5fd7ff", "#d7afff", "#ffd700", "#00ff87", "#ff5f5f", "#87ffd7", "#ffaf5f", "#afd7ff"],
     },
   },

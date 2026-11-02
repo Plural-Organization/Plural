@@ -82,10 +82,22 @@ test("the top bar says Plural in the middle and no longer prints the room id", a
 });
 
 test("the welcome plate is text only: the name and version in the frame, then the keys", async () => {
-  const setup = await conversation();
+  const fake = new FakeSession();
+  fake.emit({ type: "session.welcome", room: "r_1", token: "t", participant: HOST, base_policy: [], agent: "anthropic · claude-opus-5-5" });
+  fake.emit({ type: "participant.joined", participant: HOST });
+  const setup = await testRender(<App client={fake} room="r_1" version="0.2.9" guestLink={null} settings={{ ...DEFAULT_SETTINGS, setupSeen: true }} onQuit={() => undefined} />, { width: 130, height: 46 });
+  open.push(setup);
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  await setup.renderOnce();
   const text = setup.captureCharFrame();
   expect(text).toMatch(/╭─ Plural {2}v0\.2\.9 ─+/);
   expect(text).toMatch(/KEYS[\s\S]*\/help\s+commands/);
   expect(text).not.toContain("shared agent sessions");
   expect(text).not.toMatch(/▄▄▀▀▀▀▀▀▄▄/);
+});
+
+test("once the talk starts the plate shrinks to one line", async () => {
+  const text = (await conversation()).captureCharFrame();
+  expect(text).toContain("Plural v0.2.9 · /help");
+  expect(text).not.toMatch(/KEYS/);
 });
