@@ -12,8 +12,8 @@ from urllib.request import Request, urlopen
 
 from pydantic import ValidationError
 
-from plural import __version__
 from plural.protocol.models import Model
+from plural.protocol.relay import USER_AGENT
 from plural.protocol.team import (
     Invite,
     MemberList,
@@ -28,7 +28,6 @@ from plural.security.identity import CertVerifier, Identity, InvalidCertificate,
 
 RENEW_BEFORE = timedelta(days=7)
 REQUEST_TIMEOUT_S = 15
-USER_AGENT = f"plural/{__version__}"
 
 
 class TeamError(Exception):

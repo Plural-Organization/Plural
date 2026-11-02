@@ -269,6 +269,22 @@ def relay(
             envvar="PLURAL_RELAY_TEAMS",
         ),
     ] = None,
+    clients_only: Annotated[
+        bool,
+        typer.Option(
+            "--clients-only",
+            help="Refuse anything that does not call itself a Plural client (or a --web-origin).",
+            envvar="PLURAL_RELAY_CLIENTS_ONLY",
+        ),
+    ] = False,
+    web_origins: Annotated[
+        str,
+        typer.Option(
+            "--web-origin",
+            help="Comma-separated origins of web clients let in by --clients-only.",
+            envvar="PLURAL_RELAY_WEB_ORIGINS",
+        ),
+    ] = "",
 ) -> None:
     import uvicorn
 
@@ -280,7 +296,13 @@ def relay(
         max_guests_per_peer=guests_per_peer,
     )
     uvicorn.run(
-        create_app(limits, proxy_hops=proxy_hops, teams=teams),
+        create_app(
+            limits,
+            proxy_hops=proxy_hops,
+            teams=teams,
+            clients_only=clients_only,
+            web_origins=[item.strip() for item in web_origins.split(",") if item.strip()],
+        ),
         host=bind,
         port=port,
         log_level="info",

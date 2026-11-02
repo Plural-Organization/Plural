@@ -70,6 +70,12 @@ A relay that anyone can reach needs limits, so it has them:
 
 Behind a proxy every client looks like the proxy. Tell the relay how many proxies are in front of it with `PLURAL_RELAY_PROXY_HOPS` (the images set it to 1, which is right for Caddy, Railway and Render) and it takes the client address from the `X-Forwarded-For` header. Use 0 when the relay is reached directly. If the relay log shows the same `peer=` for different people, raise the number of hops, or raise the limits with `PLURAL_RELAY_MAX_ROOMS`, `PLURAL_RELAY_ROOMS_PER_PEER` and `PLURAL_RELAY_GUESTS_PER_PEER`.
 
+### Only Plural clients
+
+A public relay sees scanners and stray scripts. `plural-host relay --clients-only` (or `PLURAL_RELAY_CLIENTS_ONLY=1`) refuses any request that does not call itself a Plural client, with a 403. Every Plural client says `User-Agent: plural/<version>` (`plural-client` for the TypeScript client). A browser cannot set that header, so list the address of your web client with `--web-origin https://web.example.com` (`PLURAL_RELAY_WEB_ORIGINS`, comma separated). `/healthz` stays open for health checks.
+
+This is a filter, not authentication: anyone can send the header, so the limits above still apply.
+
 ### Teams
 
 A relay can also keep a team directory: who is in which team and the invite codes. Start it with a file for the data:

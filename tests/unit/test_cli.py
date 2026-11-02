@@ -239,11 +239,34 @@ def test_relay_listens_on_the_port_the_platform_assigns(monkeypatch: pytest.Monk
     assert (seen["host"], seen["port"]) == ("0.0.0.0", 4321)
 
 
+def test_the_relay_can_serve_only_plural_clients(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_create_app(_limits: object = None, **options: object) -> object:
+        seen.update(options)
+        return object()
+
+    def fake_run(_app: object, **_options: object) -> None:
+        return None
+
+    monkeypatch.setattr(relay_app, "create_app", fake_create_app)
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    monkeypatch.setenv("PLURAL_RELAY_CLIENTS_ONLY", "true")
+    monkeypatch.setenv("PLURAL_RELAY_WEB_ORIGINS", "https://a.example, https://b.example ,")
+    assert runner.invoke(app, ["relay"]).exit_code == 0
+    assert seen["clients_only"] is True
+    assert seen["web_origins"] == ["https://a.example", "https://b.example"]
+
+
 def test_relay_limits_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[tuple[RelayLimits | None, int, Path | None]] = []
 
     def fake_create_app(
-        limits: RelayLimits | None = None, *, proxy_hops: int = 0, teams: Path | None = None
+        limits: RelayLimits | None = None,
+        *,
+        proxy_hops: int = 0,
+        teams: Path | None = None,
+        **_: object,
     ) -> object:
         seen.append((limits, proxy_hops, teams))
         return object()

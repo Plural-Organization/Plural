@@ -15,6 +15,7 @@ from plural.host.conflicts import ConflictBoard
 from plural.host.repo import RepoFacts, repo_facts
 from plural.host.team import DirectoryClient, TeamError, TeamStore, http_base
 from plural.protocol.models import Role, SessionState
+from plural.protocol.relay import USER_AGENT
 from plural.protocol.team import (
     CardDraft,
     Endpoint,
@@ -149,7 +150,9 @@ class TeamPresence:
             timestamp=int(time.time()),
             nonce=secrets.token_hex(8),
         )
-        async with connect(url, additional_headers={"authorization": header}) as socket:
+        async with connect(
+            url, additional_headers={"authorization": header}, user_agent_header=USER_AGENT
+        ) as socket:
             log.info("team.presence_connected", team=profile.team_name)
             last: str | None = None
             sent_at = float("-inf")
