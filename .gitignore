@@ -81,5 +81,6 @@ Thumbs.db
 # Local agent notes
 .claude/
 CLAUDE.local.md
+/plan.md
 *.tsbuildinfo
 .vercel
