@@ -12,19 +12,13 @@ from dataclasses import replace
 from functools import partial
 from typing import Final, Literal, cast
 
-from anthropic import AsyncAnthropic
 from pydantic_ai import Agent, NativeToolReturnPart
 from pydantic_ai.capabilities import NativeTool
 from pydantic_ai.exceptions import AgentRunError, UserError
 from pydantic_ai.models import Model
-from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
-from pydantic_ai.models.openai import OpenAIResponsesModel, OpenAIResponsesModelSettings
 from pydantic_ai.native_tools import WebSearchTool, WebSearchUserLocation
-from pydantic_ai.providers.anthropic import AnthropicProvider
-from pydantic_ai.providers.openai import OpenAIProvider
 from pydantic_ai.settings import ModelSettings
 
-from plural.agent.providers.api.anthropic.adapter import OAUTH_BETA
 from plural.agent.providers.base import ProviderError
 from plural.agent.tools.extra.search import Found, SearchFailed, Source
 
@@ -111,7 +105,11 @@ def web_search_tool(
     )
 
 
+# The Anthropic and OpenAI SDKs are separate extras, so each family imports its own on use.
 def anthropic_search(model: str, api_key: str, tool: WebSearchTool) -> PydanticWebSearch:
+    from pydantic_ai.models.anthropic import AnthropicModel
+    from pydantic_ai.providers.anthropic import AnthropicProvider
+
     found = AnthropicModel(model, provider=AnthropicProvider(api_key=api_key))
     return PydanticWebSearch(f"anthropic:{model}", partial(nullcontext, found), tool)
 
@@ -120,6 +118,11 @@ def anthropic_oauth_search(
     model: str, token: Callable[[], Awaitable[str]], tool: WebSearchTool
 ) -> PydanticWebSearch:
     """Search with a Claude login: each search asks for a fresh access token."""
+    from anthropic import AsyncAnthropic
+    from pydantic_ai.models.anthropic import AnthropicModel, AnthropicModelSettings
+    from pydantic_ai.providers.anthropic import AnthropicProvider
+
+    from plural.agent.providers.api.anthropic.adapter import OAUTH_BETA
 
     @asynccontextmanager
     async def signed_in() -> AsyncGenerator[Model]:
@@ -134,6 +137,9 @@ def anthropic_oauth_search(
 
 
 def openai_search(model: str, api_key: str, tool: WebSearchTool) -> PydanticWebSearch:
+    from pydantic_ai.models.openai import OpenAIResponsesModel, OpenAIResponsesModelSettings
+    from pydantic_ai.providers.openai import OpenAIProvider
+
     found = OpenAIResponsesModel(model, provider=OpenAIProvider(api_key=api_key))
     # Without it the Responses API leaves the pages out of its search calls.
     settings = OpenAIResponsesModelSettings(openai_include_web_search_sources=True)

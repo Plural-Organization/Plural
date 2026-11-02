@@ -1,7 +1,7 @@
 {
   "name": "plural-web",
   "private": true,
-  "version": "0.2.9",
+  "version": "0.2.11",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,8 @@
   "dependencies": {
     "@plural/client": "*",
     "react": "^19.3.1",
-    "react-dom": "^19.3.1"
+    "react-dom": "^19.3.1",
+    "sucrase": "^3.35.1"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

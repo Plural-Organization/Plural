@@ -125,6 +125,24 @@ export async function fetchSessions(team: Team, fetcher: typeof fetch = fetch): 
   return ((await response.json()) as { sessions: SessionCard[] }).sessions;
 }
 
+export function teamJoinCommand(team: Team, code: string): string {
+  return `plural team join ${code} --relay ${team.profile.relay}`;
+}
+
+export async function createTeamInvite(team: Team, fetcher: typeof fetch = fetch): Promise<{ code: string; expires_at: string }> {
+  const path = `/teams/${team.profile.team_id}/invites`;
+  const response = await fetcher(`${httpBase(team.profile.relay)}${path}`, {
+    method: "POST",
+    headers: { authorization: authorization(team, "POST", path) },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!response.ok) {
+    const detail = (await response.json().catch(() => ({}))) as { error?: string };
+    throw new Error(detail.error ?? `the relay answered ${response.status}`);
+  }
+  return (await response.json()) as { code: string; expires_at: string };
+}
+
 export interface TeamView {
   name: string;
   me: string;

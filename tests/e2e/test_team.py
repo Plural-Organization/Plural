@@ -2,6 +2,7 @@ import asyncio
 import json
 from collections.abc import AsyncGenerator
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 import pytest
 from typer.testing import CliRunner
@@ -13,6 +14,7 @@ from plural.host.team import (
     TeamProfile,
     TeamStore,
     create_team,
+    http_base,
     join_team,
 )
 from tests.e2e.support import RelayServer
@@ -179,3 +181,22 @@ async def test_create_can_print_the_invite_as_json(
     alia = Person(tmp_path, "alia")
     joined = await join_team(relay.url, alia.store.identity(), code=printed["code"], member="alia")
     assert joined.team_name == "Backend"
+
+
+async def test_a_browser_may_ask_the_directory(relay: RelayServer) -> None:
+    def preflight() -> dict[str, str]:
+        request = Request(
+            f"{http_base(relay.url)}/teams/t_1/sessions",
+            method="OPTIONS",
+            headers={
+                "origin": "https://plural-room.vercel.app",
+                "access-control-request-method": "GET",
+                "access-control-request-headers": "authorization",
+            },
+        )
+        with urlopen(request) as response:
+            return dict(response.headers.items())
+
+    headers = {key.lower(): value for key, value in (await asyncio.to_thread(preflight)).items()}
+    assert headers["access-control-allow-origin"] == "*"
+    assert "authorization" in headers["access-control-allow-headers"].lower()

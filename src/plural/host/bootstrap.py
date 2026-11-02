@@ -11,15 +11,7 @@ from plural.agent.agents import AgentLibrary
 from plural.agent.context import ContextBuilder, Environment
 from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.mcp import BROWSER_SERVER, McpHub, browser_spec
-from plural.agent.providers.api.anthropic import adapter as anthropic_api
-from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider
 from plural.agent.providers.base import LLMProvider
-from plural.agent.providers.web_search import (
-    anthropic_oauth_search,
-    anthropic_search,
-    openai_search,
-    web_search_tool,
-)
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.skills import SkillLibrary
@@ -40,6 +32,7 @@ from plural.host.board_desk import InboxDesk
 from plural.host.briefing import BriefingService
 from plural.host.config import HostSettings
 from plural.host.conflicts import ConflictBoard
+from plural.host.extras import extra_for
 from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook, RoomLink
@@ -49,6 +42,7 @@ from plural.host.policy_gate import HostPolicyGate
 from plural.host.providers import (
     ConfigError,
     build_provider,
+    extra_missing,
     provider_secrets,
     resolve_api_key,
 )
@@ -102,6 +96,21 @@ def build_web_search(
     """Search through the session provider's own search engine, when it has one."""
     if not settings.web_search or settings.base_url is not None:
         return None
+    provider_name = settings.resolved_provider()
+    extra = extra_for(provider_name)
+    if extra is None:
+        return None
+    try:
+        from plural.agent.providers.api.anthropic import adapter as anthropic_api
+        from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider
+        from plural.agent.providers.web_search import (
+            anthropic_oauth_search,
+            anthropic_search,
+            openai_search,
+            web_search_tool,
+        )
+    except ModuleNotFoundError as error:
+        extra_missing(extra, error)
     place = {
         "city": settings.web_search_city,
         "region": settings.web_search_region,
@@ -115,7 +124,6 @@ def build_web_search(
         blocked_domains=settings.web_search_blocked_domains,
         location={key: value for key, value in place.items() if value},
     )
-    provider_name = settings.resolved_provider()
     family = "anthropic" if provider_name in {"anthropic", "anthropic_oauth"} else provider_name
     chosen, _, named = (settings.web_search_model or "").rpartition(":")
     model = named if chosen == family else settings.model

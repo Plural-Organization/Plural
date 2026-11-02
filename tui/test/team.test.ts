@@ -3,7 +3,7 @@ import { createPrivateKey } from "node:crypto";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { authorization, fetchSessions, httpBase, joinMessage, loadTeam, pickTeamSession, requestMessage, TeamWatcher, teamProof, type SessionCard, type Team } from "../src/team";
+import { authorization, createTeamInvite, fetchSessions, httpBase, joinMessage, loadTeam, pickTeamSession, requestMessage, TeamWatcher, teamJoinCommand, teamProof, type SessionCard, type Team } from "../src/team";
 
 const PEM = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f\n-----END PRIVATE KEY-----\n";
 
@@ -58,6 +58,30 @@ describe("the team on this machine", () => {
     expect(loadTeam(directory)?.profile.team_name).toBe("Backend");
     writeFileSync(join(directory, "team.json"), "{not json");
     expect(loadTeam(directory)).toBeNull();
+  });
+});
+
+describe("inviting to the team", () => {
+  test("asks the relay with a signed POST and returns the code", async () => {
+    const seen: { url: string; method: string; header: string }[] = [];
+    const fetcher = (async (url: string, init: RequestInit) => {
+      seen.push({ url, method: init.method as string, header: (init.headers as Record<string, string>)["authorization"] as string });
+      return new Response(JSON.stringify({ code: "abc123", expires_at: "2026-10-31T13:00:00Z" }));
+    }) as unknown as typeof fetch;
+    const invite = await createTeamInvite(team(), fetcher);
+    expect(invite.code).toBe("abc123");
+    expect(seen[0]?.url).toBe("https://relay.example.com/teams/t_1/invites");
+    expect(seen[0]?.method).toBe("POST");
+    expect(seen[0]?.header.startsWith("Plural cert=CERT ts=")).toBe(true);
+  });
+
+  test("a refusal carries the relay's reason", async () => {
+    const fetcher = (async () => new Response(JSON.stringify({ error: "only the owner can invite" }), { status: 403 })) as unknown as typeof fetch;
+    await expect(createTeamInvite(team(), fetcher)).rejects.toThrow("only the owner");
+  });
+
+  test("the command to paste names the code and the relay", () => {
+    expect(teamJoinCommand(team(), "abc123")).toBe("plural team join abc123 --relay wss://relay.example.com");
   });
 });
 

@@ -35,6 +35,7 @@ describe("settings", () => {
       announceTyping: false,
       rememberKey: false,
       setupSeen: true,
+      extrasSeen: true,
       share: "relay" as const,
       relayUrl: "wss://relay.example.com",
       agent: { preset: "gemini" as const, model: "gemini-2.5-flash", baseUrl: "", contextWindow: "" },
