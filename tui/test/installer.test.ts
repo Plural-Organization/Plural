@@ -50,9 +50,10 @@ describe("the installer pins both parts to one release", () => {
     expect((await new Response(child.stdout).text()).trim()).toBe("sourced");
   });
 
-  test("the host is refreshed from the index so a stale cache cannot keep an old one", async () => {
+  test("a release without a frozen host still installs it with uv, refreshed from the index", async () => {
     const text = await Bun.file(SCRIPT).text();
     expect(text).toContain('uv tool install --force --refresh-package plural-agent "$package"');
+    expect(text).toContain("install_binary plural-host");
   });
 
   test("the host runs on any Python the machine has, so uv does not fetch one it does not need", async () => {
@@ -165,13 +166,52 @@ describe("a host that is already current is not downloaded again", () => {
 describe("the client download is as small as the machine allows", () => {
   test("the installer takes the xz archive and falls back to gzip for older releases", async () => {
     const text = await Bun.file(SCRIPT).text();
-    expect(text).toContain('asset="plural-$os-$arch.tar.xz"');
-    expect(text).toContain('asset="plural-$os-$arch.tar.gz"');
+    expect(text).toContain('asset="$name-$os-$arch.tar.xz"');
+    expect(text).toContain('asset="$name-$os-$arch.tar.gz"');
     expect(text).toContain('tar -xf "$download_dir/$asset"');
   });
 
   test("the release publishes both archives with their checksums", async () => {
     const text = await Bun.file(resolve(import.meta.dir, "../../.github/workflows/release.yml")).text();
     for (const name of ["tar.xz", "tar.xz.sha256", "tar.gz", "tar.gz.sha256"]) expect(text).toContain(`plural-*.${name}`);
+  });
+});
+
+describe("the installer downloads both programs", () => {
+  test("the client and the frozen host are installed from the release with no uv", async () => {
+    const home = mkdtempSync(join(tmpdir(), "plural-home-"));
+    const dir = mkdtempSync(join(tmpdir(), "plural-assets-"));
+    const os = process.platform === "darwin" ? "darwin" : "linux";
+    const arch = process.arch === "arm64" ? "arm64" : "x64";
+    for (const name of ["plural", "plural-host"]) {
+      const stage = mkdtempSync(join(tmpdir(), "plural-stage-"));
+      writeFileSync(join(stage, name), `#!/bin/sh\necho ${name}-fixture\n`);
+      chmodSync(join(stage, name), 0o755);
+      const base = `${name}-${os}-${arch}.tar.gz`;
+      Bun.spawnSync(["tar", "-czf", join(dir, base), "-C", stage, name]);
+      const sum = Bun.spawnSync(["sh", "-c", `cd "${dir}" && (sha256sum "${base}" 2>/dev/null || shasum -a 256 "${base}")`]).stdout.toString();
+      writeFileSync(join(dir, `${base}.sha256`), sum);
+    }
+    const release = Bun.serve({
+      port: 0,
+      async fetch(request) {
+        const file = Bun.file(join(dir, new URL(request.url).pathname.split("/").pop() as string));
+        return (await file.exists()) ? new Response(file) : new Response("missing", { status: 404 });
+      },
+    });
+    try {
+      const binDir = join(home, "bin");
+      const child = Bun.spawn(["sh", SCRIPT], {
+        env: { ...(process.env as Record<string, string>), HOME: home, XDG_CACHE_HOME: join(home, "cache"), PLURAL_INSTALL_DIR: binDir, PLURAL_VERSION: "9.8.7", PLURAL_RELEASE_URL: `http://127.0.0.1:${release.port}/releases` },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      await new Response(child.stdout).text();
+      expect(await child.exited).toBe(0);
+      expect(await Bun.file(join(binDir, "plural-host")).exists()).toBe(true);
+      expect(await Bun.file(join(binDir, "plural")).exists()).toBe(true);
+    } finally {
+      release.stop(true);
+    }
   });
 });

@@ -26,14 +26,14 @@ export function listSessions(workspace?: string): Promise<SessionInfo[]> {
     child.stdout.on("data", (chunk: Buffer) => (out += chunk.toString()));
     child.stderr.on("data", (chunk: Buffer) => (errors += chunk.toString()));
     child.on("error", (error: NodeJS.ErrnoException) =>
-      reject(error.code === "ENOENT" ? new UsageError(`"${command}" was not found. Install the host: uv tool install plural-agent`) : error),
+      reject(error.code === "ENOENT" ? new UsageError(`"${command}" was not found. Install it: curl -fsSL https://raw.githubusercontent.com/Plural-Organization/Plural/main/install.sh | sh`) : error),
     );
     child.on("close", (code) => {
       if (code !== 0) {
         reject(
           new UsageError(
             /No such command/.test(errors)
-              ? `the host (plural-host) is older than this plural ${pkg.version} and cannot list sessions. Run plural update, or: uv tool install --force --refresh plural-agent==${pkg.version}`
+              ? `the host (plural-host) is older than this plural ${pkg.version} and cannot list sessions. Run plural update`
               : `could not list the sessions (exit ${code}) ${errors.trim()}`,
           ),
         );
