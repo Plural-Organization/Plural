@@ -16,6 +16,15 @@ const chat = (overrides: Partial<Extract<FeedItem, { kind: "chat" }>>): FeedItem
   ...overrides,
 });
 
+test("agent mentions highlight session members but leave code, emails and unknown names alone", () => {
+  const text = "@synapse, **@SYNAPSE** and `@synapse`; email x@synapse; @stranger.";
+  const html = renderToStaticMarkup(<Feed people={[{ id: "p_s", label: "synapse", role: "host", connected: true }]} items={[{ kind: "assistant", id: "a1", text, streaming: false } as FeedItem]} />);
+  expect(html.match(/data-mention="p_s"/g)).toHaveLength(2);
+  expect(html).toContain("<code>@synapse</code>");
+  expect(html).toContain("x@synapse");
+  expect(html).toContain("@stranger");
+});
+
 const render = (item: FeedItem) => renderToStaticMarkup(<Feed items={[item]} />);
 
 test("a message for the room says who wrote it and that the agent does not see it", () => {
