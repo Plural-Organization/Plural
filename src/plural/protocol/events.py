@@ -31,6 +31,7 @@ from plural.protocol.models import (
     PluginCommandView,
     PluginView,
     PolicyRuleView,
+    PreviewView,
     PromptMode,
     ProposalView,
     Provenance,
@@ -262,6 +263,23 @@ class BoardMoved(EventBase):
     type: Literal["board.moved"] = "board.moved"
     stroke_id: str
     points: tuple[float, ...]
+
+
+class PreviewChanged(EventBase):
+    type: Literal["preview.changed"] = "preview.changed"
+    preview: PreviewView | None
+
+
+class PreviewData(TransientEvent):
+    """A bounded resource response delivered only to its requester."""
+
+    type: Literal["preview.data"] = "preview.data"
+    preview_id: str
+    request_id: str
+    status: int
+    media_type: str
+    content_b64: str = ""
+    error: str | None = None
 
 
 class AttachmentData(TransientEvent):
@@ -533,6 +551,8 @@ Event = Annotated[
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PreviewChanged
+    | PreviewData
     | PluginShown
     | PluginAsked
     | PluginNotified

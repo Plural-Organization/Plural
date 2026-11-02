@@ -1174,6 +1174,22 @@ export function App({
         }
         return true;
       }
+      case "preview": {
+        const [value, ...title] = rest;
+        const port = Number(value);
+        if (!isHost) {
+          warn("preview", "only the host shares a local server");
+        } else if (value === "off") {
+          send({ type: "preview.set", port: null });
+          notify("dim", "the local preview is no longer shared");
+        } else if (value !== undefined && /^\d+$/.test(value) && port >= 1 && port <= 65535) {
+          send({ type: "preview.set", port, title: title.join(" ") || `localhost:${port}` });
+          notify("accent", `localhost:${port} opens in the canvas of everyone on the web`);
+        } else {
+          warn("preview", "usage: /preview <port> [title] or /preview off");
+        }
+        return true;
+      }
       case "quit":
         onQuit();
         return true;

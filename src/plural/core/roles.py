@@ -44,6 +44,8 @@ from plural.protocol.commands import (
     PluginsRemove,
     PolicyAdd,
     PolicyRemove,
+    PreviewFetch,
+    PreviewSet,
     PromptModeSet,
     PromptSubmit,
     ProposalDecide,
@@ -113,6 +115,8 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         BoardErase: CONTRIBUTORS,
         BoardMove: CONTRIBUTORS,
         AttachmentFetch: EVERYONE,
+        PreviewSet: HOST_ONLY,
+        PreviewFetch: EVERYONE,
         BoardClear: CONTRIBUTORS,
         QueueCancel: CONTRIBUTORS,
     }

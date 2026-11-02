@@ -14,6 +14,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 1,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -70,6 +71,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 2,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -133,6 +135,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 3,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -202,6 +205,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 4,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -277,6 +281,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 5,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -354,6 +359,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 6,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -430,6 +436,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 7,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -511,6 +518,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 8,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -596,6 +604,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 9,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -677,6 +686,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 10,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -762,6 +772,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 11,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -839,6 +850,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 12,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -916,6 +928,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 13,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -997,6 +1010,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 14,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -1080,6 +1094,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 15,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -1170,6 +1185,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 16,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -1265,6 +1281,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 17,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -1353,6 +1370,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 18,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -1443,6 +1461,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 19,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -1535,6 +1554,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 20,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -1625,6 +1645,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 21,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -1716,6 +1737,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 22,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -1808,6 +1830,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 23,
         "prompt_mode": "open",
         "permission_mode": "default",
@@ -1892,6 +1915,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 24,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -1977,6 +2001,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 25,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -2067,6 +2092,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 26,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -2161,6 +2187,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 27,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -2251,6 +2278,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 28,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -2344,6 +2372,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 29,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -2439,6 +2468,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 30,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -2541,6 +2571,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 31,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -2656,6 +2687,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 32,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -2789,6 +2821,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 33,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -2929,6 +2962,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 34,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -3063,6 +3097,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 35,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -3185,6 +3220,7 @@
         "thinking": true
       },
       "state": {
+        "preview": null,
         "last_seq": 35,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -3312,6 +3348,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 37,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -3436,6 +3473,7 @@
         "thinking": false
       },
       "state": {
+        "preview": null,
         "last_seq": 37,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -3560,6 +3598,7 @@
         "thinking": false
       },
       "state": {
+        "preview": null,
         "last_seq": 37,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -3691,6 +3730,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 40,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -3835,6 +3875,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 41,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -4008,6 +4049,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 42,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -4185,6 +4227,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 43,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -4343,6 +4386,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 44,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -4504,6 +4548,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 45,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -4679,6 +4724,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 46,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -4855,6 +4901,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 47,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -5033,6 +5080,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 48,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -5210,6 +5258,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 49,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -5392,6 +5441,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 50,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -5601,6 +5651,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 51,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -5814,6 +5865,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 52,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -6015,6 +6067,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 53,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -6231,6 +6284,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 54,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -6439,6 +6493,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 55,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -6643,6 +6698,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 56,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -6858,6 +6914,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 57,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -7081,6 +7138,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 58,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -7313,6 +7371,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 59,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -7547,6 +7606,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 60,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -7783,6 +7843,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 61,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -8010,6 +8071,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 62,
         "prompt_mode": "review",
         "permission_mode": "default",
@@ -8237,6 +8299,7 @@
         }
       },
       "state": {
+        "preview": null,
         "last_seq": 63,
         "prompt_mode": "review",
         "permission_mode": "default",

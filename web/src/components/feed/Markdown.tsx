@@ -3,6 +3,7 @@ import { CODE_LINES, lineCount } from "../../lib/canvas";
 import { cx } from "../../lib/cx";
 import { DocCard } from "./DocCard";
 import styles from "./Markdown.module.css";
+import { Mentions } from "./Mentions";
 
 export type Block =
   | { kind: "code"; lang: string; text: string }
@@ -96,15 +97,15 @@ function inline(text: string): ReactNode[] {
   for (const match of text.matchAll(INLINE)) {
     const at = match.index ?? 0;
     if (at > last) {
-      nodes.push(text.slice(last, at));
+      nodes.push(<Mentions key={`text-${key++}`} text={text.slice(last, at)} />);
     }
     const token = match[0];
     if (match[1]) {
       nodes.push(<code key={key++}>{token.slice(1, -1)}</code>);
     } else if (match[2]) {
-      nodes.push(<strong key={key++}>{token.slice(2, -2)}</strong>);
+      nodes.push(<strong key={key++}><Mentions text={token.slice(2, -2)} /></strong>);
     } else if (match[3]) {
-      nodes.push(<em key={key++}>{token.slice(1, -1)}</em>);
+      nodes.push(<em key={key++}><Mentions text={token.slice(1, -1)} /></em>);
     } else {
       const split = token.indexOf("](");
       nodes.push(
@@ -116,7 +117,7 @@ function inline(text: string): ReactNode[] {
     last = at + token.length;
   }
   if (last < text.length) {
-    nodes.push(text.slice(last));
+    nodes.push(<Mentions key={`text-${key++}`} text={text.slice(last)} />);
   }
   return nodes;
 }

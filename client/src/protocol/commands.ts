@@ -112,6 +112,8 @@ export interface CommandsSchema {
     | BoardDraw
     | BoardMove
     | AttachmentFetch
+    | PreviewSet
+    | PreviewFetch
     | BoardErase
     | BoardClear
     | QueueCancel
@@ -574,6 +576,27 @@ export interface BoardMove {
 export interface AttachmentFetch {
   attachment_id: string;
   type?: "attachment.fetch";
+}
+/**
+ * The host explicitly shares one loopback HTTP server; None disables it.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "PreviewSet".
+ */
+export interface PreviewSet {
+  port?: number | null;
+  title?: string;
+  type?: "preview.set";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "PreviewFetch".
+ */
+export interface PreviewFetch {
+  path?: string;
+  preview_id: string;
+  request_id: string;
+  type?: "preview.fetch";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

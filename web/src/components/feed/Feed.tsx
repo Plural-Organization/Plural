@@ -1,4 +1,6 @@
 import { useState, type CSSProperties } from "react";
+import type { Mentionable } from "@plural/client";
+import { MentionPeople } from "./Mentions";
 import type { FeedItem } from "@plural/client";
 import type { Activity as Current } from "../../lib/activity";
 import { colorFor } from "../../lib/colors";
@@ -34,6 +36,7 @@ function blocks(items: FeedItem[]): Block[] {
 
 interface FeedProps {
   items: FeedItem[];
+  people?: Mentionable[];
   meId?: string | null;
   activity?: Current | null;
   // Given, long code and documents show as cards that open in the canvas.
@@ -41,7 +44,7 @@ interface FeedProps {
   onOpenBoard?: () => void;
 }
 
-export function Feed({ items, meId = null, activity = null, onOpenDoc, onOpenBoard }: FeedProps) {
+export function Feed({ items, people = [], meId = null, activity = null, onOpenDoc, onOpenBoard }: FeedProps) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const toggle = (id: string) =>
     setOpened((current) => {
@@ -53,7 +56,7 @@ export function Feed({ items, meId = null, activity = null, onOpenDoc, onOpenBoa
     });
 
   return (
-    <div className={styles.feed}>
+    <MentionPeople.Provider value={people}><div className={styles.feed}>
       {blocks(items).map((block) =>
         block.kind === "steps" ? (
           <div key={block.id} className={styles.steps}>
@@ -73,7 +76,7 @@ export function Feed({ items, meId = null, activity = null, onOpenDoc, onOpenBoa
       )}
       <Activity activity={activity} />
     </div>
-  );
+  </MentionPeople.Provider>);
 }
 
 // A message's own text, with the parts it quotes set apart.

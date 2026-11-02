@@ -13,6 +13,7 @@ import {
   type Feed,
   type JoinLink,
   type PluginAsked,
+  type EventOf,
   type Tone,
 } from "@plural/client";
 import { alertMention, alertNotice } from "../lib/alert";
@@ -42,6 +43,7 @@ export interface SessionView {
 export interface Session extends SessionView {
   send: (command: Command) => void;
   fetchPicture: (attachmentId: string) => void;
+  fetchPreview: (previewId: string, path: string) => Promise<EventOf<"preview.data">>;
   // Presence that may fail quietly: a host from an older release does not know it.
   sendPresence: (command: Command) => boolean;
   notify: (tone: Tone, text: string) => void;
@@ -56,6 +58,15 @@ export class SessionStore {
   private readonly listeners = new Set<() => void>();
   private client: SessionClient | null = null;
   private token: string | null;
+  private readonly previewRequests = new Map<string, { previewId: string; resolve: (data: EventOf<"preview.data">) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+
+  private clearPreviewRequests(): void {
+    for (const request of this.previewRequests.values()) {
+      clearTimeout(request.timer);
+      request.reject(new Error("preview connection closed or changed"));
+    }
+    this.previewRequests.clear();
+  }
 
   constructor(
     private readonly link: JoinLink,
@@ -80,7 +91,10 @@ export class SessionStore {
     const client = new SessionClient(link, { name: this.name, client: CLIENT, team: team ? (room, url) => teamProof(team, url, room) : undefined });
     this.client = client;
     this.update({ projection: client.projection, feed: emptyFeed(), connection: client.status, invite: null, asks: [] });
-    const off = client.onStatus((connection) => this.update({ connection }));
+    const off = client.onStatus((connection) => {
+      if (connection !== "online") this.clearPreviewRequests();
+      this.update({ connection });
+    });
     let alive = true;
     void (async () => {
       try {
@@ -109,6 +123,17 @@ export class SessionStore {
           }
           if (event.type === "plugin.notified") {
             this.notify("accent", `/${event.command}: ${event.text}`);
+            continue;
+          }
+          if (event.type === "preview.changed") this.clearPreviewRequests();
+          if (event.type === "preview.data") {
+            const request = this.previewRequests.get(event.request_id);
+            if (request && request.previewId === event.preview_id) {
+              clearTimeout(request.timer);
+              this.previewRequests.delete(event.request_id);
+              if (event.error) request.reject(new Error(event.error));
+              else request.resolve(event);
+            }
             continue;
           }
           if (event.type === "attachment.data") {
@@ -142,6 +167,7 @@ export class SessionStore {
     return () => {
       alive = false;
       off();
+      this.clearPreviewRequests();
       client.close();
     };
   }
@@ -178,6 +204,25 @@ export class SessionStore {
     this.client.send({ type: "attachment.fetch", attachment_id: attachmentId }).catch(() => this.asked.delete(attachmentId));
   };
 
+  readonly fetchPreview = (previewId: string, path: string): Promise<EventOf<"preview.data">> => {
+    const client = this.client;
+    if (!client || this.view.connection !== "online") return Promise.reject(new Error("preview is offline"));
+    if (this.previewRequests.size >= 4) return Promise.reject(new Error("too many preview requests"));
+    const requestId = crypto.randomUUID();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.previewRequests.delete(requestId);
+        reject(new Error("preview request timed out"));
+      }, 15000);
+      this.previewRequests.set(requestId, { previewId, resolve, reject, timer });
+      client.send({ type: "preview.fetch", preview_id: previewId, request_id: requestId, path }).catch((error: unknown) => {
+        clearTimeout(timer);
+        this.previewRequests.delete(requestId);
+        reject(error);
+      });
+    });
+  };
+
   readonly notify = (tone: Tone, text: string): void => this.update({ feed: withNotice(this.view.feed, tone, text) });
 
   readonly clearInvite = (): void => this.update({ invite: null });
@@ -206,7 +251,7 @@ export function useSession(link: JoinLink, name: string, onFatal: (reason: strin
   const [store] = useState(() => new SessionStore(link, name, onFatal, team));
   const view = useSyncExternalStore(store.subscribe, store.snapshot);
   useEffect(() => store.start(), [store]);
-  return { ...view, send: store.send, fetchPicture: store.fetchPicture, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, answer: store.answer, close: store.close };
+  return { ...view, send: store.send, fetchPicture: store.fetchPicture, fetchPreview: store.fetchPreview, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, answer: store.answer, close: store.close };
 }
 
 function messageOf(error: unknown): string {

@@ -25,6 +25,7 @@ export interface CanvasDoc {
   title: string;
   // A site is the page at `path`, built from the files the agent wrote, and shown live.
   kind: "code" | "text" | "diff" | "site";
+  previewId?: string;
   lang: string;
   text: string;
   live: boolean;

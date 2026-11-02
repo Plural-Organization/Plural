@@ -1452,6 +1452,8 @@
               "plugins.changed": "#/$defs/PluginsChanged",
               "policy.rule_added": "#/$defs/PolicyRuleAdded",
               "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
+              "preview.changed": "#/$defs/PreviewChanged",
+              "preview.data": "#/$defs/PreviewData",
               "prompt.accepted": "#/$defs/PromptAccepted",
               "prompt.dequeued": "#/$defs/PromptDequeued",
               "proposal.approved": "#/$defs/ProposalApproved",
@@ -1562,6 +1564,12 @@
             },
             {
               "$ref": "#/$defs/AttachmentData"
+            },
+            {
+              "$ref": "#/$defs/PreviewChanged"
+            },
+            {
+              "$ref": "#/$defs/PreviewData"
             },
             {
               "$ref": "#/$defs/PluginShown"
@@ -2556,6 +2564,100 @@
       ],
       "type": "object"
     },
+    "PreviewChanged": {
+      "properties": {
+        "preview": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreviewView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "const": "preview.changed",
+          "default": "preview.changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "preview"
+      ],
+      "type": "object"
+    },
+    "PreviewData": {
+      "description": "A bounded resource response delivered only to its requester.",
+      "properties": {
+        "content_b64": {
+          "default": "",
+          "type": "string"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "media_type": {
+          "type": "string"
+        },
+        "preview_id": {
+          "type": "string"
+        },
+        "request_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "integer"
+        },
+        "type": {
+          "const": "preview.data",
+          "default": "preview.data",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "preview_id",
+        "request_id",
+        "status",
+        "media_type",
+        "content_b64",
+        "error"
+      ],
+      "type": "object"
+    },
+    "PreviewView": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "port": {
+          "maximum": 65535,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "title": {
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "port",
+        "title"
+      ],
+      "type": "object"
+    },
     "PromptAccepted": {
       "properties": {
         "attachments": {
@@ -3077,6 +3179,17 @@
           },
           "type": "array"
         },
+        "preview": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PreviewView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "prompt_mode": {
           "$ref": "#/$defs/PromptMode",
           "default": "open"
@@ -3139,6 +3252,7 @@
         }
       },
       "required": [
+        "preview",
         "last_seq",
         "prompt_mode",
         "permission_mode",
@@ -3718,6 +3832,8 @@
           "plugins.changed": "#/$defs/PluginsChanged",
           "policy.rule_added": "#/$defs/PolicyRuleAdded",
           "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
+          "preview.changed": "#/$defs/PreviewChanged",
+          "preview.data": "#/$defs/PreviewData",
           "prompt.accepted": "#/$defs/PromptAccepted",
           "prompt.dequeued": "#/$defs/PromptDequeued",
           "proposal.approved": "#/$defs/ProposalApproved",
@@ -3828,6 +3944,12 @@
         },
         {
           "$ref": "#/$defs/AttachmentData"
+        },
+        {
+          "$ref": "#/$defs/PreviewChanged"
+        },
+        {
+          "$ref": "#/$defs/PreviewData"
         },
         {
           "$ref": "#/$defs/PluginShown"
