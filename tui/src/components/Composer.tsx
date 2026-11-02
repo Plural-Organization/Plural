@@ -3,6 +3,7 @@ import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
 import type { Mentionable, Role, Route } from "@plural/client";
 import { suggestions as suggest, visibleSuggestionWindow, type CommandHint } from "../commands";
+import { imagePath } from "../lib/image-paste";
 import { expandPastes, pasteLabel, shouldCollapse } from "../lib/paste";
 import { theme } from "../theme";
 
@@ -43,6 +44,7 @@ interface ComposerProps {
   onIdleKey?: (key: string) => boolean;
   images?: string[];
   onPasteImage?: () => void;
+  onPasteImageFile?: (path: string) => Promise<boolean>;
   onDropImage?: () => void;
   remember?: boolean;
 }
@@ -106,8 +108,27 @@ export function Composer(props: ComposerProps) {
     props.onSubmit(text);
   };
 
+  // Cmd+V with an image on the clipboard pastes nothing, so the image is taken from the clipboard as with
+  // Ctrl+V; a pasted or dragged image file is attached, and a path to no image stays text. A long text paste
+  // shows as a short label and is sent in full.
   const paste = (event: PasteEvent): void => {
-    const text = stripAnsiSequences(decodePasteBytes(event.bytes)).replace(/\r\n?/g, "\n");
+    const raw = decodePasteBytes(event.bytes);
+    if (raw.trim() === "" && props.onPasteImage) {
+      event.preventDefault();
+      props.onPasteImage();
+      return;
+    }
+    const path = imagePath(raw);
+    if (path !== null && props.onPasteImageFile) {
+      event.preventDefault();
+      void props.onPasteImageFile(path).then((attached) => {
+        if (!attached) {
+          area.current?.insertText(raw);
+        }
+      });
+      return;
+    }
+    const text = stripAnsiSequences(raw).replace(/\r\n?/g, "\n");
     if (!shouldCollapse(text)) {
       return;
     }
