@@ -1,4 +1,5 @@
 import asyncio
+import sqlite3
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -85,10 +86,10 @@ async def test_creating_a_team_makes_the_creator_its_owner_and_gives_a_code(
     assert (claims.name, claims.role, claims.key) == ("Vlad", TeamRole.OWNER, owner.public_b64)
     assert grant.invite is not None
     assert grant.invite.startswith("tm-")
-    assert grant.invite_expires_at == clock.now + timedelta(hours=1)
+    assert grant.invite_expires_at is None
 
 
-async def test_a_code_adds_one_member_once(directory: TeamDirectory, clock: Clock) -> None:
+async def test_a_code_adds_multiple_members(directory: TeamDirectory, clock: Clock) -> None:
     owner, alia, bek = person(), person(), person()
     grant = await founded(directory, owner)
     code = grant.invite or ""
@@ -99,7 +100,8 @@ async def test_a_code_adds_one_member_once(directory: TeamDirectory, clock: Cloc
     assert joined.team_key == grant.team_key
     CertVerifier(grant.team_key).verify(joined.certificate, now=clock.now)
 
-    await refused(directory.join(TeamJoin(code=code, name="Bek", key=bek.public_b64)), 403)
+    also_joined = await directory.join(TeamJoin(code=code, name="Bek", key=bek.public_b64))
+    assert also_joined.team_id == grant.team_id
 
 
 async def test_a_code_works_however_it_was_typed(directory: TeamDirectory) -> None:
@@ -112,15 +114,57 @@ async def test_a_code_works_however_it_was_typed(directory: TeamDirectory) -> No
     assert joined.member.name == "Alia"
 
 
-async def test_a_wrong_or_expired_code_is_refused(directory: TeamDirectory, clock: Clock) -> None:
-    grant = await founded(directory, person())
-    await refused(
+async def test_a_wrong_code_is_refused(directory: TeamDirectory) -> None:
+    await founded(directory, person())
+    message = await refused(
         directory.join(TeamJoin(code="tm-aaaaa-bbbbb", name="Alia", key=person().public_b64)), 403
     )
-    clock.advance(hours=1, seconds=1)
-    await refused(
-        directory.join(TeamJoin(code=grant.invite or "", name="Alia", key=person().public_b64)), 403
+    assert message == "that invite code is wrong"
+
+
+async def test_a_code_does_not_expire(directory: TeamDirectory, clock: Clock) -> None:
+    grant = await founded(directory, person())
+    clock.advance(days=3650)
+    joined = await directory.join(
+        TeamJoin(code=grant.invite or "", name="Alia", key=person().public_b64)
     )
+    assert joined.team_id == grant.team_id
+
+
+async def test_legacy_invites_are_migrated_without_losing_codes(tmp_path: Path) -> None:
+    path = tmp_path / "teams.db"
+    with sqlite3.connect(path) as db:
+        db.executescript(
+            """
+            CREATE TABLE teams (
+                id TEXT PRIMARY KEY, name TEXT NOT NULL, signing_key BLOB NOT NULL,
+                public_key TEXT NOT NULL, created_at TEXT NOT NULL
+            );
+            CREATE TABLE invites (
+                hash TEXT PRIMARY KEY,
+                team_id TEXT NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+                created_by TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                used_by TEXT
+            );
+            INSERT INTO teams
+                VALUES ('t_legacy', 'Backend', X'00', 'key', '2026-01-01T00:00:00+00:00');
+            INSERT INTO invites
+                VALUES (
+                    'legacy-hash', 't_legacy', 'owner',
+                    '2026-01-01T01:00:00+00:00', 'old-member'
+                );
+            """
+        )
+
+    migrated = await TeamDirectory.open(path)
+    await migrated.close()
+
+    with sqlite3.connect(path) as db:
+        columns = [row[1] for row in db.execute("PRAGMA table_info(invites)")]
+        invite = db.execute("SELECT hash, team_id, created_by FROM invites").fetchone()
+    assert columns == ["hash", "team_id", "created_by"]
+    assert invite == ("legacy-hash", "t_legacy", "owner")
 
 
 async def test_a_taken_name_does_not_burn_the_code(directory: TeamDirectory) -> None:
@@ -305,7 +349,7 @@ async def _async(method: object, claims: MemberClaims) -> object:
     return await method(claims)  # type: ignore[operator]
 
 
-async def test_two_people_racing_for_one_code_get_one_seat(directory: TeamDirectory) -> None:
+async def test_people_racing_for_one_code_all_join(directory: TeamDirectory) -> None:
     grant = await founded(directory, person())
     code = grant.invite or ""
     attempts = [
@@ -313,12 +357,7 @@ async def test_two_people_racing_for_one_code_get_one_seat(directory: TeamDirect
         for index in range(6)
     ]
     results = await asyncio.gather(*attempts, return_exceptions=True)
-    assert sum(isinstance(result, TeamGrant) for result in results) == 1
-    assert all(
-        isinstance(result, TeamGrant)
-        or (isinstance(result, DirectoryError) and result.status == 403)
-        for result in results
-    )
+    assert all(isinstance(result, TeamGrant) for result in results)
 
 
 async def test_a_failed_request_does_not_undo_a_parallel_one(directory: TeamDirectory) -> None:

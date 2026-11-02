@@ -88,7 +88,6 @@ export interface AppProps {
   sharing?: boolean;
   teamError?: string | null;
   onOpenSpace?: (id: string) => void;
-  onCycleSpace?: (direction: 1 | -1) => void;
   onClose?: () => void;
   onSummary?: (summary: Summary) => void;
   onGiveBriefing?: (briefing: { source: string; as_of_seq: number; text: string }) => Promise<void>;
@@ -141,7 +140,6 @@ export function App({
   sharing = true,
   teamError = null,
   onOpenSpace,
-  onCycleSpace,
   onClose,
   onSummary,
   onGiveBriefing,
@@ -1297,11 +1295,6 @@ export function App({
     if (!active || dialog || inviteOpen || shareOpen || intro || extrasPrompt !== null || setup !== null) {
       return;
     }
-    if (key.meta && (key.name === "left" || key.name === "right") && onCycleSpace) {
-      key.preventDefault();
-      onCycleSpace(key.name === "left" ? -1 : 1);
-      return;
-    }
     if (key.ctrl && key.name === "w" && viewing !== null && onClose) {
       key.preventDefault();
       onClose();
@@ -1474,7 +1467,7 @@ export function App({
           <box flexShrink={0} height={1} paddingX={2} backgroundColor={theme.panel}>
             <text fg={theme.info} wrapMode="none">
               viewing {viewing}
-              <span fg={theme.dim}> · alt+←/→ switch · ctrl+w closes</span>
+              <span fg={theme.dim}> · ctrl+w closes</span>
             </text>
           </box>
         ) : null}
@@ -1659,7 +1652,7 @@ export function App({
           }}
           onTeam={async () => {
             const command = await onInviteTeam!();
-            copy(command, "Team invite copied", "one use · valid for an hour");
+            copy(command, "Team invite copied", "reusable · no expiry");
             setInviteOpen(false);
           }}
           onClose={() => setInviteOpen(false)}

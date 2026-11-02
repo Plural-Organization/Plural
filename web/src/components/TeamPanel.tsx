@@ -32,7 +32,7 @@ export function TeamPanel({ state, current = null, onOpen, onNotice }: TeamPanel
       .then(({ code }) => {
         const next = { command: teamJoinCommand(team.profile, code), link: teamJoinLink(team.profile, code, window.location) };
         setInvite(next);
-        void copyText(next.link).then((ok) => ok && onNotice("team invite link copied · one use, valid for an hour"));
+        void copyText(next.link).then((ok) => ok && onNotice("team invite link copied · reusable, no expiry"));
       })
       .catch((problem: unknown) => onNotice(problem instanceof Error ? problem.message : String(problem)))
       .finally(() => setInviting(false));
@@ -112,7 +112,7 @@ export function TeamPanel({ state, current = null, onOpen, onNotice }: TeamPanel
       ) : null}
       <div className={styles.row}>
         {isOwner ? (
-          <button className="button small" type="button" disabled={inviting} onClick={makeInvite} title="One use, valid for an hour">
+          <button className="button small" type="button" disabled={inviting} onClick={makeInvite} title="Reusable and does not expire">
             {inviting ? "making an invite…" : "invite to the team"}
           </button>
         ) : null}

@@ -140,7 +140,7 @@ plural team disband         # owner only, deletes the team for everyone
 plural team status
 ```
 
-`create` prints an invite code that works once and for an hour; give it to a teammate, who runs `join` with the same relay. After a successful join, Plural opens automatically and the side panel shows every session currently shared with the team; no separate room link is needed. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
+`create` prints a reusable invite code that does not expire; give it to teammates, who run `join` with the same relay. After a successful join, Plural opens automatically and the side panel shows every session currently shared with the team; no separate room link is needed. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
 
 ### A team in the browser
 
@@ -154,7 +154,7 @@ With no server at hand, one command starts the relay with a team directory, open
 plural team create Backend --tunnel ngrok        # or cloudflared
 ```
 
-The banner of the session shows two links: the room link (`plural join "…"`, for someone you want in this session) and the team link (`plural team join <code> --relay <address>`, for someone who should join the team; one use, valid for an hour, `plural team invite` makes another). Quit the session and the relay and the tunnel stop with it. The directory file is `~/.plural/teams.db`.
+The banner of the session shows two links: the room link (`plural join "…"`, for someone you want in this session) and the team link (`plural team join <code> --relay <address>`, for people who should join the team; reusable, with no expiry, and `plural team invite` can make another). Quit the session and the relay and the tunnel stop with it. The directory file is `~/.plural/teams.db`.
 
 Your machine is the directory, so while that session is closed nobody can join or see the team's cards; sessions that are already open go on. A free ngrok address and a cloudflared quick tunnel change on every start, and the team is bound to the relay's address, so after a restart everyone has to join again. For a team that stays, run the relay on a server or behind a fixed domain and use `--relay`. `--tunnel` and `--relay` cannot be combined.
 
@@ -172,7 +172,7 @@ Once you are in a team (`team create` or `team join`), every session you start i
 
 The side panel has a SPACES section: your own session first, then the team's, refreshed every few seconds: `●` working, `◆` waiting for its host, `○` idle, with who, repository and branch, and `👁 2` when two people watch.
 
-**Click a teammate to open their session** in the main area. You see all of it, live, as a viewer, and your own session keeps running in the background: a click on `you` takes you back, `alt+←` and `alt+→` move between spaces, `ctrl+w` closes the one you are in. What you type goes to the session you are looking at. If your own agent needs you while you are away, its row turns `◆ waiting`, the bell rings and the terminal title says so.
+**Click a teammate to open their session** in the main area. You see all of it, live, as a viewer, and your own session keeps running in the background: a click on `you` takes you back, and `ctrl+w` closes the space you are in. What you type goes to the session you are looking at; `alt+←` and `alt+→` remain available for moving between words in the prompt. If your own agent needs you while you are away, its row turns `◆ waiting`, the bell rings and the terminal title says so.
 
 ### Watching a teammate
 

@@ -11,7 +11,7 @@ export interface TeamState {
   sessions: SessionCard[];
   error: string | null;
   join: (invite: TeamInvite, name: string) => Promise<void>;
-  invite: () => Promise<{ code: string; expires_at: string }>;
+  invite: () => Promise<{ code: string; expires_at: string | null }>;
   leave: () => Promise<void>;
 }
 

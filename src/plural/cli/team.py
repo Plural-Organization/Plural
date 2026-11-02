@@ -81,8 +81,8 @@ def _already(store: TeamStore) -> None:
         raise typer.Exit(1)
 
 
-def _share(relay: str, code: str, minutes: int) -> None:
-    console.print(f"Invite code [bold]{code}[/bold], valid for {minutes} minutes, one use.")
+def _share(relay: str, code: str) -> None:
+    console.print(f"Invite code [bold]{code}[/bold], reusable and does not expire.")
     console.print(f"Teammates run: plural team join {code} --relay {relay}", soft_wrap=True)
 
 
@@ -106,12 +106,18 @@ def create(
     if as_json:
         typer.echo(
             json.dumps(
-                {"team": profile.team_name, "relay": address, "code": invite.code, "minutes": 60}
+                {
+                    "team": profile.team_name,
+                    "relay": address,
+                    "code": invite.code,
+                    "minutes": None,
+                    "permanent": True,
+                }
             )
         )
         return
     console.print(f"Team [bold]{escape(profile.team_name)}[/bold] created, you are {member}.")
-    _share(address, invite.code, 60)
+    _share(address, invite.code)
 
 
 @team_app.command()
@@ -144,7 +150,7 @@ def invite() -> None:
     store = _store()
     profile = _joined(store)
     created = _run(DirectoryClient(store, profile).invite())
-    _share(profile.relay, created.code, 60)
+    _share(profile.relay, created.code)
 
 
 @team_app.command()

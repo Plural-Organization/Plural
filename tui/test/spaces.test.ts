@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { buildSpaces, describeConflict, neighbour, ownConflicts, OWN, type Visit } from "../src/spaces";
+import { buildSpaces, describeConflict, ownConflicts, OWN, type Visit } from "../src/spaces";
 import type { Conflict, SessionCard, TeamView } from "../src/team";
 
 const card = (owner: string, status: SessionCard["status"] = "idle", branch: string | null = "main", viewers = 0): SessionCard => ({
@@ -55,14 +55,6 @@ describe("the list of spaces", () => {
 
   test("works with no team at all", () => {
     expect(buildSpaces({ home: "api", team: null, visits: [], active: OWN, summaries: {} })).toHaveLength(1);
-  });
-
-  test("moving to the next or previous space wraps around", () => {
-    const rows = buildSpaces({ home: "api", team: team(card("alia"), card("bek")), visits: [], active: OWN, summaries: {} });
-    expect(neighbour(rows, OWN, 1)).toBe("r_alia");
-    expect(neighbour(rows, "r_bek", 1)).toBe(OWN);
-    expect(neighbour(rows, OWN, -1)).toBe("r_bek");
-    expect(neighbour(rows, "gone", 1)).toBe("r_alia");
   });
 });
 

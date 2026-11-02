@@ -268,7 +268,7 @@ export async function fetchSessions(team: Team): Promise<SessionCard[]> {
   return (await signed<{ sessions: SessionCard[] }>(team, "GET", `/teams/${team.profile.team_id}/sessions`)).sessions;
 }
 
-export async function createTeamInvite(team: Team): Promise<{ code: string; expires_at: string }> {
+export async function createTeamInvite(team: Team): Promise<{ code: string; expires_at: string | null }> {
   return signed(team, "POST", `/teams/${team.profile.team_id}/invites`);
 }
 
