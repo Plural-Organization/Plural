@@ -40,7 +40,7 @@ usage
   plural sessions [--json]    list your sessions
   plural rm <id>              delete a session
   plural team create <name> --tunnel cloudflared|ngrok  create a team behind a tunnel and open a session in it
-  plural team join <code> --relay <url>  join a team and open its rooms
+  plural team join <code> [--relay <url>]  join a team (the Plural relay unless --relay) and open its rooms
   plural relay|doctor|export  run the host's own commands
 
 options
@@ -52,6 +52,7 @@ options
   --name <name>               your display name
   --private                   in a team, keep this session to yourself
   --port <n>  --bind <addr>  --relay <url>  --public-url <url>
+  --local                     stay on this machine, no relay
   --tunnel cloudflared|ngrok  share through a tunnel, the link carries its address
   -v, --version  -h, --help
 `;
@@ -166,10 +167,10 @@ async function start(options: SessionOptions, joinLink: string | null, name: str
     return rejoin(found.join);
   }
   const plain = found.hostArgs;
-  if (kind !== null && ["--relay", "--public-url", "--bind"].some((flag) => plain.includes(flag))) {
-    throw new UsageError("--tunnel cannot be combined with --relay, --public-url or --bind");
+  if (kind !== null && ADDRESS_FLAGS.some((flag) => plain.includes(flag))) {
+    throw new UsageError("--tunnel cannot be combined with --relay, --public-url, --bind or --local");
   }
-  const sharing = options.private ? null : loadTeam();
+  const sharing = options.private || plain.includes("--local") ? null : loadTeam();
   const named = [...plain, ...(sharing === null ? [] : ["--team"]), "--name", name];
   const portFlag = plain.indexOf("--port");
   const port = (portFlag === -1 ? 0 : Number(plain[portFlag + 1])) || (await freePort());

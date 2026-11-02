@@ -210,6 +210,28 @@ async def test_there_is_a_limit_on_teams(clock: Clock) -> None:
     await capped.close()
 
 
+async def test_one_key_owns_at_most_three_teams(directory: TeamDirectory, clock: Clock) -> None:
+    owner = person()
+    grants = [await founded(directory, owner) for _ in range(3)]
+    message = await refused(founded(directory, owner), 429)
+    assert "3 teams" in message
+    await founded(directory, person())
+
+    claims = await signed(directory, owner, grants[0], clock, "DELETE", "")
+    await directory.disband(claims)
+    await founded(directory, owner)
+
+
+async def test_belonging_to_teams_does_not_count_against_the_limit(
+    directory: TeamDirectory,
+) -> None:
+    member = person()
+    for _ in range(4):
+        grant = await founded(directory, person())
+        await directory.join(TeamJoin(code=grant.invite or "", name="Alia", key=member.public_b64))
+    await founded(directory, member)
+
+
 async def test_a_signed_request_is_accepted_once(directory: TeamDirectory, clock: Clock) -> None:
     owner = person()
     grant = await founded(directory, owner)

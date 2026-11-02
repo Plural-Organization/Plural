@@ -9,6 +9,7 @@ def test_machine_mode_host_quits_when_its_parent_closes_stdin(tmp_path: Path) ->
         str(Path(sys.executable).parent / "plural-host"),
         "host",
         "--json",
+        "--local",
         "--workspace",
         str(tmp_path),
         "--port",

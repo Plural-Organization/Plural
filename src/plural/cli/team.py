@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.markup import escape
 
 from plural.cli.format import ago
-from plural.host.config import HostSettings
+from plural.host.config import DEFAULT_RELAY_URL, HostSettings
 from plural.host.team import (
     DirectoryClient,
     TeamError,
@@ -26,7 +26,10 @@ console = Console()
 
 RelayOption = Annotated[
     str | None,
-    typer.Option(help="The team's relay, wss://host or ws://host:port.", envvar="PLURAL_RELAY_URL"),
+    typer.Option(
+        help="The team's relay, wss://host or ws://host:port. Default: the Plural relay.",
+        envvar="PLURAL_RELAY_URL",
+    ),
 ]
 NameOption = Annotated[
     str | None, typer.Option("--as", help="The name teammates see. Default: your user name.")
@@ -49,10 +52,7 @@ def _name(chosen: str | None) -> str:
 
 
 def _relay(given: str | None) -> str:
-    if not given:
-        console.print("[red]Say which relay with --relay wss://host.[/red]")
-        raise typer.Exit(2)
-    return given
+    return given or DEFAULT_RELAY_URL
 
 
 def _joined(store: TeamStore) -> TeamProfile:

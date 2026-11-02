@@ -75,6 +75,7 @@ class DirectoryError(Exception):
 @dataclass(frozen=True, slots=True)
 class TeamLimits:
     max_teams: int = 500
+    max_teams_per_owner: int = 3
     max_members: int = 50
     certificate_ttl_s: int = 30 * 86_400
     clock_skew_s: int = 60
@@ -182,12 +183,25 @@ class TeamDirectory:
             row = await cursor.fetchone()
         return int(row[0]) if row else 0
 
+    async def _owned_count(self, key: str) -> int:
+        async with self._db.execute(
+            "SELECT count(*) FROM members WHERE key = ? AND role = ?", (key, TeamRole.OWNER.value)
+        ) as cursor:
+            row = await cursor.fetchone()
+        return int(row[0]) if row else 0
+
     async def create(self, request: TeamCreate) -> TeamGrant:
         async with self._transaction():
             if not valid_public_key(request.key):
                 raise DirectoryError(400, "that is not a public key")
             if await self.team_count() >= self._limits.max_teams:
                 raise DirectoryError(429, "this relay cannot take more teams")
+            if await self._owned_count(request.key) >= self._limits.max_teams_per_owner:
+                raise DirectoryError(
+                    429,
+                    f"you already own {self._limits.max_teams_per_owner} teams on this relay, "
+                    "delete one with plural team disband",
+                )
             now = self._clock()
             signer = CertSigner.generate()
             team_id = f"t_{secrets.token_hex(8)}"

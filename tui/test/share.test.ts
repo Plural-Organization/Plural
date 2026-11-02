@@ -34,9 +34,9 @@ describe("lan address", () => {
 });
 
 describe("share launch", () => {
-  test("local adds nothing", () => {
+  test("local keeps the host on this machine", () => {
     expect(shareLaunch({ share: "local", relayUrl: "wss://r.example.com" }, base, 7001, "192.168.1.20")).toEqual({
-      args: base,
+      args: [...base, "--local"],
       note: null,
     });
   });
@@ -47,12 +47,16 @@ describe("share launch", () => {
     expect(launch.note).toBeNull();
   });
 
-  test("relay without a valid address stays local and says why", () => {
-    for (const relayUrl of ["", "nope"]) {
-      const launch = shareLaunch({ share: "relay", relayUrl }, base, 7001, null);
-      expect(launch.args).toEqual(base);
-      expect(launch.note).toContain("sharing over the internet is off");
-    }
+  test("relay without an address leaves the choice to the host's default relay", () => {
+    const launch = shareLaunch({ share: "relay", relayUrl: "" }, base, 7001, null);
+    expect(launch.args).toEqual(base);
+    expect(launch.note).toBeNull();
+  });
+
+  test("relay with an invalid address stays local and says why", () => {
+    const launch = shareLaunch({ share: "relay", relayUrl: "nope" }, base, 7001, null);
+    expect(launch.args).toEqual([...base, "--local"]);
+    expect(launch.note).toContain("sharing over the internet is off");
   });
 
   test("network binds every interface and advertises the lan address", () => {
@@ -62,12 +66,12 @@ describe("share launch", () => {
 
   test("network without an address stays local and says why", () => {
     const launch = shareLaunch({ share: "network", relayUrl: "" }, base, 7001, null);
-    expect(launch.args).toEqual(base);
+    expect(launch.args).toEqual([...base, "--local"]);
     expect(launch.note).toContain("no network address");
   });
 
   test("an explicit address flag wins over the saved choice", () => {
-    for (const flag of ["--relay", "--public-url", "--bind"]) {
+    for (const flag of ["--relay", "--public-url", "--bind", "--local"]) {
       const args = [...base, flag, "x"];
       expect(shareLaunch({ share: "network", relayUrl: "wss://r.example.com" }, args, 7001, "10.0.0.2").args).toEqual(args);
     }

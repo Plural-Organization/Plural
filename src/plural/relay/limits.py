@@ -13,7 +13,7 @@ class RelayLimits:
     messages_per_second: float = 20.0
     burst: int = 40
     room_ttl_s: float = 900.0
-    max_rooms_per_peer: int = 3
+    max_rooms_per_peer: int = 5
     max_guests_per_peer: int = 30
     connects_per_second: float = 2.0
     connect_burst: int = 20
