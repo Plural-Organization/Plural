@@ -28,13 +28,14 @@ class FakeProcess extends EventEmitter {
 
 const CREATED = JSON.stringify({ team: "kbtu", relay: "wss://calm.example.dev", code: "tm-abcde-fghj2", minutes: 60 });
 
-function harness(options: { createStatus?: number; listening?: boolean; printed?: string } = {}) {
+function harness(options: { createStatus?: number; listening?: boolean; printed?: string; answers?: boolean[] } = {}) {
   const started: { args: string[]; child: FakeProcess }[] = [];
   const tunnel = { stopped: false, exit: null as ((reason: string) => void) | null };
   const deps: TeamHostDeps = {
     freePort: async () => 4321,
     teamsFile: () => "/data/teams.db",
     listening: async () => options.listening ?? true,
+    answering: async () => (options.answers ?? [true]).shift() ?? true,
     run: (args) => {
       const child = new FakeProcess();
       started.push({ args, child });
@@ -97,13 +98,20 @@ describe("plural team create --tunnel", () => {
     const steps: string[] = [];
     const hosting = await openTeam(REQUEST, (text) => steps.push(text), deps);
     expect(started.map((entry) => entry.args[0])).toEqual(["relay", "team"]);
-    expect(steps).toEqual(["starting the team's relay…", "opening a ngrok tunnel…", "creating the team…"]);
+    expect(steps).toEqual(["starting the team's relay…", "opening a ngrok tunnel…", "waiting for the tunnel to answer…", "creating the team…"]);
     expect(hosting.joinCommand).toBe("plural team join tm-abcde-fghj2 --relay wss://calm.example.dev");
     expect(hosting.minutes).toBe(60);
     expect(tunnel.stopped).toBe(false);
     await hosting.stop();
     expect(tunnel.stopped).toBe(true);
     expect(started[0]?.child.signals).toEqual(["SIGTERM"]);
+  });
+
+  test("the team is created only once the tunnel answers", async () => {
+    const { deps, started } = harness({ answers: [false, false, true] });
+    const hosting = await openTeam(REQUEST, undefined, deps);
+    expect(started.map((entry) => entry.args[0])).toEqual(["relay", "team"]);
+    await hosting.stop();
   });
 
   test("a team that cannot be made stops everything and says why", async () => {

@@ -18,10 +18,12 @@ export interface TeamHostDeps {
   run: (args: string[], stdio?: StdioOptions) => ChildProcess;
   startTunnel: (kind: TunnelKind, port: number) => Promise<Tunnel>;
   listening: (port: number) => Promise<boolean>;
+  answering: (url: string) => Promise<boolean>;
   teamsFile: () => string;
 }
 
 const STARTUP_MS = 15_000;
+const TUNNEL_MS = 45_000;
 const POLL_MS = 100;
 
 export function relayArgs(port: number, teams: string): string[] {
@@ -53,11 +55,21 @@ function accepting(port: number): Promise<boolean> {
   });
 }
 
+async function healthy(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(`${url.replace(/^ws/, "http")}/healthz`, { signal: AbortSignal.timeout(3000) });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 export const DEFAULT_DEPS: TeamHostDeps = {
   freePort,
   run: runHostCommand,
   startTunnel: (kind, port) => startTunnel(kind, port),
   listening: accepting,
+  answering: healthy,
   teamsFile: () => {
     mkdirSync(dataDir(), { recursive: true, mode: 0o700 });
     return join(dataDir(), "teams.db");
@@ -128,6 +140,8 @@ export async function openTeam(
     step(`opening a ${kind} tunnel…`);
     tunnel = await deps.startTunnel(kind, port);
     tunnel.onExit((reason) => report(`the ${kind} tunnel stopped (${reason.split("\n")[0]})`));
+    step("waiting for the tunnel to answer…");
+    await untilAnswering(deps, tunnel.url, () => relayLost);
     step("creating the team…");
     const made = await created(deps.run(createArgs(request, tunnel.url), ["ignore", "pipe", "pipe"]));
     return {
@@ -195,4 +209,19 @@ async function untilListening(deps: TeamHostDeps, port: number, gone: () => stri
     await pause(POLL_MS);
   }
   throw new HostUnavailable("the relay did not start in time");
+}
+
+async function untilAnswering(deps: TeamHostDeps, url: string, gone: () => string | null): Promise<void> {
+  const deadline = Date.now() + TUNNEL_MS;
+  while (Date.now() < deadline) {
+    const reason = gone();
+    if (reason !== null) {
+      throw new HostUnavailable(reason);
+    }
+    if (await deps.answering(url)) {
+      return;
+    }
+    await pause(POLL_MS * 10);
+  }
+  throw new HostUnavailable("the tunnel did not start answering in time, try again");
 }
