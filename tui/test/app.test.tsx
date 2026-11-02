@@ -143,7 +143,7 @@ describe("App", () => {
     expect(await frame(setup, "who · 1 here")).toContain("vlad (you)  host");
     await setup.mockInput.typeText("/help");
     await setup.mockInput.pressEnter();
-    const help = await frame(setup, "shift+tab");
+    const help = await frame(setup, "esc close");
     expect(help).not.toContain("who · 1 here");
     await setup.mockInput.pressEscape();
     await tick(50);
@@ -197,11 +197,11 @@ describe("App", () => {
       type: "approval.requested",
       approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [], warnings: [] },
     });
-    await frame(setup, "approval needed");
+    await frame(setup, "Approve ");
     await frame(setup, "answer above");
     const text = setup.captureCharFrame().split("\n");
-    const row = text.findIndex((line) => line.includes("send ·"));
-    await setup.mockMouse.click(10, row - 1);
+    const row = text.findIndex((line) => line.includes("click or press tab to type"));
+    await setup.mockMouse.click(10, row);
     await tick(100);
     await setup.mockInput.typeText("hi");
     await setup.mockInput.pressEnter();
@@ -481,8 +481,8 @@ describe("App", () => {
       type: "approval.requested",
       approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: ["rm *"], warnings: [] },
     });
-    const text = await frame(setup, "approval needed");
-    expect(text).toContain("$ rm a.txt");
+    const text = await frame(setup, "Approve ");
+    expect(text).toContain("Approve rm a.txt?");
     expect(text).toContain("Alia");
     expect(text).toContain("NEEDS YOU");
     await tick(500);
@@ -498,7 +498,7 @@ describe("App", () => {
       type: "approval.requested",
       approval: { id: "ap1", call: CALL, provenance: GUEST, timeout_at: new Date(Date.now() + 60_000).toISOString(), suggested_patterns: [], warnings: [] },
     });
-    await frame(setup, "approval needed");
+    await frame(setup, "Approve ");
     await setup.mockInput.pressKey("y");
     await tick(100);
     expect(fake.commands).toEqual([]);
@@ -579,7 +579,7 @@ describe("App", () => {
     const setup = await mount(fake);
     fake.emit({ type: "run.started", run_id: "r", prompt_id: "pm0", provenance: GUEST });
     fake.emit({ type: "message.started", run_id: "r", message_id: "m1" });
-    const text = await frame(setup, "thinking…");
+    const text = await frame(setup, "esc to interrupt");
     expect(text).toContain("esc to interrupt");
     expect(text).not.toContain("⏺");
   });
@@ -587,12 +587,12 @@ describe("App", () => {
   test("shift+tab cycles the permission mode and the line under the composer follows it", async () => {
     const fake = session();
     const setup = await mount(fake);
-    await frame(setup, "ask before changes (shift+tab to cycle)");
+    await frame(setup, "ask before changes");
     await setup.mockInput.pressTab({ shift: true });
     await tick(100);
     expect(fake.commands).toEqual([{ type: "session.set_permission_mode", mode: "accept_edits" }]);
     fake.emit({ type: "session.permission_mode_changed", mode: "plan" });
-    await frame(setup, "plan mode on (shift+tab to cycle)");
+    await frame(setup, "plan mode on");
   });
 
   test("after a plan the host starts the work in auto mode", async () => {
@@ -921,17 +921,60 @@ describe("App", () => {
     expect(await frame(setup, "exit 1")).toContain("⏺ Bash(pytest) · exit 1");
   });
 
-  test("a running command keeps output inside its expandable details", async () => {
+  test("a running command shows only its last line until it is opened", async () => {
     const fake = session();
     const setup = await mount(fake);
     fake.emit({ type: "tool.started", run_id: "r", call: { id: "t1", name: "bash", risk: "exec", subject: "make all", args: {} } });
     fake.emit({ type: "tool.output", call_id: "t1", chunk: "compiling a\ncompiling b\n" });
-    const text = await frame(setup, "make all");
-    expect(text).not.toContain("compiling b");
+    const text = await frame(setup, "compiling b");
     expect(text).not.toContain("compiling a");
     await setup.mockInput.pressKey("o", { ctrl: true });
     const open = await frame(setup, "compiling a");
     expect(open).toContain("compiling b");
+  });
+
+  test("a finished edit shows its diff without a click and copy waits for the open view", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    runTool(fake, { id: "t1", name: "edit", risk: "write", subject: "calc.py", args: {} }, "edited", true, DIFF);
+    const text = await frame(setup, "return a + b");
+    expect(text).toMatch(/2 - {5}return a - b/);
+    expect(text).not.toContain("copy");
+    await setup.mockInput.pressKey("o", { ctrl: true });
+    expect(await frame(setup, "copy")).toContain("return a + b");
+  });
+
+  test("a failed command shows the end of its error without opening it", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    runTool(fake, { id: "t1", name: "bash", risk: "exec", subject: "make", args: {} }, "building\nld: symbol not found\n[exit 2]", false);
+    const text = await frame(setup, "ld: symbol not found");
+    expect(text).toContain("· exit 2");
+  });
+
+  test("a long run of tools folds the early steps and ctrl+o opens them", async () => {
+    const fake = session();
+    const setup = await mount(fake, 120, 50);
+    for (let index = 0; index < 8; index += 1) {
+      runTool(fake, { id: `t${index}`, name: "read", risk: "read", subject: `file${index}.py`, args: {} }, "x");
+    }
+    const text = await frame(setup, "3 earlier steps");
+    expect(text).not.toContain("file0.py");
+    expect(text).toContain("file7.py");
+    expect(text).toContain("8 steps");
+    await setup.mockInput.pressKey("o", { ctrl: true });
+    expect(await frame(setup, "file0.py")).not.toContain("earlier steps");
+  });
+
+  test("while the agent works a verb with a spinner shows, and a finished run says how long it took", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "run.started", run_id: "r", prompt_id: "pm0", provenance: GUEST });
+    const working = await frame(setup, "esc to interrupt");
+    expect(working).toMatch(/[·✢✳✶✻✽] \w+ing…/);
+    await tick(2200);
+    fake.emit({ type: "run.ended", run_id: "r", reason: "stop", usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 }, error: null });
+    expect(await frame(setup, "· done")).toMatch(/✻ \w+ed for \d+s · done/);
   });
 
   test("an edit says what it added and removed and opens into a numbered diff", async () => {

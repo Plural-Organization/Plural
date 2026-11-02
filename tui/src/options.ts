@@ -5,6 +5,7 @@ export type OutputFormat = "text" | "json" | "stream-json";
 
 export interface SessionOptions {
   hostArgs: string[];
+  private: boolean;
   tunnel: string | null;
   resume: Resume | null;
   print: boolean;
@@ -84,6 +85,7 @@ function list(value: string): string[] {
 export function emptyOptions(): SessionOptions {
   return {
     hostArgs: [],
+    private: false,
     tunnel: null,
     resume: null,
     print: false,
@@ -219,8 +221,8 @@ function session(args: string[]): SessionOptions {
         }
         break;
       }
-      case "--team":
-        options.hostArgs.push("--team");
+      case "--private":
+        options.private = true;
         break;
       case "--name":
         options.displayName = valueOf(args, index, arg);
