@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { parseLink, type JoinLink } from "@plural/client";
 import { Logo } from "../components/Logo";
 import { blockedByMixedContent, hostOf, unwrapLink } from "../lib/links";
 import { forgetRoom, linkOf, rememberName, savedName, savedRooms, type SavedRoom } from "../lib/saved";
-import { parseTeamInvite, type SessionCard } from "../lib/team";
+import { firstSession, parseTeamInvite, type SessionCard } from "../lib/team";
 import { TeamPanel } from "../components/TeamPanel";
 import type { TeamState } from "../hooks/useTeam";
 import styles from "./JoinScreen.module.css";
@@ -37,7 +37,20 @@ export function JoinScreen({ notice, team, onJoin, onWatch }: JoinScreenProps) {
   const [teamError, setTeamError] = useState<string | null>(null);
   const [joiningTeam, setJoiningTeam] = useState(false);
   const [teamNote, setTeamNote] = useState<string | null>(null);
+  // Right after joining, the first session someone shares opens on its own, as in the terminal.
+  const [entering, setEntering] = useState(false);
   const teamRelay = parseTeamInvite(teamInvite)?.relay ?? "";
+
+  useEffect(() => {
+    if (!entering || team.team === null) {
+      return;
+    }
+    const first = firstSession(team.sessions, team.team.profile.member.id, window.location.protocol);
+    if (first !== null) {
+      setEntering(false);
+      onWatch(first.card, first.url);
+    }
+  }, [entering, team.team, team.sessions]);
   const teamInsecure = blockedByMixedContent(teamRelay, window.location.protocol);
 
   const joinTeam = (event: FormEvent) => {
@@ -59,6 +72,7 @@ export function JoinScreen({ notice, team, onJoin, onWatch }: JoinScreenProps) {
       .then(() => {
         rememberName(member);
         setTeamInvite("");
+        setEntering(true);
         window.history.replaceState(null, "", window.location.pathname);
       })
       .catch((problem: unknown) => setTeamError(problem instanceof Error ? problem.message : String(problem)))
@@ -146,6 +160,7 @@ export function JoinScreen({ notice, team, onJoin, onWatch }: JoinScreenProps) {
           <div>
             <h2 className="label">your team</h2>
             <TeamPanel state={team} onOpen={onWatch} onNotice={setTeamNote} />
+            {entering ? <p className="hint">You are in. The first session someone shares opens here on its own.</p> : null}
             {teamNote ? <p className="hint">{teamNote}</p> : null}
           </div>
         ) : team.loading ? null : (

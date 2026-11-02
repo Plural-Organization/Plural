@@ -16,15 +16,18 @@ interface SidebarProps {
   open: boolean;
   send: (command: Command) => void;
   onInvite: (role: "participant" | "viewer") => void;
+  // The sessions open in this tab, when there is more than one.
+  spaces?: ReactNode;
   // The team's sessions, when this browser is in a team.
   team?: ReactNode;
 }
 
-export function Sidebar({ projection, status, waiting, open, send, onInvite, team = null }: SidebarProps) {
+export function Sidebar({ projection, status, waiting, open, send, onInvite, spaces = null, team = null }: SidebarProps) {
   const isHost = projection.me?.role === "host";
   return (
     <aside className={cx(styles.side, open && styles.open)} aria-label="The room">
       <People projection={projection} isHost={isHost} send={send} onInvite={onInvite} />
+      {spaces ? <Section title="open here">{spaces}</Section> : null}
       {team ? <Section title="team">{team}</Section> : null}
       {isHost ? (
         <Section title="waits for you">

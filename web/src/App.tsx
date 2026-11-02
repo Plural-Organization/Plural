@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { parseLink, type JoinLink } from "@plural/client";
 import { JoinScreen } from "./screens/JoinScreen";
 import { RoomScreen } from "./screens/RoomScreen";
@@ -6,45 +6,92 @@ import { unlockAudio } from "./lib/alert";
 import { useTeam } from "./hooks/useTeam";
 import type { SessionCard, Team } from "./lib/team";
 
-interface Joined {
+export interface Space {
   link: JoinLink;
   name: string;
-  key: number;
   team: Team | null;
+  // Who runs it, for the list of open spaces.
+  owner: string | null;
 }
 
+// Like the terminal's spaces: every session opened here stays connected, so moving between them is
+// instant; the oldest one in the background closes past this many.
+const MAX_SPACES = 6;
+
 export function App() {
-  const [joined, setJoined] = useState<Joined | null>(null);
+  const [spaces, setSpaces] = useState<Space[]>([]);
+  const [active, setActive] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const team = useTeam();
 
-  const join = (link: JoinLink, name: string, member: Team | null = null) => {
+  const open = (space: Space) => {
     unlockAudio();
     setNotice(null);
-    setJoined({ link, name, key: Date.now(), team: member });
+    setSpaces((current) => {
+      if (current.some((item) => item.link.room === space.link.room)) {
+        return current;
+      }
+      const next = [...current, space];
+      const extra = next.length - MAX_SPACES;
+      return extra > 0 ? next.filter((item, index) => index >= extra || item.link.room === active) : next;
+    });
+    setActive(space.link.room);
   };
+  const join = (link: JoinLink, name: string) => open({ link, name, team: null, owner: null });
   // A teammate's session opens with the team's word for this person instead of an invite.
-  const watch = (_card: SessionCard, url: string) => {
+  const watch = (card: SessionCard, url: string) => {
     if (team.team !== null) {
-      join(parseLink(url), team.team.profile.member.name, team.team);
+      open({ link: parseLink(url), name: team.team.profile.member.name, team: team.team, owner: card.owner });
+    }
+  };
+  const close = (room: string, reason: string | null) => {
+    const rest = spaces.filter((item) => item.link.room !== room);
+    setSpaces(rest);
+    if (room === active) {
+      setActive(rest.at(-1)?.link.room ?? null);
+      setNotice(reason);
     }
   };
 
-  if (joined === null) {
-    return <JoinScreen notice={notice} team={team} onJoin={(link, name) => join(link, name)} onWatch={watch} />;
+  // alt+← and alt+→ move between open spaces, as in the terminal.
+  useEffect(() => {
+    if (spaces.length < 2) {
+      return;
+    }
+    const onKey = (event: KeyboardEvent) => {
+      if (!event.altKey || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) {
+        return;
+      }
+      const index = spaces.findIndex((item) => item.link.room === active);
+      const step = event.key === "ArrowLeft" ? -1 : 1;
+      event.preventDefault();
+      setActive(spaces[(index + step + spaces.length) % spaces.length]!.link.room);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [spaces, active]);
+
+  if (spaces.length === 0 || active === null) {
+    return <JoinScreen notice={notice} team={team} onJoin={join} onWatch={watch} />;
   }
   return (
-    <RoomScreen
-      key={joined.key}
-      link={joined.link}
-      name={joined.name}
-      member={joined.team}
-      team={team}
-      onWatch={watch}
-      onLeave={(reason) => {
-        setNotice(reason);
-        setJoined(null);
-      }}
-    />
+    <>
+      {spaces.map((space) => (
+        <div key={space.link.room} style={{ display: space.link.room === active ? "contents" : "none" }}>
+          <RoomScreen
+            link={space.link}
+            name={space.name}
+            member={space.team}
+            team={team}
+            active={space.link.room === active}
+            spaces={spaces}
+            onSwitch={setActive}
+            onClose={(room) => close(room, null)}
+            onWatch={watch}
+            onLeave={(reason) => close(space.link.room, reason)}
+          />
+        </div>
+      ))}
+    </>
   );
 }

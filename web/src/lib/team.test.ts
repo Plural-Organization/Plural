@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { authorization, base64url, certificateWindow, httpBase, joinMessage, parseTeamInvite, renewalDue, reach, reachable, requestMessage, teamJoinCommand, teamJoinLink, teamProof, type SessionCard, type Team, type TeamProfile } from "./team";
+import { authorization, firstSession, base64url, certificateWindow, httpBase, joinMessage, parseTeamInvite, renewalDue, reach, reachable, requestMessage, teamJoinCommand, teamJoinLink, teamProof, type SessionCard, type Team, type TeamProfile } from "./team";
 
 const PROFILE: TeamProfile = {
   relay: "wss://relay.example.com",
@@ -106,4 +106,19 @@ test("a relay that answers plainly is asked once", async () => {
   vi.stubGlobal("fetch", fetcher);
   await reach("https://relay.example/teams/join", {});
   expect(fetcher).toHaveBeenCalledTimes(1);
+});
+
+test("right after joining, the busiest session someone else shares opens", () => {
+  const card = (owner_id: string, status: SessionCard["status"], updated_at: string, url = `wss://r.example/${owner_id}`) =>
+    ({ room: owner_id, owner: owner_id, owner_id, status, updated_at, endpoints: [{ kind: "relay", url }] }) as SessionCard;
+  const cards = [
+    card("m_idle", "idle", "2026-11-02T10:05:00Z"),
+    card("m_me", "running", "2026-11-02T10:06:00Z"),
+    card("m_old", "running", "2026-11-02T10:00:00Z"),
+    card("m_new", "running", "2026-11-02T10:04:00Z"),
+    card("m_plain", "running", "2026-11-02T10:07:00Z", "ws://10.0.0.2/r"),
+  ];
+  expect(firstSession(cards, "m_me", "https:")?.card.owner_id).toBe("m_new");
+  expect(firstSession(cards, "m_me", "http:")?.card.owner_id).toBe("m_plain");
+  expect(firstSession([cards[1]!], "m_me", "https:")).toBeNull();
 });
