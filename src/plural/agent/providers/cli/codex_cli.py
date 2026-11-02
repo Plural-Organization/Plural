@@ -621,9 +621,7 @@ class CodexCliProvider:
                         completed = True
                     elif method == "error":
                         nested = _as_dict(event.get("error")) or event
-                        raise ProviderError(
-                            _failure(nested, "Codex app server: turn failed")
-                        )
+                        raise ProviderError(_failure(nested, "Codex app server: turn failed"))
 
                 if final_text is None:
                     raise ProviderError("Codex app server returned no answer")

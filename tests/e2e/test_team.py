@@ -65,9 +65,7 @@ async def test_two_people_form_a_team_and_see_each_other(
         )
 
 
-async def test_an_invite_code_is_reusable_over_the_wire(
-    relay: RelayServer, tmp_path: Path
-) -> None:
+async def test_an_invite_code_is_reusable_over_the_wire(relay: RelayServer, tmp_path: Path) -> None:
     _, code = await founder(relay, tmp_path)
     alia, bek = Person(tmp_path, "alia"), Person(tmp_path, "bek")
     alia_profile = await join_team(relay.url, alia.store.identity(), code=code, member="alia")
