@@ -112,6 +112,8 @@ class AgentRun:
             self._deadline = asyncio.get_running_loop().call_later(ABORT_GRACE_S, task.cancel)
 
     async def _drive(self, run_id: str, events: AsyncIterator[AgentEvent]) -> None:
+        # The task has its own context, so every line the run logs carries its id.
+        structlog.contextvars.bind_contextvars(run_id=run_id)
         try:
             async for event in events:
                 self._inbox.put(AgentOutput(run_id, event))

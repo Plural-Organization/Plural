@@ -1009,6 +1009,7 @@ class SessionActor:
             self._redactor.add(secret)
         self._agent_label = change.label
         self._fast_label = change.helper_label
+        log.info("agent.models", main=change.label, fast=change.helper_label)
         if change.label != self._state.agent or change.helper_label != self._state.fast_agent:
             await self._emit(
                 AgentChanged(agent=change.label, fast=change.helper_label), actor_id=self._host.id

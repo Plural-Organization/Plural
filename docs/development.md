@@ -34,6 +34,24 @@ npm run dev --workspace tui -- --workspace ~/some-project
 
 `npm run dev --workspace web` serves the browser client on http://localhost:5173. Join it with the invite or the host link of a running host. `npm run build --workspace web` writes a static site to `web/dist`.
 
+## What a session cost
+
+The host started by the terminal client logs JSON lines to `~/.plural/logs/host.log`, each with the `room`, and with the `run_id` while a run is going. Three kinds of line say where tokens and time went:
+
+- `llm.call`: one per model call, with its `purpose` (`turn`, `compact`, `briefing`, `ask`), the tokens billed (`input`, `cache_read`, `cache_write`, `output`), `hit`, the share of the prompt read from the provider's cache, and `first_ms` and `total_ms`. A sub-agent's lines also carry `agent` and `agent_model`.
+- `tool.call`: the tool, whether it was allowed, how long the approval (`wait_ms`) and the call (`run_ms`) took, the size of its result and whether it was truncated.
+- `context.compacted`: why the conversation was summarized, and its size before and after.
+
+```bash
+jq -c 'select(.event == "llm.call") | {purpose, input, cache_read, cache_write, hit}' ~/.plural/logs/host.log
+```
+
+A `hit` that stays low after the first turn means something changes the start of each request. With `PLURAL_DUMP_REQUESTS=1` every request is saved, and `scripts/prefix_diff.py` names where each one stops repeating the one before it:
+
+```bash
+uv run python scripts/prefix_diff.py ~/.plural/logs/requests/<room>
+```
+
 ## Layout
 
 ```text

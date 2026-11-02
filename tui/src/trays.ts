@@ -1,4 +1,4 @@
-import { label, ruleLine, type Projection, type Role } from "@plural/client";
+import { cacheHitLabel, label, ruleLine, type Projection, type Role } from "@plural/client";
 import { visibleCommands, type CommandHint } from "./commands";
 import type { Row } from "./components/Tray";
 import { colorFor, theme } from "./theme";
@@ -132,11 +132,15 @@ export function usageRows(projection: Projection): Row[] {
   const what = Math.max(...lines.map((line) => label(line).length));
   const total = lines.reduce(
     (sum, line) => ({
-      input: sum.input + line.usage.input_tokens + line.usage.cache_read_tokens + line.usage.cache_write_tokens,
-      output: sum.output + line.usage.output_tokens,
+      input_tokens: sum.input_tokens + line.usage.input_tokens,
+      cache_read_tokens: sum.cache_read_tokens + line.usage.cache_read_tokens,
+      cache_write_tokens: sum.cache_write_tokens + line.usage.cache_write_tokens,
+      output_tokens: sum.output_tokens + line.usage.output_tokens,
     }),
-    { input: 0, output: 0 },
+    { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0 },
   );
+  const prompt = total.input_tokens + total.cache_read_tokens + total.cache_write_tokens;
+  const cached = cacheHitLabel(total);
   return [
     ...lines.map((line): Row => [
       { text: `${line.role} · ${line.model}`.padEnd(width + 2), fg: line.role === "fast" ? theme.info : theme.accent },
@@ -144,9 +148,15 @@ export function usageRows(projection: Projection): Row[] {
       { text: `${line.uses}×`.padStart(5), fg: theme.dim },
       { text: `  in ${tokens(line.usage.input_tokens)}`.padEnd(11), fg: theme.text },
       { text: `out ${tokens(line.usage.output_tokens)}`.padEnd(10), fg: theme.text },
-      { text: line.usage.cache_read_tokens > 0 ? `cache ${tokens(line.usage.cache_read_tokens)}` : "", fg: theme.dim },
+      { text: line.usage.cache_read_tokens + line.usage.cache_write_tokens > 0 ? cacheHitLabel(line.usage) : "", fg: theme.dim },
     ]),
     [""],
-    [{ text: "total  ", fg: theme.dim }, { text: `in ${tokens(total.input)} · out ${tokens(total.output)} tokens`, fg: theme.text, bold: true }],
+    [
+      { text: "total  ", fg: theme.dim },
+      { text: `in ${tokens(prompt)} · out ${tokens(total.output_tokens)} tokens`, fg: theme.text, bold: true },
+      { text: cached ? `  ${cached}` : "", fg: theme.dim },
+      { text: total.cache_write_tokens > 0 ? ` · ${tokens(total.cache_write_tokens)} written to the cache` : "", fg: theme.dim },
+    ],
+    [{ text: "in counts the whole prompt, the part read from the cache too", fg: theme.dim }],
   ];
 }

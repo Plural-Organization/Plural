@@ -1,4 +1,4 @@
-import { findPerson, isSkillCommand, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
+import { cacheHitLabel, findPerson, isSkillCommand, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
 import { commandName, helpText, isHostOnly, pluginHints } from "../lib/commands";
 import type { Session } from "./useSession";
@@ -149,7 +149,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
       if (parsed.type === "show.usage") {
         const lines = state.usage.map(
           (line) =>
-            `  ${line.role} · ${line.model}  ${line.agent || "conversation"}  ${line.uses}×  in ${line.usage.input_tokens}  out ${line.usage.output_tokens}`,
+            `  ${line.role} · ${line.model}  ${line.agent || "conversation"}  ${line.uses}×  in ${line.usage.input_tokens}  out ${line.usage.output_tokens}  cache ${line.usage.cache_read_tokens}  wrote ${line.usage.cache_write_tokens}  ${cacheHitLabel(line.usage)}`.trimEnd(),
         );
         notify("accent", lines.length > 0 ? ["usage", ...lines].join("\n") : "nothing spent yet in this session");
         return;

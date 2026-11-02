@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from collections import deque
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field, replace
@@ -61,6 +62,7 @@ from plural.agent.providers.base import (
 )
 from plural.agent.providers.resilient import ResilientProvider
 from plural.agent.sandbox.base import SandboxError
+from plural.agent.telemetry import RequestDump, observed
 from plural.agent.tools.base import PreparedCall, ToolCtx, ToolError, ToolResult
 from plural.agent.tools.registry import ToolRegistry, UnknownTool
 from plural.core.ports import IdGenerator
@@ -136,7 +138,9 @@ class AgentLoop:
         ids: IdGenerator,
         limits: LoopLimits | None = None,
         helper: LLMProvider | None = None,
+        dump: RequestDump | None = None,
     ) -> None:
+        self._dump = dump
         self._spending: dict[tuple[str, str], Spend] = {}
         self._tools = tools
         self._gate = gate
@@ -180,6 +184,10 @@ class AgentLoop:
     @property
     def helper(self) -> LLMProvider | None:
         return self._helper.inner if self._helper is not None else None
+
+    @property
+    def dump(self) -> RequestDump | None:
+        return self._dump
 
     @property
     def limits(self) -> LoopLimits:
@@ -250,7 +258,7 @@ class AgentLoop:
         self._usage = Usage()
         yield Compacting(self._context_tokens)
         try:
-            yield await self._compact(None, cancel)
+            yield await self._compact(None, cancel, "manual")
         except CompactionFailed as error:
             yield RunEnd(RunEndReason.ERROR, self._usage, f"compaction failed: {error}")
             return
@@ -311,9 +319,10 @@ class AgentLoop:
         try:
             for _ in range(self._limits.max_turns):
                 if self._should_compact():
+                    reason = "requested" if self._compact_requested else "threshold"
                     yield Compacting(self._context_tokens)
                     try:
-                        yield await self._compact(prompt, cancel)
+                        yield await self._compact(prompt, cancel, reason)
                         yield self.fill()
                     except CompactionFailed as error:
                         self._compaction_failed = True
@@ -354,7 +363,7 @@ class AgentLoop:
                     recovering = True
                     yield Compacting(self._context_tokens)
                     try:
-                        yield await self._compact(prompt, cancel)
+                        yield await self._compact(prompt, cancel, "overflow")
                         yield self.fill()
                     except CompactionFailed as failure:
                         yield RunEnd(RunEndReason.ERROR, self._usage, f"context is full: {failure}")
@@ -455,7 +464,9 @@ class AgentLoop:
                 window=self._limits.context_window,
             )
 
-    async def _compact(self, prompt: UserTurn | None, cancel: asyncio.Event) -> Compacted:
+    async def _compact(
+        self, prompt: UserTurn | None, cancel: asyncio.Event, reason: str
+    ) -> Compacted:
         self._compact_requested = False
         system, tools = self._prompt_parts()
         request = LlmRequest(
@@ -464,14 +475,14 @@ class AgentLoop:
             tools=tools,
         )
         summary = ""
+        role = "main"
         for provider in (self._helper, self._provider):
             if provider is None:
                 continue
             try:
                 summary = await self._summarize(request, provider, cancel)
-                self.spend(
-                    "fast" if provider is self._helper else "main", "compact", Usage(), uses=1
-                )
+                role = "fast" if provider is self._helper else "main"
+                self.spend(role, "compact", Usage(), uses=1)
                 break
             except CompactionFailed as error:
                 if cancel.is_set() or provider is self._provider:
@@ -481,6 +492,14 @@ class AgentLoop:
         self._conversation = [SummaryTurn(text=summary), *([prompt] if prompt is not None else [])]
         self._context_tokens = sum(_estimate_tokens(message) for message in self._conversation)
         self._verify_compaction = True
+        log.info(
+            "context.compacted",
+            reason=reason,
+            role=role,
+            tokens_before=before,
+            tokens_after=self._context_tokens,
+            summary_chars=len(summary),
+        )
         return Compacted(summary, before)
 
     async def brief(self, instruction: str, *, cancel: asyncio.Event) -> str:
@@ -522,7 +541,7 @@ class AgentLoop:
             role = "fast" if provider is self._helper else "main"
             text: list[str] = []
             try:
-                async for event in self._events(request, cancel, provider):
+                async for event in self._events(request, cancel, provider, purpose="ask"):
                     match event:
                         case TextDelta(text=chunk):
                             text.append(chunk)
@@ -555,7 +574,7 @@ class AgentLoop:
         called = False
         role = "fast" if provider is self._helper else "main"
         try:
-            async for event in self._events(request, cancel, provider):
+            async for event in self._events(request, cancel, provider, purpose=purpose):
                 match event:
                     case TextDelta(text=chunk):
                         text.append(chunk)
@@ -575,9 +594,22 @@ class AgentLoop:
         return summary
 
     def _events(
-        self, request: LlmRequest, cancel: asyncio.Event, provider: LLMProvider | None = None
+        self,
+        request: LlmRequest,
+        cancel: asyncio.Event,
+        provider: LLMProvider | None = None,
+        *,
+        purpose: str = "turn",
     ) -> AsyncIterator[LlmEvent]:
-        return (provider or self._provider).stream(request, cancel=cancel)
+        chosen = provider or self._provider
+        dumped = self._dump.write(request, purpose) if self._dump is not None else None
+        return observed(
+            chosen.stream(request, cancel=cancel),
+            request,
+            purpose=purpose,
+            role="fast" if chosen is self._helper else "main",
+            dumped=dumped,
+        )
 
     def _next_input(self, *, has_tool_calls: bool) -> list[UserTurn]:
         if self._steer:
@@ -689,11 +721,16 @@ class AgentLoop:
             args=call.args,
         )
         yield ToolStart(view)
+        asked = time.monotonic()
+        ran: float | None = None
+        allowed = False
         try:
             verdict = await interruptible(
                 self._gate.check(view, subject=prepared.subject, provenance=provenance), cancel
             )
+            allowed = verdict.allowed
             if verdict.allowed:
+                ran = time.monotonic()
                 queue: asyncio.Queue[str] = asyncio.Queue()
                 runner = asyncio.create_task(
                     self._invoke(
@@ -723,6 +760,18 @@ class AgentLoop:
                 result = ToolResult(f"Denied: {verdict.reason}", is_error=True)
         except Interrupted:
             result = ToolResult(_ABORTED, is_error=True)
+        done = time.monotonic()
+        log.info(
+            "tool.call",
+            tool=prepared.name,
+            risk=prepared.risk.value,
+            allowed=allowed,
+            error=result.is_error,
+            chars=len(result.content),
+            truncated="[truncated " in result.content,
+            wait_ms=round(((ran or done) - asked) * 1000),
+            run_ms=round((done - ran) * 1000) if ran is not None else None,
+        )
         yield ToolEnd(call.id, result)
 
     async def _invoke(

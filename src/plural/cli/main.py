@@ -365,6 +365,7 @@ def _writable(path: Path) -> bool:
 
 def _configure_logging(path: Path | None) -> None:
     processors: list[structlog.typing.Processor] = [
+        structlog.contextvars.merge_contextvars,
         structlog.processors.add_log_level,
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.format_exc_info,

@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import cast
 
+import structlog
+
 from plural.agent.agents import AgentLibrary
 from plural.agent.context import ContextBuilder, Environment
 from plural.agent.loop import AgentLoop, LoopLimits
@@ -23,6 +25,7 @@ from plural.agent.providers.web_search import (
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.skills import SkillLibrary
+from plural.agent.telemetry import RequestDump
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.core.discovery import ToolSearchTool
 from plural.agent.tools.core.skill import SkillTool
@@ -66,6 +69,8 @@ from plural.security.keys import load_or_create_host_key
 from plural.security.secrets import Redactor
 from plural.security.tokens import TokenSigner
 from plural.storage.sqlite_store import SqliteEventStore
+
+log = structlog.get_logger(__name__)
 
 
 @dataclass(slots=True)
@@ -150,6 +155,8 @@ async def remember_session(
 
 async def build_host(settings: HostSettings, *, provider: LLMProvider | None = None) -> Host:
     room = settings.room or UlidGenerator().new("r_")
+    # Tasks started from here on copy this context, so every log line names the room.
+    structlog.contextvars.bind_contextvars(room=room)
     try:
         workspace = await asyncio.to_thread(Workspace.at, settings.workspace)
     except FileNotFoundError as error:
@@ -250,6 +257,9 @@ async def _assemble(
         ),
         tool_ctx=ToolCtx(workspace=workspace, backend=LocalBackend()),
         ids=ids,
+        dump=RequestDump(state_dir / "logs" / "requests" / room)
+        if settings.dump_requests
+        else None,
         limits=LoopLimits(
             first_token_timeout_s=settings.first_token_timeout_s,
             idle_timeout_s=settings.idle_timeout_s,
@@ -258,6 +268,7 @@ async def _assemble(
         ),
     )
     delegate.attach(lambda: loop)
+    log.info("agent.models", main=settings.agent_label(), fast=helper.label if helper else "")
     room_url = settings.room_url(room)
     invites = InviteBook(clock=clock, link_base=room_url)
     link_code = await store.meta("room_link")

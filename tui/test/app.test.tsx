@@ -382,11 +382,11 @@ describe("App", () => {
   test("/usage breaks the session's tokens down by model and agent", async () => {
     const fake = session();
     const setup = await mount(fake);
-    const usage = (input: number, output: number) => ({ input_tokens: input, output_tokens: output, cache_read_tokens: 0, cache_write_tokens: 0 });
+    const usage = (input: number, output: number, read = 0, write = 0) => ({ input_tokens: input, output_tokens: output, cache_read_tokens: read, cache_write_tokens: write });
     fake.emit({
       type: "usage.recorded",
       lines: [
-        { role: "main", model: "claude-opus-5-5", agent: "", uses: 2, usage: usage(120_000, 8_000) },
+        { role: "main", model: "claude-opus-5-5", agent: "", uses: 2, usage: usage(20_000, 8_000, 90_000, 10_000) },
         { role: "fast", model: "claude-haiku-5-5", agent: "explore", uses: 3, usage: usage(40_000, 2_000) },
       ],
     });
@@ -395,8 +395,9 @@ describe("App", () => {
     const tray = await frame(setup, "usage · this session");
     expect(tray).toContain("main · claude-opus-5-5");
     expect(tray).toContain("agent explore");
-    expect(tray).toContain("in 120K");
-    expect(tray).toContain("in 160K · out 10K tokens");
+    expect(tray).toContain("in 20K");
+    expect(tray).toContain("75% cached");
+    expect(tray).toContain("in 160K · out 10K tokens  56% cached · 10K written to the cache");
   });
 
   test("/agents lists the sub-agents and the host creates one step by step", async () => {
