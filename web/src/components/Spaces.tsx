@@ -19,7 +19,7 @@ export function Spaces({ spaces, current, onSwitch, onClose }: SpacesProps) {
         return (
           <li key={space.link.room} className={cx(styles.space, here && styles.here)}>
             <button className={styles.open} type="button" disabled={here} onClick={() => onSwitch(space.link.room)} title={here ? "you are here" : `go to ${title}`}>
-              <span className={styles.name}>{space.owner === null ? "your room" : space.owner}</span>
+              <span className={styles.name}>{space.owner ?? "joined room"}</span>
               <span className={cx("mono", styles.room)}>{space.link.room}</span>
             </button>
             <button className={styles.close} type="button" aria-label={`Close ${title}`} title="close" onClick={() => onClose(space.link.room)}>

@@ -299,7 +299,7 @@ export function reachable(card: SessionCard, protocol: string): string | null {
   return (protocol === "https:" ? urls.find((url) => url.startsWith("wss:")) : urls[0]) ?? null;
 }
 
-const LIVELIEST: Record<SessionStatus, number> = { running: 0, waiting: 1, idle: 2 };
+const BUSIEST: Record<SessionStatus, number> = { running: 0, waiting: 1, idle: 2 };
 
 // The session to open right after joining: someone else's that this page can reach, the busiest first,
 // then the freshest.
@@ -308,6 +308,6 @@ export function firstSession(cards: SessionCard[], memberId: string, protocol: s
     .filter((card) => card.owner_id !== memberId)
     .map((card) => ({ card, url: reachable(card, protocol) }))
     .filter((item): item is { card: SessionCard; url: string } => item.url !== null);
-  open.sort((a, b) => (LIVELIEST[a.card.status] ?? 3) - (LIVELIEST[b.card.status] ?? 3) || b.card.updated_at.localeCompare(a.card.updated_at));
+  open.sort((a, b) => BUSIEST[a.card.status] - BUSIEST[b.card.status] || b.card.updated_at.localeCompare(a.card.updated_at));
   return open[0] ?? null;
 }

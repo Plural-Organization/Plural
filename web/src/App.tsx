@@ -33,7 +33,12 @@ export function App() {
       }
       const next = [...current, space];
       const extra = next.length - MAX_SPACES;
-      return extra > 0 ? next.filter((item, index) => index >= extra || item.link.room === active) : next;
+      if (extra <= 0) {
+        return next;
+      }
+      // The oldest ones in the background make way; the one in view and the new one stay.
+      const drop = new Set(next.filter((item) => item.link.room !== active && item.link.room !== space.link.room).slice(0, extra).map((item) => item.link.room));
+      return next.filter((item) => !drop.has(item.link.room));
     });
     setActive(space.link.room);
   };
@@ -44,13 +49,14 @@ export function App() {
       open({ link: parseLink(url), name: team.team.profile.member.name, team: team.team, owner: card.owner });
     }
   };
+  // Called from a session's own callbacks too, so it reads the latest spaces through the updaters.
   const close = (room: string, reason: string | null) => {
-    const rest = spaces.filter((item) => item.link.room !== room);
-    setSpaces(rest);
-    if (room === active) {
-      setActive(rest.at(-1)?.link.room ?? null);
-      setNotice(reason);
-    }
+    setSpaces((current) => {
+      const rest = current.filter((item) => item.link.room !== room);
+      setActive((shown) => (shown === room ? (rest.at(-1)?.link.room ?? null) : shown));
+      return rest;
+    });
+    setNotice(reason);
   };
 
   // alt+← and alt+→ move between open spaces, as in the terminal.
@@ -60,6 +66,10 @@ export function App() {
     }
     const onKey = (event: KeyboardEvent) => {
       if (!event.altKey || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) {
+        return;
+      }
+      // In a text field alt+arrows move by word.
+      if (event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]") !== null) {
         return;
       }
       const index = spaces.findIndex((item) => item.link.room === active);
@@ -84,6 +94,7 @@ export function App() {
             member={space.team}
             team={team}
             active={space.link.room === active}
+            notice={space.link.room === active ? notice : null}
             spaces={spaces}
             onSwitch={setActive}
             onClose={(room) => close(room, null)}

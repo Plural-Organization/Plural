@@ -1,5 +1,5 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { authorization, firstSession, base64url, certificateWindow, httpBase, joinMessage, parseTeamInvite, renewalDue, reach, reachable, requestMessage, teamJoinCommand, teamJoinLink, teamProof, type SessionCard, type Team, type TeamProfile } from "./team";
+import { authorization, base64url, certificateWindow, firstSession, httpBase, joinMessage, parseTeamInvite, renewalDue, reach, reachable, requestMessage, teamJoinCommand, teamJoinLink, teamProof, type SessionCard, type Team, type TeamProfile } from "./team";
 
 const PROFILE: TeamProfile = {
   relay: "wss://relay.example.com",

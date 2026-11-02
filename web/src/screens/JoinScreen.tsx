@@ -42,6 +42,14 @@ export function JoinScreen({ notice, team, onJoin, onWatch }: JoinScreenProps) {
   const teamRelay = parseTeamInvite(teamInvite)?.relay ?? "";
 
   useEffect(() => {
+    if (!entering) {
+      return;
+    }
+    // Nobody shares anything yet: after a minute the choice is left to this person.
+    const giveUp = setTimeout(() => setEntering(false), 60_000);
+    return () => clearTimeout(giveUp);
+  }, [entering]);
+  useEffect(() => {
     if (!entering || team.team === null) {
       return;
     }

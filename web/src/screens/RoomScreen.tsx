@@ -42,14 +42,19 @@ interface RoomScreenProps {
   team: TeamState;
   // Shown now; the others stay connected in the background.
   active: boolean;
+  // Why another space closed, said here when this one takes its place.
+  notice?: string | null;
   spaces: Space[];
   onSwitch: (room: string) => void;
   onClose: (room: string) => void;
   onWatch: (card: SessionCard, url: string) => void;
   onLeave: (reason: string | null) => void;
 }
-export function RoomScreen({ link, name, member, team, active, spaces, onSwitch, onClose, onWatch, onLeave }: RoomScreenProps) {
-  const session = useSession(link, name, (reason) => onLeave(reason), member);
+export function RoomScreen({ link, name, member, team, active, notice = null, spaces, onSwitch, onClose, onWatch, onLeave }: RoomScreenProps) {
+  // The session keeps the callback it started with, so it calls the latest one through a ref.
+  const leaving = useRef(onLeave);
+  leaving.current = onLeave;
+  const session = useSession(link, name, (reason) => leaving.current(reason), member);
   const { projection, feed, connection, invite, send, sendPresence } = session;
   const state = projection.state;
   const me = projection.me;
@@ -62,6 +67,11 @@ export function RoomScreen({ link, name, member, team, active, spaces, onSwitch,
   const [editing, setEditing] = useState<ProposalView | null>(null);
   const [panel, setPanel] = useState(false);
   const { toast, flash } = useToast();
+  useEffect(() => {
+    if (notice) {
+      flash(notice);
+    }
+  }, [notice]);
   const site = useMemo(() => siteFiles(feed.items), [feed.items]);
   const docs = useMemo(() => canvasDocs(feed.items, site), [feed.items, site]);
   const [canvasId, setCanvasId] = useState<string | null>(null);
@@ -194,11 +204,6 @@ export function RoomScreen({ link, name, member, team, active, spaces, onSwitch,
   // Each open space has its own composer, so the lookup stays inside this room.
   const root = useRef<HTMLDivElement>(null);
   const focusInput = useCallback(() => root.current?.querySelector<HTMLElement>("#composer")?.focus(), []);
-  useEffect(() => {
-    if (active) {
-      focusInput();
-    }
-  }, [active, focusInput]);
   const canAbort = isHost && state.run !== null && editing === null;
 
   useHotkeys({ enabled: invite === null && active, first: items[0], canAbort, send, onEdit: setEditing, onFocusInput: focusInput });
@@ -295,7 +300,7 @@ export function RoomScreen({ link, name, member, team, active, spaces, onSwitch,
         </div>
       </main>
 
-      {boardShown ? (
+      {boardShown && active ? (
         <Board
           strokes={state.board.strokes}
           pointers={pointers}
