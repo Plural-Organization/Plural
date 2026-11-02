@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { EventEmitter } from "node:events";
 import type { ChildProcess } from "node:child_process";
 import { parseArgs, UsageError } from "../src/options";
-import { createArgs, openTeam, relayArgs, type TeamHostDeps } from "../src/team-host";
+import { createArgs, openTeam, relayArgs, resolvable, type TeamHostDeps } from "../src/team-host";
 import type { Tunnel } from "../src/tunnel";
 
 class FakeProcess extends EventEmitter {
@@ -147,5 +147,25 @@ describe("plural team create --tunnel", () => {
     relay.stderr.emit("data", Buffer.from("address already in use"));
     relay.finish(1);
     await expect(done).rejects.toThrow("address already in use");
+  });
+});
+
+describe("a quick tunnel's name", () => {
+  const answers = (...results: ("found" | "missing" | "unknown")[]) => async () => results.shift() ?? "found";
+
+  test("is not looked up by the system until its name servers know it", async () => {
+    const lookup = answers("missing", "missing", "found", "missing");
+    expect(await resolvable("early.trycloudflare.com", lookup)).toBe(false);
+    expect(await resolvable("early.trycloudflare.com", lookup)).toBe(false);
+    expect(await resolvable("early.trycloudflare.com", lookup)).toBe(true);
+    // Once known, it stays known without asking again.
+    expect(await resolvable("early.trycloudflare.com", lookup)).toBe(true);
+  });
+
+  test("is left to the system resolver where the name servers cannot be reached", async () => {
+    const lookup = answers("unknown", "missing");
+    expect(await resolvable("blocked.trycloudflare.com", lookup)).toBe(true);
+    // An unknown answer is not remembered: the next poll asks again.
+    expect(await resolvable("blocked.trycloudflare.com", lookup)).toBe(false);
   });
 });
