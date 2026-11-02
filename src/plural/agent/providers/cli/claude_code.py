@@ -53,20 +53,36 @@ def _schema(request: LlmRequest) -> dict[str, Any]:
     }
 
 
-def _input(request: LlmRequest) -> bytes:
-    """One stream-json user message: the conversation as JSON text, then its images.
+INSTRUCTIONS = (
+    "Continue this conversation. The available Plural tools and then each message of the "
+    "conversation follow as JSON blocks. When a tool is needed, return its exact name and JSON "
+    "arguments in tool_calls; Plural will request approval and run it. Do not claim a tool has "
+    "run before its result appears in a later message. Images a message lists follow it under "
+    "the same label. Otherwise answer in text."
+)
 
-    Every `claude -p` call starts fresh, so the images of the whole conversation go along, the
-    way the API adapter resends them. A message refers to its images by label.
+
+def _input(request: LlmRequest) -> bytes:
+    """One stream-json user message: the instructions, the tools, then each message in turn.
+
+    Every `claude -p` call starts fresh, so the whole conversation goes along each time. Each
+    message is a block of its own after the tools, so a call repeats the blocks of the one before
+    it from the start and the provider's prompt cache serves them instead of a full-price prompt.
+    An image follows the message it belongs to.
     """
-    messages: list[dict[str, Any]] = []
-    images: list[dict[str, Any]] = []
+    tools = [tool.model_dump(mode="json") for tool in request.tools]
+    content: list[dict[str, Any]] = [
+        {"type": "text", "text": INSTRUCTIONS},
+        {"type": "text", "text": json.dumps({"tools": tools}, ensure_ascii=False)},
+    ]
+    count = 0
     for message in request.messages:
         dumped = message.model_dump(mode="json", exclude_none=True, exclude={"images"})
-        labels: list[str] = []
+        images: list[dict[str, Any]] = []
         for image in message.images:
-            label = f"image {len(images) // 2 + 1}"
-            labels.append(label)
+            count += 1
+            label = f"image {count}"
+            dumped.setdefault("images", []).append(label)
             images.append({"type": "text", "text": f"[{label}]"})
             images.append(
                 {
@@ -78,19 +94,10 @@ def _input(request: LlmRequest) -> bytes:
                     },
                 }
             )
-        if labels:
-            dumped["images"] = labels
-        messages.append(dumped)
-    tools = [tool.model_dump(mode="json") for tool in request.tools]
-    prompt = (
-        "Continue this conversation. Messages and available Plural tools are JSON data below. "
-        "When a tool is needed, return its exact name and JSON arguments in tool_calls; "
-        "Plural will request approval and run it. Do not claim a tool has run before its "
-        "result appears in a later message. Images a message lists follow this text under the "
-        "same label. Otherwise answer in text.\n"
-        + json.dumps({"messages": messages, "tools": tools}, ensure_ascii=False)
-    )
-    content = [{"type": "text", "text": prompt}, *images]
+        content.append(
+            {"type": "text", "text": json.dumps({"message": dumped}, ensure_ascii=False)}
+        )
+        content.extend(images)
     line = {"type": "user", "message": {"role": "user", "content": content}}
     return (json.dumps(line, ensure_ascii=False) + "\n").encode()
 

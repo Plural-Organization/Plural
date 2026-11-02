@@ -11,7 +11,7 @@ from plural.agent.loop import LoopLimits
 from plural.agent.providers.base import LlmImage, LlmMessage, LlmRequest
 from plural.agent.providers.cli import codex_cli
 from plural.agent.providers.cli.codex_cli import CodexCliProvider
-from plural.protocol.models import RunEndReason
+from plural.protocol.models import RunEndReason, Usage
 
 
 def fake_codex(tmp_path: Path, *, progress: str) -> Path:
@@ -149,3 +149,14 @@ async def test_codex_receives_the_new_messages_images(tmp_path: Path) -> None:
     turns = [json.loads(line) for line in record.read_text().splitlines()]
     assert turns[0][1] == {"type": "image", "url": "data:image/png;base64,cmVk"}
     assert [item["type"] for item in turns[1]] == ["text"]
+    # The thread keeps the system instructions and tools, so only the first turn sends them.
+    first_input, second_input = (json.loads(t[0]["text"].split("\n", 1)[1]) for t in turns)
+    assert set(first_input) == {"system", "tools", "messages"}
+    assert set(second_input) == {"messages"}
+
+
+def test_codex_turn_usage_counts_the_cached_prompt_apart() -> None:
+    last = {"inputTokens": 1000, "cachedInputTokens": 900, "outputTokens": 7}
+    usage = codex_cli._usage({"tokenUsage": {"last": last, "total": last}})  # pyright: ignore[reportPrivateUsage]
+    assert usage == Usage(input_tokens=100, cache_read_tokens=900, output_tokens=7)
+    assert codex_cli._usage({}) is None  # pyright: ignore[reportPrivateUsage]
