@@ -284,9 +284,24 @@ class AgentLoop:
         self._notes.append(turn)
         self._shared = True
 
-    def add_context(self, turn: NotesTurn) -> None:
-        """Notes from the host's own plugins: unlike a briefing, they do not mark the run shared."""
+    def add_context(self, turn: NotesTurn) -> bool:
+        """Notes from the host's own plugins: unlike a briefing, they do not mark the run shared.
+
+        A note that repeats the plugin's latest one in the conversation is left out, so a hook
+        that says the same each run does not pile up copies. False when it was left out.
+        """
+        latest = next(
+            (
+                message
+                for message in reversed([*self._conversation, *self._notes])
+                if isinstance(message, NotesTurn) and message.source == turn.source
+            ),
+            None,
+        )
+        if latest is not None and latest.text == turn.text:
+            return False
         self._notes.append(turn)
+        return True
 
     def load_tools(self, names: Sequence[str]) -> None:
         """Declare deferred tools loaded in an earlier session, before the next run."""

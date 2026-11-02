@@ -388,6 +388,20 @@ async def test_a_before_run_hook_gives_the_agent_context_without_tainting_the_ru
         assert "write a" in contents[context + 1]
 
 
+async def test_a_before_run_note_that_has_not_changed_is_not_added_again(tmp_path: Path) -> None:
+    install(tmp_path, "git", BEFORE)
+    provider = FakeProvider([reply("one"), reply("two")])
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        owner = await session.owner()
+        for text in ("first", "second"):
+            await owner.client.send(PromptSubmit(text=text))
+            await owner.next(RunEnded)
+        added = [event for event in owner.events if isinstance(event, PluginContextAdded)]
+        assert len(added) == 1
+        second = [message.content for message in provider.requests[1].messages]
+        assert sum("branch feat/x" in text for text in second) == 1
+
+
 STARTUP = """
 def setup(plural):
     @plural.on("session_start")

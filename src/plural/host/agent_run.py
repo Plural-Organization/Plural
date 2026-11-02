@@ -38,8 +38,8 @@ class AgentRun:
     ) -> AsyncIterator[AgentEvent]:
         # Plugin hooks run in the run's task, so a slow one never holds up the room.
         for plugin, text in await prepare(turn) if prepare is not None else ():
-            self._loop.add_context(NotesTurn(source=f"{PLUGIN_SOURCE}{plugin}", text=text))
-            yield ContextNote(plugin, text)
+            if self._loop.add_context(NotesTurn(source=f"{PLUGIN_SOURCE}{plugin}", text=text)):
+                yield ContextNote(plugin, text)
         async for event in self._loop.run(turn, cancel=cancel):
             yield event
 

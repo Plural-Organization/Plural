@@ -208,8 +208,9 @@ def setup(plural):
 
 It gets `prompt.prompt_id`, `prompt.text`, `prompt.author_id` and `prompt.role`, and returns text or
 nothing. The text goes to the agent as a note from the plugin right before the prompt, never into the
-system prompt, and is kept in the session log, so a restored session gives the agent the same note. The
-room sees a short line saying the plugin added context. Notes from all plugins together are capped at
+system prompt, and is kept in the session log, so a restored session gives the agent the same note. A
+note that repeats the plugin's latest one is left out, so returning the same branch every run costs
+nothing after the first. The room sees a short line saying the plugin added context. Notes from all plugins together are capped at
 8,000 characters; a hook gets 5 seconds and one that fails or is late adds nothing. It runs when a run
 starts, not for a prompt that joins a run already going. Unlike a briefing, a plugin's note does not
 make the agent ask before every change: it is the host's own code.
