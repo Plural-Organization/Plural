@@ -38,7 +38,7 @@ import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
 import { SCOPES, TrayView, type Form, type McpWizard, type Row, type Tray } from "./components/Tray";
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
-import { Compacting, ModeLine, Working } from "./components/Working";
+import { Compacting, Working } from "./components/Working";
 import { InviteDialog } from "./components/InviteDialog";
 import { ShareDialog } from "./components/ShareDialog";
 import { candidateFolders } from "./folders";
@@ -298,7 +298,6 @@ export function App({
             if (liveSettings.current.joinBell) {
               sound.ring();
             }
-            showToast(`${label(client.projection.state, event.participant)} joined`, `as ${event.participant.role}`, "accent", "+");
           }
           if (event.type === "invite.created") {
             if (event.reusable) {
@@ -366,6 +365,7 @@ export function App({
     () => new Map(state.queue.map((entry) => [entry.prompt_id, entry.delivery === "follow_up" ? ("follow_up" as const) : ("steer" as const)])),
     [state.queue],
   );
+  const chatting = useMemo(() => feed.items.some((item) => item.kind === "user" || item.kind === "assistant" || item.kind === "tool"), [feed.items]);
   const searching = focus === "search";
   const hits = useMemo(() => (searching ? findInFeed(feed.items, query).reverse() : []), [feed.items, query, searching]);
   const hitSet = useMemo(() => new Set(hits), [hits]);
@@ -1471,6 +1471,7 @@ export function App({
                   expanded={allOpen || opened.has(item.id)}
                   queued={queuedIds.get(item.id) ?? null}
                   runs={runs}
+                  started={chatting}
                   onToggle={toggle}
                   onCopy={(text) => copy(text, "Copied", `${text.length} characters`)}
                 />
@@ -1509,7 +1510,6 @@ export function App({
           disabled={disabled}
           placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
           remember={!asking?.secret}
-          tips={!asking}
           role={me?.role}
           people={mentionable(state, projection.meId)}
           commands={pluginCommands}
@@ -1551,8 +1551,7 @@ export function App({
             }}
           />
         ) : null}
-        <ModeLine mode={mode} canCycle={isHost} />
-        <StatusBar me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
+        <StatusBar mode={mode} canCycle={isHost} me={me} state={state} connection={connection} inbox={items.length} focused={focus === "inbox"} hint={hint} />
       </box>
       {toast ? <Toast message={toast} right={(showPanel ? SIDEBAR_WIDTH : 0) + 2} /> : null}
       {dialog ? (

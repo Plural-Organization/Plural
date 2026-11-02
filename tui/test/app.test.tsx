@@ -143,7 +143,7 @@ describe("App", () => {
     expect(await frame(setup, "who · 1 here")).toContain("vlad (you)  host");
     await setup.mockInput.typeText("/help");
     await setup.mockInput.pressEnter();
-    const help = await frame(setup, "shift+tab");
+    const help = await frame(setup, "esc close");
     expect(help).not.toContain("who · 1 here");
     await setup.mockInput.pressEscape();
     await tick(50);
@@ -162,8 +162,8 @@ describe("App", () => {
     await frame(setup, "Approve ");
     await frame(setup, "answer above");
     const text = setup.captureCharFrame().split("\n");
-    const row = text.findIndex((line) => line.includes("send ·"));
-    await setup.mockMouse.click(10, row - 1);
+    const row = text.findIndex((line) => line.includes("click or press tab to type"));
+    await setup.mockMouse.click(10, row);
     await tick(100);
     await setup.mockInput.typeText("hi");
     await setup.mockInput.pressEnter();
@@ -540,12 +540,12 @@ describe("App", () => {
   test("shift+tab cycles the permission mode and the line under the composer follows it", async () => {
     const fake = session();
     const setup = await mount(fake);
-    await frame(setup, "ask before changes (shift+tab to cycle)");
+    await frame(setup, "ask before changes");
     await setup.mockInput.pressTab({ shift: true });
     await tick(100);
     expect(fake.commands).toEqual([{ type: "session.set_permission_mode", mode: "accept_edits" }]);
     fake.emit({ type: "session.permission_mode_changed", mode: "plan" });
-    await frame(setup, "plan mode on (shift+tab to cycle)");
+    await frame(setup, "plan mode on");
   });
 
   test("after a plan the host starts the work in auto mode", async () => {

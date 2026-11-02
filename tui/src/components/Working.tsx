@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { PERMISSION_LABELS, shortTokens, type PermissionMode } from "@plural/client";
+import { shortTokens } from "@plural/client";
 import { theme } from "../theme";
 import { VERBS, verbAt } from "../verbs";
 import { Spinner, useElapsed } from "./Spinner";
@@ -67,26 +67,6 @@ export function Busy({ text }: { text: string }) {
         <Spinner color={theme.info} />
         <span fg={theme.info}> {text}…</span>
         {elapsed > 0 ? ` ${elapsed}s` : ""}
-      </text>
-    </box>
-  );
-}
-
-const MARKS: Record<PermissionMode, string> = { default: "⏵", accept_edits: "⏵⏵", plan: "⏸", auto: "⏵⏵⏵" };
-
-export function ModeLine({ mode, canCycle }: { mode: PermissionMode; canCycle: boolean }) {
-  if (mode === "default" && !canCycle) {
-    return null;
-  }
-  const color = mode === "plan" ? theme.info : mode === "auto" ? theme.danger : mode === "accept_edits" ? theme.warn : theme.dim;
-  return (
-    <box paddingX={2} height={1} flexShrink={0} backgroundColor={theme.panel}>
-      <text fg={theme.dim}>
-        <span fg={color}>
-          {MARKS[mode]} {PERMISSION_LABELS[mode]}
-          {mode === "default" ? "" : " on"}
-        </span>
-        {canCycle ? " (shift+tab to cycle)" : ""}
       </text>
     </box>
   );

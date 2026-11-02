@@ -50,7 +50,17 @@ const KEYS: readonly (readonly [string, string])[] = [
   ["ctrl+c", "twice to quit"],
 ];
 
-export function Banner({ item }: { item: Extract<FeedItem, { kind: "banner" }> }) {
+export function Banner({ item, compact }: { item: Extract<FeedItem, { kind: "banner" }>; compact: boolean }) {
+  if (compact) {
+    return (
+      <box marginBottom={1}>
+        <text fg={theme.dim}>
+          Plural v{item.version}
+          {item.guestLink || item.teamLink ? " · /invite shows the link" : ""} · /help
+        </text>
+      </box>
+    );
+  }
   return (
     <box flexDirection="column" border borderStyle="rounded" borderColor={theme.line} title={` Plural  v${item.version} `} paddingX={2} paddingY={1} marginBottom={1}>
       {item.guestLink || item.teamLink ? (
@@ -379,14 +389,15 @@ interface ViewProps {
   expanded: boolean;
   queued?: Queued;
   runs: Map<string, Run>;
+  started: boolean;
   onToggle: (id: string) => void;
   onCopy: (text: string) => void;
 }
 
-export function FeedItemView({ item, syntax, width, expanded, queued = null, runs, onToggle, onCopy }: ViewProps) {
+export function FeedItemView({ item, syntax, width, expanded, queued = null, runs, started, onToggle, onCopy }: ViewProps) {
   switch (item.kind) {
     case "banner":
-      return <Banner item={item} />;
+      return <Banner item={item} compact={started} />;
     case "user":
       return <UserCard item={item} queued={queued} />;
     case "chat":
