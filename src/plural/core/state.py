@@ -31,6 +31,7 @@ from plural.protocol.events import (
     ParticipantRevoked,
     ParticipantRoleChanged,
     PermissionModeChanged,
+    PluginLineSet,
     PluginsChanged,
     PolicyRuleAdded,
     PolicyRuleRemoved,
@@ -54,6 +55,8 @@ from plural.protocol.models import (
     BoardStroke,
     ChatEntry,
     EntryKind,
+    PluginLine,
+    PluginStatus,
     QueuedPrompt,
     RunView,
     SessionState,
@@ -161,7 +164,15 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             loaded = tuple(dict.fromkeys((*state.loaded_tools, *tools)))
             return state.model_copy(update={"loaded_tools": loaded})
         case PluginsChanged(plugins=plugins, commands=commands):
-            return state.model_copy(update={"plugins": plugins, "commands": commands})
+            loaded = {view.name for view in plugins if view.status is PluginStatus.LOADED}
+            lines = tuple(line for line in state.plugin_lines if line.plugin in loaded)
+            return state.model_copy(
+                update={"plugins": plugins, "commands": commands, "plugin_lines": lines}
+            )
+        case PluginLineSet(plugin=plugin, text=text):
+            kept = tuple(line for line in state.plugin_lines if line.plugin != plugin)
+            lines = (*kept, PluginLine(plugin=plugin, text=text)) if text else kept
+            return state.model_copy(update={"plugin_lines": lines})
         case ProposalCreated(proposal=proposal):
             return state.model_copy(
                 update={"proposals": {**state.proposals, proposal.id: proposal}}
@@ -174,6 +185,8 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
                 kind=EntryKind.PROMPT,
                 author_id=event.author_id,
                 text=event.text,
+                via=event.via,
+                display=event.display,
             )
             queued = state.run is not None
             if queued:

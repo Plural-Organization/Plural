@@ -5,12 +5,12 @@ import json
 import keyword
 import re
 import sys
-from collections.abc import Awaitable, Callable, Iterable, Mapping
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from itertools import count
 from pathlib import Path
 from types import ModuleType
-from typing import Final
+from typing import Final, Literal
 
 import structlog
 from pydantic import JsonValue
@@ -18,12 +18,23 @@ from pydantic import JsonValue
 from plural.agent.providers.base import ToolSchema
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
 from plural.agent.tools.registry import Exposure
-from plural.host.inbox import Inbox, PluginPrompt, PluginReply
+from plural.host.inbox import (
+    Inbox,
+    PluginLineUpdate,
+    PluginNotify,
+    PluginPrompt,
+    PluginQuestion,
+    PluginReply,
+    PluginShow,
+)
 from plural.protocol.models import (
+    HOST_PARTICIPANT_ID,
     PluginCommandView,
     PluginStatus,
     PluginView,
+    Provenance,
     Role,
+    ToolCallView,
     ToolRisk,
 )
 
@@ -52,6 +63,13 @@ BUILT_IN: Final = frozenset(
 TOOL_NAME: Final = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 RISKS: Final = {"read": ToolRisk.READ, "write": ToolRisk.WRITE, "exec": ToolRisk.EXEC}
 RUN_TIMEOUT_S: Final = 120.0
+ASK_TIMEOUT_S: Final = 120.0
+GUARD_TIMEOUT_S: Final = 5.0
+HOOK_TIMEOUT_S: Final = 120.0
+MAX_OPTIONS: Final = 20
+MAX_STORE_BYTES: Final = 1_000_000
+MAX_CONTEXT_CHARS: Final = 8000
+HOOK_EVENTS: Final = frozenset({"session_start", "before_run", "tool_call", "run_end"})
 MAX_OUTPUT_CHARS: Final = 64_000
 
 TEMPLATE: Final = '''\
@@ -85,6 +103,64 @@ class PluginError(Exception):
     pass
 
 
+class PluginStore:
+    """A plugin's own JSON values, kept in a file across reloads and restarts.
+
+    Every change is written at once, through a temporary file, so a crash never leaves half a file.
+    """
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+        self._values: dict[str, JsonValue] | None = None
+
+    def get(self, key: str, default: JsonValue = None) -> JsonValue:
+        return self._load().get(key, default)
+
+    def set(self, key: str, value: JsonValue) -> None:
+        values = {**self._load(), key: value}
+        self._save(values)
+
+    def delete(self, key: str) -> None:
+        values = self._load()
+        if key in values:
+            self._save({name: value for name, value in values.items() if name != key})
+
+    def all(self) -> dict[str, JsonValue]:
+        return dict(self._load())
+
+    def _load(self) -> dict[str, JsonValue]:
+        if self._values is None:
+            try:
+                loaded = json.loads(self._path.read_text(encoding="utf-8"))
+            except FileNotFoundError:
+                loaded = {}
+            except (OSError, ValueError) as error:
+                raise PluginError(f"cannot read {self._path}: {error}") from None
+            self._values = loaded if isinstance(loaded, dict) else {}
+        return self._values
+
+    def _save(self, values: dict[str, JsonValue]) -> None:
+        try:
+            text = json.dumps(values, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError) as error:
+            raise PluginError(f"store values must be JSON: {error}") from None
+        if len(text.encode()) > MAX_STORE_BYTES:
+            raise PluginError(f"a plugin's store holds at most {MAX_STORE_BYTES:,} bytes")
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        temporary = self._path.with_suffix(".tmp")
+        temporary.write_text(text, encoding="utf-8")
+        temporary.replace(self._path)
+        self._values = values
+
+
+# Answers one question with the session's model: (question, with_history, main_model) -> text.
+Asker = Callable[[str, bool, bool], Awaitable[str]]
+
+
+async def _no_model(question: str, history: bool, main: bool) -> str:
+    raise PluginError("no model is available to answer")
+
+
 class CommandContext:
     def __init__(
         self,
@@ -96,6 +172,7 @@ class CommandContext:
         role: Role,
         workspace: Path,
         inbox: Inbox,
+        asker: Asker = _no_model,
     ) -> None:
         self.command = command
         self.args = args
@@ -104,12 +181,65 @@ class CommandContext:
         self.role = role
         self.workspace = workspace
         self._inbox = inbox
+        self._asker = asker
 
     async def reply(self, text: str) -> None:
         self._inbox.put(PluginReply(self.command, self.author_id, text))
 
-    async def prompt(self, text: str, *, follow_up: bool = False) -> None:
-        self._inbox.put(PluginPrompt(self.command, self.author_id, text, follow_up=follow_up))
+    async def prompt(
+        self, text: str, *, follow_up: bool = False, display: str | None = None
+    ) -> None:
+        """Prompt the agent with `text`; the room sees `display` instead, the full text folded."""
+        self._inbox.put(
+            PluginPrompt(self.command, self.author_id, text, follow_up=follow_up, display=display)
+        )
+
+    async def show(self, title: str, text: str) -> None:
+        """Show `text` to the person who ran the command, in a window only they see."""
+        self._inbox.put(PluginShow(self.command, self.author_id, title, text))
+
+    async def notify(self, text: str) -> None:
+        """A short toast for the person who ran the command; it is not kept anywhere."""
+        self._inbox.put(PluginNotify(self.command, self.author_id, text))
+
+    async def confirm(self, title: str) -> bool:
+        """Ask the person who ran the command yes or no. Closing it or not answering is no."""
+        return await self._question("confirm", title, ("yes", "no")) == "yes"
+
+    async def select(self, title: str, options: Sequence[str]) -> str | None:
+        """Let the person who ran the command pick one option; None when they close it."""
+        choices = tuple(dict.fromkeys(str(option) for option in options))
+        if not choices or len(choices) > MAX_OPTIONS:
+            raise PluginError(f"select takes 1 to {MAX_OPTIONS} options")
+        return await self._question("select", title, choices)
+
+    async def input(self, title: str, *, default: str = "") -> str | None:
+        """Ask the person who ran the command to type a line; None when they close it."""
+        return await self._question("input", title, (), default)
+
+    async def _question(
+        self, kind: str, title: str, options: tuple[str, ...], default: str = ""
+    ) -> str | None:
+        answer: asyncio.Future[str | None] = asyncio.get_running_loop().create_future()
+        self._inbox.put(
+            PluginQuestion(self.command, self.author_id, kind, title, options, default, answer)
+        )
+        return await answer
+
+    async def ask(self, question: str, *, history: bool = True, model: str = "fast") -> str:
+        """Ask the session's model one question, outside the conversation, and return its answer.
+
+        With `history` the model sees the conversation so far. Nothing is added to it, the room
+        sees nothing, and the model cannot call tools. `model` is "fast" or "main".
+        """
+        if model not in {"fast", "main"}:
+            raise PluginError('model is "fast" or "main"')
+        try:
+            return await asyncio.wait_for(
+                self._asker(question, history, model == "main"), ASK_TIMEOUT_S
+            )
+        except TimeoutError:
+            raise PluginError(f"the model did not answer in {ASK_TIMEOUT_S:g}s") from None
 
     async def run(self, *argv: str, timeout_s: float = RUN_TIMEOUT_S) -> str:
         return await _run_program(argv, self.workspace, timeout_s)
@@ -154,8 +284,103 @@ async def _run_program(argv: tuple[str, ...], workspace: Path, timeout_s: float)
     return output
 
 
+class HookContext:
+    """What a hook gets besides its event: it may reply to the room and run programs."""
+
+    def __init__(
+        self, *, plugin: str, workspace: Path, inbox: Inbox, can_prompt: bool = False
+    ) -> None:
+        self.plugin = plugin
+        self.workspace = workspace
+        self._inbox = inbox
+        self._can_prompt = can_prompt
+
+    async def reply(self, text: str) -> None:
+        self._inbox.put(PluginReply(self.plugin, HOST_PARTICIPANT_ID, text))
+
+    async def prompt(
+        self, text: str, *, follow_up: bool = True, display: str | None = None
+    ) -> None:
+        """From run_end: prompt the agent as the host. That run does not fire run_end again."""
+        if not self._can_prompt:
+            raise PluginError("only a run_end hook can prompt the agent")
+        message = PluginPrompt(
+            self.plugin,
+            HOST_PARTICIPANT_ID,
+            text,
+            follow_up=follow_up,
+            display=display,
+            from_hook=True,
+        )
+        self._inbox.put(message)
+
+    async def run(self, *argv: str, timeout_s: float = RUN_TIMEOUT_S) -> str:
+        return await _run_program(argv, self.workspace, timeout_s)
+
+
+@dataclass(frozen=True, slots=True)
+class Verdict:
+    """A tool_call hook's answer. There is no allow: a hook only makes the policy stricter."""
+
+    action: Literal["ask", "deny"]
+    reason: str
+    plugin: str = ""
+
+
+@dataclass(frozen=True, slots=True)
+class SessionInfo:
+    """The session a session_start hook starts in."""
+
+    room: str
+    workspace: Path
+
+
+@dataclass(frozen=True, slots=True)
+class PromptInfo:
+    """The prompt a run starts with, as a before_run hook sees it."""
+
+    prompt_id: str
+    text: str
+    author_id: str
+    role: str
+
+
+@dataclass(frozen=True, slots=True)
+class RunInfo:
+    """A finished run, as a run_end hook sees it."""
+
+    run_id: str
+    reason: str
+    error: str | None
+    author_id: str
+    role: str
+    files: tuple[str, ...]
+    input_tokens: int
+    output_tokens: int
+
+
+@dataclass(frozen=True, slots=True)
+class ToolCall:
+    """The tool call a tool_call hook sees, before the policy decides it."""
+
+    name: str
+    risk: str
+    subject: str
+    args: Mapping[str, JsonValue]
+    author_id: str
+    role: str
+
+
 Handler = Callable[[CommandContext], Awaitable[None]]
 ToolHandler = Callable[[dict[str, JsonValue], ToolContext], Awaitable[object]]
+HookHandler = Callable[[object, HookContext], Awaitable[object]]
+
+
+@dataclass(frozen=True, slots=True)
+class Hook:
+    event: str
+    plugin: str
+    handler: HookHandler
 
 
 class PluginTool:
@@ -246,11 +471,49 @@ class PluginCommand:
 
 
 class PluginApi:
-    def __init__(self, plugin: str, *, workspace: Path) -> None:
+    def __init__(
+        self,
+        plugin: str,
+        *,
+        workspace: Path,
+        inbox: Inbox | None = None,
+        store: PluginStore | None = None,
+    ) -> None:
         self._plugin = plugin
         self._workspace = workspace
+        self._inbox = inbox
+        self.store = store
         self.commands: list[PluginCommand] = []
         self.tools: list[PluginTool] = []
+        self.hooks: list[Hook] = []
+
+    def on(self, event: str) -> Callable[[HookHandler], HookHandler]:
+        if event not in HOOK_EVENTS:
+            raise PluginError(f"unknown event {event!r}: use {', '.join(sorted(HOOK_EVENTS))}")
+
+        def register(handler: HookHandler) -> HookHandler:
+            if not inspect.iscoroutinefunction(handler):
+                raise PluginError(f"the {event} hook must be an async function")
+            self.hooks.append(Hook(event, self._plugin, handler))
+            return handler
+
+        return register
+
+    def status(self, text: str) -> None:
+        """Set this plugin's line in the side panel, such as "tests ✓"; an empty text removes it.
+
+        Everyone in the room sees it. The host shows at most one change a second.
+        """
+        if self._inbox is not None:
+            self._inbox.put(PluginLineUpdate(self._plugin, text))
+
+    def ask(self, reason: str) -> Verdict:
+        """From a tool_call hook: have the host approve this call even if the policy allows it."""
+        return Verdict("ask", reason, self._plugin)
+
+    def deny(self, reason: str) -> Verdict:
+        """From a tool_call hook: refuse this call."""
+        return Verdict("deny", reason, self._plugin)
 
     def command(
         self, name: str, *, description: str = "", usage: str = "", host_only: bool = False
@@ -315,20 +578,24 @@ class PluginHost:
         directory: Path,
         *,
         workspace: Path,
+        inbox: Inbox | None = None,
         reserved_tools: Callable[[], Iterable[str]] = lambda: (),
     ) -> None:
         self.directory = directory
+        self._inbox = inbox or Inbox()
         self.workspace = workspace
         self._reserved_tools = reserved_tools
         self._views: tuple[PluginView, ...] = ()
         self._commands: dict[str, PluginCommand] = {}
         self._tools: dict[str, PluginTool] = {}
+        self._hooks: tuple[Hook, ...] = ()
         self._generation = count()
 
     def load(self) -> None:
         views: list[PluginView] = []
         commands: dict[str, PluginCommand] = {}
         tools: dict[str, PluginTool] = {}
+        hooks: list[Hook] = []
         reserved = set(self._reserved_tools())
         generation = next(self._generation)
         paths = sorted(self.directory.glob("*.py")) if self.directory.is_dir() else []
@@ -337,7 +604,8 @@ class PluginHost:
             if name.startswith("_"):
                 continue
             try:
-                api = PluginApi(name, workspace=self.workspace)
+                store = PluginStore(self.directory / ".data" / f"{name}.json")
+                api = PluginApi(name, workspace=self.workspace, inbox=self._inbox, store=store)
                 setup = getattr(_import(path, f"plural_plugin_{generation}_{name}"), "setup", None)
                 if not callable(setup):
                     raise PluginError("the file defines no setup(plural) function")
@@ -363,6 +631,7 @@ class PluginHost:
                 continue
             commands.update((command.view.name, command) for command in api.commands)
             tools.update((tool.name, tool) for tool in api.tools)
+            hooks.extend(api.hooks)
             views.append(
                 PluginView(
                     name=name,
@@ -375,6 +644,7 @@ class PluginHost:
         self._views = tuple(views)
         self._commands = commands
         self._tools = tools
+        self._hooks = tuple(hooks)
 
     def views(self) -> tuple[PluginView, ...]:
         return self._views
@@ -391,6 +661,83 @@ class PluginHost:
     def tools_source(self, exposure: Exposure) -> PluginToolSource:
         return PluginToolSource(self, exposure)
 
+    def hooks(self, event: str) -> tuple[Hook, ...]:
+        return tuple(hook for hook in self._hooks if hook.event == event)
+
+    def _context(self, plugin: str, *, can_prompt: bool = False) -> HookContext:
+        return HookContext(
+            plugin=plugin, workspace=self.workspace, inbox=self._inbox, can_prompt=can_prompt
+        )
+
+    async def before_run(self, prompt: PromptInfo) -> list[tuple[str, str]]:
+        """Collect what before_run hooks add for the agent, 8,000 characters at most in all."""
+        added: list[tuple[str, str]] = []
+        room = MAX_CONTEXT_CHARS
+        for hook in self.hooks("before_run"):
+            try:
+                text = await asyncio.wait_for(
+                    hook.handler(prompt, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                )
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                continue
+            if isinstance(text, str) and text.strip() and room > 0:
+                added.append((hook.plugin, text.strip()[:room]))
+                room -= len(added[-1][1])
+        return added
+
+    async def session_started(self, room: str) -> None:
+        """Run every session_start hook after the plugins load, at start and on reload."""
+        await self._each("session_start", SessionInfo(room=room, workspace=self.workspace))
+
+    async def run_ended(self, run: RunInfo) -> None:
+        """Run every run_end hook in turn; one that fails is reported and the rest still run."""
+        await self._each("run_end", run, can_prompt=True)
+
+    async def _each(self, event: str, info: object, *, can_prompt: bool = False) -> None:
+        for hook in self.hooks(event):
+            context = self._context(hook.plugin, can_prompt=can_prompt)
+            try:
+                await asyncio.wait_for(hook.handler(info, context), HOOK_TIMEOUT_S)
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                problem = (
+                    f"took longer than {HOOK_TIMEOUT_S:g}s"
+                    if isinstance(error, TimeoutError)
+                    else _describe(error)
+                )
+                text = f"the {event} hook failed: {problem}"
+                self._inbox.put(PluginReply(hook.plugin, HOST_PARTICIPANT_ID, text, ok=False))
+
+    async def guard_tool(self, call: ToolCallView, provenance: Provenance) -> Verdict | None:
+        """Ask every tool_call hook about a call. Any deny wins; a hook that fails counts as ask."""
+        seen = ToolCall(
+            name=call.name,
+            risk=call.risk.value,
+            subject=call.subject,
+            args=call.args,
+            author_id=provenance.initiator_id,
+            role=provenance.initiator_role.value,
+        )
+        asked: Verdict | None = None
+        for hook in self.hooks("tool_call"):
+            try:
+                answer = await asyncio.wait_for(
+                    hook.handler(seen, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                )
+            except TimeoutError:
+                answer = Verdict("ask", f"its guard took longer than {GUARD_TIMEOUT_S:g}s")
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                answer = Verdict("ask", f"its guard failed: {_describe(error)}")
+            if not isinstance(answer, Verdict):
+                continue
+            answer = Verdict(answer.action, answer.reason, hook.plugin)
+            if answer.action == "deny":
+                return answer
+            asked = asked or answer
+        return asked
+
     def create(self, name: str) -> Path:
         if not NAME.match(name):
             raise PluginError(f"invalid plugin name {name!r}: use a-z, 0-9, - and _")
@@ -404,6 +751,13 @@ class PluginHost:
             function = f"{function}_command"
         self.directory.mkdir(parents=True, exist_ok=True)
         path.write_text(TEMPLATE.format(name=name, function=function), encoding="utf-8")
+        return path
+
+    def remove(self, name: str) -> Path:
+        path = self.directory / f"{name}.py"
+        if not NAME.match(name) or not path.is_file():
+            raise PluginError(f"no plugin named {name}")
+        path.unlink()
         return path
 
 

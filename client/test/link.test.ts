@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { parseLink, parseSlash, SlashError } from "../src";
+import { isSkillCommand, parseLink, parseSlash, SlashError } from "../src";
 
 test("an invite link is split into url, room and invite", () => {
   expect(parseLink("ws://127.0.0.1:7777/r_1?invite=abc")).toEqual({
@@ -33,6 +33,12 @@ test("a token link keeps the token", () => {
 
 test.each(["http://example.com/r_1", "not a link", "ws://host/"])("%s is refused", (raw) => {
   expect(() => parseLink(raw)).toThrow();
+});
+
+test("a skill command is a prompt for the host, not a slash command", () => {
+  expect(isSkillCommand("/skill:grill my plan")).toBe(true);
+  expect(isSkillCommand("/skill:")).toBe(false);
+  expect(isSkillCommand("/skills")).toBe(false);
 });
 
 test("slash commands become protocol commands", () => {
@@ -69,5 +75,6 @@ test("plugin commands go to the host and /plugins manages them", () => {
   expect(parseSlash("/plugins")).toEqual({ type: "show.plugins" });
   expect(parseSlash("/plugins reload")).toEqual({ type: "plugins.reload" });
   expect(parseSlash("/plugins new git-tools")).toEqual({ type: "plugins.create", name: "git-tools" });
+  expect(parseSlash("/plugins rm git-tools")).toEqual({ type: "plugins.remove", name: "git-tools" });
   expect(() => parseSlash("/plugins new Bad Name")).toThrow(SlashError);
 });

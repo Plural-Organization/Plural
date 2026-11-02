@@ -80,6 +80,11 @@ export type BriefingSharing = "off" | "ask" | "team";
 export type DequeueReason = "delivered" | "cancelled" | "dropped";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "AskKind".
+ */
+export type AskKind = "confirm" | "select" | "input";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "Delivery".
  */
 export type Delivery = "now" | "steer" | "follow_up";
@@ -93,6 +98,22 @@ export type Origin = "direct" | "proposal";
  * via the `definition` "RunEndReason".
  */
 export type RunEndReason = "stop" | "aborted" | "error" | "limit";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ContextPartKind".
+ */
+export type ContextPartKind =
+  | "system"
+  | "tool_rules"
+  | "environment"
+  | "project_notes"
+  | "skills"
+  | "agents"
+  | "tools"
+  | "messages"
+  | "tool_results"
+  | "summary"
+  | "notes";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "McpStatus".
@@ -166,6 +187,9 @@ export interface EventsSchema {
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PluginShown
+    | PluginAsked
+    | PluginNotified
     | BoardErased
     | BoardCleared
     | ChatPosted
@@ -188,6 +212,8 @@ export interface EventsSchema {
     | PluginsChanged
     | CommandInvoked
     | CommandReplied
+    | PluginLineSet
+    | PluginContextAdded
     | ToolStarted
     | ToolOutput
     | ToolEnded
@@ -308,6 +334,7 @@ export interface SkillsChanged {
 export interface SkillView {
   builtin: boolean;
   description: string;
+  hidden: boolean;
   name: string;
   scope: SkillScope;
 }
@@ -616,6 +643,44 @@ export interface AttachmentData {
   type: "attachment.data";
 }
 /**
+ * What a plugin command shows the person who ran it, and nobody else. It is not logged.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginShown".
+ */
+export interface PluginShown {
+  command: string;
+  text: string;
+  title: string;
+  type: "plugin.shown";
+}
+/**
+ * A plugin command asks whoever ran it a question. Only they get it; it is not logged.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginAsked".
+ */
+export interface PluginAsked {
+  ask_id: string;
+  command: string;
+  default: string;
+  kind: AskKind;
+  options: string[];
+  title: string;
+  type: "plugin.asked";
+}
+/**
+ * A short toast from a plugin command for the person who ran it.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginNotified".
+ */
+export interface PluginNotified {
+  command: string;
+  text: string;
+  type: "plugin.notified";
+}
+/**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "BoardErased".
  */
@@ -692,10 +757,12 @@ export interface PromptAccepted {
   attachments: string[];
   author_id: string;
   delivery: Delivery;
+  display: string | null;
   prompt_id: string;
   provenance: Provenance;
   text: string;
   type: "prompt.accepted";
+  via: string | null;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -777,6 +844,7 @@ export interface ContextCompacting {
  * via the `definition` "ContextCompacted".
  */
 export interface ContextCompacted {
+  kept_from: string | null;
   run_id: string;
   summary: string;
   tokens_before: number;
@@ -796,8 +864,19 @@ export interface ContextUsage {
  */
 export interface ContextView {
   compact_at: number;
+  hit: number | null;
+  parts: ContextPart[];
   tokens: number;
   window: number;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ContextPart".
+ */
+export interface ContextPart {
+  kind: ContextPartKind;
+  name: string | null;
+  tokens: number;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -924,6 +1003,29 @@ export interface CommandReplied {
   ok: boolean;
   text: string;
   type: "command.replied";
+}
+/**
+ * A plugin's status line changed; empty text removes it.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginLineSet".
+ */
+export interface PluginLineSet {
+  plugin: string;
+  text: string;
+  type: "plugin.line";
+}
+/**
+ * A plugin's before_run hook gave the agent context ahead of the run's prompt.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginContextAdded".
+ */
+export interface PluginContextAdded {
+  plugin: string;
+  run_id: string;
+  text: string;
+  type: "plugin.context";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -1104,6 +1206,7 @@ export interface SessionState {
     [k: string]: Participant;
   };
   permission_mode: "default" | "accept_edits" | "plan" | "auto";
+  plugin_lines: PluginLine[];
   plugins: PluginView[];
   policy: PolicyRuleView[];
   prompt_mode: "open" | "review";
@@ -1138,6 +1241,16 @@ export interface ChatEntry {
   ts: string;
 }
 /**
+ * A short status line a plugin keeps in the side panel, such as "tests ✓".
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PluginLine".
+ */
+export interface PluginLine {
+  plugin: string;
+  text: string;
+}
+/**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "QueuedPrompt".
  */
@@ -1162,12 +1275,14 @@ export interface RunView {
  */
 export interface TranscriptEntry {
   author_id: string | null;
+  display: string | null;
   id: string;
   kind: EntryKind;
   ok: boolean | null;
   output: string;
   text: string;
   tool: ToolCallView | null;
+  via: string | null;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -1226,6 +1341,9 @@ export interface EventRecord {
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PluginShown
+    | PluginAsked
+    | PluginNotified
     | BoardErased
     | BoardCleared
     | ChatPosted
@@ -1248,6 +1366,8 @@ export interface EventRecord {
     | PluginsChanged
     | CommandInvoked
     | CommandReplied
+    | PluginLineSet
+    | PluginContextAdded
     | ToolStarted
     | ToolOutput
     | ToolEnded

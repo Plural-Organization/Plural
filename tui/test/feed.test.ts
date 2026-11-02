@@ -93,8 +93,30 @@ describe("feed", () => {
       delivery: "now",
       provenance: { ...DIRECT, origin: "proposal" },
       attachments: [],
+      via: null,
+      display: null,
     });
     expect(feed.items.at(-1)).toMatchObject({ kind: "user", name: "Alia", role: "participant", viaProposal: true, text: "hello" });
+  });
+
+  test("a plugin prompt shows its short text and keeps the full one folded", () => {
+    const { feed } = replay(joined(ALIA), {
+      type: "prompt.accepted",
+      prompt_id: "pm1",
+      author_id: "p_alia",
+      text: "Answer briefly, prefix BTW: what is overfitting?",
+      delivery: "now",
+      provenance: DIRECT,
+      attachments: [],
+      via: "btw",
+      display: "what is overfitting?",
+    });
+    expect(feed.items.at(-1)).toMatchObject({
+      kind: "user",
+      text: "what is overfitting?",
+      via: "btw",
+      full: "Answer briefly, prefix BTW: what is overfitting?",
+    });
   });
 
   test("a failed run settles the live items and is reported", () => {
@@ -129,7 +151,7 @@ describe("feed", () => {
   test("the last reply joins everything since the last prompt", () => {
     const { feed } = replay(
       joined(ALIA),
-      { type: "prompt.accepted", prompt_id: "pm1", author_id: "p_alia", text: "go", delivery: "now", provenance: DIRECT, attachments: [] },
+      { type: "prompt.accepted", prompt_id: "pm1", author_id: "p_alia", text: "go", delivery: "now", provenance: DIRECT, attachments: [], via: null, display: null },
       { type: "message.ended", run_id: "r", message_id: "m1", text: "one", thinking: "" },
       { type: "tool.started", run_id: "r", call: CALL },
       { type: "message.ended", run_id: "r", message_id: "m2", text: "two", thinking: "" },

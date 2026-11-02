@@ -92,6 +92,7 @@ class AnthropicOAuthProvider:
         self._max_tokens = max_tokens
         self._effort: Effort | None = effort
         self._refresh_lock = asyncio.Lock()
+        self._window: int | None = None
         load_credentials(credentials_path)
 
     async def token(self) -> str:
@@ -102,6 +103,22 @@ class AnthropicOAuthProvider:
                 credentials = await asyncio.to_thread(_refresh, credentials.refresh)
                 await asyncio.to_thread(save_credentials, self._path, credentials)
             return credentials.access
+
+    async def context_window(self) -> int | None:
+        if self._window is None:
+            try:
+                token = await self.token()
+            except ProviderError:
+                return None
+            client = AsyncAnthropic(api_key=None, auth_token=token, max_retries=0)
+            try:
+                provider = AnthropicProvider(
+                    api_key="", model=self._model, client=client, oauth=True
+                )
+                self._window = await provider.context_window()
+            finally:
+                await client.close()
+        return self._window
 
     async def stream(
         self, request: LlmRequest, *, cancel: asyncio.Event

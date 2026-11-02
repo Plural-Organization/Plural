@@ -11,6 +11,7 @@ from plural.protocol.models import (
     AgentView,
     ApprovalDecision,
     ApprovalView,
+    AskKind,
     AttachmentMeta,
     BoardCursor,
     BoardStroke,
@@ -95,6 +96,52 @@ class SkillsFound(TransientEvent):
     type: Literal["skills.found"] = "skills.found"
     query: str
     hits: tuple[SkillHit, ...]
+
+
+class PluginContextAdded(EventBase):
+    """A plugin's before_run hook gave the agent context ahead of the run's prompt."""
+
+    type: Literal["plugin.context"] = "plugin.context"
+    run_id: str
+    plugin: str
+    text: str
+
+
+class PluginLineSet(EventBase):
+    """A plugin's status line changed; empty text removes it."""
+
+    type: Literal["plugin.line"] = "plugin.line"
+    plugin: str
+    text: str
+
+
+class PluginAsked(TransientEvent):
+    """A plugin command asks whoever ran it a question. Only they get it; it is not logged."""
+
+    type: Literal["plugin.asked"] = "plugin.asked"
+    ask_id: str
+    command: str
+    kind: AskKind
+    title: str
+    options: tuple[str, ...] = ()
+    default: str = ""
+
+
+class PluginNotified(TransientEvent):
+    """A short toast from a plugin command for the person who ran it."""
+
+    type: Literal["plugin.notified"] = "plugin.notified"
+    command: str
+    text: str
+
+
+class PluginShown(TransientEvent):
+    """What a plugin command shows the person who ran it, and nobody else. It is not logged."""
+
+    type: Literal["plugin.shown"] = "plugin.shown"
+    command: str
+    title: str
+    text: str
 
 
 class AgentChanged(EventBase):
@@ -274,6 +321,10 @@ class PromptAccepted(EventBase):
     delivery: Delivery
     provenance: Provenance
     attachments: tuple[str, ...] = ()
+    # A plugin's prompt: the command that sent it, and the short text the room sees in place of
+    # the full one the agent gets.
+    via: str | None = None
+    display: str | None = None
 
 
 class RunStarted(EventBase):
@@ -369,6 +420,8 @@ class ContextCompacted(EventBase):
     run_id: str
     summary: str
     tokens_before: int
+    # The first message kept as it is after the summary: "prompt:<id>" or "call:<tool call id>".
+    kept_from: str | None = None
 
 
 class ToolStarted(EventBase):
@@ -480,6 +533,9 @@ Event = Annotated[
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PluginShown
+    | PluginAsked
+    | PluginNotified
     | BoardErased
     | BoardCleared
     | ChatPosted
@@ -502,6 +558,8 @@ Event = Annotated[
     | PluginsChanged
     | CommandInvoked
     | CommandReplied
+    | PluginLineSet
+    | PluginContextAdded
     | ToolStarted
     | ToolOutput
     | ToolEnded

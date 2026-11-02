@@ -256,6 +256,9 @@ The host reads skills from `.agents/skills`, `.claude/skills` and `.plural/skill
 | `/skills add <owner/repo@skill>` | Install into the project's `.agents/skills` (host) |
 | `/skills add <owner/repo@skill> --global` | Install into `~/.agents/skills` for every session (host) |
 | `/skills rm <name>` | Remove a skill Plural installed (host) |
+| `/skill:<name> [request]` | Run a skill by hand: the agent gets its instructions and your request |
+
+`/skill:grill-me my plan` works for anyone who can prompt, as in pi: the room sees `my plan` marked `via /skill:grill-me`, and the agent gets the skill's instructions followed by the request. Every installed skill also costs a line of the agent's prompt on every request. A skill you only ever run by hand can stay out of it: add `disable-model-invocation: true` to its frontmatter, and the agent no longer sees it, while `/skill:<name>` still runs it. `/skills` marks such skills.
 
 The agent can search the catalog on its own and suggest a skill. It can install one too, but every install waits for the host's approval like an edit does, and plan mode refuses it. A skill is someone else's instructions that the agent will follow with the host's permissions, so install skills from sources you trust.
 
@@ -302,8 +305,18 @@ tools: Read, Grep, Glob, Bash
 model: haiku        # haiku/fast runs on the fast model, anything else on the main one
 max_turns: 20
 ---
-You review the diff you are given. Report each problem with path:line.
+You review the diff you are given for another agent.
+
+<task>
+- Look for bugs, missing tests and changes the diff does not explain.
+</task>
+
+<report>
+- One line per problem, with path:line.
+</report>
 ```
+
+Plain instructions work too. Parts in XML tags, as Plural's own prompts and the built-in `explore` (`src/plural/agent/builtin_agents/explore.md`) use, help the model tell the parts apart.
 
 Every tool call a sub-agent makes goes through the same permissions as the main agent: deny rules, the permission mode and the host's approval for edits and commands. A sub-agent cannot start another one.
 
@@ -341,10 +354,11 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | `/policy` | Show the permission rules (host) |
 | `/policy allow\|ask\|deny <tool> <pattern>` | Add a rule (host) |
 | `/policy rm <id>` | Remove a rule (host) |
-| `/compact` | Summarize the conversation now, or before the agent's next step when it is busy (host) |
+| `/compact` | Summarize the older conversation now, keeping the newest turns as they are, or before the agent's next step when it is busy (host) |
 | `/skills [search\|add\|rm …]` | List, find and install skills, see [Skills](#skills) |
 | `/agents [rm <name>]` | The sub-agents; the host creates one with a short form, see [Sub-agents](#sub-agents) |
 | `/usage` | Tokens spent in this session per model, for the conversation, summaries and each sub-agent |
+| `/context` | What fills the agent's prompt now (system prompt sections, tool definitions, messages, each tool's results, summary), and how much of the latest request came from the cache |
 | `/plugins [new <name>\|reload]` | List the host's plugins, create one or reload them (host), see [plugins](plugins.md) |
 | `/<plugin command>` | Run a command a plugin added; they appear in the suggestions |
 | `/abort` | Stop the current run (host) |

@@ -25,6 +25,10 @@ class SkillTool(TypedTool[SkillArgs]):
         ),
         risk=ToolRisk.READ,
         args_model=SkillArgs,
+        guidelines=(
+            "When a task matches an installed skill, load it with skill before you start and "
+            "follow it, loading its other files when it points to them.",
+        ),
     )
 
     def __init__(self, library: SkillLibrary) -> None:

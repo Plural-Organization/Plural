@@ -462,3 +462,31 @@ async def test_a_tool_call_being_written_counts_as_activity() -> None:
     assert "content_block_delta" in sources
     openai_events = await drain(openai_provider(Recorder(200, OPENAI_TOOL_TURN)))
     assert ProviderActivity(source="tool_call") in openai_events
+
+
+async def test_anthropic_window_comes_from_the_models_api_once() -> None:
+    asked: list[str] = []
+
+    def handler(request: httpx2.Request) -> httpx2.Response:
+        asked.append(request.url.path)
+        return httpx2.Response(
+            200,
+            json={
+                "id": "claude-opus-5-5",
+                "type": "model",
+                "display_name": "Claude Opus 5.5",
+                "created_at": "2026-09-01T00:00:00Z",
+                "lifecycle": "active",
+                "max_input_tokens": 1_000_000,
+            },
+        )
+
+    provider = anthropic_provider(handler)
+    assert await provider.context_window() == 1_000_000
+    assert await provider.context_window() == 1_000_000
+    assert asked == ["/v1/models/claude-opus-5-5"]
+
+
+async def test_anthropic_window_is_unknown_when_the_models_api_fails() -> None:
+    provider = anthropic_provider(lambda _: httpx2.Response(404, json={"error": {}}))
+    assert await provider.context_window() is None

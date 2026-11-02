@@ -11,4 +11,5 @@ export * from "./search";
 export * from "./session";
 export * from "./slash";
 export * from "./tools";
+export * from "./usage";
 export * from "./wire";

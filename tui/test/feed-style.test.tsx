@@ -26,7 +26,7 @@ async function conversation(): Promise<Setup> {
   fake.emit({ type: "participant.joined", participant: HOST });
   fake.emit({ type: "participant.joined", participant: ALIA });
   const provenance = { initiator_id: "p_alia", initiator_role: "participant", origin: "direct" } as never;
-  fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_alia", text: "fix the login bug", delivery: "now", provenance, attachments: [] });
+  fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_alia", text: "fix the login bug", delivery: "now", provenance, attachments: [], via: null, display: null });
   fake.emit({ type: "message.started", run_id: "r", message_id: "m1" });
   fake.emit({ type: "message.ended", run_id: "r", message_id: "m1", text: "I will look at the retry logic", thinking: "" });
   fake.emit({ type: "tool.started", run_id: "r", call: { id: "t1", name: "bash", risk: "exec", subject: "pytest -q", args: {} } });

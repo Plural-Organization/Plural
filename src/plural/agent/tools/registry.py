@@ -116,6 +116,17 @@ class ToolRegistry:
             if self._allowed_name(entry.tool.name) and self._declared(entry)
         )
 
+    def guidelines(self) -> tuple[str, ...]:
+        """The rules of the tools declared up front, for the system prompt. A tool loaded later
+        brings none, so loading one never changes the prompt and its cache."""
+        rules = (
+            rule
+            for entry in self._entries().values()
+            if entry.exposure is Exposure.CORE
+            for rule in getattr(entry.tool, "guidelines", ())
+        )
+        return tuple(dict.fromkeys(rules))
+
     def deferred(self) -> tuple[Entry, ...]:
         """Tools the model does not see yet: what tool_search searches."""
         return tuple(

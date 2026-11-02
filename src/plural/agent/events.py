@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 
 from plural.agent.tools.base import ToolResult
-from plural.protocol.models import RunEndReason, ToolCallView, Usage
+from plural.protocol.models import ContextPart, RunEndReason, ToolCallView, Usage
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,6 +44,8 @@ class ToolEnd:
 class Compacted:
     summary: str
     tokens_before: int
+    # The first message kept after the summary, as `messages.kept_from` names it; None kept none.
+    kept_from: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,6 +58,8 @@ class ContextFill:
     tokens: int
     window: int
     compact_at: float
+    parts: tuple[ContextPart, ...] = ()
+    hit: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,6 +83,14 @@ class Spend:
 
 
 @dataclass(frozen=True, slots=True)
+class ContextNote:
+    """A plugin added context before the run's prompt."""
+
+    plugin: str
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
 class RunEnd:
     reason: RunEndReason
     usage: Usage
@@ -97,5 +109,6 @@ AgentEvent = (
     | ContextFill
     | Delivered
     | ToolsLoaded
+    | ContextNote
     | RunEnd
 )

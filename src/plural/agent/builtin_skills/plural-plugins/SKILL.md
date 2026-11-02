@@ -26,6 +26,7 @@ You work inside the workspace, so you cannot write to the plugin folder yourself
 
 Then the host runs `/plugins reload`. `/plugins` lists every plugin with ✓ and its commands and tools,
 or ✕ and the error, for example `SyntaxError line 3` or `/deploy is already taken`.
+`/plugins rm <name>` deletes a plugin's file and unloads it.
 
 ## Commands
 
@@ -49,8 +50,15 @@ takes `ctx`:
 | `ctx.author`, `ctx.author_id`, `ctx.role` | who ran it (`role` is `host` or `participant`) |
 | `ctx.workspace` | the workspace path on the host |
 | `await ctx.reply(text)` | a reply the whole room sees |
-| `await ctx.prompt(text, follow_up=False)` | a prompt to the agent **as the person who ran the command** |
+| `await ctx.prompt(text, follow_up=False, display=None)` | a prompt to the agent **as the person who ran the command**; the room sees `display` and the full text folded |
+| `await ctx.show(title, text)` | a window only the person who ran the command sees, not logged |
+| `await ctx.confirm(title)` / `await ctx.select(title, options)` / `await ctx.input(title, default="")` | ask the person who ran the command and wait: `bool`, the option or `None`, the text or `None`; closed or five minutes unanswered is `False`/`None` |
+| `await ctx.notify(text)` | a toast only they see |
+| `await ctx.ask(question, history=True, model="fast")` | one answer from the session's model, outside the conversation: no tools, nothing added to the history; raises `PluginError` if no model answers |
 | `await ctx.run(*argv, timeout_s=120)` | runs a program in the workspace without a shell, returns stdout; raises on a non-zero exit or a timeout |
+
+For a side question (`/btw`) use `ctx.ask` + `ctx.show`, not `ctx.prompt`: the main task and the room are
+left alone.
 
 Names use `a-z`, `0-9`, `-` and `_` and cannot reuse a built-in command (`abort`, `cancel`,
 `compact`, `copy`, `help`, `invite`, `leave`, `mcp`, `mode`, `plugins`, `policy`, `quit`,
@@ -60,7 +68,8 @@ everyone but the host; viewers can never run commands. If a handler raises, the 
 
 `ctx.prompt` takes the same path as a typed prompt: in review mode a guest's prompt becomes a proposal,
 write and exec actions still wait for the host, and the guest token budget applies. Never use it to get
-around those rules.
+around those rules. When the prompt wraps the user's words in instructions, pass their words as
+`display` so the room does not read the instructions as theirs.
 
 ## Tools for the agent
 
@@ -94,11 +103,45 @@ exception becomes an error result the model reads, so raise with a clear message
 an error string. Every call goes through the host's policy: a tool without a rule asks the host, and
 the host can allow it for good with `/policy allow <tool> *`.
 
+## Keeping state
+
+`plural.store.get(key, default)`, `.set(key, value)`, `.delete(key)` and `.all()` keep JSON values in
+`~/.plural/plugins/.data/<name>.json` across reloads and restarts (1 MB at most). Use it instead of
+module variables for anything that must survive `/plugins reload`.
+
+## A status line
+
+`plural.status(text)` (on the `plural` object from `setup`, usable anywhere) sets the plugin's one line in
+the side panel that the whole room sees, at most 80 characters and one change a second; `""` removes it.
+Use it for state that matters while people work, such as `tests 3/3 ✓` after a `run_end` hook.
+
+## Hooks
+
+`@plural.on("tool_call")` runs before the policy on every tool call the agent makes. The handler gets
+`(call, ctx)`: `call.name`, `call.risk`, `call.subject`, `call.args`, `call.author_id`, `call.role`. It
+returns `plural.deny(reason)`, `plural.ask(reason)` or nothing. There is no allow, so use it for guards
+("never push to main", "ask before touching migrations/"), not to skip approvals. Keep it fast: after 5
+seconds, or if it raises, the call needs the host's approval.
+
+`@plural.on("session_start")` gets `(session, ctx)` (`session.room`, `session.workspace`) after the
+plugins load, at start and on every reload.
+
+`@plural.on("before_run")` gets `(prompt, ctx)` (`prompt.text`, `prompt.author_id`, `prompt.role`) when
+a run starts and returns text the agent reads as a note right before the prompt, or nothing. 5 seconds,
+8,000 characters across plugins. Use it for facts the agent should not have to look up: branch, failing
+tests, ticket.
+
+`@plural.on("run_end")` runs after each run with `(run, ctx)`: `run.reason` (`stop`, `aborted`, `error`,
+`limit`), `run.error`, `run.author_id`, `run.role`, `run.files` (edited or written this run),
+`run.input_tokens`, `run.output_tokens`. `ctx.reply`, `ctx.run` and `ctx.prompt(text)` (as the host) work;
+the run a hook prompt starts does not fire `run_end` again. Good for running tests or a linter after the
+agent changed files.
+
 ## Good plugins
 
 - Keep handlers `async`. Wrap blocking work in `await asyncio.to_thread(...)` so the room does not
   freeze.
-- Module-level variables keep state between calls until the next `/plugins reload`.
+- Module-level variables keep state between calls until the next `/plugins reload`; `plural.store` keeps it for good.
 - Read settings from the environment, never hard-code tokens, and never put secrets in replies or tool
   results.
 - Trim large output (`text[:20000]`) before replying or prompting.

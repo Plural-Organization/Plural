@@ -53,20 +53,36 @@ def _schema(request: LlmRequest) -> dict[str, Any]:
     }
 
 
-def _input(request: LlmRequest) -> bytes:
-    """One stream-json user message: the conversation as JSON text, then its images.
+INSTRUCTIONS = (
+    "Continue this conversation. The available Plural tools and then each message of the "
+    "conversation follow as JSON blocks. When a tool is needed, return its exact name and JSON "
+    "arguments in tool_calls; Plural will request approval and run it. Do not claim a tool has "
+    "run before its result appears in a later message. Images a message lists follow it under "
+    "the same label. Otherwise answer in text."
+)
 
-    Every `claude -p` call starts fresh, so the images of the whole conversation go along, the
-    way the API adapter resends them. A message refers to its images by label.
+
+def _input(request: LlmRequest) -> bytes:
+    """One stream-json user message: the instructions, the tools, then each message in turn.
+
+    Every `claude -p` call starts fresh, so the whole conversation goes along each time. Each
+    message is a block of its own after the tools, so a call repeats the blocks of the one before
+    it from the start and the provider's prompt cache serves them instead of a full-price prompt.
+    An image follows the message it belongs to.
     """
-    messages: list[dict[str, Any]] = []
-    images: list[dict[str, Any]] = []
+    tools = [tool.model_dump(mode="json") for tool in request.tools]
+    content: list[dict[str, Any]] = [
+        {"type": "text", "text": INSTRUCTIONS},
+        {"type": "text", "text": json.dumps({"tools": tools}, ensure_ascii=False)},
+    ]
+    count = 0
     for message in request.messages:
         dumped = message.model_dump(mode="json", exclude_none=True, exclude={"images"})
-        labels: list[str] = []
+        images: list[dict[str, Any]] = []
         for image in message.images:
-            label = f"image {len(images) // 2 + 1}"
-            labels.append(label)
+            count += 1
+            label = f"image {count}"
+            dumped.setdefault("images", []).append(label)
             images.append({"type": "text", "text": f"[{label}]"})
             images.append(
                 {
@@ -78,21 +94,26 @@ def _input(request: LlmRequest) -> bytes:
                     },
                 }
             )
-        if labels:
-            dumped["images"] = labels
-        messages.append(dumped)
-    tools = [tool.model_dump(mode="json") for tool in request.tools]
-    prompt = (
-        "Continue this conversation. Messages and available Plural tools are JSON data below. "
-        "When a tool is needed, return its exact name and JSON arguments in tool_calls; "
-        "Plural will request approval and run it. Do not claim a tool has run before its "
-        "result appears in a later message. Images a message lists follow this text under the "
-        "same label. Otherwise answer in text.\n"
-        + json.dumps({"messages": messages, "tools": tools}, ensure_ascii=False)
-    )
-    content = [{"type": "text", "text": prompt}, *images]
+        content.append(
+            {"type": "text", "text": json.dumps({"message": dumped}, ensure_ascii=False)}
+        )
+        content.extend(images)
     line = {"type": "user", "message": {"role": "user", "content": content}}
     return (json.dumps(line, ensure_ascii=False) + "\n").encode()
+
+
+def _window(result: dict[str, object]) -> int | None:
+    """The context window in a result's per-model usage, the largest if several models ran."""
+    models = result.get("modelUsage")
+    if not isinstance(models, dict):
+        return None
+    windows = [
+        window
+        for usage in cast("dict[str, object]", models).values()
+        if isinstance(usage, dict)
+        and isinstance(window := cast("dict[str, object]", usage).get("contextWindow"), int)
+    ]
+    return max(windows, default=None)
 
 
 def _string_end(raw: str, start: int) -> int | None:
@@ -231,6 +252,11 @@ class ClaudeCodeProvider:
         self._cli = cli_path
         self._model = model
         self._workspace = workspace
+        self._window: int | None = None
+
+    async def context_window(self) -> int | None:
+        """The window Claude Code reported with its last answer."""
+        return self._window
 
     async def stream(
         self, request: LlmRequest, *, cancel: asyncio.Event
@@ -284,6 +310,8 @@ class ClaudeCodeProvider:
         stopping = asyncio.create_task(cancel.wait())
         text_stream = _TextFieldStream()
         streamed_plain_text = ""
+        # Text written outside the structured answer, which usually repeats it.
+        loose_text = ""
         result: dict[str, object] | None = None
         try:
             while True:
@@ -324,9 +352,9 @@ class ClaudeCodeProvider:
                 match delta_data.get("type"):
                     case "text_delta":
                         text = delta_data.get("text")
-                        if isinstance(text, str) and text:
-                            streamed_plain_text += text
-                            yield TextDelta(text=text)
+                        if isinstance(text, str):
+                            loose_text += text
+                        yield ProviderActivity(source="text_delta")
                     case "input_json_delta":
                         partial = delta_data.get("partial_json")
                         text = text_stream.feed(partial) if isinstance(partial, str) else ""
@@ -371,6 +399,8 @@ class ClaudeCodeProvider:
         calls = answer.get("tool_calls")
         if not isinstance(text, str) or not isinstance(calls, list):
             raise ProviderError("Claude Code returned an invalid answer")
+        if not text and not streamed_plain_text:
+            text = loose_text.strip()
         if text.startswith(streamed_plain_text):
             remaining_text = text[len(streamed_plain_text) :]
         else:
@@ -391,6 +421,7 @@ class ClaudeCodeProvider:
             yield ToolCallReady(
                 call=ToolCallRequest(id=f"toolu_{uuid4().hex}", name=name, args=tool_args)
             )
+        self._window = _window(result) or self._window
         usage = result.get("usage")
         if isinstance(usage, dict):
             usage_data = cast("dict[str, object]", usage)

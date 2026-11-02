@@ -7,6 +7,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import cast
 
+import structlog
+
 from plural.agent.agents import AgentLibrary
 from plural.agent.context import ContextBuilder, Environment
 from plural.agent.loop import AgentLoop, LoopLimits
@@ -15,6 +17,7 @@ from plural.agent.providers.base import LLMProvider
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.skills import SkillLibrary
+from plural.agent.telemetry import RequestDump
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.core.discovery import ToolSearchTool
 from plural.agent.tools.core.skill import SkillTool
@@ -60,6 +63,8 @@ from plural.security.keys import load_or_create_host_key
 from plural.security.secrets import Redactor
 from plural.security.tokens import TokenSigner
 from plural.storage.sqlite_store import SqliteEventStore
+
+log = structlog.get_logger(__name__)
 
 
 @dataclass(slots=True)
@@ -157,14 +162,34 @@ async def remember_session(
 
 
 async def build_host(settings: HostSettings, *, provider: LLMProvider | None = None) -> Host:
+    room = settings.room or UlidGenerator().new("r_")
+    # Tasks started from here on copy this context, so every log line names the room.
+    structlog.contextvars.bind_contextvars(room=room)
+    try:
+        workspace = await asyncio.to_thread(Workspace.at, settings.workspace)
+    except FileNotFoundError as error:
+        raise ConfigError(f"the workspace {settings.workspace} does not exist") from error
+    store = await SqliteEventStore.open(settings.state_dir / "sessions" / f"{room}.db")
+    try:
+        return await _assemble(settings, provider, room, workspace, store)
+    except BaseException:
+        # The store's thread would keep a host that failed to start from exiting.
+        await store.close()
+        raise
+
+
+async def _assemble(
+    settings: HostSettings,
+    provider: LLMProvider | None,
+    room: str,
+    workspace: Workspace,
+    store: SqliteEventStore,
+) -> Host:
     api_key = resolve_api_key(settings, os.environ)
     ids, clock = UlidGenerator(), SystemClock()
     helper = build_helper(settings) if provider is None else None
-    room = settings.room or ids.new("r_")
     state_dir = settings.state_dir
     signer = TokenSigner(await asyncio.to_thread(load_or_create_host_key, state_dir / "host_key"))
-    store = await SqliteEventStore.open(state_dir / "sessions" / f"{room}.db")
-    workspace = await asyncio.to_thread(Workspace.at, settings.workspace)
     profile = await _team_profile(settings) if settings.team else None
     await remember_session(
         store, workspace.root, settings, clock.now(), profile.team_name if profile else None
@@ -194,7 +219,10 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
     tools.add_source(mcp, exposure=Exposure.DEFERRED)
     mcp.start()
     plugins = PluginHost(
-        state_dir / "plugins", workspace=workspace.root, reserved_tools=tools.registered
+        state_dir / "plugins",
+        workspace=workspace.root,
+        inbox=inbox,
+        reserved_tools=tools.registered,
     )
     tools.add_source(plugins.tools_source(Exposure.CORE))
     tools.add_source(plugins.tools_source(Exposure.DEFERRED), exposure=Exposure.DEFERRED)
@@ -207,6 +235,7 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         clock=clock,
         timeout_s=settings.approval_timeout_s,
         rejection_limit=settings.rejection_limit,
+        guard=plugins.guard_tool,
     )
     environment = Environment(
         workspace=workspace.root,
@@ -232,17 +261,23 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
             project_notes=await _project_notes(workspace),
             skills=skills,
             agents=agents,
+            tool_rules=tools.guidelines(),
         ),
         tool_ctx=ToolCtx(workspace=workspace, backend=LocalBackend()),
         ids=ids,
+        dump=RequestDump(state_dir / "logs" / "requests" / room)
+        if settings.dump_requests
+        else None,
         limits=LoopLimits(
             first_token_timeout_s=settings.first_token_timeout_s,
             idle_timeout_s=settings.idle_timeout_s,
             context_window=settings.context_window,
-            compact_at=settings.compact_at,
+            compact_reserve=settings.compact_reserve,
+            keep_recent=settings.compact_keep,
         ),
     )
     delegate.attach(lambda: loop)
+    log.info("agent.models", main=settings.agent_label(), fast=helper.label if helper else "")
     room_url = settings.room_url(room)
     invites = InviteBook(clock=clock, link_base=room_url)
     link_code = await store.meta("room_link")

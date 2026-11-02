@@ -298,6 +298,14 @@
       ],
       "type": "object"
     },
+    "AskKind": {
+      "enum": [
+        "confirm",
+        "select",
+        "input"
+      ],
+      "type": "string"
+    },
     "AttachmentAdded": {
       "properties": {
         "attachment": {
@@ -1013,6 +1021,17 @@
     },
     "ContextCompacted": {
       "properties": {
+        "kept_from": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "run_id": {
           "type": "string"
         },
@@ -1032,7 +1051,8 @@
         "type",
         "run_id",
         "summary",
-        "tokens_before"
+        "tokens_before",
+        "kept_from"
       ],
       "type": "object"
     },
@@ -1057,6 +1077,49 @@
       ],
       "type": "object"
     },
+    "ContextPart": {
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/ContextPartKind"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tokens": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "kind",
+        "tokens",
+        "name"
+      ],
+      "type": "object"
+    },
+    "ContextPartKind": {
+      "enum": [
+        "system",
+        "tool_rules",
+        "environment",
+        "project_notes",
+        "skills",
+        "agents",
+        "tools",
+        "messages",
+        "tool_results",
+        "summary",
+        "notes"
+      ],
+      "type": "string"
+    },
     "ContextUsage": {
       "properties": {
         "context": {
@@ -1079,6 +1142,24 @@
         "compact_at": {
           "type": "number"
         },
+        "hit": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "parts": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/ContextPart"
+          },
+          "type": "array"
+        },
         "tokens": {
           "type": "integer"
         },
@@ -1089,7 +1170,9 @@
       "required": [
         "tokens",
         "window",
-        "compact_at"
+        "compact_at",
+        "parts",
+        "hit"
       ],
       "type": "object"
     },
@@ -1361,6 +1444,11 @@
               "participant.role_changed": "#/$defs/ParticipantRoleChanged",
               "participant.selected": "#/$defs/ParticipantSelected",
               "participant.typing": "#/$defs/ParticipantTyping",
+              "plugin.asked": "#/$defs/PluginAsked",
+              "plugin.context": "#/$defs/PluginContextAdded",
+              "plugin.line": "#/$defs/PluginLineSet",
+              "plugin.notified": "#/$defs/PluginNotified",
+              "plugin.shown": "#/$defs/PluginShown",
               "plugins.changed": "#/$defs/PluginsChanged",
               "policy.rule_added": "#/$defs/PolicyRuleAdded",
               "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
@@ -1476,6 +1564,15 @@
               "$ref": "#/$defs/AttachmentData"
             },
             {
+              "$ref": "#/$defs/PluginShown"
+            },
+            {
+              "$ref": "#/$defs/PluginAsked"
+            },
+            {
+              "$ref": "#/$defs/PluginNotified"
+            },
+            {
               "$ref": "#/$defs/BoardErased"
             },
             {
@@ -1540,6 +1637,12 @@
             },
             {
               "$ref": "#/$defs/CommandReplied"
+            },
+            {
+              "$ref": "#/$defs/PluginLineSet"
+            },
+            {
+              "$ref": "#/$defs/PluginContextAdded"
             },
             {
               "$ref": "#/$defs/ToolStarted"
@@ -2123,6 +2226,49 @@
       ],
       "type": "object"
     },
+    "PluginAsked": {
+      "description": "A plugin command asks whoever ran it a question. Only they get it; it is not logged.",
+      "properties": {
+        "ask_id": {
+          "type": "string"
+        },
+        "command": {
+          "type": "string"
+        },
+        "default": {
+          "default": "",
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/AskKind"
+        },
+        "options": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "plugin.asked",
+          "default": "plugin.asked",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "ask_id",
+        "command",
+        "kind",
+        "title",
+        "options",
+        "default"
+      ],
+      "type": "object"
+    },
     "PluginCommandView": {
       "properties": {
         "description": {
@@ -2149,6 +2295,118 @@
         "description",
         "usage",
         "host_only"
+      ],
+      "type": "object"
+    },
+    "PluginContextAdded": {
+      "description": "A plugin's before_run hook gave the agent context ahead of the run's prompt.",
+      "properties": {
+        "plugin": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "plugin.context",
+          "default": "plugin.context",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "run_id",
+        "plugin",
+        "text"
+      ],
+      "type": "object"
+    },
+    "PluginLine": {
+      "description": "A short status line a plugin keeps in the side panel, such as \"tests \u2713\".",
+      "properties": {
+        "plugin": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "plugin",
+        "text"
+      ],
+      "type": "object"
+    },
+    "PluginLineSet": {
+      "description": "A plugin's status line changed; empty text removes it.",
+      "properties": {
+        "plugin": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "plugin.line",
+          "default": "plugin.line",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "plugin",
+        "text"
+      ],
+      "type": "object"
+    },
+    "PluginNotified": {
+      "description": "A short toast from a plugin command for the person who ran it.",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "plugin.notified",
+          "default": "plugin.notified",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command",
+        "text"
+      ],
+      "type": "object"
+    },
+    "PluginShown": {
+      "description": "What a plugin command shows the person who ran it, and nobody else. It is not logged.",
+      "properties": {
+        "command": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "plugin.shown",
+          "default": "plugin.shown",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "command",
+        "title",
+        "text"
       ],
       "type": "object"
     },
@@ -2313,6 +2571,17 @@
         "delivery": {
           "$ref": "#/$defs/Delivery"
         },
+        "display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "prompt_id": {
           "type": "string"
         },
@@ -2326,6 +2595,17 @@
           "const": "prompt.accepted",
           "default": "prompt.accepted",
           "type": "string"
+        },
+        "via": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -2335,7 +2615,9 @@
         "text",
         "delivery",
         "provenance",
-        "attachments"
+        "attachments",
+        "via",
+        "display"
       ],
       "type": "object"
     },
@@ -2774,6 +3056,13 @@
           "$ref": "#/$defs/PermissionMode",
           "default": "default"
         },
+        "plugin_lines": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginLine"
+          },
+          "type": "array"
+        },
         "plugins": {
           "default": [],
           "items": {
@@ -2872,6 +3161,7 @@
         "loaded_tools",
         "plugins",
         "commands",
+        "plugin_lines",
         "queue",
         "agent",
         "fast_agent",
@@ -2957,6 +3247,10 @@
         "description": {
           "type": "string"
         },
+        "hidden": {
+          "default": false,
+          "type": "boolean"
+        },
         "name": {
           "type": "string"
         },
@@ -2968,7 +3262,8 @@
         "name",
         "description",
         "scope",
-        "builtin"
+        "builtin",
+        "hidden"
       ],
       "type": "object"
     },
@@ -3213,6 +3508,17 @@
           ],
           "default": null
         },
+        "display": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "id": {
           "type": "string"
         },
@@ -3248,6 +3554,17 @@
             }
           ],
           "default": null
+        },
+        "via": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         }
       },
       "required": [
@@ -3257,7 +3574,9 @@
         "text",
         "tool",
         "ok",
-        "output"
+        "output",
+        "via",
+        "display"
       ],
       "type": "object"
     },
@@ -3391,6 +3710,11 @@
           "participant.role_changed": "#/$defs/ParticipantRoleChanged",
           "participant.selected": "#/$defs/ParticipantSelected",
           "participant.typing": "#/$defs/ParticipantTyping",
+          "plugin.asked": "#/$defs/PluginAsked",
+          "plugin.context": "#/$defs/PluginContextAdded",
+          "plugin.line": "#/$defs/PluginLineSet",
+          "plugin.notified": "#/$defs/PluginNotified",
+          "plugin.shown": "#/$defs/PluginShown",
           "plugins.changed": "#/$defs/PluginsChanged",
           "policy.rule_added": "#/$defs/PolicyRuleAdded",
           "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
@@ -3506,6 +3830,15 @@
           "$ref": "#/$defs/AttachmentData"
         },
         {
+          "$ref": "#/$defs/PluginShown"
+        },
+        {
+          "$ref": "#/$defs/PluginAsked"
+        },
+        {
+          "$ref": "#/$defs/PluginNotified"
+        },
+        {
           "$ref": "#/$defs/BoardErased"
         },
         {
@@ -3570,6 +3903,12 @@
         },
         {
           "$ref": "#/$defs/CommandReplied"
+        },
+        {
+          "$ref": "#/$defs/PluginLineSet"
+        },
+        {
+          "$ref": "#/$defs/PluginContextAdded"
         },
         {
           "$ref": "#/$defs/ToolStarted"

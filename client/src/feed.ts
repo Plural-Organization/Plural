@@ -12,7 +12,19 @@ export type ToolStatus = "running" | "ok" | "failed";
 
 export type FeedItem =
   | { kind: "banner"; id: string; room: string; version: string; guestLink: string | null; teamLink?: string | null }
-  | { kind: "user"; id: string; participantId: string; name: string; role: Role; viaProposal: boolean; text: string; files?: string[] }
+  | {
+      kind: "user";
+      id: string;
+      participantId: string;
+      name: string;
+      role: Role;
+      viaProposal: boolean;
+      text: string;
+      files?: string[];
+      /** The plugin command that sent it; `full` is what the agent got when the room sees a short `text`. */
+      via?: string | null;
+      full?: string | null;
+    }
   | {
       kind: "chat";
       id: string;
@@ -27,7 +39,8 @@ export type FeedItem =
   | { kind: "assistant"; id: string; text: string; streaming: boolean }
   | { kind: "tool"; id: string; call: ToolCallView; status: ToolStatus; output: string; diff: string | null; live: string }
   | { kind: "notice"; id: string; tone: Tone; text: string; action?: "board" | "done" }
-  | { kind: "briefing"; id: string; from: string; text: string; asOf: number; update: boolean };
+  | { kind: "briefing"; id: string; from: string; text: string; asOf: number; update: boolean }
+  | { kind: "shown"; id: string; command: string; title: string; text: string };
 
 export interface Feed {
   items: FeedItem[];
@@ -134,6 +147,15 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
       const from = host ? label(state, host) : "the host";
       return { ...feed, counter, items: [...feed.items, { kind: "briefing", id: `b${counter}`, from, text: event.text, asOf: event.as_of_seq, update: event.update }] };
     }
+    case "plugin.context": {
+      const first = event.text.split("\n")[0] ?? "";
+      const more = event.text.length > first.length ? ` (+${event.text.length - first.length} chars)` : "";
+      return note("dim", `context from the ${event.plugin} plugin for the agent: ${first.slice(0, 160)}${more}`);
+    }
+    case "plugin.shown": {
+      const counter = feed.counter + 1;
+      return { ...feed, counter, items: [...feed.items, { kind: "shown", id: `s${counter}`, command: event.command, title: event.title, text: event.text }] };
+    }
     case "briefing.sharing_changed":
       return note("accent", { off: "this session shares no briefings", ask: "briefings of this session are given when you agree", team: "briefings of this session are given to anyone who asks" }[event.mode]);
     case "briefing.imported":
@@ -199,7 +221,7 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
             name: author ? label(state, author) : event.author_id,
             role: author?.role ?? event.provenance.initiator_role,
             viaProposal: event.provenance.origin === "proposal",
-            text: event.text,
+            ...promptText(event.text, event.via, event.display),
             files: event.attachments.map((id) => state.attachments[id]?.name ?? "a file"),
           },
         ],
@@ -382,6 +404,10 @@ function loadHistory(
   return { ...feed, items, counter, approvals, history: true };
 }
 
+function promptText(text: string, via: string | null | undefined, display: string | null | undefined): { text: string; via: string | null; full: string | null } {
+  return display ? { text: display, via: via ?? null, full: text } : { text, via: via ?? null, full: null };
+}
+
 function fromEntry(entry: TranscriptEntry, state: SessionState, counter: number): FeedItem | null {
   switch (entry.kind) {
     case "prompt": {
@@ -393,7 +419,7 @@ function fromEntry(entry: TranscriptEntry, state: SessionState, counter: number)
         name: author ? label(state, author) : (entry.author_id ?? "system"),
         role: author?.role ?? "participant",
         viaProposal: false,
-        text: entry.text,
+        ...promptText(entry.text, entry.via, entry.display),
       };
     }
     case "assistant":

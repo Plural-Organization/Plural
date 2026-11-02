@@ -1,6 +1,7 @@
 from collections.abc import Iterable, Mapping
 
 from plural.agent.messages import (
+    PLUGIN_SOURCE,
     AssistantTurn,
     Message,
     NotesTurn,
@@ -14,6 +15,7 @@ from plural.protocol.events import (
     ContextCompacted,
     EventRecord,
     MessageEnded,
+    PluginContextAdded,
     PromptAccepted,
     PromptDequeued,
     RunEnded,
@@ -82,13 +84,22 @@ def replay(
                         is_error=not ok,
                     )
                 )
+            case PluginContextAdded(plugin=plugin, text=text) if run_prompt is not None:
+                # Recorded after run.started, but the agent read it just before the prompt.
+                at = next(
+                    (i for i in range(len(messages) - 1, -1, -1) if messages[i] is run_prompt),
+                    len(messages),
+                )
+                messages.insert(at, NotesTurn(source=f"{PLUGIN_SOURCE}{plugin}", text=text))
             case BriefingImported(item=item, text=text):
                 turn = NotesTurn(source=item.source, text=text)
                 (notes if run_prompt is not None else messages).append(turn)
-            case ContextCompacted(summary=summary):
-                messages = [SummaryTurn(text=summary)]
-                if run_prompt is not None:
-                    messages.append(run_prompt)
+            case ContextCompacted(summary=summary, kept_from=kept):
+                tail = _kept(messages, kept)
+                again = (
+                    [run_prompt] if run_prompt and all(m is not run_prompt for m in tail) else []
+                )
+                messages = [SummaryTurn(text=summary), *again, *tail]
                 assistant_at = None
             case RunEnded():
                 _settle(messages)
@@ -104,6 +115,24 @@ def replay(
         for message in messages
         if not isinstance(message, AssistantTurn) or message.text or message.tool_calls
     ]
+
+
+def _kept(messages: list[Message], kept: str | None) -> list[Message]:
+    """The messages a compaction kept after its summary, from the one `kept` names."""
+    if kept is None:
+        return []
+    kind, _, key = kept.partition(":")
+    for index, message in enumerate(messages):
+        match message:
+            case UserTurn(id=prompt_id) if kind == "prompt" and prompt_id == key:
+                return messages[index:]
+            case AssistantTurn(tool_calls=calls) if kind == "call" and any(
+                call.id == key for call in calls
+            ):
+                return messages[index:]
+            case _:
+                pass
+    return []
 
 
 def _order_results(messages: list[Message]) -> None:

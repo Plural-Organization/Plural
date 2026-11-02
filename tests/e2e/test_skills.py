@@ -11,6 +11,7 @@ from plural.protocol.envelope import ErrorCode
 from plural.protocol.events import (
     ApprovalRequested,
     ErrorRaised,
+    PromptAccepted,
     RunEnded,
     SkillsChanged,
     SkillsFound,
@@ -93,3 +94,33 @@ async def test_the_agent_installs_a_skill_only_after_the_host_approves(tmp_path:
         assert loaded.ok
         assert "# deploy-to-vercel" in loaded.output
         assert "deploy-to-vercel: Does things." in provider.requests[-1].system
+
+
+async def test_a_skill_command_gives_the_agent_the_skill_and_the_room_the_request(
+    tmp_path: Path,
+) -> None:
+    folder = tmp_path / "ws" / ".agents" / "skills" / "grill"
+    folder.mkdir(parents=True)
+    (folder / "SKILL.md").write_text(
+        "---\nname: grill\ndescription: Grill.\ndisable-model-invocation: true\n---\nAsk hard.\n"
+    )
+    provider = FakeProvider([reply("first question")])
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        owner = await session.owner()
+        await owner.client.send(PromptSubmit(text="/skill:grill my plan"))
+        accepted = await owner.next(PromptAccepted)
+        assert (accepted.via, accepted.display) == ("skill:grill", "my plan")
+        assert "Ask hard." in accepted.text
+        await owner.next(RunEnded)
+        sent = str(provider.requests[-1].messages)
+        assert "Ask hard." in sent
+        assert "my plan" in sent
+        assert "grill" not in provider.requests[-1].system
+
+
+async def test_an_unknown_skill_command_is_refused(tmp_path: Path) -> None:
+    async with running_session(tmp_path, relayed=False, provider=FakeProvider()) as session:
+        owner = await session.owner()
+        with pytest.raises(CommandRejected) as rejected:
+            await owner.client.send(PromptSubmit(text="/skill:nope hi"))
+        assert rejected.value.error.code is ErrorCode.NOT_FOUND

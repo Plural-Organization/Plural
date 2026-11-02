@@ -1,6 +1,6 @@
 # ADR 0003: simple, host-side context compaction
 
-Status: accepted
+Status: superseded by ADR 0012
 
 ## Context
 
@@ -23,8 +23,10 @@ Compaction is performed by the loop, with the session's own provider, in the "si
 - The summary is requested with the same system prompt and tool list as normal calls (so the request can
   reuse the cached prefix) plus a final instruction that forbids tool calls. A summary that contains
   tool calls or no text is treated as a failed compaction.
-- Triggers: proactively before a model call when the previous response reported a prompt of at least
-  `PLURAL_COMPACT_AT` (default 0.75) of `PLURAL_CONTEXT_WINDOW`; reactively once when the provider
+- Triggers: proactively before a model call when the prompt, as the previous response reported it plus
+  an estimate of what was added since, reaches the window less `PLURAL_COMPACT_RESERVE` (16384 tokens),
+  the window being what the provider reports for its model, else `PLURAL_CONTEXT_WINDOW` (until 2026-11
+  this was `PLURAL_COMPACT_AT`, 0.75 of a 128k window); reactively once when the provider
   reports a context overflow; on demand through `/compact`, which applies before the next prompt.
 - Compaction happens only between tool rounds, never while an assistant turn waits for its tool results.
 - The summary is a durable event (`context.compacted`) and `SessionState.summary` keeps the latest one.

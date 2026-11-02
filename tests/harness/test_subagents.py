@@ -81,7 +81,7 @@ async def test_explore_runs_on_the_fast_model_and_reports_back(tmp_path: Path) -
     # A sub-agent sees every tool of its spec that exists, deferred or not.
     assert child_tools == {"read", "grep", "glob", "ls", "web_fetch"}
     assert not child_tools & {"agent", "write", "bash"}
-    assert "# Sub-agents" in main.requests[0].system
+    assert "<sub_agents>" in main.requests[0].system
 
     checked = [(subject, provenance.initiator_role) for subject, provenance in gate.seen]
     assert ("alpha", Role.PARTICIPANT) in checked

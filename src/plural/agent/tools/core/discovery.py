@@ -7,7 +7,7 @@ from typing import Final
 from pydantic import Field, JsonValue
 
 from plural.agent.providers.base import ToolSchema
-from plural.agent.tools.base import PreparedCall, ToolArgs, ToolCtx, ToolResult
+from plural.agent.tools.base import PreparedCall, ToolArgs, ToolCtx, ToolResult, args_schema
 from plural.agent.tools.registry import Entry, ToolRegistry
 from plural.protocol.models import ToolRisk
 
@@ -116,6 +116,11 @@ class ToolSearchTool:
     """Finds deferred tools by keyword and declares the matches from the next model call."""
 
     name = TOOL_SEARCH
+    guidelines = (
+        "The web, MCP servers, the board, sub-agents and installing skills load on demand: find "
+        "them with tool_search, or call one by its exact name, before you say you cannot do "
+        "something.",
+    )
 
     def __init__(self, registry: ToolRegistry) -> None:
         self._registry = registry
@@ -130,7 +135,7 @@ class ToolSearchTool:
                 "Search with words for what you need to do, or with a tool's exact name. "
                 + (f"Not loaded yet, by group: {listing}." if listing else "Every tool is loaded.")
             ),
-            parameters=ToolSearchArgs.model_json_schema(),
+            parameters=args_schema(ToolSearchArgs),
         )
 
     def prepare(self, raw: Mapping[str, JsonValue]) -> PreparedCall:

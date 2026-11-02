@@ -23,7 +23,10 @@ class BashArgs(ToolArgs):
 class BashTool(TypedTool[BashArgs]):
     spec = ToolSpec(
         name="bash",
-        description="Run a shell command in the workspace. Output is tail-truncated.",
+        description=(
+            "Run a shell command in the workspace. Long output keeps its last lines and is kept "
+            "whole for read."
+        ),
         risk=ToolRisk.EXEC,
         args_model=BashArgs,
     )
@@ -43,7 +46,7 @@ class BashTool(TypedTool[BashArgs]):
             )
         finally:
             stream.flush()
-        body = truncate_tail(result.output)
+        body = truncate_tail(result.output, full=ctx.outputs)
         if result.timed_out:
             notice = f"[timed out after {args.timeout_s:g}s]"
             return ToolResult(f"{body}\n{notice}" if body else notice, is_error=True)

@@ -169,6 +169,11 @@ export function Sidebar({ projection, room: _room, inbox, running, status, space
               {` · ${state.mcp.reduce((sum, server) => sum + server.tools, 0)} tools`}
             </text>
           ) : null}
+          {state.plugin_lines.map((line) => (
+            <text key={line.plugin} fg={theme.dim}>
+              {truncate(line.plugin, 10)} <span fg={theme.text}>{truncate(line.text, SIDEBAR_WIDTH - 15)}</span>
+            </text>
+          ))}
         </Section>
         {inbox.length > 0 ? (
           <Section title="needs you" count={inbox.length}>

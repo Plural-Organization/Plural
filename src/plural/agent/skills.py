@@ -13,10 +13,12 @@ from typing import Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from plural.agent.prompts import tag
 from plural.protocol.models import SkillHit, SkillScope, SkillView
 from plural.security.secrets import is_denied_path
 
 SKILL_FILE: Final = "SKILL.md"
+SKILL_COMMAND: Final = "/skill:"
 INSTALL_DIR: Final = (".agents", "skills")
 BUILTIN_DIR: Final = Path(__file__).parent / "builtin_skills"
 SEARCH_DIRS: Final = (INSTALL_DIR, (".claude", "skills"), (".plural", "skills"))
@@ -59,10 +61,16 @@ class Skill:
     path: Path
     scope: SkillScope
     builtin: bool = False
+    # disable-model-invocation: left out of the prompt, run only as /skill:name.
+    hidden: bool = False
 
     def view(self) -> SkillView:
         return SkillView(
-            name=self.name, description=self.description, scope=self.scope, builtin=self.builtin
+            name=self.name,
+            description=self.description,
+            scope=self.scope,
+            builtin=self.builtin,
+            hidden=self.hidden,
         )
 
 
@@ -123,7 +131,23 @@ def read_skill(directory: Path, scope: SkillScope, *, builtin: bool = False) -> 
     description = " ".join(fields.get("description", "").split())
     if len(description) > MAX_DESCRIPTION:
         description = f"{description[: MAX_DESCRIPTION - 1]}…"
-    return Skill(name=name, description=description, path=directory, scope=scope, builtin=builtin)
+    return Skill(
+        name=name,
+        description=description,
+        path=directory,
+        scope=scope,
+        builtin=builtin,
+        hidden=fields.get("disable-model-invocation", "").lower() == "true",
+    )
+
+
+def body(text: str) -> str:
+    """A SKILL.md without its frontmatter."""
+    lines = text.splitlines()
+    if lines and lines[0].strip() == "---":
+        end = next((i for i, line in enumerate(lines[1:], 1) if line.strip() == "---"), 0)
+        lines = lines[end + 1 :]
+    return "\n".join(lines).strip()
 
 
 class SkillLibrary:
@@ -164,27 +188,40 @@ class SkillLibrary:
 
     def describe(self) -> str:
         installed = [
-            f"- {skill.name}: {skill.description or '(no description)'}" for skill in self._skills
+            f"- {skill.name}: {skill.description or '(no description)'}"
+            for skill in self._skills
+            if not skill.hidden
         ]
-        return "\n".join(
-            (
-                "# Skills",
-                "Skills are folders of expert instructions for one kind of task. Pick them by "
-                "description, the way you pick a tool:",
-                "- When a task matches an installed skill, call the skill tool with its name "
-                "before you start and follow what it says, loading its other files when it "
-                "points to them.",
-                "- When a task needs specialist know-how that no installed skill covers, such as "
-                "a file format (pdf, docx, xlsx, pptx), a framework's conventions or a deploy "
-                "target, call skill_search first. Prefer a well-known source with many installs "
-                "that matches the task closely, say in one line which one you chose and why, "
-                "install it with skill_install (the host approves it) and then load it.",
-                "- Do not search or install for small tasks you can already do well, and never "
-                "install a skill the room did not need.",
-                "Installed skills:" if installed else "No skills are installed yet.",
-                *installed,
-            )
+        return tag(
+            "skills",
+            "\n".join(
+                (
+                    "Expert instructions for one kind of task, picked by description. For "
+                    "specialist know-how none of them covers, such as a file format, a "
+                    "framework's conventions or a deploy target, look for one with skill_search.",
+                    "Installed skills:" if installed else "No skills are installed yet.",
+                    *installed,
+                )
+            ),
         )
+
+    async def expand(self, text: str) -> tuple[str, str, str]:
+        """Turns `/skill:name args` into the skill's instructions followed by the args, as pi
+        does, and returns the name, the args and that text."""
+        name, _, args = text.removeprefix(SKILL_COMMAND).partition(" ")
+        skill = self.get(name)
+        if skill is None:
+            raise SkillError(f"no skill named {name}; installed: {self._names()}")
+        content = await asyncio.to_thread(
+            (skill.path / SKILL_FILE).read_text, encoding="utf-8", errors="replace"
+        )
+        block = tag(
+            "skill",
+            f'Load its other files with skill(name="{skill.name}", file=...).\n\n{body(content)}',
+            name=skill.name,
+        )
+        args = args.strip()
+        return skill.name, args, f"{block}\n\n{args}" if args else block
 
     def file(self, name: str, relative: str) -> Path:
         skill = self.get(name)

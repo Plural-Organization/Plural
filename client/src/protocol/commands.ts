@@ -103,6 +103,8 @@ export interface CommandsSchema {
     | CommandRun
     | PluginsReload
     | PluginsCreate
+    | PluginsRemove
+    | PluginAnswer
     | TypingSet
     | SelectionSet
     | CursorSet
@@ -451,6 +453,25 @@ export interface PluginsReload {
 export interface PluginsCreate {
   name: string;
   type?: "plugins.create";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "PluginsRemove".
+ */
+export interface PluginsRemove {
+  name: string;
+  type?: "plugins.remove";
+}
+/**
+ * The answer to a plugin's question; no value means the person closed it.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "PluginAnswer".
+ */
+export interface PluginAnswer {
+  ask_id: string;
+  type?: "plugin.answer";
+  value?: string | null;
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

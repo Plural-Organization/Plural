@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.messages import NOTES_HEADER
+from plural.agent.prompts import prompt
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
 from plural.client.reconnect import JoinLink, SessionClient
@@ -210,13 +210,15 @@ async def test_notes_given_to_an_agent_reach_its_next_prompt_once(tmp_path: Path
         await owner.client.send(PromptSubmit(text="continue his work"))
         await owner.next(RunEnded)
         sent = [message.content for message in provider.requests[0].messages]
-        assert sent[0].startswith(NOTES_HEADER.format(source="bek"))
-        assert sent[0].endswith("Goal: fix login. Done: a retry.")
+        assert sent[0].startswith(prompt("briefing_note").format(source="bek"))
+        assert sent[0].endswith("\nGoal: fix login. Done: a retry.\n</briefing>")
 
         await owner.client.send(PromptSubmit(text="and now?"))
         await owner.next(RunEnded)
         again = [message.content for message in provider.requests[1].messages]
-        assert sum(NOTES_HEADER.format(source="bek") in content for content in again) == 1
+        assert (
+            sum(prompt("briefing_note").format(source="bek") in content for content in again) == 1
+        )
 
         duplicate = BriefingImport(source="bek", as_of_seq=7, text="same")
         assert await rejected(owner.client.send(duplicate)) is ErrorCode.CONFLICT
@@ -288,7 +290,7 @@ async def test_the_notes_and_the_caution_survive_a_restart(tmp_path: Path) -> No
         await again.client.send(PromptSubmit(text="make it"))
         await again.next(ApprovalRequested)
         sent = [message.content for message in provider.requests[0].messages]
-        assert sent[0].startswith(NOTES_HEADER.format(source="bek"))
+        assert sent[0].startswith(prompt("briefing_note").format(source="bek"))
     finally:
         await again.stop()
         serving.cancel()

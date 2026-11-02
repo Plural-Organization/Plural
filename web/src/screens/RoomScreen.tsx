@@ -8,7 +8,7 @@ import { SelectionLayer, type Selector } from "../components/SelectionLayer";
 import { SitePreview } from "../components/SitePreview";
 import { Feed } from "../components/feed/Feed";
 import { Inbox } from "../components/inbox/Inbox";
-import { inboxItems } from "../components/inbox/items";
+import { askItems, inboxItems } from "../components/inbox/items";
 import { InviteDialog } from "../components/InviteDialog";
 import { Sidebar } from "../components/side/Sidebar";
 import { TeamPanel } from "../components/TeamPanel";
@@ -29,7 +29,7 @@ import { siteFiles } from "../lib/site";
 import { copyText } from "../lib/clipboard";
 import { upload } from "../lib/upload";
 import { cx } from "../lib/cx";
-import { pluginHints } from "../lib/commands";
+import { pluginHints, skillHints } from "../lib/commands";
 import styles from "./RoomScreen.module.css";
 
 interface RoomScreenProps {
@@ -46,9 +46,12 @@ export function RoomScreen({ link, name, member, team, onWatch, onLeave }: RoomS
   const { projection, feed, connection, invite, send, sendPresence } = session;
   const state = projection.state;
   const me = projection.me;
-  const pluginCommands = useMemo(() => pluginHints(state.commands), [state.commands]);
+  const pluginCommands = useMemo(() => [...pluginHints(state.commands), ...skillHints(state.skills)], [state.commands, state.skills]);
   const isHost = me?.role === "host";
-  const items = useMemo(() => (isHost ? inboxItems(state) : []), [isHost, state.approvals, state.proposals, state.join_requests]);
+  const items = useMemo(
+    () => [...askItems(session.asks), ...(isHost ? inboxItems(state) : [])],
+    [session.asks, isHost, state.approvals, state.proposals, state.join_requests],
+  );
   const [editing, setEditing] = useState<ProposalView | null>(null);
   const [panel, setPanel] = useState(false);
   const { toast, flash } = useToast();
@@ -246,7 +249,7 @@ export function RoomScreen({ link, name, member, team, onWatch, onLeave }: RoomS
             </button>
           ) : null}
           {connection === "offline" ? <div className="banner warn">The connection dropped. Reconnecting…</div> : null}
-          <Inbox items={items} state={state} send={send} onEdit={setEditing} />
+          <Inbox items={items} state={state} send={send} onEdit={setEditing} answer={session.answer} />
           <div className={styles.presence}>
             {typers.length > 0 ? (
               <span>

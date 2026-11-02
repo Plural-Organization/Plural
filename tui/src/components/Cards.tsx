@@ -146,11 +146,37 @@ export function BriefingCard({ item, expanded, onToggle, onCopy }: { item: Extra
   );
 }
 
+export function ShownCard({ item, expanded, onToggle, onCopy }: { item: Extract<FeedItem, { kind: "shown" }>; expanded: boolean; onToggle: () => void; onCopy: (text: string) => void }) {
+  const long = item.text.split("\n").length > BRIEFING_LINES;
+  const view = long && !expanded ? collapseText(item.text, BRIEFING_LINES) : { text: item.text, hidden: 0 };
+  return (
+    <box flexDirection="column" marginY={1} border={["left"]} borderStyle="heavy" borderColor={theme.accent} backgroundColor={theme.panel} paddingX={1}>
+      <text>
+        <span fg={theme.accent}>
+          <b>◆ {item.title}</b>
+        </span>
+        <span fg={theme.dim}> · from /{item.command} · only you see this</span>
+      </text>
+      <text fg={theme.text} wrapMode="word">
+        {view.text}
+      </text>
+      {long ? (
+        <box onMouseDown={() => onToggle()}>
+          <text fg={theme.accent}>{expanded ? "▴ show less" : `▾ ${view.hidden} more lines · click or ctrl+o to expand`}</text>
+        </box>
+      ) : null}
+      <box onMouseDown={() => onCopy(item.text)}>
+        <text fg={theme.accent}>copy</text>
+      </box>
+    </box>
+  );
+}
+
 const SOLO: Run = { startId: "", first: true, last: true, count: 1, added: 0, removed: 0, failed: 0, hidden: false, earlier: 0 };
 
 export type Queued = "steer" | "follow_up" | null;
 
-export function UserCard({ item, queued }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued }) {
+export function UserCard({ item, queued, expanded, onToggle }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued; expanded: boolean; onToggle: () => void }) {
   const color = colorFor(item.participantId);
   return (
     <box id={pinId(item.id)} flexDirection="column" marginTop={1} marginBottom={1} backgroundColor={theme.bubble} paddingX={2} paddingY={1}>
@@ -161,10 +187,17 @@ export function UserCard({ item, queued }: { item: Extract<FeedItem, { kind: "us
         <span fg={theme.dim}>
           {"  "}
           {item.role} · to agent
+          {item.via ? ` · via /${item.via}` : ""}
           {item.viaProposal ? " · approved by host" : ""}
         </span>
       </text>
       <text fg={theme.text} wrapMode="word">{item.text}</text>
+      {item.full ? (
+        <box flexDirection="column" onMouseDown={onToggle}>
+          <text fg={theme.accent}>{expanded ? "▴ hide what the agent got" : `▸ the agent got the full text from /${item.via ?? "plugin"} · click or ctrl+o`}</text>
+          {expanded ? <text fg={theme.dim} wrapMode="word">{item.full}</text> : null}
+        </box>
+      ) : null}
       {queued ? (
         <text fg={theme.warn}>
           ⧗ queued · <span fg={theme.dim}>{queued === "steer" ? "the agent reads it after its current step" : "sent when the run ends"}</span>
@@ -399,7 +432,7 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, run
     case "banner":
       return <Banner item={item} compact={started} />;
     case "user":
-      return <UserCard item={item} queued={queued} />;
+      return <UserCard item={item} queued={queued} expanded={expanded} onToggle={() => onToggle(item.id)} />;
     case "chat":
       return <ChatCard item={item} />;
     case "assistant":
@@ -410,5 +443,7 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, run
       return <NoticeCard item={item} />;
     case "briefing":
       return <BriefingCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} />;
+    case "shown":
+      return <ShownCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} />;
   }
 }

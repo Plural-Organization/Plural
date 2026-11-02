@@ -3,6 +3,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import replace
 from typing import Final
 
+import structlog
 from pydantic import Field, JsonValue
 
 from plural.agent.agents import AgentLibrary, AgentSpec
@@ -12,7 +13,14 @@ from plural.agent.gate import GateResult, PolicyGate
 from plural.agent.loop import AgentLoop
 from plural.agent.messages import UserTurn
 from plural.agent.providers.base import ToolSchema
-from plural.agent.tools.base import PreparedCall, ToolArgs, ToolCtx, ToolError, ToolResult
+from plural.agent.tools.base import (
+    PreparedCall,
+    ToolArgs,
+    ToolCtx,
+    ToolError,
+    ToolResult,
+    args_schema,
+)
 from plural.agent.tools.registry import ToolRegistry
 from plural.agent.tools.truncation import truncate_head
 from plural.core.ports import IdGenerator
@@ -87,11 +95,16 @@ class AgentTool:
 
     def schema(self) -> ToolSchema:
         names = [agent.name for agent in self._library.agents]
-        parameters = AgentArgs.model_json_schema()
+        parameters = args_schema(AgentArgs)
         parameters["properties"]["agent"]["enum"] = names
         return ToolSchema(
             name=AGENT_TOOL,
-            description="Hand a self-contained task to a sub-agent and get its report back.",
+            description=(
+                "Hand a task to a sub-agent that works in its own context, often on a cheaper "
+                "model, and returns a short report. Give it a complete, self-contained task. "
+                "Several calls in one turn run in parallel. Check the lines a report cites "
+                "before you change code based on it."
+            ),
             parameters=parameters,
         )
 
@@ -123,6 +136,7 @@ class AgentTool:
             tool_ctx=replace(ctx, emit=_quiet),
             ids=self._ids,
             limits=replace(parent.limits, max_turns=spec.max_turns),
+            dump=parent.dump,
         )
         provenance = ctx.provenance or direct("p_host", Role.HOST)
         turn = UserTurn(
@@ -135,19 +149,21 @@ class AgentTool:
         report = ""
         calls = 0
         ending: RunEnd | None = None
-        async for event in child.run(turn, cancel=ctx.cancel or asyncio.Event()):
-            match event:
-                case ToolStart(call=call):
-                    calls += 1
-                    ctx.emit(f"· {call.name} {call.subject}\n")
-                case ToolEnd(result=result) if result.is_error:
-                    ctx.emit(f"  ✗ {_first_line(result.content)}\n")
-                case MessageEnd(text=text) if text.strip():
-                    report = text.strip()
-                case RunEnd() as end:
-                    ending = end
-                case _:
-                    pass
+        # The sub-agent's log lines name it and the model it runs on.
+        with structlog.contextvars.bound_contextvars(agent=spec.name, agent_model=model):
+            async for event in child.run(turn, cancel=ctx.cancel or asyncio.Event()):
+                match event:
+                    case ToolStart(call=call):
+                        calls += 1
+                        ctx.emit(f"· {call.name} {call.subject}\n")
+                    case ToolEnd(result=result) if result.is_error:
+                        ctx.emit(f"  ✗ {_first_line(result.content)}\n")
+                    case MessageEnd(text=text) if text.strip():
+                        report = text.strip()
+                    case RunEnd() as end:
+                        ending = end
+                    case _:
+                        pass
         usage = child.usage
         parent.spend(model, spec.name, usage, uses=1)
         tokens = usage.prompt_tokens + usage.output_tokens

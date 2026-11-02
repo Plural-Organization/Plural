@@ -1,4 +1,4 @@
-import { mentionCompletions, mentionNote, type Mentionable, type PluginCommandView, type Role } from "@plural/client";
+import { mentionCompletions, mentionNote, type Mentionable, type PluginCommandView, type Role, type SkillView } from "@plural/client";
 
 export interface CommandHint {
   name: string;
@@ -22,6 +22,7 @@ export const COMMANDS: CommandHint[] = [
   { name: "mcp", usage: "/mcp [add <name> <command|url> [--global] | on|off|restart|rm <name> | import]", description: "connect MCP servers and their tools" },
   { name: "agents", usage: "/agents [rm <name>]", description: "sub-agents the agent can hand work to; create your own" },
   { name: "usage", usage: "/usage", description: "tokens spent per model and agent in this session" },
+  { name: "context", usage: "/context", description: "what fills the agent's context, and whether the cache was used" },
   { name: "plugins", usage: "/plugins [new <name> | reload]", description: "the host's plugins and their commands" },
   { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
   { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
@@ -37,6 +38,15 @@ export function pluginHints(commands: readonly PluginCommandView[]): CommandHint
     usage: command.usage ?? `/${command.name}`,
     description: command.description || `from the ${command.plugin} plugin`,
     hostOnly: command.host_only ?? false,
+  }));
+}
+
+/** `/skill:<name>` for every skill, the only way to run one the model does not see. */
+export function skillHints(skills: readonly SkillView[]): CommandHint[] {
+  return skills.map((skill) => ({
+    name: `skill:${skill.name}`,
+    usage: `/skill:${skill.name} [request]`,
+    description: skill.description || "run this skill",
   }));
 }
 

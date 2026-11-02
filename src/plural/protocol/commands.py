@@ -249,6 +249,19 @@ class PluginsCreate(Model):
     name: str = Field(min_length=1, max_length=32, pattern=r"^[a-z][a-z0-9_-]*$")
 
 
+class PluginsRemove(Model):
+    type: Literal["plugins.remove"] = "plugins.remove"
+    name: str = Field(min_length=1, max_length=32, pattern=r"^[a-z][a-z0-9_-]*$")
+
+
+class PluginAnswer(Model):
+    """The answer to a plugin's question; no value means the person closed it."""
+
+    type: Literal["plugin.answer"] = "plugin.answer"
+    ask_id: str = Field(min_length=1, max_length=64)
+    value: str | None = Field(default=None, max_length=4000)
+
+
 class TypingSet(Model):
     type: Literal["presence.typing"] = "presence.typing"
     typing: bool
@@ -366,6 +379,8 @@ Command = Annotated[
     | CommandRun
     | PluginsReload
     | PluginsCreate
+    | PluginsRemove
+    | PluginAnswer
     | TypingSet
     | SelectionSet
     | CursorSet

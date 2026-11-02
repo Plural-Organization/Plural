@@ -1,3 +1,4 @@
+from collections.abc import Awaitable, Callable
 from datetime import timedelta
 from typing import Final
 
@@ -8,6 +9,7 @@ from plural.core.policy.rules import RuleSet
 from plural.core.ports import Clock, IdGenerator
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.inbox import ApprovalNeeded, Inbox
+from plural.host.plugins import Verdict
 from plural.protocol.models import (
     ApprovalDecision,
     ApprovalView,
@@ -19,6 +21,9 @@ from plural.protocol.models import (
 )
 
 FINAL: Final = "Do not retry this or an equivalent action; ask the user how to proceed instead"
+
+# Plugin tool_call hooks: they may ask for an approval or refuse, never allow.
+Guard = Callable[[ToolCallView, Provenance], Awaitable[Verdict | None]]
 
 
 class HostPolicyGate:
@@ -32,8 +37,10 @@ class HostPolicyGate:
         clock: Clock,
         timeout_s: float,
         rejection_limit: int,
+        guard: Guard | None = None,
     ) -> None:
         self._policy = policy
+        self._guard = guard
         self._registry = registry
         self._inbox = inbox
         self._ids = ids
@@ -62,7 +69,14 @@ class HostPolicyGate:
     ) -> GateResult:
         invocation = ToolInvocation(name=call.name, risk=call.risk, subject=subject)
         decision = evaluate(self._policy, invocation, provenance)
-        if decision.action is PolicyAction.ALLOW:
+        refused = decision.action is PolicyAction.DENY or decision.reason == PLAN_MODE
+        verdict = None
+        if self._guard is not None and not refused:
+            verdict = await self._guard(call, provenance)
+        if verdict is not None and verdict.action == "deny":
+            reason = f"refused by the {verdict.plugin} plugin: {verdict.reason}"
+            return GateResult(allowed=False, reason=f"{reason}. {FINAL}")
+        if decision.action is PolicyAction.ALLOW and verdict is None:
             return GateResult(allowed=True, reason=decision.reason)
         if decision.reason == PLAN_MODE:
             return GateResult(allowed=False, reason=PLAN_MODE)
@@ -76,6 +90,7 @@ class HostPolicyGate:
             provenance=provenance,
             timeout_at=self._clock.now() + self._timeout,
             suggested_patterns=decision.suggested_patterns,
+            warnings=() if verdict is None else (f"{verdict.plugin} plugin: {verdict.reason}",),
         )
         waiter = self._registry.open(approval.id)
         self._inbox.put(ApprovalNeeded(approval))

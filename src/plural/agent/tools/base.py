@@ -4,12 +4,13 @@ from abc import ABC, abstractmethod
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
 from plural.agent.providers.base import ToolSchema
 from plural.agent.sandbox.base import ExecutionBackend, Workspace
+from plural.agent.tools.truncation import FullOutputs
 from plural.protocol.models import Provenance, ToolRisk
 
 
@@ -19,6 +20,25 @@ class ToolError(Exception):
 
 class ToolArgs(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+def args_schema(model: type[BaseModel]) -> dict[str, Any]:
+    """The JSON schema of a tool's arguments, without the titles pydantic adds: they repeat the
+    names and cost the model tokens on every request."""
+    return _untitled(model.model_json_schema())
+
+
+def _untitled(node: Any) -> Any:
+    if isinstance(node, dict):
+        items = cast("dict[str, Any]", node).items()
+        return {
+            key: _untitled(value)
+            for key, value in items
+            if not (key == "title" and isinstance(value, str))
+        }
+    if isinstance(node, list):
+        return [_untitled(value) for value in cast("list[Any]", node)]
+    return node
 
 
 @dataclass(frozen=True, slots=True)
@@ -64,6 +84,7 @@ class ToolCtx:
     backend: ExecutionBackend
     locks: FileLocks = field(default_factory=FileLocks)
     stamps: FileStamps = field(default_factory=FileStamps)
+    outputs: FullOutputs = field(default_factory=FullOutputs)
     emit: Callable[[str], None] = _discard
     provenance: Provenance | None = None
     cancel: asyncio.Event | None = None
@@ -83,6 +104,8 @@ class ToolSpec[A: ToolArgs]:
     description: str
     risk: ToolRisk
     args_model: type[A]
+    # Rules for the system prompt, there only while the tool is declared on every request.
+    guidelines: tuple[str, ...] = ()
 
 
 class Tool(Protocol):
@@ -101,11 +124,15 @@ class TypedTool[A: ToolArgs](ABC):
     def name(self) -> str:
         return self.spec.name
 
+    @property
+    def guidelines(self) -> tuple[str, ...]:
+        return self.spec.guidelines
+
     def schema(self) -> ToolSchema:
         return ToolSchema(
             name=self.spec.name,
             description=self.spec.description,
-            parameters=self.spec.args_model.model_json_schema(),
+            parameters=args_schema(self.spec.args_model),
         )
 
     def prepare(self, raw: Mapping[str, JsonValue]) -> PreparedCall:

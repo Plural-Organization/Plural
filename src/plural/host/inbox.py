@@ -111,6 +111,48 @@ class PluginPrompt:
     invoker_id: str
     text: str
     follow_up: bool = False
+    display: str | None = None
+    # Sent by a run_end hook: the run it starts does not fire run_end hooks again.
+    from_hook: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class PluginLineUpdate:
+    plugin: str
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class PluginLineFlush:
+    plugin: str
+
+
+@dataclass(frozen=True, slots=True)
+class PluginQuestion:
+    """A plugin waits for `answer` from `invoker_id`; None means closed, timed out or gone."""
+
+    command: str
+    invoker_id: str
+    kind: str
+    title: str
+    options: tuple[str, ...]
+    default: str
+    answer: "asyncio.Future[str | None]"
+
+
+@dataclass(frozen=True, slots=True)
+class PluginNotify:
+    command: str
+    invoker_id: str
+    text: str
+
+
+@dataclass(frozen=True, slots=True)
+class PluginShow:
+    command: str
+    invoker_id: str
+    title: str
+    text: str
 
 
 InboxMessage = (
@@ -130,6 +172,11 @@ InboxMessage = (
     | BoardRequest
     | PluginReply
     | PluginPrompt
+    | PluginShow
+    | PluginQuestion
+    | PluginNotify
+    | PluginLineUpdate
+    | PluginLineFlush
 )
 
 

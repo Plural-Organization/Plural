@@ -11,6 +11,7 @@ import {
   matchPreview,
   nextPermissionMode,
   parseChat,
+  isSkillCommand,
   parseSlash,
   routeOf,
   SlashError,
@@ -19,9 +20,10 @@ import {
   type Command,
   type ConnectionStatus,
   type PermissionMode,
+  type PluginAsked,
   type Session,
 } from "@plural/client";
-import { COMMANDS, pluginHints } from "./commands";
+import { COMMANDS, pluginHints, skillHints } from "./commands";
 import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
@@ -36,13 +38,13 @@ import { Sidebar, SIDEBAR_WIDTH } from "./components/Sidebar";
 import { preview, Toast, TOAST_MS, type ToastMessage } from "./components/Toast";
 import { StatusBar } from "./components/StatusBar";
 import { TopBar } from "./components/TopBar";
-import { SCOPES, TrayView, type Form, type McpWizard, type Row, type Tray } from "./components/Tray";
+import { SCOPES, TrayView, type Form, type FormStep, type McpWizard, type Row, type Tray } from "./components/Tray";
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, Working } from "./components/Working";
 import { InviteDialog } from "./components/InviteDialog";
 import { ShareDialog } from "./components/ShareDialog";
 import { candidateFolders } from "./folders";
-import { helpRows, pluginRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
+import { contextRows, helpRows, pluginRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
 import { describeConflict, type SpaceRow, type Summary } from "./spaces";
@@ -312,6 +314,20 @@ export function App({
               copy(event.link, "Invite link copied", "send it to one person, it works once");
             }
           }
+          if (event.type === "plugin.asked") {
+            setTray(askForm(event));
+          }
+          if (event.type === "plugin.notified") {
+            showToast(event.text, `from /${event.command}`, "accent", "◆");
+          }
+          if (event.type === "plugin.shown") {
+            setTray({
+              kind: "text",
+              title: `${event.title} · only you see this`,
+              tone: "accent",
+              rows: event.text.split("\n").map((line): Row => [line]),
+            });
+          }
           if (event.type === "skills.found") {
             const host = client.projection.me?.role === "host";
             setTray({ kind: "pick", title: `skills.sh · ${event.query}`, hits: [...event.hits], selected: 0, canInstall: host });
@@ -355,6 +371,7 @@ export function App({
   const state = projection.state;
   const me = projection.me;
   const pluginCommands = useMemo(() => pluginHints(state.commands), [state.commands]);
+  const suggested = useMemo(() => [...pluginCommands, ...skillHints(state.skills)], [pluginCommands, state.skills]);
   const isHost = me?.role === "host";
   const mode = state.permission_mode;
   const running = state.run !== null;
@@ -713,8 +730,31 @@ export function App({
     ],
   });
 
+  const askForm = (event: PluginAsked): Form => {
+    const options = event.kind === "confirm" ? ["yes", "no"] : event.options;
+    const step: FormStep =
+      event.kind === "input"
+        ? { kind: "text", key: "answer", label: event.title, hint: event.default ? `enter keeps "${event.default}" · esc closes` : "esc closes", optional: true }
+        : { kind: "choice", key: "answer", label: event.title, options: options.map((option) => ({ value: option, title: option, detail: "" })) };
+    return { kind: "form", title: `/${event.command} asks`, steps: [step], index: 0, values: {}, selected: 0, warning: null, ask: event.ask_id, fallback: event.default };
+  };
+
+  // Closing the tray answers an open plugin question with nothing, so the plugin is not left waiting.
+  const closeTray = (): void => {
+    const current = trayRef.current;
+    if (current?.kind === "form" && current.ask) {
+      send({ type: "plugin.answer", ask_id: current.ask, value: null });
+    }
+    setTray(null);
+  };
+
   const finishForm = (form: Form): void => {
     const values = form.values;
+    if (form.ask) {
+      send({ type: "plugin.answer", ask_id: form.ask, value: values.answer || form.fallback || "" });
+      setTray(null);
+      return;
+    }
     send({
       type: "agents.create",
       name: values.name ?? "",
@@ -738,8 +778,9 @@ export function App({
     } else {
       value = (typed ?? "").trim();
       const taken = client.projection.state.agents.map((agent) => agent.name);
-      const warning =
-        !value && !step.optional
+      const warning = form.ask
+        ? null
+        : !value && !step.optional
           ? `${step.label.toLowerCase()} is needed`
           : step.key === "name" && !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(value)
             ? "use letters, digits, ., - and _"
@@ -1001,7 +1042,7 @@ export function App({
 
   const escape = (): void => {
     if (trayRef.current) {
-      setTray(null);
+      closeTray();
     } else if (editing) {
       setEditing(null);
       setSeed({ text: "", key: Date.now() });
@@ -1166,7 +1207,7 @@ export function App({
       warn(text.split(/\s+/)[0] ?? "chat", error instanceof SlashError ? error.message : String(error));
       return;
     }
-    if (text.startsWith("/")) {
+    if (text.startsWith("/") && !isSkillCommand(text)) {
       const name = text.slice(1).split(/\s+/)[0] ?? "";
       const known = [...COMMANDS, ...pluginCommands].find((command) => command.name === name);
       if (known?.hostOnly && !isHost) {
@@ -1187,6 +1228,8 @@ export function App({
         }
         if (parsed.type === "plugins.create") {
           setTray({ kind: "busy", title: "plugins", text: `creating ~/.plural/plugins/${parsed.name}.py`, key: Date.now() });
+        } else if (parsed.type === "plugins.remove") {
+          setTray({ kind: "busy", title: "plugins", text: `removing ~/.plural/plugins/${parsed.name}.py`, key: Date.now() });
         } else if (parsed.type === "plugins.reload") {
           setTray({ kind: "busy", title: "plugins", text: "reloading plugins", key: Date.now() });
         }
@@ -1196,6 +1239,10 @@ export function App({
         }
         if (parsed.type === "show.usage") {
           show("usage · this session", usageRows(projection));
+          return;
+        }
+        if (parsed.type === "show.context") {
+          show("context · the agent's prompt", contextRows(projection));
           return;
         }
         if (parsed.type === "show.agents") {
@@ -1514,7 +1561,7 @@ export function App({
           remember={!asking?.secret}
           role={me?.role}
           people={mentionable(state, projection.meId)}
-          commands={pluginCommands}
+          commands={suggested}
           seed={seed}
           label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
           route={asking || editing || disabled ? () => null : (text) => routeOf(text, state, projection.meId)}
@@ -1546,7 +1593,7 @@ export function App({
             servers={state.mcp}
             agents={state.agents}
             maxRows={Math.max(4, Math.floor(height * 0.55))}
-            onClose={() => setTray(null)}
+            onClose={closeTray}
             onSelect={(index) => {
               setFocus("composer");
               setTray((current) => (current?.kind === "pick" || current?.kind === "mcp" || current?.kind === "mcp-add" || current?.kind === "agents" || current?.kind === "form" ? { ...current, selected: index } : current));

@@ -13,11 +13,12 @@ from pydantic import ValidationError
 
 from plural.agent import events as agent
 from plural.agent.agents import AgentError, AgentLibrary, AgentSpec, agent_tools
-from plural.agent.loop import BriefingFailed
+from plural.agent.loop import AskFailed, BriefingFailed
 from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.messages import Message, NotesTurn, UserTurn
+from plural.agent.prompts import prompt
 from plural.agent.providers.base import LlmImage
-from plural.agent.skills import Package, SkillError, SkillLibrary, parse_package
+from plural.agent.skills import SKILL_COMMAND, Package, SkillError, SkillLibrary, parse_package
 from plural.agent.tools.extra.board import AGENT_AUTHOR, BoardRefused
 from plural.core import access, approvals, briefings, chat, joins, policies, proposals, visibility
 from plural.core.errors import (
@@ -51,8 +52,13 @@ from plural.host.inbox import (
     Incoming,
     JoinExpired,
     McpUpdated,
+    PluginLineFlush,
+    PluginLineUpdate,
+    PluginNotify,
     PluginPrompt,
+    PluginQuestion,
     PluginReply,
+    PluginShow,
     Reconfigure,
     SkillsReply,
     SkillsUpdated,
@@ -61,7 +67,14 @@ from plural.host.inbox import (
 )
 from plural.host.invites import InviteBook, RoomLink
 from plural.host.ledger import ChangeLedger
-from plural.host.plugins import CommandContext, PluginCommand, PluginError, PluginHost
+from plural.host.plugins import (
+    CommandContext,
+    PluginCommand,
+    PluginError,
+    PluginHost,
+    PromptInfo,
+    RunInfo,
+)
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.publisher import Publisher
 from plural.host.team_admission import (
@@ -107,8 +120,10 @@ from plural.protocol.commands import (
     ParticipantRevoke,
     ParticipantSetRole,
     PermissionModeSet,
+    PluginAnswer,
     PluginsCreate,
     PluginsReload,
+    PluginsRemove,
     PolicyAdd,
     PolicyRemove,
     PromptModeSet,
@@ -163,7 +178,12 @@ from plural.protocol.events import (
     ParticipantSelected,
     ParticipantTyping,
     PermissionModeChanged,
+    PluginAsked,
+    PluginContextAdded,
+    PluginLineSet,
+    PluginNotified,
     PluginsChanged,
+    PluginShown,
     PolicyRuleAdded,
     PolicyRuleRemoved,
     PromptAccepted,
@@ -188,6 +208,7 @@ from plural.protocol.models import (
     ActorKind,
     AdmissionMode,
     ApprovalDecision,
+    AskKind,
     AttachmentMeta,
     BoardShape,
     BoardStroke,
@@ -202,6 +223,7 @@ from plural.protocol.models import (
     JoinDecision,
     Participant,
     PermissionMode,
+    PluginStatus,
     PromptMode,
     Provenance,
     Role,
@@ -215,11 +237,13 @@ from plural.security.secrets import Redactor, is_denied_path
 
 log = structlog.get_logger(__name__)
 
-PLAN_NOTE = (
-    "[plan mode: research only. Read the code, do not change files or run commands that change "
-    "anything. End with a concrete step-by-step plan; the host approves it before you start]"
-)
+PLAN_NOTE = prompt("plan")
 MAX_REPLY_CHARS = 8000
+MAX_DISPLAY_CHARS = 500
+MAX_SHOWN_CHARS = 20_000
+MAX_LINE_CHARS = 80
+LINE_INTERVAL_S = 1.0
+QUESTION_TIMEOUT_S = 300.0
 
 
 def _check_points(kind: BoardShape, points: tuple[float, ...]) -> None:
@@ -281,6 +305,15 @@ class SessionActor:
         self._team_sweep_s = team_sweep_s
         self._briefing = briefing
         self._ledger = ledger
+        # What the agent changed in the current run, for run_end hooks.
+        self._run_changes: ChangeLedger | None = None
+        self._hook_prompts: set[str] = set()
+        # Plugin status lines waiting for their one-a-second slot, and when each last changed.
+        self._lines_waiting: dict[str, str] = {}
+        self._lines_at: dict[str, float] = {}
+        # Plugin questions waiting for an answer, by id, and the one each person has open.
+        self._questions: dict[str, PluginQuestion] = {}
+        self._question_of: dict[str, str] = {}
         self._briefing_at: dict[str, datetime] = {}
         self._team = team
         self._conflicts = conflicts
@@ -386,8 +419,7 @@ class SessionActor:
         await self._sync_mcp()
         await self._sync_agents()
         if self._plugins is not None:
-            await asyncio.to_thread(self._plugins.load)
-            await self._sync_plugins()
+            await self._load_plugins(self._plugins)
 
     async def run(self) -> None:
         sweeper = asyncio.create_task(self._sweep_team_loop()) if self._team else None
@@ -430,7 +462,9 @@ class SessionActor:
             case ApprovalNeeded(approval=approval):
                 if self._conflicts is not None:
                     warnings = self._conflicts.warnings_for(approval.call, self._clock.now())
-                    approval = approval.model_copy(update={"warnings": warnings})
+                    approval = approval.model_copy(
+                        update={"warnings": (*approval.warnings, *warnings)}
+                    )
                 await self._emit(ApprovalRequested(approval=approval))
                 delay = max((approval.timeout_at - self._clock.now()).total_seconds(), 0)
                 self._timers[approval.id] = asyncio.get_running_loop().call_later(
@@ -479,6 +513,24 @@ class SessionActor:
                     ok=ok,
                 )
                 await self._emit(replied, actor_id=invoker_id)
+            case PluginLineUpdate(plugin=plugin, text=text):
+                await self._plugin_line(plugin, text)
+            case PluginLineFlush(plugin=plugin):
+                text = self._lines_waiting.pop(plugin, None)
+                if text is not None:
+                    await self._plugin_line(plugin, text)
+            case PluginQuestion() as question:
+                self._open_question(question)
+            case PluginNotify(command=command, invoker_id=invoker_id, text=text):
+                notified = PluginNotified(command=command, text=" ".join(text.split())[:200])
+                self._publisher.deliver_to(invoker_id, self._redactor.scrub(notified))
+            case PluginShow(command=command, invoker_id=invoker_id, title=title, text=text):
+                shown = PluginShown(
+                    command=command,
+                    title=title.strip()[:120] or f"/{command}",
+                    text=text[:MAX_SHOWN_CHARS] or "(empty)",
+                )
+                self._publisher.deliver_to(invoker_id, self._redactor.scrub(shown))
             case PluginPrompt() as request:
                 await self._plugin_prompt(request)
             case TypingExpired(participant_id=participant_id):
@@ -592,17 +644,31 @@ class SessionActor:
                 await self._sync_skills(actor_id=participant.id)
             case CommandRun():
                 await self._run_command(participant, command)
+            case PluginAnswer(ask_id=ask_id, value=value):
+                question = self._questions.get(ask_id)
+                if question is None or question.invoker_id != participant.id:
+                    raise NotFound("no such question, it may have timed out")
+                if value is not None and question.kind != "input" and value not in question.options:
+                    raise Invalid(f"answer one of: {', '.join(question.options)}")
+                self._close_question(ask_id, value)
             case PluginsReload():
-                await asyncio.to_thread(self._require_plugins().load)
-                await self._sync_plugins(actor_id=participant.id, force=True)
+                await self._load_plugins(
+                    self._require_plugins(), actor_id=participant.id, force=True
+                )
             case PluginsCreate():
                 plugins = self._require_plugins()
                 try:
                     plugins.create(command.name)
                 except PluginError as error:
                     raise Conflict(str(error)) from None
-                await asyncio.to_thread(plugins.load)
-                await self._sync_plugins(actor_id=participant.id)
+                await self._load_plugins(plugins, actor_id=participant.id)
+            case PluginsRemove():
+                plugins = self._require_plugins()
+                try:
+                    plugins.remove(command.name)
+                except PluginError as error:
+                    raise NotFound(str(error)) from None
+                await self._load_plugins(plugins, actor_id=participant.id)
             case TypingSet():
                 await self._set_typing(participant.id, typing=command.typing)
             case SelectionSet():
@@ -894,7 +960,23 @@ class SessionActor:
             raise Unauthorized("token is bound to another connection")
         return participant
 
-    async def _submit(self, participant: Participant, command: PromptSubmit) -> None:
+    async def _submit(
+        self,
+        participant: Participant,
+        command: PromptSubmit,
+        *,
+        via: str | None = None,
+        display: str | None = None,
+        from_hook: bool = False,
+    ) -> None:
+        if via is None and command.text.startswith(SKILL_COMMAND):
+            try:
+                name, args, text = await self._library().expand(command.text)
+            except SkillError as error:
+                raise NotFound(str(error)) from None
+            # The room sees what was typed; the agent gets the skill's instructions too.
+            command = command.model_copy(update={"text": text})
+            via, display = f"skill:{name}", args or f"{SKILL_COMMAND}{name}"
         if participant.role is Role.HOST or self._state.prompt_mode is PromptMode.OPEN:
             proposals.ensure_attachments(self._state, command.attachments)
             await self._accept(
@@ -903,8 +985,12 @@ class SessionActor:
                 delivery=command.delivery,
                 attachments=command.attachments,
                 provenance=direct(participant.id, participant.role),
+                via=via,
+                display=display,
+                from_hook=from_hook,
             )
             return
+        # A proposal shows the host the whole text it approves, so the short display is dropped.
         created = proposals.submit(
             self._state, proposal_id=self._ids.new("pr_"), author_id=participant.id, command=command
         )
@@ -923,6 +1009,7 @@ class SessionActor:
             self._redactor.add(secret)
         self._agent_label = change.label
         self._fast_label = change.helper_label
+        log.info("agent.models", main=change.label, fast=change.helper_label)
         if change.label != self._state.agent or change.helper_label != self._state.fast_agent:
             await self._emit(
                 AgentChanged(agent=change.label, fast=change.helper_label), actor_id=self._host.id
@@ -1173,7 +1260,13 @@ class SessionActor:
             await self._emit(UsageRecorded(lines=lines))
 
     async def _sync_context(self, fill: agent.ContextFill) -> None:
-        context = ContextView(tokens=fill.tokens, window=fill.window, compact_at=fill.compact_at)
+        context = ContextView(
+            tokens=fill.tokens,
+            window=fill.window,
+            compact_at=fill.compact_at,
+            parts=fill.parts,
+            hit=fill.hit,
+        )
         if context != self._state.context:
             await self._emit(ContextUsage(context=context))
 
@@ -1194,6 +1287,14 @@ class SessionActor:
         if self._plugins is None:
             raise Conflict("plugins are not available on this host")
         return self._plugins
+
+    async def _load_plugins(
+        self, plugins: PluginHost, *, actor_id: str | None = None, force: bool = False
+    ) -> None:
+        await asyncio.to_thread(plugins.load)
+        await self._sync_plugins(actor_id=actor_id, force=force)
+        if plugins.hooks("session_start"):
+            self._background(plugins.session_started(self._publisher.room))
 
     async def _sync_plugins(self, *, actor_id: str | None = None, force: bool = False) -> None:
         if self._plugins is None:
@@ -1219,6 +1320,7 @@ class SessionActor:
             role=participant.role,
             workspace=self._require_plugins().workspace,
             inbox=self._inbox,
+            asker=self._plugin_ask,
         )
         self._background(self._invoke_plugin(found, context))
 
@@ -1229,6 +1331,68 @@ class SessionActor:
             log.exception("actor.plugin_command_failed", command=context.command)
             text = f"/{context.command} failed: {type(error).__name__}: {error}"
             self._inbox.put(PluginReply(context.command, context.author_id, text, ok=False))
+
+    def _open_question(self, question: PluginQuestion) -> None:
+        if not self._publisher.is_online(question.invoker_id):
+            question.answer.set_result(None)
+            return
+        if question.invoker_id in self._question_of:
+            question.answer.set_exception(
+                PluginError("the person already has a question from a plugin open")
+            )
+            return
+        ask_id = self._ids.new("pq_")
+        self._questions[ask_id] = question
+        self._question_of[question.invoker_id] = ask_id
+        asked = PluginAsked(
+            ask_id=ask_id,
+            command=question.command,
+            kind=AskKind(question.kind),
+            title=question.title.strip()[:300] or f"/{question.command}",
+            options=question.options,
+            default=question.default[:4000],
+        )
+        self._publisher.deliver_to(question.invoker_id, self._redactor.scrub(asked))
+        asyncio.get_running_loop().call_later(
+            QUESTION_TIMEOUT_S, self._close_question, ask_id, None
+        )
+
+    def _close_question(self, ask_id: str, value: str | None) -> None:
+        question = self._questions.pop(ask_id, None)
+        if question is None:
+            return
+        self._question_of.pop(question.invoker_id, None)
+        if not question.answer.done():
+            question.answer.set_result(value)
+
+    async def _plugin_line(self, plugin: str, text: str) -> None:
+        line = " ".join(text.split())[:MAX_LINE_CHARS]
+        if plugin in self._lines_waiting:
+            self._lines_waiting[plugin] = line
+            return
+        now = asyncio.get_running_loop().time()
+        wait = self._lines_at.get(plugin, -LINE_INTERVAL_S) + LINE_INTERVAL_S - now
+        if wait > 0:
+            self._lines_waiting[plugin] = line
+            asyncio.get_running_loop().call_later(wait, self._inbox.put, PluginLineFlush(plugin))
+            return
+        lines = self._state.plugin_lines
+        current = next((each.text for each in lines if each.plugin == plugin), "")
+        loaded = self._plugins is not None and any(
+            view.name == plugin and view.status is PluginStatus.LOADED
+            for view in self._plugins.views()
+        )
+        if line == current or not loaded:
+            return
+        self._lines_at[plugin] = now
+        await self._emit(PluginLineSet(plugin=plugin, text=line), actor_id=self._host.id)
+
+    async def _plugin_ask(self, question: str, history: bool, main: bool) -> str:
+        try:
+            answer = await self._agent.ask(question, history=history, main=main)
+        except AskFailed as error:
+            raise PluginError(f"the model could not answer: {error}") from None
+        return self._redactor.redact(answer)
 
     async def _plugin_prompt(self, request: PluginPrompt) -> None:
         author = self._state.participants.get(request.invoker_id)
@@ -1242,8 +1406,15 @@ class SessionActor:
         )
         if author is not None and problem is None:
             delivery = Delivery.FOLLOW_UP if request.follow_up else Delivery.NOW
+            display = (request.display or "").strip()[:MAX_DISPLAY_CHARS] or None
             try:
-                await self._submit(author, PromptSubmit(text=text, delivery=delivery))
+                await self._submit(
+                    author,
+                    PromptSubmit(text=text, delivery=delivery),
+                    via=request.command,
+                    display=display,
+                    from_hook=request.from_hook,
+                )
             except DomainError as error:
                 problem = str(error)
             else:
@@ -1281,8 +1452,13 @@ class SessionActor:
         delivery: Delivery,
         attachments: tuple[str, ...],
         provenance: Provenance,
+        via: str | None = None,
+        display: str | None = None,
+        from_hook: bool = False,
     ) -> None:
         prompt_id = self._ids.new("pm_")
+        if from_hook:
+            self._hook_prompts.add(prompt_id)
         accepted = PromptAccepted(
             prompt_id=prompt_id,
             author_id=author.id,
@@ -1290,6 +1466,8 @@ class SessionActor:
             delivery=delivery,
             provenance=provenance,
             attachments=attachments,
+            via=via,
+            display=display,
         )
         await self._emit(accepted, actor_id=author.id)
         await self._set_typing(author.id, typing=False)
@@ -1312,8 +1490,25 @@ class SessionActor:
 
     async def _start_run(self, turn: UserTurn) -> None:
         run_id = self._ids.new("run_")
+        if self._plugins is not None and self._plugins.hooks("run_end"):
+            self._run_changes = ChangeLedger(self._plugins.workspace)
         await self._emit(RunStarted(run_id=run_id, prompt_id=turn.id, provenance=turn.provenance))
-        self._agent.start(run_id, turn)
+        plugins = self._plugins
+        if plugins is None or not plugins.hooks("before_run"):
+            self._agent.start(run_id, turn)
+            return
+
+        async def prepare(prompt: UserTurn) -> list[tuple[str, str]]:
+            info = PromptInfo(
+                prompt_id=prompt.id,
+                text=prompt.text,
+                author_id=prompt.provenance.initiator_id,
+                role=prompt.provenance.initiator_role.value,
+            )
+            added = await plugins.before_run(info)
+            return [(name, self._redactor.redact(text)) for name, text in added]
+
+        self._agent.start(run_id, turn, prepare)
 
     async def _on_agent(self, run_id: str, event: agent.AgentEvent) -> None:
         if self._state.run is None or self._state.run.id != run_id:
@@ -1333,6 +1528,8 @@ class SessionActor:
                 )
             case agent.ToolsLoaded(names=names):
                 await self._emit(ToolsLoaded(tools=names))
+            case agent.ContextNote(plugin=plugin, text=text):
+                await self._emit(PluginContextAdded(run_id=run_id, plugin=plugin, text=text))
             case agent.Delivered(prompt_ids=prompt_ids):
                 for prompt_id in prompt_ids:
                     await self._emit(
@@ -1342,9 +1539,11 @@ class SessionActor:
                 await self._emit(ContextCompacting(run_id=run_id, tokens_before=tokens_before))
             case agent.ContextFill() as fill:
                 await self._sync_context(fill)
-            case agent.Compacted(summary=summary, tokens_before=tokens_before):
+            case agent.Compacted(summary=summary, tokens_before=tokens_before, kept_from=kept):
                 await self._emit(
-                    ContextCompacted(run_id=run_id, summary=summary, tokens_before=tokens_before)
+                    ContextCompacted(
+                        run_id=run_id, summary=summary, tokens_before=tokens_before, kept_from=kept
+                    )
                 )
             case agent.ToolStart(call=call):
                 await self._emit(ToolStarted(run_id=run_id, call=call))
@@ -1372,7 +1571,24 @@ class SessionActor:
             await self._emit(resolved)
         self._streaming.clear()
         await self._record_usage()
+        run = self._state.run
         await self._emit(RunEnded(run_id=run_id, reason=reason, usage=usage, error=error))
+        changes, self._run_changes = self._run_changes, None
+        if run is not None and self._plugins is not None and changes is not None:
+            if run.prompt_id in self._hook_prompts:
+                self._hook_prompts.discard(run.prompt_id)
+            else:
+                info = RunInfo(
+                    run_id=run_id,
+                    reason=reason.value,
+                    error=error,
+                    author_id=run.provenance.initiator_id,
+                    role=run.provenance.initiator_role.value,
+                    files=tuple(path for path, _, _ in changes.files()),
+                    input_tokens=usage.prompt_tokens,
+                    output_tokens=usage.output_tokens,
+                )
+                self._background(self._plugins.run_ended(info))
         pending = self._agent.drain_pending()
         if reason is RunEndReason.ABORTED:
             for turn in pending:
@@ -1399,6 +1615,8 @@ class SessionActor:
         if participant_id is None or self._publisher.is_online(participant_id):
             return
         await self._set_typing(participant_id, typing=False)
+        if participant_id in self._question_of:
+            self._close_question(self._question_of[participant_id], None)
         await self._set_selection(participant_id, SelectionSet(selection=None))
         await self._set_cursor(participant_id, CursorSet(cursor=None))
         if participant_id in self._state.participants:
@@ -1547,6 +1765,8 @@ class SessionActor:
             self._conflicts.observe(event, record.ts)
         if self._ledger is not None:
             self._ledger.observe(event)
+        if self._run_changes is not None:
+            self._run_changes.observe(event)
         if isinstance(event, PolicyRuleAdded | PolicyRuleRemoved | PermissionModeChanged):
             self._sync_policy()
         self._publisher.publish(record)

@@ -1,5 +1,6 @@
 import asyncio
 import json
+import time
 from collections import deque
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field, replace
@@ -8,8 +9,8 @@ import structlog
 from pydantic import ValidationError
 
 from plural.agent.briefing import BRIEFING_TAG
-from plural.agent.compaction import SUMMARY_PROMPT, extract_tagged
-from plural.agent.context import ContextBuilder
+from plural.agent.compaction import SUMMARY_SYSTEM, extract_tagged, summary_request, with_files
+from plural.agent.context import ContextBuilder, system_text
 from plural.agent.events import (
     AgentEvent,
     Compacted,
@@ -29,15 +30,18 @@ from plural.agent.events import (
 from plural.agent.gate import PolicyGate
 from plural.agent.interrupt import Interrupted, TimedOut, interruptible
 from plural.agent.messages import (
+    PLUGIN_SOURCE,
     AssistantTurn,
     Message,
     NotesTurn,
     SummaryTurn,
     ToolResultTurn,
     UserTurn,
+    kept_from,
     settled,
     to_llm,
 )
+from plural.agent.prompts import prompt
 from plural.agent.providers.base import (
     ContextOverflow,
     LlmEvent,
@@ -59,11 +63,14 @@ from plural.agent.providers.base import (
 )
 from plural.agent.providers.resilient import ResilientProvider
 from plural.agent.sandbox.base import SandboxError
+from plural.agent.telemetry import RequestDump, hit_rate, observed
 from plural.agent.tools.base import PreparedCall, ToolCtx, ToolError, ToolResult
 from plural.agent.tools.registry import ToolRegistry, UnknownTool
 from plural.core.ports import IdGenerator
 from plural.core.provenance import merge
 from plural.protocol.models import (
+    ContextPart,
+    ContextPartKind,
     Origin,
     Provenance,
     Role,
@@ -84,6 +91,13 @@ class BriefingFailed(Exception):
     pass
 
 
+class AskFailed(Exception):
+    pass
+
+
+ASIDE = f"\n\n{prompt('aside')}"
+
+
 SHARED = Provenance(initiator_id="shared-context", initiator_role=Role.VIEWER, origin=Origin.DIRECT)
 
 
@@ -94,8 +108,12 @@ class LoopLimits:
     tool_timeout_s: float = 600.0
     first_token_timeout_s: float = 120.0
     idle_timeout_s: float = 60.0
-    context_window: int = 128_000
-    compact_at: float = 0.75
+    # None until the provider says how much its model takes; set it to hold a window fixed.
+    context_window: int | None = None
+    # Room left for the reply: the conversation is summarized once it leaves less than this.
+    compact_reserve: int = 16_384
+    # The newest part of the conversation a compaction keeps as it is, in estimated tokens.
+    keep_recent: int = 20_000
     retries: int = 3
     retry_delay_s: float = 2.0
 
@@ -115,6 +133,11 @@ class _Turn:
         )
 
 
+Sections = tuple[tuple[ContextPartKind, str], ...]
+# The window assumed for a provider that does not say what its model takes.
+FALLBACK_WINDOW = 128_000
+
+
 class AgentLoop:
     def __init__(
         self,
@@ -127,7 +150,9 @@ class AgentLoop:
         ids: IdGenerator,
         limits: LoopLimits | None = None,
         helper: LLMProvider | None = None,
+        dump: RequestDump | None = None,
     ) -> None:
+        self._dump = dump
         self._spending: dict[tuple[str, str], Spend] = {}
         self._tools = tools
         self._gate = gate
@@ -137,14 +162,19 @@ class AgentLoop:
         self._limits = limits or LoopLimits()
         self._provider = self._resilient(provider)
         self._helper = self._resilient(helper) if helper is not None else None
-        self._prompt: tuple[str, tuple[ToolSchema, ...]] | None = None
+        self._prompt: tuple[Sections, tuple[ToolSchema, ...]] | None = None
         self._conversation: list[Message] = []
         self._notes: list[NotesTurn] = []
         self._shared = False
         self._steer: deque[UserTurn] = deque()
         self._follow_up: deque[UserTurn] = deque()
         self._usage = Usage()
+        # The prompt size the provider last reported, and how many messages that prompt held.
         self._context_tokens = 0
+        self._measured = 0
+        # The share of the latest request read from the provider's cache.
+        self._hit: float | None = None
+        self._window = self._limits.context_window
         self._compact_requested = False
         self._compaction_failed = False
         self._verify_compaction = False
@@ -171,6 +201,10 @@ class AgentLoop:
     @property
     def helper(self) -> LLMProvider | None:
         return self._helper.inner if self._helper is not None else None
+
+    @property
+    def dump(self) -> RequestDump | None:
+        return self._dump
 
     @property
     def limits(self) -> LoopLimits:
@@ -206,8 +240,8 @@ class AgentLoop:
                 task = asyncio.create_task(close())
                 self._provider_close_tasks.add(task)
                 task.add_done_callback(self._provider_close_tasks.discard)
-        if context_window is not None:
-            self._limits = replace(self._limits, context_window=context_window)
+        self._limits = replace(self._limits, context_window=context_window)
+        self._window = context_window
         self._conversation = [
             message.model_copy(update={"native": None})
             if isinstance(message, AssistantTurn) and message.native is not None
@@ -215,6 +249,7 @@ class AgentLoop:
             for message in self._conversation
         ]
         self._context_tokens = 0
+        self._measured = 0
         self._compaction_failed = False
 
     async def close(self) -> None:
@@ -228,8 +263,10 @@ class AgentLoop:
         self._compact_requested = True
 
     def fill(self) -> ContextFill:
+        window = self._window or FALLBACK_WINDOW
+        tokens = self._tokens()
         return ContextFill(
-            self._context_tokens, self._limits.context_window, self._limits.compact_at
+            tokens, window, self._threshold_of(window) / window, self._parts(tokens), self._hit
         )
 
     @property
@@ -239,9 +276,9 @@ class AgentLoop:
     async def compact(self, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         """Summarize the conversation now, outside a prompt, so everyone sees it happen."""
         self._usage = Usage()
-        yield Compacting(self._context_tokens)
+        yield Compacting(self._tokens())
         try:
-            yield await self._compact(None, cancel)
+            yield await self._compact(None, cancel, "manual")
         except CompactionFailed as error:
             yield RunEnd(RunEndReason.ERROR, self._usage, f"compaction failed: {error}")
             return
@@ -255,14 +292,37 @@ class AgentLoop:
         self._notes.append(turn)
         self._shared = True
 
+    def add_context(self, turn: NotesTurn) -> bool:
+        """Notes from the host's own plugins: unlike a briefing, they do not mark the run shared.
+
+        A note that repeats the plugin's latest one in the conversation is left out, so a hook
+        that says the same each run does not pile up copies. False when it was left out.
+        """
+        latest = next(
+            (
+                message
+                for message in reversed([*self._conversation, *self._notes])
+                if isinstance(message, NotesTurn) and message.source == turn.source
+            ),
+            None,
+        )
+        if latest is not None and latest.text == turn.text:
+            return False
+        self._notes.append(turn)
+        return True
+
     def load_tools(self, names: Sequence[str]) -> None:
         """Declare deferred tools loaded in an earlier session, before the next run."""
         self._tools.load(names)
 
     def restore(self, conversation: Sequence[Message]) -> None:
         self._conversation = list(conversation)
-        self._shared = any(isinstance(message, NotesTurn) for message in conversation)
-        self._context_tokens = sum(_estimate_tokens(message) for message in conversation)
+        self._shared = any(
+            isinstance(message, NotesTurn) and not message.source.startswith(PLUGIN_SOURCE)
+            for message in conversation
+        )
+        self._context_tokens = 0
+        self._measured = 0
 
     def cancel_pending(self, prompt_id: str) -> bool:
         for queue in (self._steer, self._follow_up):
@@ -286,7 +346,7 @@ class AgentLoop:
         self._usage = Usage()
         self.spend("main", "", Usage(), uses=1)
         self._gate.begin_run()
-        self._prompt = (self._context.system(), self._tools.schemas())
+        self._prompt = (self._context.sections(), self._tools.schemas())
         revision = self._tools.revision
         self._compaction_failed = False
         self._verify_compaction = False
@@ -295,9 +355,10 @@ class AgentLoop:
         try:
             for _ in range(self._limits.max_turns):
                 if self._should_compact():
-                    yield Compacting(self._context_tokens)
+                    reason = "requested" if self._compact_requested else "threshold"
+                    yield Compacting(self._tokens())
                     try:
-                        yield await self._compact(prompt, cancel)
+                        yield await self._compact(prompt, cancel, reason)
                         yield self.fill()
                     except CompactionFailed as error:
                         self._compaction_failed = True
@@ -307,6 +368,7 @@ class AgentLoop:
                         return
                 turn = _Turn(self._ids.new("m_"))
                 yield MessageStart(turn.message_id)
+                measured = len(self._conversation)
                 try:
                     async for event in self._events(self._request(), cancel):
                         match event:
@@ -325,8 +387,11 @@ class AgentLoop:
                             case UsageReport(usage=delta):
                                 self._usage = self._usage + delta
                                 self.spend("main", "", delta)
-                                self._context_tokens = delta.prompt_tokens
-                                self._check_compaction_helped()
+                                if delta.prompt_tokens:
+                                    self._context_tokens = delta.prompt_tokens
+                                    self._measured = measured
+                                    self._hit = hit_rate(delta)
+                                    self._check_compaction_helped()
                                 yield self.fill()
                             case Stop(reason=reason):
                                 turn.stop = reason
@@ -336,9 +401,9 @@ class AgentLoop:
                         yield RunEnd(RunEndReason.ERROR, self._usage, str(error))
                         return
                     recovering = True
-                    yield Compacting(self._context_tokens)
+                    yield Compacting(self._tokens())
                     try:
-                        yield await self._compact(prompt, cancel)
+                        yield await self._compact(prompt, cancel, "overflow")
                         yield self.fill()
                     except CompactionFailed as failure:
                         yield RunEnd(RunEndReason.ERROR, self._usage, f"context is full: {failure}")
@@ -352,6 +417,7 @@ class AgentLoop:
                     yield RunEnd(RunEndReason.ERROR, self._usage, reason)
                     return
                 recovering = False
+                await self._learn_window()
                 assistant = turn.assistant()
                 if assistant.text or assistant.tool_calls or not cancel.is_set():
                     self._conversation.append(assistant)
@@ -417,55 +483,128 @@ class AgentLoop:
             self._prompt = None
             self._settle()
 
-    def _threshold(self) -> float:
-        return self._limits.context_window * self._limits.compact_at
+    def _threshold_of(self, window: int) -> int:
+        # A window smaller than twice the reserve still gets half of itself for the conversation.
+        return max(window - self._limits.compact_reserve, window // 2)
+
+    def _threshold(self) -> int | None:
+        """The size at which the conversation is summarized; None before the window is known."""
+        return self._threshold_of(self._window) if self._window is not None else None
+
+    def _tokens(self) -> int:
+        """The provider's last count of the prompt, plus an estimate of what came after it."""
+        added = self._conversation[self._measured :]
+        return self._context_tokens + sum(_estimate_tokens(message) for message in added)
+
+    async def _learn_window(self) -> None:
+        if self._limits.context_window is not None:
+            return
+        ask = getattr(self._provider.inner, "context_window", None)
+        learned = await ask() if ask is not None else None
+        if learned:
+            self._window = learned
+        elif self._window is None:
+            self._window = FALLBACK_WINDOW
 
     def _should_compact(self) -> bool:
         if len(self._conversation) < 2:
             return False
         if self._compact_requested:
             return True
-        return not self._compaction_failed and self._context_tokens >= self._threshold()
+        # Until the first call says how big the window is, only an overflow compacts.
+        threshold = self._threshold()
+        return not self._compaction_failed and threshold is not None and self._tokens() >= threshold
 
     def _check_compaction_helped(self) -> None:
         if not self._verify_compaction:
             return
         self._verify_compaction = False
-        if self._context_tokens >= self._threshold():
+        threshold = self._threshold()
+        if threshold is not None and self._context_tokens >= threshold:
             self._compaction_failed = True
             log.warning(
                 "agent.compaction_ineffective",
                 prompt_tokens=self._context_tokens,
-                window=self._limits.context_window,
+                window=self._window,
             )
 
-    async def _compact(self, prompt: UserTurn | None, cancel: asyncio.Event) -> Compacted:
+    async def _compact(
+        self, prompt: UserTurn | None, cancel: asyncio.Event, reason: str
+    ) -> Compacted:
+        """Summarize the older part of the conversation and keep the newest part as it is."""
         self._compact_requested = False
-        system, tools = self._prompt_parts()
+        first = self._conversation[0] if self._conversation else None
+        previous = first.text if isinstance(first, SummaryTurn) else None
+        start = 1 if previous is not None else 0
+        end = self._cut(start) or len(self._conversation)
+        history = self._conversation[start:end]
         request = LlmRequest(
-            system=system,
-            messages=(*to_llm(self._conversation), LlmMessage(role="user", content=SUMMARY_PROMPT)),
-            tools=tools,
+            system=SUMMARY_SYSTEM,
+            messages=(LlmMessage(role="user", content=summary_request(history, previous)),),
         )
         summary = ""
+        role = "main"
         for provider in (self._helper, self._provider):
             if provider is None:
                 continue
             try:
                 summary = await self._summarize(request, provider, cancel)
-                self.spend(
-                    "fast" if provider is self._helper else "main", "compact", Usage(), uses=1
-                )
+                role = "fast" if provider is self._helper else "main"
+                self.spend(role, "compact", Usage(), uses=1)
                 break
             except CompactionFailed as error:
                 if cancel.is_set() or provider is self._provider:
                     raise
                 log.warning("agent.helper_compaction_failed", error=str(error))
-        before = self._context_tokens
-        self._conversation = [SummaryTurn(text=summary), *([prompt] if prompt is not None else [])]
-        self._context_tokens = sum(_estimate_tokens(message) for message in self._conversation)
+        summary = with_files(summary, history, previous)
+        # Thinking blocks are bound to the history they were written after, which the summary
+        # replaces; the kept turns go on with their text and tool calls only.
+        tail = [
+            message.model_copy(update={"native": None})
+            if isinstance(message, AssistantTurn)
+            else message
+            for message in self._conversation[end:]
+        ]
+        kept_prompt = prompt is not None and any(
+            isinstance(message, UserTurn) and message.id == prompt.id for message in tail
+        )
+        before = self._tokens()
+        self._conversation = [
+            SummaryTurn(text=summary),
+            *([prompt] if prompt is not None and not kept_prompt else []),
+            *tail,
+        ]
+        self._context_tokens = 0
+        self._measured = 0
         self._verify_compaction = True
-        return Compacted(summary, before)
+        log.info(
+            "context.compacted",
+            reason=reason,
+            role=role,
+            tokens_before=before,
+            tokens_after=self._tokens(),
+            summarized=len(history),
+            kept=len(tail),
+            summary_chars=len(summary),
+        )
+        return Compacted(summary, before, kept_from=kept_from(tail[0]) if tail else None)
+
+    def _cut(self, start: int) -> int | None:
+        """Where the kept part begins: about `keep_recent` tokens from the end, at a prompt or at
+        a turn that calls tools, so a tool result never loses its call. None keeps nothing."""
+        threshold = self._threshold()
+        budget = min(self._limits.keep_recent, threshold // 2 if threshold else 1 << 62)
+        points = [
+            index
+            for index in range(start + 1, len(self._conversation))
+            if kept_from(self._conversation[index]) is not None
+        ]
+        size = 0
+        for index in range(len(self._conversation) - 1, start, -1):
+            size += _estimate_tokens(self._conversation[index])
+            if size >= budget:
+                return next((point for point in points if point >= index), None)
+        return None
 
     async def brief(self, instruction: str, *, cancel: asyncio.Event) -> str:
         """Write a briefing of the conversation, outside any run, without changing it."""
@@ -493,6 +632,39 @@ class AgentLoop:
             return text
         raise BriefingFailed("no model is available")
 
+    async def ask(self, question: str, *, history: bool, main: bool, cancel: asyncio.Event) -> str:
+        """Answer one question outside any run, without changing the conversation."""
+        past = to_llm(settled(self._conversation)) if history else ()
+        request = LlmRequest(
+            system=self._context.system(),
+            messages=(*past, LlmMessage(role="user", content=question + ASIDE)),
+            tools=self._tools.schemas(),
+        )
+        providers = [self._provider] if main else [p for p in (self._helper, self._provider) if p]
+        for provider in providers:
+            role = "fast" if provider is self._helper else "main"
+            text: list[str] = []
+            try:
+                async for event in self._events(request, cancel, provider, purpose="ask"):
+                    match event:
+                        case TextDelta(text=chunk):
+                            text.append(chunk)
+                        case UsageReport(usage=delta):
+                            self.spend(role, "plugin", delta)
+                        case _:
+                            pass
+            except ProviderError as error:
+                if cancel.is_set() or provider is self._provider:
+                    raise AskFailed(str(error)) from error
+                log.warning("agent.helper_ask_failed", error=str(error))
+                continue
+            self.spend(role, "plugin", Usage(), uses=1)
+            answer = "".join(text).strip()
+            if not answer:
+                raise AskFailed("the model gave no answer")
+            return answer
+        raise AskFailed("no model is available")
+
     async def _summarize(
         self,
         request: LlmRequest,
@@ -504,14 +676,17 @@ class AgentLoop:
     ) -> str:
         text: list[str] = []
         called = False
+        cut_off = False
         role = "fast" if provider is self._helper else "main"
         try:
-            async for event in self._events(request, cancel, provider):
+            async for event in self._events(request, cancel, provider, purpose=purpose):
                 match event:
                     case TextDelta(text=chunk):
                         text.append(chunk)
                     case ToolCallReady():
                         called = True
+                    case Stop(reason="max_tokens"):
+                        cut_off = True
                     case UsageReport(usage=delta):
                         if purpose == "compact":
                             self._usage = self._usage + delta
@@ -521,14 +696,29 @@ class AgentLoop:
         except ProviderError as error:
             raise CompactionFailed(str(error)) from error
         summary = extract_tagged("".join(text), tag)
+        if cut_off:
+            raise CompactionFailed("the summary was cut off at the output limit")
         if cancel.is_set() or called or not summary:
             raise CompactionFailed("the model did not produce a summary")
         return summary
 
     def _events(
-        self, request: LlmRequest, cancel: asyncio.Event, provider: LLMProvider | None = None
+        self,
+        request: LlmRequest,
+        cancel: asyncio.Event,
+        provider: LLMProvider | None = None,
+        *,
+        purpose: str = "turn",
     ) -> AsyncIterator[LlmEvent]:
-        return (provider or self._provider).stream(request, cancel=cancel)
+        chosen = provider or self._provider
+        dumped = self._dump.write(request, purpose) if self._dump is not None else None
+        return observed(
+            chosen.stream(request, cancel=cancel),
+            request,
+            purpose=purpose,
+            role="fast" if chosen is self._helper else "main",
+            dumped=dumped,
+        )
 
     def _next_input(self, *, has_tool_calls: bool) -> list[UserTurn]:
         if self._steer:
@@ -548,15 +738,34 @@ class AgentLoop:
             retry_delay_s=self._limits.retry_delay_s,
         )
 
-    def _prompt_parts(self) -> tuple[str, tuple[ToolSchema, ...]]:
+    def _prompt_parts(self) -> tuple[Sections, tuple[ToolSchema, ...]]:
         # A run keeps the system prompt and tool list it started with, so MCP servers or skills
         # changing mid-run do not rewrite the request prefix the provider has cached.
-        return self._prompt or (self._context.system(), self._tools.schemas())
+        return self._prompt or (self._context.sections(), self._tools.schemas())
+
+    def _parts(self, tokens: int) -> tuple[ContextPart, ...]:
+        """What the prompt is spent on, estimated, then scaled to the provider's count of it."""
+        sections, tools = self._prompt_parts()
+        sizes: dict[tuple[ContextPartKind, str | None], int] = {}
+        for kind, text in sections:
+            sizes[kind, None] = sizes.get((kind, None), 0) + len(text) // 4
+        sizes[ContextPartKind.TOOLS, None] = sum(len(t.model_dump_json()) for t in tools) // 4
+        for message in self._conversation:
+            key = _part_of(message)
+            sizes[key] = sizes.get(key, 0) + _estimate_tokens(message)
+        estimated = sum(sizes.values())
+        # Before the first call the provider has not counted the system prompt and tools.
+        scale = tokens / estimated if self._context_tokens and estimated else 1.0
+        return tuple(
+            ContextPart(kind=kind, name=name, tokens=round(size * scale))
+            for (kind, name), size in sizes.items()
+            if size
+        )
 
     def _request(self) -> LlmRequest:
-        system, tools = self._prompt_parts()
+        sections, tools = self._prompt_parts()
         return LlmRequest(
-            system=system,
+            system=system_text(sections),
             messages=to_llm(self._conversation),
             tools=tools,
         )
@@ -640,11 +849,16 @@ class AgentLoop:
             args=call.args,
         )
         yield ToolStart(view)
+        asked = time.monotonic()
+        ran: float | None = None
+        allowed = False
         try:
             verdict = await interruptible(
                 self._gate.check(view, subject=prepared.subject, provenance=provenance), cancel
             )
+            allowed = verdict.allowed
             if verdict.allowed:
+                ran = time.monotonic()
                 queue: asyncio.Queue[str] = asyncio.Queue()
                 runner = asyncio.create_task(
                     self._invoke(
@@ -674,6 +888,18 @@ class AgentLoop:
                 result = ToolResult(f"Denied: {verdict.reason}", is_error=True)
         except Interrupted:
             result = ToolResult(_ABORTED, is_error=True)
+        done = time.monotonic()
+        log.info(
+            "tool.call",
+            tool=prepared.name,
+            risk=prepared.risk.value,
+            allowed=allowed,
+            error=result.is_error,
+            chars=len(result.content),
+            truncated="[truncated " in result.content,
+            wait_ms=round(((ran or done) - asked) * 1000),
+            run_ms=round((done - ran) * 1000) if ran is not None else None,
+        )
         yield ToolEnd(call.id, result)
 
     async def _invoke(
@@ -738,6 +964,18 @@ _UNFINISHED: dict[StopReason, str] = {
     "max_tokens": "Not executed: the response hit the output limit before the call was complete",
     "refusal": "Not executed: the model declined the request",
 }
+
+
+def _part_of(message: Message) -> tuple[ContextPartKind, str | None]:
+    match message:
+        case ToolResultTurn(name=name):
+            return ContextPartKind.TOOL_RESULTS, name
+        case SummaryTurn():
+            return ContextPartKind.SUMMARY, None
+        case NotesTurn():
+            return ContextPartKind.NOTES, None
+        case UserTurn() | AssistantTurn():
+            return ContextPartKind.MESSAGES, None
 
 
 def _estimate_tokens(message: Message) -> int:

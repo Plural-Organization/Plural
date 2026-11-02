@@ -155,9 +155,70 @@ async def test_claude_code_receives_the_conversation_images(tmp_path: Path) -> N
     assert sent["argv"][sent["argv"].index("--input-format") + 1] == "stream-json"
     line = json.loads(sent["prompt"])
     assert line["type"] == "user"
-    text, label, image = line["message"]["content"]
-    conversation = json.loads(text["text"].split("\n", 1)[1])
-    assert conversation["messages"][0]["images"] == ["image 1"]
-    assert "images" not in conversation["messages"][2]
+    _, _, asked, label, image, answered, followed = line["message"]["content"]
+    assert json.loads(asked["text"])["message"]["images"] == ["image 1"]
     assert label == {"type": "text", "text": "[image 1]"}
     assert image["source"] == {"type": "base64", "media_type": "image/png", "data": "cmVk"}
+    assert json.loads(answered["text"])["message"]["content"] == "red"
+    assert "images" not in json.loads(followed["text"])["message"]
+
+
+async def test_each_call_repeats_the_blocks_of_the_one_before_it(tmp_path: Path) -> None:
+    # The provider caches a prompt by its blocks, so a call that only adds blocks at the end
+    # is served from the cache instead of being sent again at full price.
+    cli = fake_cli(tmp_path, {"structured_output": {"text": "ok", "tool_calls": []}})
+    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(cli))
+    tools = (ToolSchema(name="read", description="Read file", parameters={"type": "object"}),)
+    first = (LlmMessage(role="user", content="hello"),)
+    second = (
+        *first,
+        LlmMessage(role="assistant", content="ok"),
+        LlmMessage(role="user", content="again"),
+    )
+    sent: list[list[dict[str, object]]] = []
+    for messages in (first, second):
+        request = LlmRequest(system="s", messages=messages, tools=tools)
+        [event async for event in provider.stream(request, cancel=asyncio.Event())]
+        prompt = json.loads((tmp_path / "request.json").read_text())["prompt"]
+        sent.append(json.loads(prompt)["message"]["content"])
+    assert sent[1][: len(sent[0])] == sent[0]
+    assert len(sent[1]) == len(sent[0]) + 2
+    assert '"read"' in str(sent[0][1]["text"])
+
+
+async def test_claude_code_reports_the_window_of_its_model(tmp_path: Path) -> None:
+    cli = fake_cli(
+        tmp_path,
+        {
+            "structured_output": {"text": "ok", "tool_calls": []},
+            "modelUsage": {"claude-sonnet-5-5": {"contextWindow": 1_000_000}},
+        },
+    )
+    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(cli))
+    assert await provider.context_window() is None
+    request = LlmRequest(system="", messages=(LlmMessage(role="user", content="hi"),))
+    [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    assert await provider.context_window() == 1_000_000
+
+
+async def test_text_written_beside_the_structured_answer_is_not_shown_twice(
+    tmp_path: Path,
+) -> None:
+    script = tmp_path / "claude"
+    script.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "sys.stdin.read()\n"
+        "def delta(d): print(json.dumps({'type': 'stream_event', "
+        "'event': {'type': 'content_block_delta', 'delta': d}}))\n"
+        "delta({'type': 'text_delta', 'text': 'The answer.'})\n"
+        "delta({'type': 'input_json_delta', 'partial_json': json.dumps("
+        "{'text': 'The answer.', 'tool_calls': []})})\n"
+        "print(json.dumps({'type': 'result', 'structured_output': "
+        "{'text': 'The answer.', 'tool_calls': []}}))\n"
+    )
+    script.chmod(0o755)
+    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(script))
+    request = LlmRequest(system="", messages=(LlmMessage(role="user", content="hi"),))
+    events = [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    assert "".join(e.text for e in events if isinstance(e, TextDelta)) == "The answer."

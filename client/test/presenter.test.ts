@@ -28,7 +28,7 @@ test("the run status follows what the run is waiting for", () => {
   const call = { id: "t1", name: "bash", risk: "exec", subject: "ls", args: {} } as const;
   projection.state = {
     ...projection.state,
-    transcript: [{ id: "t1", kind: "tool", author_id: null, text: "", tool: call, ok: null, output: "" }],
+    transcript: [{ id: "t1", kind: "tool", author_id: null, text: "", tool: call, ok: null, output: "", via: null, display: null }],
   };
   expect(status(projection)).toBe("… running bash");
   const approval = { id: "ap", call, provenance, timeout_at: "2026-10-26T12:00:00Z", suggested_patterns: [], warnings: [] };
@@ -37,7 +37,7 @@ test("the run status follows what the run is waiting for", () => {
 });
 
 test.each(["Claude OAuth · claude-haiku-4-5", "Claude Code · claude-sonnet-5-5", "Codex CLI · gpt-6.1-sol"])("OAuth connections hide the context meter: %s", (agent) => {
-  const state = { ...emptyState(), agent, context: { tokens: 96000, window: 128000, compact_at: 0.75 } };
+  const state = { ...emptyState(), agent, context: { tokens: 96000, window: 128000, compact_at: 0.75, parts: [], hit: null } };
   expect(contextMeter(state)).toBeNull();
   expect(state.context.tokens).toBe(96000);
   expect(contextMeter({ ...state, agent: "Anthropic · claude-opus-5-5" })).toEqual({ percent: 75, tokens: "96K", window: "128K", level: "danger" });

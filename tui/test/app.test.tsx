@@ -128,7 +128,7 @@ describe("App", () => {
       { type: "skills.search", query: "react" },
       { type: "skills.install", package: "vercel-labs/agent-skills@vercel-react-native-skills", scope: "global" },
     ]);
-    fake.emit({ type: "skills.changed", skills: [{ name: "vercel-react-native-skills", description: "React Native.", scope: "global", builtin: false }], added: ["vercel-react-native-skills"], removed: [] });
+    fake.emit({ type: "skills.changed", skills: [{ name: "vercel-react-native-skills", description: "React Native.", scope: "global", builtin: false, hidden: false }], added: ["vercel-react-native-skills"], removed: [] });
     await frame(setup, "✓ vercel-react-native-skills installed");
     await setup.mockInput.typeText("/skills");
     await setup.mockInput.pressEnter();
@@ -150,6 +150,44 @@ describe("App", () => {
     await setup.renderOnce();
     expect(setup.captureCharFrame()).not.toContain("esc close");
     expect(fake.commands).toEqual([]);
+  });
+
+  test("what a plugin shows opens in the tray and stays in the conversation", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "plugin.shown", command: "btw", title: "btw", text: "Overfitting is memorising noise." });
+    const text = await frame(setup, "btw · only you see this");
+    expect(text).toContain("Overfitting is memorising noise.");
+    await setup.mockInput.pressEscape();
+    await tick(50);
+    await setup.renderOnce();
+    const after = setup.captureCharFrame();
+    expect(after).not.toContain("esc close");
+    expect(after).toContain("from /btw · only you see this");
+  });
+
+  test("a plugin's question opens in the tray and the answer goes back to the host", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({ type: "plugin.asked", ask_id: "pq1", command: "deploy", kind: "select", title: "where to?", options: ["staging", "prod"], default: "" });
+    expect(await frame(setup, "/deploy asks")).toContain("where to?");
+    setup.mockInput.pressArrow("down");
+    await tick(20);
+    setup.mockInput.pressEnter();
+    await tick(50);
+    fake.emit({ type: "plugin.asked", ask_id: "pq2", command: "deploy", kind: "input", title: "tag", options: [], default: "v1" });
+    await frame(setup, "tag");
+    setup.mockInput.pressEnter();
+    await tick(50);
+    fake.emit({ type: "plugin.asked", ask_id: "pq3", command: "deploy", kind: "confirm", title: "sure?", options: ["yes", "no"], default: "" });
+    await frame(setup, "sure?");
+    setup.mockInput.pressEscape();
+    await tick(50);
+    expect(fake.commands).toEqual([
+      { type: "plugin.answer", ask_id: "pq1", value: "prod" },
+      { type: "plugin.answer", ask_id: "pq2", value: "v1" },
+      { type: "plugin.answer", ask_id: "pq3", value: null },
+    ]);
   });
 
   test("clicking the composer takes the keys back from the inbox", async () => {
@@ -174,7 +212,7 @@ describe("App", () => {
   test("switching to OAuth hides the context meter and switching back restores it", async () => {
     const fake = session();
     const setup = await mount(fake);
-    fake.emit({ type: "context.usage", context: { tokens: 96000, window: 128000, compact_at: 0.75 } });
+    fake.emit({ type: "context.usage", context: { tokens: 96000, window: 128000, compact_at: 0.75, parts: [], hit: null } });
     await frame(setup, "96K/128K");
     fake.emit({ type: "agent.changed", agent: "Claude OAuth · claude-haiku-4-5", fast: "" });
     await tick(50);
@@ -190,13 +228,13 @@ describe("App", () => {
   test("everyone sees the context fill up and a compaction squeeze it", async () => {
     const fake = session();
     const setup = await mount(fake);
-    fake.emit({ type: "context.usage", context: { tokens: 96_000, window: 128_000, compact_at: 0.75 } });
+    fake.emit({ type: "context.usage", context: { tokens: 96_000, window: 128_000, compact_at: 0.75, parts: [], hit: null } });
     expect(await frame(setup, "75%")).toContain("96K/128K");
     fake.emit({ type: "run.started", run_id: "rc", prompt_id: "", provenance: GUEST });
     fake.emit({ type: "context.compacting", run_id: "rc", tokens_before: 96_000 });
     expect(await frame(setup, "compacting the context")).toContain("96K tokens into a summary");
-    fake.emit({ type: "context.compacted", run_id: "rc", summary: "S", tokens_before: 96_000 });
-    fake.emit({ type: "context.usage", context: { tokens: 3_000, window: 128_000, compact_at: 0.75 } });
+    fake.emit({ type: "context.compacted", run_id: "rc", summary: "S", tokens_before: 96_000, kept_from: null });
+    fake.emit({ type: "context.usage", context: { tokens: 3_000, window: 128_000, compact_at: 0.75, parts: [], hit: null } });
     fake.emit({ type: "run.ended", run_id: "rc", reason: "stop", usage: { input_tokens: 0, output_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0 }, error: null });
     const done = await frame(setup, "context compacted: 96K tokens summarized");
     expect(done).toContain("2%");
@@ -206,7 +244,7 @@ describe("App", () => {
   test("the prompt being answered stays pinned on top while its reply scrolls by", async () => {
     const fake = session();
     const setup = await mount(fake, 100, 24);
-    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_host", text: "bro which skills do you have?", delivery: "now", provenance: GUEST, attachments: [] });
+    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_host", text: "bro which skills do you have?", delivery: "now", provenance: GUEST, attachments: [], via: null, display: null });
     const reply = Array.from({ length: 40 }, (_, i) => `- skill number ${i + 1}`).join("\n");
     fake.emit({ type: "message.started", run_id: "r", message_id: "m1" });
     fake.emit({ type: "message.ended", run_id: "r", message_id: "m1", text: reply, thinking: "" });
@@ -344,11 +382,11 @@ describe("App", () => {
   test("/usage breaks the session's tokens down by model and agent", async () => {
     const fake = session();
     const setup = await mount(fake);
-    const usage = (input: number, output: number) => ({ input_tokens: input, output_tokens: output, cache_read_tokens: 0, cache_write_tokens: 0 });
+    const usage = (input: number, output: number, read = 0, write = 0) => ({ input_tokens: input, output_tokens: output, cache_read_tokens: read, cache_write_tokens: write });
     fake.emit({
       type: "usage.recorded",
       lines: [
-        { role: "main", model: "claude-opus-5-5", agent: "", uses: 2, usage: usage(120_000, 8_000) },
+        { role: "main", model: "claude-opus-5-5", agent: "", uses: 2, usage: usage(20_000, 8_000, 90_000, 10_000) },
         { role: "fast", model: "claude-haiku-5-5", agent: "explore", uses: 3, usage: usage(40_000, 2_000) },
       ],
     });
@@ -357,8 +395,34 @@ describe("App", () => {
     const tray = await frame(setup, "usage · this session");
     expect(tray).toContain("main · claude-opus-5-5");
     expect(tray).toContain("agent explore");
-    expect(tray).toContain("in 120K");
-    expect(tray).toContain("in 160K · out 10K tokens");
+    expect(tray).toContain("in 20K");
+    expect(tray).toContain("75% cached");
+    expect(tray).toContain("in 160K · out 10K tokens  56% cached · 10K written to the cache");
+  });
+
+  test("/context shows what fills the prompt and flags a cache miss", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    fake.emit({
+      type: "context.usage",
+      context: {
+        tokens: 40_000,
+        window: 200_000,
+        compact_at: 0.9,
+        hit: 0.2,
+        parts: [
+          { kind: "system", name: null, tokens: 2_000 },
+          { kind: "tool_results", name: "read", tokens: 30_000 },
+          { kind: "messages", name: null, tokens: 8_000 },
+        ],
+      },
+    });
+    await setup.mockInput.typeText("/context");
+    await setup.mockInput.pressEnter();
+    const tray = await frame(setup, "context · the agent's prompt");
+    expect(tray).toMatch(/read results\s+30K\s+15%/);
+    expect(tray).toContain("40K of 200K");
+    expect(tray).toContain("20% cached  most of it was sent at full price");
   });
 
   test("/agents lists the sub-agents and the host creates one step by step", async () => {
@@ -412,6 +476,15 @@ describe("App", () => {
     await setup.mockInput.pressEnter();
     await tick(100);
     expect(fake.commands).toEqual([{ type: "prompt.submit", text: "hello", delivery: "now" }]);
+  });
+
+  test("a skill command goes to the host as a prompt", async () => {
+    const fake = session();
+    const setup = await mount(fake);
+    await setup.mockInput.typeText("/skill:grill my plan");
+    await setup.mockInput.pressEnter();
+    await tick(100);
+    expect(fake.commands).toEqual([{ type: "prompt.submit", text: "/skill:grill my plan", delivery: "now" }]);
   });
 
   test("slash commands become protocol commands and unknown ones are explained", async () => {
@@ -627,7 +700,7 @@ describe("App", () => {
     const fake = session();
     const setup = await mount(fake);
     fake.emit({ type: "run.started", run_id: "r", prompt_id: "pm0", provenance: GUEST });
-    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_host", text: "did you read other files?", delivery: "now", provenance: GUEST, attachments: [] });
+    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_host", text: "did you read other files?", delivery: "now", provenance: GUEST, attachments: [], via: null, display: null });
     const text = await frame(setup, "⧗ queued");
     expect(text).toContain("the agent reads it after its current step");
     expect(text).toContain("1 queued");
@@ -642,8 +715,8 @@ describe("App", () => {
     const setup = await mount(fake);
     fake.emit({ type: "participant.joined", participant: ALIA });
     fake.emit({ type: "run.started", run_id: "r", prompt_id: "pm0", provenance: GUEST });
-    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_alia", text: "then fix the readme", delivery: "now", provenance: GUEST, attachments: [] });
-    fake.emit({ type: "prompt.accepted", prompt_id: "pm2", author_id: "p_alia", text: "and add tests", delivery: "follow_up", provenance: GUEST, attachments: [] });
+    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_alia", text: "then fix the readme", delivery: "now", provenance: GUEST, attachments: [], via: null, display: null });
+    fake.emit({ type: "prompt.accepted", prompt_id: "pm2", author_id: "p_alia", text: "and add tests", delivery: "follow_up", provenance: GUEST, attachments: [], via: null, display: null });
     const text = await frame(setup, "QUEUE");
     expect(text).toContain("1 Alia");
     expect(text).toContain("then fix the readme");

@@ -1,4 +1,4 @@
-import { label, ruleLine, type Projection, type Role } from "@plural/client";
+import { cacheHitLabel, contextLines, label, missedCache, ruleLine, type Projection, type Role } from "@plural/client";
 import { visibleCommands, type CommandHint } from "./commands";
 import type { Row } from "./components/Tray";
 import { colorFor, theme } from "./theme";
@@ -62,6 +62,7 @@ export function skillRows(projection: Projection, width: number): Row[] {
         ? { text: "built-in", fg: theme.dim }
         : { text: skill.scope === "global" ? "global  " : "project ", fg: skill.scope === "global" ? theme.info : theme.ok },
       { text: skill.description.length > room ? `${skill.description.slice(0, room - 1)}…` : skill.description, fg: theme.dim },
+      ...(skill.hidden ? [{ text: `  /skill:${skill.name} only`, fg: theme.info }] : []),
     ]),
     [""],
     [{ text: "/skills search <query>", fg: theme.accent }, { text: " finds more · ", fg: theme.dim }, { text: "/skills rm <name>", fg: theme.accent }, { text: " removes one", fg: theme.dim }],
@@ -97,6 +98,8 @@ export function pluginRows(projection: Projection): Row[] {
           [
             { text: "/plugins new <name>", fg: theme.accent },
             { text: " creates one · ", fg: theme.dim },
+            { text: "/plugins rm <name>", fg: theme.accent },
+            { text: " deletes one · ", fg: theme.dim },
             { text: "/plugins reload", fg: theme.accent },
             { text: " applies your edits", fg: theme.dim },
           ] as Row,
@@ -129,11 +132,15 @@ export function usageRows(projection: Projection): Row[] {
   const what = Math.max(...lines.map((line) => label(line).length));
   const total = lines.reduce(
     (sum, line) => ({
-      input: sum.input + line.usage.input_tokens + line.usage.cache_read_tokens + line.usage.cache_write_tokens,
-      output: sum.output + line.usage.output_tokens,
+      input_tokens: sum.input_tokens + line.usage.input_tokens,
+      cache_read_tokens: sum.cache_read_tokens + line.usage.cache_read_tokens,
+      cache_write_tokens: sum.cache_write_tokens + line.usage.cache_write_tokens,
+      output_tokens: sum.output_tokens + line.usage.output_tokens,
     }),
-    { input: 0, output: 0 },
+    { input_tokens: 0, cache_read_tokens: 0, cache_write_tokens: 0, output_tokens: 0 },
   );
+  const prompt = total.input_tokens + total.cache_read_tokens + total.cache_write_tokens;
+  const cached = cacheHitLabel(total);
   return [
     ...lines.map((line): Row => [
       { text: `${line.role} · ${line.model}`.padEnd(width + 2), fg: line.role === "fast" ? theme.info : theme.accent },
@@ -141,9 +148,48 @@ export function usageRows(projection: Projection): Row[] {
       { text: `${line.uses}×`.padStart(5), fg: theme.dim },
       { text: `  in ${tokens(line.usage.input_tokens)}`.padEnd(11), fg: theme.text },
       { text: `out ${tokens(line.usage.output_tokens)}`.padEnd(10), fg: theme.text },
-      { text: line.usage.cache_read_tokens > 0 ? `cache ${tokens(line.usage.cache_read_tokens)}` : "", fg: theme.dim },
+      { text: line.usage.cache_read_tokens + line.usage.cache_write_tokens > 0 ? cacheHitLabel(line.usage) : "", fg: theme.dim },
     ]),
     [""],
-    [{ text: "total  ", fg: theme.dim }, { text: `in ${tokens(total.input)} · out ${tokens(total.output)} tokens`, fg: theme.text, bold: true }],
+    [
+      { text: "total  ", fg: theme.dim },
+      { text: `in ${tokens(prompt)} · out ${tokens(total.output_tokens)} tokens`, fg: theme.text, bold: true },
+      { text: cached ? `  ${cached}` : "", fg: theme.dim },
+      { text: total.cache_write_tokens > 0 ? ` · ${tokens(total.cache_write_tokens)} written to the cache` : "", fg: theme.dim },
+    ],
+    [{ text: "in counts the whole prompt, the part read from the cache too", fg: theme.dim }],
+  ];
+}
+
+export function contextRows(projection: Projection): Row[] {
+  const context = projection.state.context;
+  if (context === null || context.parts.length === 0) {
+    return [[{ text: "the agent has not been asked anything yet", fg: theme.dim }]];
+  }
+  const lines = contextLines(context);
+  const width = Math.max(...lines.map((line) => line.label.length));
+  const percent = (share: number): string => `${share > 0 && share < 0.01 ? "<1" : Math.round(share * 100)}%`;
+  return [
+    ...lines.map((line): Row => [
+      { text: line.label.padEnd(width + 2), fg: theme.text },
+      { text: tokens(line.tokens).padStart(6), fg: theme.text },
+      { text: percent(line.share).padStart(6), fg: theme.dim },
+    ]),
+    [""],
+    [
+      { text: "total  ", fg: theme.dim },
+      { text: `${tokens(context.tokens)} of ${tokens(context.window)}`, fg: theme.text, bold: true },
+      { text: `  summarized at ${Math.round(context.compact_at * 100)}%`, fg: theme.dim },
+    ],
+    ...(context.hit === null
+      ? []
+      : [
+          [
+            { text: "latest request  ", fg: theme.dim },
+            { text: `${Math.round(context.hit * 100)}% cached`, fg: missedCache(context) ? theme.warn : theme.text },
+            { text: missedCache(context) ? "  most of it was sent at full price" : "", fg: theme.warn },
+          ] as Row,
+        ]),
+    [{ text: "parts are estimated from their length and scaled to the provider's count", fg: theme.dim }],
   ];
 }

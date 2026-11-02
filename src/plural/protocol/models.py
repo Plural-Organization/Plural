@@ -216,6 +216,7 @@ class SkillView(Model):
     description: str
     scope: SkillScope
     builtin: bool = False
+    hidden: bool = False
 
 
 class SkillHit(Model):
@@ -259,6 +260,19 @@ class PluginView(Model):
     error: str | None = None
 
 
+class AskKind(StrEnum):
+    CONFIRM = "confirm"
+    SELECT = "select"
+    INPUT = "input"
+
+
+class PluginLine(Model):
+    """A short status line a plugin keeps in the side panel, such as "tests ✓"."""
+
+    plugin: str
+    text: str
+
+
 class PluginCommandView(Model):
     name: str
     plugin: str
@@ -267,10 +281,38 @@ class PluginCommandView(Model):
     host_only: bool = False
 
 
+class ContextPartKind(StrEnum):
+    # The system prompt's sections.
+    SYSTEM = "system"
+    TOOL_RULES = "tool_rules"
+    ENVIRONMENT = "environment"
+    PROJECT_NOTES = "project_notes"
+    SKILLS = "skills"
+    AGENTS = "agents"
+    # The declared tools' schemas.
+    TOOLS = "tools"
+    # The conversation.
+    MESSAGES = "messages"
+    TOOL_RESULTS = "tool_results"
+    SUMMARY = "summary"
+    NOTES = "notes"
+
+
+class ContextPart(Model):
+    kind: ContextPartKind
+    tokens: int
+    # The tool whose results these are.
+    name: str | None = None
+
+
 class ContextView(Model):
     tokens: int
     window: int
     compact_at: float
+    # What the tokens are spent on: estimated from length, scaled to the provider's count.
+    parts: tuple[ContextPart, ...] = ()
+    # The share of the latest request the provider read from its cache.
+    hit: float | None = None
 
 
 class RunView(Model):
@@ -287,6 +329,8 @@ class TranscriptEntry(Model):
     tool: ToolCallView | None = None
     ok: bool | None = None
     output: str = ""
+    via: str | None = None
+    display: str | None = None
 
 
 class TextSelection(Model):
@@ -456,6 +500,7 @@ class SessionState(Model):
     loaded_tools: tuple[str, ...] = ()
     plugins: tuple[PluginView, ...] = ()
     commands: tuple[PluginCommandView, ...] = ()
+    plugin_lines: tuple[PluginLine, ...] = ()
     queue: tuple[QueuedPrompt, ...] = ()
     agent: str = ""
     fast_agent: str = ""

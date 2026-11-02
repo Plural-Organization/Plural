@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.compaction import SUMMARY_PROMPT
-from plural.agent.messages import SUMMARY_HEADER
+from plural.agent.compaction import SUMMARY_SYSTEM
+from plural.agent.messages import summary_message
 from plural.agent.providers.base import UsageReport
 from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
@@ -12,7 +12,7 @@ from plural.protocol.events import ContextCompacted, ContextCompacting, ContextU
 from plural.protocol.models import EntryKind, Usage
 from tests.e2e.support import running_session
 
-SMALL_WINDOW = {"context_window": 1000, "compact_at": 0.5}
+SMALL_WINDOW = {"context_window": 1000, "compact_reserve": 500}
 
 
 async def test_automatic_compaction_is_shared_and_survives_a_restart(tmp_path: Path) -> None:
@@ -33,7 +33,8 @@ async def test_automatic_compaction_is_shared_and_survives_a_restart(tmp_path: P
         await owner.next(RunEnded)
 
         assert compacted.summary == "listed the workspace"
-        assert compacted.tokens_before == 900
+        # The reported 900, plus an estimate of the tool round that came after it.
+        assert 900 < compacted.tokens_before < 950
         state = guest.client.projection.state
         assert state.summary == "listed the workspace"
         assert any(entry.kind is EntryKind.COMPACTION for entry in state.transcript)
@@ -47,7 +48,7 @@ async def test_automatic_compaction_is_shared_and_survives_a_restart(tmp_path: P
         await owner.client.send(PromptSubmit(text="continue"))
         await owner.next(RunEnded)
         first = resumed.requests[0].messages
-        assert first[0].content == f"{SUMMARY_HEADER}\nlisted the workspace"
+        assert first[0].content == summary_message("listed the workspace")
         assert "look around" in first[1].content
         assert (first[2].role, first[2].content) == ("assistant", "all done")
         assert "continue" in first[3].content
@@ -68,7 +69,7 @@ async def test_host_can_request_compaction_and_guests_cannot(tmp_path: Path) -> 
         await owner.client.send(PromptSubmit(text="two"))
         compacted = await owner.next(ContextCompacted)
         assert compacted.summary == "S"
-        assert provider.requests[1].messages[-1].content == SUMMARY_PROMPT
+        assert provider.requests[1].system == SUMMARY_SYSTEM
 
 
 async def test_an_idle_compaction_runs_now_and_everyone_watches_it(tmp_path: Path) -> None:
@@ -90,7 +91,7 @@ async def test_an_idle_compaction_runs_now_and_everyone_watches_it(tmp_path: Pat
 
         await owner.client.send(ContextCompact())
         compacting = await guest.next(ContextCompacting)
-        assert compacting.tokens_before == 400
+        assert 400 <= compacting.tokens_before <= 405
         assert (await guest.next(ContextCompacted)).summary == "talked about the repo"
         after = await guest.next(ContextUsage)
         assert after.context.tokens < 400

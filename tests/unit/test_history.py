@@ -1,6 +1,12 @@
 from datetime import UTC, datetime
 
-from plural.agent.messages import AssistantTurn, SummaryTurn, ToolResultTurn, UserTurn
+from plural.agent.messages import (
+    AssistantTurn,
+    NotesTurn,
+    SummaryTurn,
+    ToolResultTurn,
+    UserTurn,
+)
 from plural.core.provenance import direct
 from plural.host.history import INTERRUPTED, replay
 from plural.protocol.events import (
@@ -8,6 +14,7 @@ from plural.protocol.events import (
     Event,
     EventRecord,
     MessageEnded,
+    PluginContextAdded,
     PromptAccepted,
     PromptDequeued,
     RunEnded,
@@ -106,3 +113,68 @@ def test_results_follow_call_order_and_orphans_are_dropped() -> None:
 
     results = [m for m in conversation if isinstance(m, ToolResultTurn)]
     assert [r.call_id for r in results] == ["c1", "c2"]
+
+
+def test_plugin_context_is_restored_before_the_prompt_it_came_with() -> None:
+    log = records(
+        prompt("pm_1", "fix it"),
+        RunStarted(run_id="run_1", prompt_id="pm_1", provenance=direct("p_host", Role.HOST)),
+        PluginContextAdded(run_id="run_1", plugin="git", text="branch feat/x"),
+        MessageEnded(run_id="run_1", message_id="m1", text="fixed"),
+        RunEnded(run_id="run_1", reason=RunEndReason.STOP),
+    )
+    conversation = replay(log, names={}, texts={})
+    assert conversation[0] == NotesTurn(source="plugin:git", text="branch feat/x")
+    assert isinstance(conversation[1], UserTurn)
+    assert conversation[1].text == "fix it"
+    assert conversation[2] == AssistantTurn(text="fixed")
+
+
+def test_compaction_restores_the_part_it_kept_after_the_summary() -> None:
+    ls = ToolCallView(id="c2", name="ls", risk=ToolRisk.READ, args={"path": "."})
+    log = records(
+        prompt("pm_1", "start"),
+        RunStarted(run_id="run_1", prompt_id="pm_1", provenance=direct("p_host", Role.HOST)),
+        MessageEnded(run_id="run_1", message_id="m1", text="reading"),
+        ToolStarted(run_id="run_1", call=ToolCallView(id="c1", name="read", risk=ToolRisk.READ)),
+        ToolEnded(run_id="run_1", call_id="c1", ok=True, output="a long file"),
+        MessageEnded(run_id="run_1", message_id="m2", text=""),
+        ToolStarted(run_id="run_1", call=ls),
+        ToolEnded(run_id="run_1", call_id="c2", ok=True, output="a.txt"),
+        ContextCompacted(
+            run_id="run_1", summary="read the file", tokens_before=900, kept_from="call:c2"
+        ),
+        MessageEnded(run_id="run_1", message_id="m3", text="done"),
+        RunEnded(run_id="run_1", reason=RunEndReason.STOP),
+    )
+    conversation = replay(log, names={}, texts={})
+
+    # The summary, the run's prompt it summarized, then the kept turn from its tool call on.
+    summary, start, kept, result, done = conversation
+    assert summary == SummaryTurn(text="read the file")
+    assert isinstance(start, UserTurn)
+    assert start.text == "start"
+    assert isinstance(kept, AssistantTurn)
+    assert [call.id for call in kept.tool_calls] == ["c2"]
+    assert result == ToolResultTurn(call_id="c2", name="ls", content="a.txt")
+    assert done == AssistantTurn(text="done")
+
+
+def test_a_kept_prompt_is_not_repeated_after_the_summary() -> None:
+    log = records(
+        prompt("pm_1", "first"),
+        RunStarted(run_id="run_1", prompt_id="pm_1", provenance=direct("p_host", Role.HOST)),
+        MessageEnded(run_id="run_1", message_id="m1", text="one"),
+        RunEnded(run_id="run_1", reason=RunEndReason.STOP),
+        prompt("pm_2", "second"),
+        RunStarted(run_id="run_2", prompt_id="pm_2", provenance=direct("p_host", Role.HOST)),
+        ContextCompacted(run_id="run_2", summary="s", tokens_before=900, kept_from="prompt:pm_2"),
+        MessageEnded(run_id="run_2", message_id="m2", text="two"),
+        RunEnded(run_id="run_2", reason=RunEndReason.STOP),
+    )
+    conversation = replay(log, names={}, texts={})
+    assert [type(message).__name__ for message in conversation] == [
+        "SummaryTurn",
+        "UserTurn",
+        "AssistantTurn",
+    ]

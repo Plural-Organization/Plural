@@ -19,6 +19,7 @@ class WriteTool(TypedTool[WriteArgs]):
         ),
         risk=ToolRisk.WRITE,
         args_model=WriteArgs,
+        guidelines=("Use write only for new files or full rewrites.",),
     )
 
     def subject(self, args: WriteArgs) -> str:

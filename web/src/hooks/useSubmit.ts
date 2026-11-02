@@ -1,6 +1,7 @@
-import { findPerson, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
+import { cacheHitLabel, findPerson, isSkillCommand, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
 import { commandName, helpText, isHostOnly, pluginHints } from "../lib/commands";
+import { contextText } from "../lib/context";
 import type { Session } from "./useSession";
 
 interface Submit {
@@ -149,9 +150,13 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
       if (parsed.type === "show.usage") {
         const lines = state.usage.map(
           (line) =>
-            `  ${line.role} · ${line.model}  ${line.agent || "conversation"}  ${line.uses}×  in ${line.usage.input_tokens}  out ${line.usage.output_tokens}`,
+            `  ${line.role} · ${line.model}  ${line.agent || "conversation"}  ${line.uses}×  in ${line.usage.input_tokens}  out ${line.usage.output_tokens}  cache ${line.usage.cache_read_tokens}  wrote ${line.usage.cache_write_tokens}  ${cacheHitLabel(line.usage)}`.trimEnd(),
         );
         notify("accent", lines.length > 0 ? ["usage", ...lines].join("\n") : "nothing spent yet in this session");
+        return;
+      }
+      if (parsed.type === "show.context") {
+        notify("accent", contextText(state.context));
         return;
       }
       if (parsed.type === "show.plugins") {
@@ -171,7 +176,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
         return;
       }
       if (parsed.type === "show.skills") {
-        const lines = state.skills.map((skill) => `  ${skill.name}${skill.builtin ? " (built-in)" : skill.scope === "global" ? " (global)" : ""}  ${skill.description}`);
+        const lines = state.skills.map((skill) => `  ${skill.name}${skill.builtin ? " (built-in)" : skill.scope === "global" ? " (global)" : ""}${skill.hidden ? ` (/skill:${skill.name} only)` : ""}  ${skill.description}`);
         notify(
           "accent",
           lines.length > 0 ? ["skills", ...lines, "", "/skills search <query> finds more on skills.sh"].join("\n") : "no skills yet: /skills search <query> finds some on skills.sh",
@@ -215,7 +220,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
       onEdited();
     } else if (chat(text)) {
       return;
-    } else if (text.startsWith("/")) {
+    } else if (text.startsWith("/") && !isSkillCommand(text)) {
       slash(text);
     } else {
       send({ type: "prompt.submit", text, delivery: "now" });
