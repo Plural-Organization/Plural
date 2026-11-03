@@ -72,6 +72,18 @@ describe("invites", () => {
     expect(parseTeamInvite("https://plural-room.vercel.app/?team=tm-2&relay=wss%3A%2F%2Fr.example")).toEqual({ code: "tm-2", relay: "wss://r.example" });
     expect(parseTeamInvite("wss://host/r_1?join=abc")).toBeNull();
     expect(parseTeamInvite("hello")).toBeNull();
+    expect(parseTeamInvite("--relay wss://r.example  plural team join tm-3")).toEqual({ code: "tm-3", relay: "wss://r.example" });
+    expect(parseTeamInvite("plural team join tm-4 --as vlad --relay = wss://r.example")).toEqual({ code: "tm-4", relay: "wss://r.example" });
+    expect(parseTeamInvite("plural team join tm-5")).toBeNull();
+    expect(parseTeamInvite("plural team join --relay wss://r.example")).toBeNull();
+  });
+
+  test("pasted text that repeats the separators is read in linear time", () => {
+    const started = performance.now();
+    for (const text of [`--relay\t${"=".repeat(50_000)}`, `--relay\t! ${"\t=".repeat(30_000)}`, `team join x --relay ${"= ".repeat(30_000)}`]) {
+      expect(parseTeamInvite(text)).toBeNull();
+    }
+    expect(performance.now() - started).toBeLessThan(500);
   });
 
   test("the invite the owner shares names the code and the relay", () => {
