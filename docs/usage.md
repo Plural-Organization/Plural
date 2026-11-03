@@ -142,7 +142,7 @@ plural team disband         # owner only, deletes the team for everyone
 plural team status
 ```
 
-`create` prints a reusable invite code that does not expire; give it to teammates, who run `join` with the same relay. Without `--relay` both use the Plural relay. One key owns at most 3 teams on a relay: delete one with `plural team disband` to make another. After a successful join, Plural opens automatically and the side panel shows every session currently shared with the team; no separate room link is needed. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
+`create` prints a reusable invite code that does not expire; give it to teammates, who run `join` with the same relay. Without `--relay` both use the Plural relay. One key owns at most 3 teams on a relay: delete one with `plural team disband` to make another. After a successful `create` or `join`, Plural opens automatically (`create --json` and `--help` only print) and the side panel shows every session currently shared with the team; no separate room link is needed. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
 
 ### A team in the browser
 

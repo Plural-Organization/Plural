@@ -39,6 +39,7 @@ usage
   plural update [--check]     install the latest version
   plural sessions [--json]    list your sessions
   plural rm <id>              delete a session
+  plural team create <name> [--relay <url>]  create a team (on the Plural relay unless --relay) and open its rooms
   plural team create <name> --tunnel cloudflared|ngrok  create a team behind a tunnel and open a session in it
   plural team join <code> [--relay <url>]  join a team (the Plural relay unless --relay) and open its rooms
   plural relay|doctor|export  run the host's own commands
@@ -465,7 +466,7 @@ async function main(): Promise<void> {
       fail(problem(error));
     }
     await run({ ...emptyOptions(), displayName: name }, null, name, hosting);
-  } else if (parsed.kind === "team_join") {
+  } else if (parsed.kind === "team_enter") {
     const child = runHostCommand(parsed.args);
     const code = await new Promise<number>((resolve, reject) => {
       child.once("error", reject);
@@ -476,7 +477,7 @@ async function main(): Promise<void> {
     }
     const joined = loadTeam();
     if (joined === null) {
-      fail("joined the team, but its profile was not saved");
+      fail("the team was made, but its profile was not saved");
     }
     const name = joined.profile.member.name;
     await run({ ...emptyOptions(), displayName: name }, null, name);
