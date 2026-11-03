@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from plural.agent.tools.base import ToolArgs, ToolCtx, ToolResult, ToolSpec, TypedTool
+from plural.agent.tools.base import Reach, ToolArgs, ToolCtx, ToolResult, ToolSpec, TypedTool
 from plural.agent.tools.truncation import truncate_head
 from plural.protocol.models import ToolRisk
 
@@ -19,6 +19,9 @@ class LsTool(TypedTool[LsArgs]):
 
     def subject(self, args: LsArgs) -> str:
         return args.path
+
+    def reach(self, args: LsArgs) -> Reach | None:
+        return Reach(args.path, write=False)
 
     async def run(self, args: LsArgs, ctx: ToolCtx) -> ToolResult:
         path = ctx.workspace.resolve(args.path)

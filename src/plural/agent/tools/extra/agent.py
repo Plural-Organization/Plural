@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Callable, Mapping
 from dataclasses import replace
+from pathlib import Path
 from typing import Final
 
 import structlog
@@ -9,7 +10,7 @@ from pydantic import Field, JsonValue
 from plural.agent.agents import AgentLibrary, AgentSpec
 from plural.agent.context import ContextBuilder, Environment
 from plural.agent.events import MessageEnd, RunEnd, ToolEnd, ToolStart
-from plural.agent.gate import GateResult, PolicyGate
+from plural.agent.gate import FolderResult, GateResult, PolicyGate
 from plural.agent.loop import AgentLoop
 from plural.agent.messages import UserTurn
 from plural.agent.providers.base import ToolSchema
@@ -57,6 +58,11 @@ class _SharedGate:
 
     def begin_run(self) -> None:
         return None
+
+    async def ask_folder(
+        self, call: ToolCallView, *, folder: Path, write: bool, provenance: Provenance
+    ) -> FolderResult:
+        return await self._gate.ask_folder(call, folder=folder, write=write, provenance=provenance)
 
     async def check(
         self, call: ToolCallView, *, subject: str, provenance: Provenance

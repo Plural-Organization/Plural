@@ -5,7 +5,15 @@ from typing import Final
 
 from pydantic import Field
 
-from plural.agent.tools.base import ToolArgs, ToolCtx, ToolError, ToolResult, ToolSpec, TypedTool
+from plural.agent.tools.base import (
+    Reach,
+    ToolArgs,
+    ToolCtx,
+    ToolError,
+    ToolResult,
+    ToolSpec,
+    TypedTool,
+)
 from plural.agent.tools.core.glob import WALK_LIMIT
 from plural.agent.tools.truncation import truncate_head
 from plural.protocol.models import ToolRisk
@@ -32,6 +40,9 @@ class GrepTool(TypedTool[GrepArgs]):
 
     def subject(self, args: GrepArgs) -> str:
         return args.pattern
+
+    def reach(self, args: GrepArgs) -> Reach | None:
+        return Reach(args.path, write=False)
 
     async def run(self, args: GrepArgs, ctx: ToolCtx) -> ToolResult:
         try:

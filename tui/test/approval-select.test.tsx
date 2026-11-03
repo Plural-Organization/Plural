@@ -16,7 +16,7 @@ function request(fake: FakeSession, id: string) {
   fake.emit({ type: "approval.requested", approval: {
     id, call: CALL, provenance: GUEST,
     timeout_at: new Date(Date.now() + 60_000).toISOString(),
-    suggested_patterns: [], warnings: [],
+    suggested_patterns: [], warnings: [], folder: null,
   } });
 }
 

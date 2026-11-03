@@ -4,6 +4,7 @@
 |---|---|
 | guest runs commands on host | tool calls always need host approval; a run containing a guest prompt is tainted in both prompt modes (`core/roles.py`, `core/provenance.py`, `host/actor.py`) |
 | guest floods the agent with prompts or spends the host's budget | `review` mode makes the host approve every prompt; viewers cannot prompt; host aborts with `/abort` |
+| guest reads or changes files outside the session folder | file tools refuse paths outside the workspace (`agent/sandbox/base.py`); a run with a guest's prompt can reach a folder only after the host answers a red card with read or read + write, asked every time and never remembered; a read-only grant cannot write; protected paths stay denied inside a grant (`agent/loop.py`, `host/policy_gate.py`). `bash` is not covered: it is unsandboxed and relies on host approval |
 | prompt injection via guest | provenance taint forces `ask` for write/exec (`core/policy/engine.py`) |
 | compound shell bypass (`ls; rm`) | allow rules ignored for compound commands → `ask` |
 | session `always` overriding deny | base deny rules are evaluated first and cannot be overridden |

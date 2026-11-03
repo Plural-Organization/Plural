@@ -27,6 +27,22 @@ function from(state: SessionState, participantId: string): string {
 // What an approval may be answered with, in the order its keys are shown.
 export const APPROVAL_DECISIONS = ["once", "always", "reject", "block"] as const;
 
+// A folder request is answered with how far the folder opens, or not at all.
+export const FOLDER_DECISIONS = ["read", "write", "reject"] as const;
+
+export function decisionsOf(approval: ApprovalView): readonly string[] {
+  return approval.folder ? FOLDER_DECISIONS : APPROVAL_DECISIONS;
+}
+
+// Enter on a folder request refuses until you move to a wider answer, so a stray Enter opens nothing.
+export function defaultChoice(approval: ApprovalView): number {
+  return approval.folder ? FOLDER_DECISIONS.length - 1 : 0;
+}
+
+export function isFolderRequest(item: InboxItem | undefined): boolean {
+  return item?.kind === "approval" && Boolean(item.approval.folder);
+}
+
 // With `selected`, that choice is marked and Enter takes it.
 function Keys({ items, selected }: { items: [string, string][]; selected?: number }) {
   return (
@@ -64,8 +80,8 @@ export function Inbox({ items, state, selected, focused, now, approvalChoice }: 
     <box
       flexDirection="column"
       border
-      borderStyle="rounded"
-      borderColor={focused ? theme.warn : theme.dim}
+      borderStyle={isFolderRequest(item) ? "heavy" : "rounded"}
+      borderColor={isFolderRequest(item) ? theme.danger : focused ? theme.warn : theme.dim}
       paddingX={1}
       marginX={2}
       flexShrink={0}
@@ -88,7 +104,7 @@ export function Inbox({ items, state, selected, focused, now, approvalChoice }: 
       ) : item.kind === "briefing" ? (
         <BriefingBody request={item.request} now={now} focused={focused} />
       ) : item.kind === "approval" ? (
-        <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} selected={approvalChoice?.id === item.id ? approvalChoice.index : 0} place={items.length > 1 ? `${index + 1}/${items.length}` : ""} />
+        <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} selected={approvalChoice?.id === item.id ? approvalChoice.index : defaultChoice(item.approval)} place={items.length > 1 ? `${index + 1}/${items.length}` : ""} />
       ) : item.kind === "plan" ? (
         <PlanBody focused={focused} />
       ) : (
@@ -152,7 +168,64 @@ function AccessBody({ request, now, focused }: { request: AccessRequestView; now
   );
 }
 
+function FolderBody({ approval, state, now, focused, selected, place }: { approval: ApprovalView; state: SessionState; now: number; focused: boolean; selected: number; place: string }) {
+  const folder = approval.folder;
+  if (!folder) {
+    return null;
+  }
+  const call = approval.call;
+  const seconds = Math.max(0, Math.round((Date.parse(approval.timeout_at) - now) / 1000));
+  const who = from(state, approval.provenance.initiator_id);
+  const labels = ["read", "read + write", "refuse"];
+  const meaning = [
+    "the agent may only look at files in this folder, for this one call",
+    "the agent may also change files in this folder, for this one call",
+    "open nothing",
+  ];
+  return (
+    <>
+      <text wrapMode="word" fg={theme.danger}>
+        <b>⚠ FOLDER OUTSIDE THE SESSION · {who} asks the agent to {folder.write ? "CHANGE" : "READ"} files here</b>
+      </text>
+      <text wrapMode="word" fg={theme.danger}>
+        <b>{folder.folder}</b>
+      </text>
+      <text wrapMode="word" fg={theme.dim}>
+        for: {call.name} {call.subject}
+      </text>
+      {folder.broad ? (
+        <text wrapMode="word" fg={theme.danger}>
+          <b>⚠ this is your whole disk or your home folder, not a project</b>
+        </text>
+      ) : null}
+      <text wrapMode="word">
+        {FOLDER_DECISIONS.map((decision, index) => (
+          <span key={decision}>
+            {index > 0 ? "  " : ""}
+            {focused && index === selected ? (
+              <span fg={theme.bg} bg={theme.danger}>
+                <b>{` ${labels[index]} `}</b>
+              </span>
+            ) : (
+              <span fg={focused ? theme.danger : theme.dim}>{labels[index]}</span>
+            )}
+          </span>
+        ))}
+      </text>
+      <text fg={theme.dim}>
+        {focused ? `r read · w read + write · n refuse · ←/→ choose, enter confirms · ${meaning[selected] ?? ""}` : "tab to answer"}
+      </text>
+      <text fg={theme.dim}>
+        {`asked every time, nothing is remembered · expires in ${seconds}s${place ? ` · ${place}` : ""}`}
+      </text>
+    </>
+  );
+}
+
 function ApprovalBody({ approval, state, now, focused, selected, place }: { approval: ApprovalView; state: SessionState; now: number; focused: boolean; selected: number; place: string }) {
+  if (approval.folder) {
+    return <FolderBody approval={approval} state={state} now={now} focused={focused} selected={selected} place={place} />;
+  }
   const call = approval.call;
   const seconds = Math.max(0, Math.round((Date.parse(approval.timeout_at) - now) / 1000));
   const origin = approval.provenance.origin === "proposal" ? "via proposal" : "direct";
