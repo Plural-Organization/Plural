@@ -3,7 +3,7 @@ from pathlib import Path
 
 from plural.agent.context import ContextBuilder
 from plural.agent.events import AgentEvent
-from plural.agent.gate import GateResult
+from plural.agent.gate import FolderResult, GateResult
 from plural.agent.loop import AgentLoop, LoopLimits
 from plural.agent.messages import UserTurn
 from plural.agent.providers.base import LLMProvider
@@ -25,9 +25,17 @@ class StubGate:
         self.limit = limit
         self.runs = 0
         self.seen: list[tuple[str, Provenance]] = []
+        self.folders: list[tuple[str, bool, Provenance]] = []
+        self.folder_answer = FolderResult(False, False, "stub refused the folder")
 
     def begin_run(self) -> None:
         self.runs += 1
+
+    async def ask_folder(
+        self, call: ToolCallView, *, folder: Path, write: bool, provenance: Provenance
+    ) -> FolderResult:
+        self.folders.append((str(folder), write, provenance))
+        return self.folder_answer
 
     async def check(
         self, call: ToolCallView, *, subject: str, provenance: Provenance

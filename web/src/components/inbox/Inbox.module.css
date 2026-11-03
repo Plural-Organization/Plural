@@ -16,3 +16,8 @@
   color: var(--warn);
   font-weight: 600;
 }
+
+/* A folder outside the session: red on purpose, it is the one card that opens the host's own disk. */
+.folder { border: 2px solid #e5484d; background: color-mix(in srgb, #e5484d 16%, var(--panel)); box-shadow: 0 0 0 3px color-mix(in srgb, #e5484d 25%, transparent); }
+.folderTitle { color: #ff6b6f; font-weight: 700; }
+.folderPath { border-color: #e5484d; color: #ff9a9a; font-weight: 600; }

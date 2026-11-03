@@ -27,7 +27,7 @@ from plural.agent.events import (
     ToolsLoaded,
     ToolStart,
 )
-from plural.agent.gate import PolicyGate
+from plural.agent.gate import GateResult, PolicyGate
 from plural.agent.interrupt import Interrupted, TimedOut, interruptible
 from plural.agent.messages import (
     PLUGIN_SOURCE,
@@ -62,12 +62,12 @@ from plural.agent.providers.base import (
     UsageReport,
 )
 from plural.agent.providers.resilient import ResilientProvider
-from plural.agent.sandbox.base import SandboxError
+from plural.agent.sandbox.base import SandboxError, Workspace
 from plural.agent.telemetry import RequestDump, hit_rate, observed
 from plural.agent.tools.base import PreparedCall, ToolCtx, ToolError, ToolResult
 from plural.agent.tools.registry import ToolRegistry, UnknownTool
 from plural.core.ports import IdGenerator
-from plural.core.provenance import merge
+from plural.core.provenance import is_guest_originated, merge
 from plural.protocol.models import (
     ContextPart,
     ContextPartKind,
@@ -79,6 +79,7 @@ from plural.protocol.models import (
     ToolRisk,
     Usage,
 )
+from plural.security.secrets import is_denied_path
 
 log = structlog.get_logger(__name__)
 
@@ -852,10 +853,21 @@ class AgentLoop:
         asked = time.monotonic()
         ran: float | None = None
         allowed = False
+        workspace = self._tool_ctx.workspace
         try:
-            verdict = await interruptible(
-                self._gate.check(view, subject=prepared.subject, provenance=provenance), cancel
+            reached = await interruptible(
+                self._reach(prepared, view, provenance, workspace), cancel
             )
+            verdict = (
+                reached
+                if isinstance(reached, GateResult)
+                else await interruptible(
+                    self._gate.check(view, subject=prepared.subject, provenance=provenance),
+                    cancel,
+                )
+            )
+            if not isinstance(reached, GateResult):
+                workspace = reached
             allowed = verdict.allowed
             if verdict.allowed:
                 ran = time.monotonic()
@@ -866,6 +878,7 @@ class AgentLoop:
                         cancel,
                         replace(
                             self._tool_ctx,
+                            workspace=workspace,
                             emit=queue.put_nowait,
                             provenance=provenance,
                             cancel=cancel,
@@ -901,6 +914,39 @@ class AgentLoop:
             run_ms=round((done - ran) * 1000) if ran is not None else None,
         )
         yield ToolEnd(call.id, result)
+
+    async def _reach(
+        self,
+        prepared: PreparedCall,
+        view: ToolCallView,
+        provenance: Provenance,
+        workspace: Workspace,
+    ) -> Workspace | GateResult:
+        """The workspace this call runs in: the usual one, or one with the folder it asked for
+        opened. A call for a folder outside the workspace is the host's to allow before the call
+        itself is put to the usual approval. The host's own runs open their folders without a
+        question, a run with a guest's prompt in it asks; a protected folder is never opened."""
+        reach = prepared.reach
+        if reach is None:
+            return workspace
+        folder = workspace.outside(reach.path)
+        if folder is None:
+            return workspace
+        if is_denied_path(folder):
+            return GateResult(allowed=False, reason=f"{folder} is protected")
+        if not is_guest_originated(provenance):
+            return workspace.granting(folder, write=reach.write)
+        answer = await self._gate.ask_folder(
+            view, folder=folder, write=reach.write, provenance=provenance
+        )
+        if not answer.granted:
+            return GateResult(allowed=False, reason=answer.reason)
+        if reach.write and not answer.write:
+            return GateResult(
+                allowed=False,
+                reason=f"the host opened {folder} for reading only, not for changes",
+            )
+        return workspace.granting(folder, write=answer.write)
 
     async def _invoke(
         self, prepared: PreparedCall, cancel: asyncio.Event, ctx: ToolCtx

@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from plural.agent.tools.base import ToolArgs, ToolCtx, ToolResult, ToolSpec, TypedTool
+from plural.agent.tools.base import Reach, ToolArgs, ToolCtx, ToolResult, ToolSpec, TypedTool
 from plural.agent.tools.core.edit import Replacement, apply
 from plural.protocol.models import ToolRisk
 
@@ -27,6 +27,9 @@ class MultiEditTool(TypedTool[MultiEditArgs]):
 
     def subject(self, args: MultiEditArgs) -> str:
         return args.path
+
+    def reach(self, args: MultiEditArgs) -> Reach | None:
+        return Reach(args.path, write=True)
 
     async def run(self, args: MultiEditArgs, ctx: ToolCtx) -> ToolResult:
         return await apply(ctx, args.path, args.edits)

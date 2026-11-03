@@ -91,11 +91,20 @@ class ToolCtx:
 
 
 @dataclass(frozen=True, slots=True)
+class Reach:
+    """The path a file tool is about to touch, and whether it changes it."""
+
+    path: str
+    write: bool
+
+
+@dataclass(frozen=True, slots=True)
 class PreparedCall:
     name: str
     risk: ToolRisk
     subject: str
     execute: Callable[[ToolCtx], Awaitable[ToolResult]]
+    reach: Reach | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,7 +151,12 @@ class TypedTool[A: ToolArgs](ABC):
             risk=self.spec.risk,
             subject=self.subject(args),
             execute=lambda ctx: self.run(args, ctx),
+            reach=self.reach(args),
         )
+
+    def reach(self, args: A) -> Reach | None:
+        """The path the tool touches: a path outside the workspace has to be opened by the host."""
+        return None
 
     @abstractmethod
     def subject(self, args: A) -> str: ...

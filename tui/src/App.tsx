@@ -28,7 +28,7 @@ import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
 import { SearchBar } from "./components/SearchBar";
-import { APPROVAL_DECISIONS, Inbox, inboxItems, type InboxItem } from "./components/Inbox";
+import { Inbox, decisionsOf, defaultChoice, inboxItems, type InboxItem } from "./components/Inbox";
 import { ExtrasDialog } from "./components/ExtrasDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SetupDialog } from "./components/SetupDialog";
@@ -1364,7 +1364,7 @@ export function App({
       const direction = key.name === "left" ? -1 : 1;
       setApprovalChoice((current) => ({
         id: item.id,
-        index: Math.max(0, Math.min(APPROVAL_DECISIONS.length - 1, (current?.id === item.id ? current.index : 0) + direction)),
+        index: Math.max(0, Math.min(decisionsOf(item.approval).length - 1, (current?.id === item.id ? current.index : defaultChoice(item.approval)) + direction)),
       }));
     } else if (key.name === "up" || key.name === "k") {
       setApprovalChoice(null);
@@ -1391,9 +1391,11 @@ export function App({
         send({ type: "access.decide", participant_id: item.id, decision: "deny" });
       }
     } else if (item?.kind === "approval") {
-      const decisions: Record<string, "once" | "always" | "reject" | "block"> = { y: "once", a: "always", n: "reject", b: "block" };
-      const index = approvalChoice?.id === item.id ? approvalChoice.index : 0;
-      const decision = key.name === "return" ? APPROVAL_DECISIONS[index] : decisions[key.name];
+      const decisions: Record<string, "once" | "always" | "reject" | "block" | "read" | "write"> = item.approval.folder
+        ? { r: "read", w: "write", n: "reject", x: "reject" }
+        : { y: "once", a: "always", n: "reject", b: "block" };
+      const index = approvalChoice?.id === item.id ? approvalChoice.index : defaultChoice(item.approval);
+      const decision = key.name === "return" ? (decisionsOf(item.approval)[index] as "once" | "always" | "reject" | "block" | "read" | "write" | undefined) : decisions[key.name];
       if (decision) {
         send({ type: "approval.respond", approval_id: item.id, decision });
       }

@@ -4003,7 +4003,8 @@
             "suggested_patterns": [
               "ls*"
             ],
-            "warnings": []
+            "warnings": [],
+            "folder": null
           }
         }
       },
@@ -4071,7 +4072,8 @@
             "suggested_patterns": [
               "ls*"
             ],
-            "warnings": []
+            "warnings": [],
+            "folder": null
           }
         },
         "attachments": {},
@@ -5596,7 +5598,8 @@
             "suggested_patterns": [
               "ls*"
             ],
-            "warnings": []
+            "warnings": [],
+            "folder": null
           }
         }
       },
@@ -5664,7 +5667,8 @@
             "suggested_patterns": [
               "ls*"
             ],
-            "warnings": []
+            "warnings": [],
+            "folder": null
           }
         },
         "attachments": {

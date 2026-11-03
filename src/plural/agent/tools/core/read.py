@@ -1,6 +1,14 @@
 from pydantic import Field
 
-from plural.agent.tools.base import ToolArgs, ToolCtx, ToolError, ToolResult, ToolSpec, TypedTool
+from plural.agent.tools.base import (
+    Reach,
+    ToolArgs,
+    ToolCtx,
+    ToolError,
+    ToolResult,
+    ToolSpec,
+    TypedTool,
+)
 from plural.agent.tools.truncation import MAX_LINES, OUTPUT_PREFIX, truncate_head
 from plural.protocol.models import ToolRisk
 
@@ -22,6 +30,9 @@ class ReadTool(TypedTool[ReadArgs]):
 
     def subject(self, args: ReadArgs) -> str:
         return args.path
+
+    def reach(self, args: ReadArgs) -> Reach | None:
+        return None if args.path.startswith(OUTPUT_PREFIX) else Reach(args.path, write=False)
 
     async def run(self, args: ReadArgs, ctx: ToolCtx) -> ToolResult:
         if args.path.startswith(OUTPUT_PREFIX):
