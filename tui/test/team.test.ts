@@ -85,6 +85,20 @@ describe("inviting to the team", () => {
   });
 });
 
+describe("the directory calls", () => {
+  // A relay run with --clients-only refuses anything that does not call itself a Plural client.
+  test("name the TypeScript client to the relay", async () => {
+    const agents: string[] = [];
+    const fetcher = (async (_url: string, init: RequestInit) => {
+      agents.push((init.headers as Record<string, string>)["user-agent"] as string);
+      return new Response(JSON.stringify({ sessions: [], code: "abc123", expires_at: null }));
+    }) as unknown as typeof fetch;
+    await fetchSessions(team(), fetcher);
+    await createTeamInvite(team(), fetcher);
+    expect(agents).toEqual(["plural-client", "plural-client"]);
+  });
+});
+
 describe("the list of sessions", () => {
   test("is asked from the relay with a signed request", async () => {
     const seen: { url: string; header: string }[] = [];

@@ -1,5 +1,5 @@
 import { createHash, createPrivateKey, randomBytes, sign, type KeyObject } from "node:crypto";
-import type { TeamProof } from "@plural/client";
+import { USER_AGENT, type TeamProof } from "@plural/client";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { dataDir } from "./paths";
@@ -115,7 +115,7 @@ export function authorization(team: Team, method: string, path: string, body: Ui
 export async function fetchSessions(team: Team, fetcher: typeof fetch = fetch): Promise<SessionCard[]> {
   const path = `/teams/${team.profile.team_id}/sessions`;
   const response = await fetcher(`${httpBase(team.profile.relay)}${path}`, {
-    headers: { authorization: authorization(team, "GET", path) },
+    headers: { authorization: authorization(team, "GET", path), "user-agent": USER_AGENT },
     signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) {
@@ -133,7 +133,7 @@ export async function createTeamInvite(team: Team, fetcher: typeof fetch = fetch
   const path = `/teams/${team.profile.team_id}/invites`;
   const response = await fetcher(`${httpBase(team.profile.relay)}${path}`, {
     method: "POST",
-    headers: { authorization: authorization(team, "POST", path) },
+    headers: { authorization: authorization(team, "POST", path), "user-agent": USER_AGENT },
     signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) {
