@@ -1,58 +1,4 @@
-import { mentionCompletions, mentionNote, type Mentionable, type PluginCommandView, type Role, type SkillView } from "@plural/client";
-
-export interface CommandHint {
-  name: string;
-  usage: string;
-  description: string;
-  hostOnly?: boolean;
-  insert?: string;
-}
-
-export const COMMANDS: CommandHint[] = [
-  { name: "help", usage: "/help", description: "show commands and keys" },
-  { name: "who", usage: "/who", description: "list participants" },
-  { name: "team", usage: "/team <message>", description: "write to the room, the agent does not see it" },
-  { name: "invite", usage: "/invite [link|once|viewer|revoke|open|approve]", description: "copy the room link, or a one-time invite, or change who may join", hostOnly: true },
-  { name: "brief", usage: "/brief [question] · /brief update · /brief give", description: "ask a teammate's agent for a briefing of their session, then hand it to yours (host: /brief share off|ask|team)" },
-  { name: "access", usage: "/access [note]", description: "ask the host for the right to write (host: allow|deny|revoke <name>)" },
-  { name: "kick", usage: "/kick <name>", description: "remove someone from the session; a team member stays out", hostOnly: true },
-  { name: "mode", usage: "/mode open|review", description: "who may prompt directly", hostOnly: true },
-  { name: "policy", usage: "/policy [allow|ask|deny <tool> <pattern> | rm <id>]", description: "show or edit permission rules", hostOnly: true },
-  { name: "skills", usage: "/skills [search <q> | add <owner/repo@skill> [--global] | rm <name>]", description: "list, find and install skills" },
-  { name: "mcp", usage: "/mcp [add <name> <command|url> [--global] | on|off|restart|rm <name> | import]", description: "connect MCP servers and their tools" },
-  { name: "agents", usage: "/agents [rm <name>]", description: "sub-agents the agent can hand work to; create your own" },
-  { name: "usage", usage: "/usage", description: "tokens spent per model and agent in this session" },
-  { name: "context", usage: "/context", description: "what fills the agent's context, and whether the cache was used" },
-  { name: "plugins", usage: "/plugins [new <name> | reload]", description: "the host's plugins and their commands" },
-  { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
-  { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
-  { name: "cancel", usage: "/cancel <n>", description: "remove a queued prompt (yours, or any as host)" },
-  { name: "settings", usage: "/settings", description: "theme, prompt mode and other preferences" },
-  { name: "copy", usage: "/copy", description: "copy the last reply to the clipboard" },
-  { name: "quit", usage: "/quit", description: "leave the session" },
-];
-
-export function pluginHints(commands: readonly PluginCommandView[]): CommandHint[] {
-  return commands.map((command) => ({
-    name: command.name,
-    usage: command.usage ?? `/${command.name}`,
-    description: command.description || `from the ${command.plugin} plugin`,
-    hostOnly: command.host_only ?? false,
-  }));
-}
-
-/** `/skill:<name>` for every skill, the only way to run one the model does not see. */
-export function skillHints(skills: readonly SkillView[]): CommandHint[] {
-  return skills.map((skill) => ({
-    name: `skill:${skill.name}`,
-    usage: `/skill:${skill.name} [request]`,
-    description: skill.description || "run this skill",
-  }));
-}
-
-export function visibleCommands(role: Role | undefined, plugins: CommandHint[] = []): CommandHint[] {
-  return [...COMMANDS, ...plugins].filter((command) => !command.hostOnly || role === "host");
-}
+import { commandSuggestions, mentionCompletions, mentionNote, visibleCommands, type CommandHint, type Mentionable, type Role } from "@plural/client";
 
 export function mentionHints(value: string, people: Mentionable[]): CommandHint[] {
   return mentionCompletions(value, people).map(({ person, insert }) => ({
@@ -69,9 +15,8 @@ export function suggestions(
   people: Mentionable[] = [],
   plugins: CommandHint[] = [],
 ): CommandHint[] {
-  if (value.startsWith("/") && !value.includes(" ") && !value.includes("\n")) {
-    const prefix = value.slice(1).toLowerCase();
-    return visibleCommands(role, plugins).filter((command) => command.name.startsWith(prefix));
+  if (value.startsWith("/") && !/\s/.test(value)) {
+    return commandSuggestions("terminal", value, role, plugins);
   }
   return mentionHints(value, people);
 }
@@ -92,7 +37,7 @@ export function visibleSuggestionWindow(
 }
 
 export function helpText(role: Role | undefined): string {
-  const commands = visibleCommands(role).map((command) => `  ${command.usage.padEnd(30)} ${command.description}`);
+  const commands = visibleCommands("terminal", role).map((command) => `  ${command.usage.padEnd(30)} ${command.description}`);
   const keys = [
     "  enter           send",
     "  shift+enter     new line (ctrl+j in any terminal)",

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { label, mentionable, status, type JoinLink, type ProposalView, type SessionCard } from "@plural/client";
+import { label, mentionable, pluginHints, skillHints, status, type JoinLink, type ProposalView, type SessionCard } from "@plural/client";
 import { Board, type Pointer } from "../components/Board";
 import { Canvas } from "../components/Canvas";
 import { Composer } from "../components/Composer";
@@ -31,7 +31,6 @@ import { siteFiles } from "../lib/site";
 import { copyText } from "../lib/clipboard";
 import { upload } from "../lib/upload";
 import { cx } from "../lib/cx";
-import { pluginHints, skillHints } from "../lib/commands";
 import styles from "./RoomScreen.module.css";
 
 interface RoomScreenProps {

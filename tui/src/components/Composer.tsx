@@ -1,8 +1,8 @@
 import { decodePasteBytes, stripAnsiSequences, type KeyBinding, type PasteEvent, type TextareaRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
-import type { Mentionable, Role, Route } from "@plural/client";
-import { suggestions as suggest, visibleSuggestionWindow, type CommandHint } from "../commands";
+import type { CommandHint, Mentionable, Role, Route } from "@plural/client";
+import { suggestions as suggest, visibleSuggestionWindow } from "../commands";
 import { imagePath } from "../lib/image-paste";
 import { expandPastes, pasteLabel, shouldCollapse } from "../lib/paste";
 import { theme } from "../theme";

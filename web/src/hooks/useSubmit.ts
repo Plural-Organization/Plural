@@ -1,6 +1,6 @@
-import { cacheHitLabel, findPerson, isSkillCommand, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
+import { cacheHitLabel, commandName, isHostOnly, isSkillCommand, label, lastReply, localCommand, parseChat, parseSlash, pluginHints, routeOf, ruleLine, SlashError, type LocalEffect, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
-import { commandName, helpText, isHostOnly, pluginHints } from "../lib/commands";
+import { helpText } from "../lib/commands";
 import { contextText } from "../lib/context";
 import type { Session } from "./useSession";
 
@@ -19,8 +19,25 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
   const isHost = projection.me?.role === "host";
   const plugins = pluginHints(state.commands);
 
+  const perform = (effect: LocalEffect): void => {
+    if (effect.kind === "send") {
+      send(effect.command);
+    } else if (effect.kind === "notify") {
+      notify(effect.tone, effect.text);
+    } else if (effect.action === "access-requests") {
+      const waiting = Object.values(state.access_requests);
+      notify("accent", waiting.length === 0 ? "nobody is asking to write" : waiting.map((ask) => `${ask.name}${ask.note ? `: ${ask.note}` : ""}`).join("\n"));
+    } else if (effect.action === "briefings") {
+      notify("accent", `this session shares briefings: ${state.briefing_sharing} (/brief share off|ask|team)`);
+    }
+  };
+
   const local = (text: string): boolean => {
-    const [, ...rest] = text.slice(1).split(/\s+/);
+    const effects = localCommand("browser", text, projection);
+    if (effects !== null) {
+      effects.forEach(perform);
+      return true;
+    }
     switch (commandName(text)) {
       case "help":
         notify("accent", helpText(projection.me?.role, plugins));
@@ -33,88 +50,12 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
             .join("\n"),
         );
         return true;
-      case "invite":
-        switch (rest[0]) {
-          case undefined:
-          case "link":
-            send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true });
-            break;
-          case "once":
-            send({ type: "invite.create", role: "participant", ttl_s: 3600 });
-            break;
-          case "viewer":
-            send({ type: "invite.create", role: "viewer", ttl_s: 3600 });
-            break;
-          case "revoke":
-            send({ type: "link.revoke" });
-            break;
-          case "open":
-          case "approve":
-            send({ type: "link.set_admission", mode: rest[0] });
-            notify("accent", rest[0] === "open" ? "the room link lets people in at once" : "you will be asked to let each person in");
-            break;
-          default:
-            notify("warn", "usage: /invite [link | once | viewer | revoke | open | approve]");
-        }
-        return true;
       case "copy": {
         const reply = lastReply(feed);
         if (reply === "") {
           flash("nothing to copy yet");
         } else {
           void copyText(reply).then((ok) => flash(ok ? "copied the last reply" : "your browser blocked the clipboard"));
-        }
-        return true;
-      }
-      case "cancel": {
-        const entry = state.queue[Number(rest[0]) - 1];
-        if (entry === undefined) {
-          notify("warn", state.queue.length === 0 ? "the queue is empty" : "usage: /cancel <number from the queue>");
-        } else {
-          send({ type: "queue.cancel", prompt_id: entry.prompt_id });
-        }
-        return true;
-      }
-      case "brief": {
-        const [verb, mode] = rest;
-        if (isHost && verb === "share" && ["off", "ask", "team"].includes(mode ?? "")) {
-          send({ type: "session.set_briefing_sharing", mode: mode as "off" | "ask" | "team" });
-        } else if (isHost) {
-          notify("accent", `this session shares briefings: ${state.briefing_sharing} (/brief share off|ask|team)`);
-        } else {
-          notify("warn", "ask for a briefing from the terminal client, plural join @name, then /brief");
-        }
-        return true;
-      }
-      case "access": {
-        const people = mentionable(state, projection.meId);
-        const [verb, ...names] = rest;
-        if (projection.me?.role === "viewer") {
-          send({ type: "access.request", note: rest.join(" ").trim() || null });
-        } else if (!isHost) {
-          notify("warn", "you can already write");
-        } else if (verb === undefined) {
-          const waiting = Object.values(state.access_requests);
-          notify("accent", waiting.length === 0 ? "nobody is asking to write" : waiting.map((ask) => `${ask.name}${ask.note ? `: ${ask.note}` : ""}`).join("\n"));
-        } else {
-          const person = findPerson(names.join(" "), people);
-          if (person === null || !["allow", "deny", "revoke"].includes(verb)) {
-            notify("warn", "usage: /access [allow|deny|revoke <name>]");
-          } else if (verb === "revoke") {
-            send({ type: "participant.set_role", participant_id: person.id, role: "viewer" });
-          } else {
-            send({ type: "access.decide", participant_id: person.id, decision: verb as "allow" | "deny" });
-          }
-        }
-        return true;
-      }
-      case "kick": {
-        const person = findPerson(rest.join(" "), mentionable(state, projection.meId));
-        if (person === null) {
-          notify("warn", "usage: /kick <name> (see /who)");
-        } else {
-          send({ type: "participant.revoke", participant_id: person.id });
-          notify("dim", `${person.label} was removed from the session`);
         }
         return true;
       }
@@ -130,7 +71,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
   };
 
   const slash = (text: string) => {
-    if (isHostOnly(text, plugins) && !isHost) {
+    if (isHostOnly("browser", text, plugins) && !isHost) {
       notify("warn", `/${commandName(text)} is for the host`);
       return;
     }

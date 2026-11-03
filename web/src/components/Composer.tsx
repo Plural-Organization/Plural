@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 import { mentionCompletions, mentionNote, type Mentionable, type ProposalView, type Role } from "@plural/client";
 import type { Attachment } from "../hooks/useAttachments";
-import { suggestions, type CommandHint } from "../lib/commands";
+import { commandSuggestions, type CommandHint } from "@plural/client";
 import { withQuote } from "../lib/quote";
 import styles from "./Composer.module.css";
 
@@ -32,7 +32,7 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
-  const commandHints = suggestions(value, role, commands);
+  const commandHints = commandSuggestions("browser", value, role, commands);
   const mentions = commandHints.length === 0 ? mentionCompletions(value, people) : [];
   const hints = [
     ...commandHints.map((hint) => ({ key: hint.name, usage: hint.usage, description: hint.description, insert: `/${hint.name}${hint.usage.includes(" ") ? " " : ""}` })),

@@ -1,5 +1,4 @@
-import { cacheHitLabel, contextLines, label, missedCache, ruleLine, type Projection, type Role } from "@plural/client";
-import { visibleCommands, type CommandHint } from "./commands";
+import { cacheHitLabel, contextLines, label, missedCache, ruleLine, visibleCommands, type CommandHint, type Projection, type Role } from "@plural/client";
 import type { Row } from "./components/Tray";
 import { colorFor, theme } from "./theme";
 
@@ -20,7 +19,7 @@ const KEYS: [string, string][] = [
 ];
 
 export function helpRows(role: Role | undefined, plugins: CommandHint[] = []): Row[] {
-  const commands = visibleCommands(role, plugins);
+  const commands = visibleCommands("terminal", role, plugins);
   const name = Math.max(...commands.map((command) => command.name.length)) + 3;
   const key = Math.max(...KEYS.map(([shortcut]) => shortcut.length)) + 2;
   return [

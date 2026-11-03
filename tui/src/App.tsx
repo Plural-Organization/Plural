@@ -7,7 +7,6 @@ import {
   mentionable,
   mentionsMe,
   findInFeed,
-  findPerson,
   matchPreview,
   nextPermissionMode,
   parseChat,
@@ -17,14 +16,19 @@ import {
   SlashError,
   stepMatch,
   status,
+  commandName,
+  commandsFor,
+  localCommand,
+  pluginHints,
+  skillHints,
   type Command,
+  type LocalEffect,
   type Conflict,
   type ConnectionStatus,
   type PermissionMode,
   type PluginAsked,
   type Session,
 } from "@plural/client";
-import { COMMANDS, pluginHints, skillHints } from "./commands";
 import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
@@ -1063,38 +1067,55 @@ export function App({
     }
   };
 
+  const giveBriefing = (): void => {
+    const last = feedRef.current.items.filter((entry) => entry.kind === "briefing").at(-1);
+    if (last === undefined || last.kind !== "briefing") {
+      warn("brief", "there is no briefing here yet, /brief asks for one");
+    } else if (!onGiveBriefing) {
+      warn("brief", "a briefing goes to your own agent, ask for it from a teammate's session");
+    } else {
+      onGiveBriefing({ source: last.from, as_of_seq: last.asOf, text: last.text }).then(
+        () => notify("ok", `${last.from}'s briefing is in your agent's notes, it reads it at its next prompt. Click “you” to go back`),
+        (error: unknown) => notify("warn", error instanceof Error ? error.message : String(error)),
+      );
+    }
+  };
+
+  const perform = (effect: LocalEffect): void => {
+    if (effect.kind === "send") {
+      send(effect.command);
+    } else if (effect.kind === "notify") {
+      if (effect.tone === "warn") {
+        warn(effect.topic, effect.text);
+      } else {
+        notify(effect.tone, effect.text);
+      }
+    } else if (effect.action === "briefings") {
+      const waiting = Object.values(state.briefing_requests);
+      show("briefings", [
+        [{ text: `this session shares briefings: ${state.briefing_sharing}`, bold: true }, { text: "  (/brief share off|ask|team)", fg: theme.dim }],
+        ...waiting.map((ask): Row => [{ text: ask.name }, { text: ask.focus ? `  ${ask.focus}` : "", fg: theme.dim }]),
+      ]);
+    } else if (effect.action === "access-requests") {
+      const waiting = Object.values(state.access_requests);
+      show("access", waiting.length === 0 ? [[{ text: "nobody is asking to write", fg: theme.dim }]] : waiting.map((ask): Row => [{ text: ask.name, bold: true }, { text: ask.note ? `  ${ask.note}` : "", fg: theme.dim }]));
+    } else {
+      giveBriefing();
+    }
+  };
+
   const local = (text: string): boolean => {
-    const [name = "", ...rest] = text.slice(1).split(/\s+/);
-    switch (name) {
+    const effects = localCommand("terminal", text, projection);
+    if (effects !== null) {
+      effects.forEach(perform);
+      return true;
+    }
+    switch (commandName(text)) {
       case "help":
         show("help", helpRows(me?.role, pluginCommands));
         return true;
       case "who":
         show(`who · ${Object.values(state.participants).filter((person) => person.connected).length} here`, whoRows(projection));
-        return true;
-      case "invite":
-        switch (rest[0]) {
-          case undefined:
-          case "link":
-            send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true });
-            break;
-          case "once":
-            send({ type: "invite.create", role: "participant", ttl_s: 3600 });
-            break;
-          case "viewer":
-            send({ type: "invite.create", role: "viewer", ttl_s: 3600 });
-            break;
-          case "revoke":
-            send({ type: "link.revoke" });
-            break;
-          case "open":
-          case "approve":
-            send({ type: "link.set_admission", mode: rest[0] });
-            notify("accent", rest[0] === "open" ? "the room link lets people in at once" : "you will be asked to let each person in");
-            break;
-          default:
-            warn("invite", "usage: /invite [link | once | viewer | revoke | open | approve]");
-        }
         return true;
       case "settings":
         setDialog(true);
@@ -1102,78 +1123,6 @@ export function App({
       case "copy":
         copyReply();
         return true;
-      case "cancel": {
-        const entry = state.queue[Number(rest[0]) - 1];
-        if (!entry) {
-          warn("cancel", state.queue.length === 0 ? "the queue is empty" : "usage: /cancel <number from the queue>");
-        } else {
-          send({ type: "queue.cancel", prompt_id: entry.prompt_id });
-        }
-        return true;
-      }
-      case "brief": {
-        const [verb, ...more] = rest;
-        if (isHost) {
-          if (verb === "share" && ["off", "ask", "team"].includes(more[0] ?? "")) {
-            send({ type: "session.set_briefing_sharing", mode: more[0] as "off" | "ask" | "team" });
-          } else {
-            const waiting = Object.values(state.briefing_requests);
-            show("briefings", [
-              [{ text: `this session shares briefings: ${state.briefing_sharing}`, bold: true }, { text: "  (/brief share off|ask|team)", fg: theme.dim }],
-              ...waiting.map((ask): Row => [{ text: ask.name }, { text: ask.focus ? `  ${ask.focus}` : "", fg: theme.dim }]),
-            ]);
-          }
-        } else if (verb === "give") {
-          const last = feedRef.current.items.filter((entry) => entry.kind === "briefing").at(-1);
-          if (last === undefined || last.kind !== "briefing") {
-            warn("brief", "there is no briefing here yet, /brief asks for one");
-          } else if (!onGiveBriefing) {
-            warn("brief", "a briefing goes to your own agent, ask for it from a teammate's session");
-          } else {
-            onGiveBriefing({ source: last.from, as_of_seq: last.asOf, text: last.text }).then(
-              () => notify("ok", `${last.from}'s briefing is in your agent's notes, it reads it at its next prompt. Click “you” to go back`),
-              (error: unknown) => notify("warn", error instanceof Error ? error.message : String(error)),
-            );
-          }
-        } else {
-          const update = verb === "update";
-          const focus = (update ? more : rest).join(" ").trim();
-          send({ type: "briefing.request", focus: focus === "" ? null : focus, update });
-        }
-        return true;
-      }
-      case "access": {
-        const people = mentionable(state, projection.meId);
-        const [verb, ...names] = rest;
-        if (me?.role === "viewer") {
-          send({ type: "access.request", note: rest.join(" ").trim() || null });
-        } else if (!isHost) {
-          warn("access", "you can already write");
-        } else if (verb === undefined) {
-          const waiting = Object.values(state.access_requests);
-          show("access", waiting.length === 0 ? [[{ text: "nobody is asking to write", fg: theme.dim }]] : waiting.map((ask): Row => [{ text: ask.name, bold: true }, { text: ask.note ? `  ${ask.note}` : "", fg: theme.dim }]));
-        } else {
-          const person = findPerson(names.join(" "), people);
-          if (person === null || !["allow", "deny", "revoke"].includes(verb)) {
-            warn("access", "usage: /access [allow|deny|revoke <name>]");
-          } else if (verb === "revoke") {
-            send({ type: "participant.set_role", participant_id: person.id, role: "viewer" });
-          } else {
-            send({ type: "access.decide", participant_id: person.id, decision: verb as "allow" | "deny" });
-          }
-        }
-        return true;
-      }
-      case "kick": {
-        const person = findPerson(rest.join(" "), mentionable(state, projection.meId));
-        if (person === null) {
-          warn("kick", "usage: /kick <name> (see /who)");
-        } else {
-          send({ type: "participant.revoke", participant_id: person.id });
-          notify("dim", `${person.label} was removed from the session`);
-        }
-        return true;
-      }
       case "quit":
         onQuit();
         return true;
@@ -1221,7 +1170,7 @@ export function App({
     }
     if (text.startsWith("/") && !isSkillCommand(text)) {
       const name = text.slice(1).split(/\s+/)[0] ?? "";
-      const known = [...COMMANDS, ...pluginCommands].find((command) => command.name === name);
+      const known = [...commandsFor("terminal"), ...pluginCommands].find((command) => command.name === name);
       if (known?.hostOnly && !isHost) {
         warn(`/${name}`, `/${name} is for the host`);
         return;

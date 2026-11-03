@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { COMMANDS, pluginHints, suggestions, visibleSuggestionWindow } from "../src/commands";
+import { commandsFor, pluginHints } from "@plural/client";
+import { suggestions, visibleSuggestionWindow } from "../src/commands";
+
+const COMMANDS = commandsFor("terminal");
 
 describe("command suggestions", () => {
   test("keeps the selected command in the visible window", () => {
