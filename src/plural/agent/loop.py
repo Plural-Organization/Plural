@@ -384,13 +384,14 @@ class AgentLoop:
                                 turn.calls.append(call)
                             case NativeReady(content=content):
                                 turn.native = content
-                            case UsageReport(usage=delta):
+                            case UsageReport(usage=delta, last=last):
                                 self._usage = self._usage + delta
                                 self.spend("main", "", delta)
-                                if delta.prompt_tokens:
-                                    self._context_tokens = delta.prompt_tokens
+                                current = last or delta
+                                if current.prompt_tokens:
+                                    self._context_tokens = current.prompt_tokens
                                     self._measured = measured
-                                    self._hit = hit_rate(delta)
+                                    self._hit = hit_rate(current)
                                     self._check_compaction_helped()
                                 yield self.fill()
                             case Stop(reason=reason):
