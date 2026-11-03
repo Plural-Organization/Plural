@@ -9,7 +9,7 @@
 «pair programming со своим ИИ, но с коллегами в зрительном зале (или в кабине
 пилота)».
 
-Лицензия: Apache-2.0. Статус: Alpha (judging по classifiers в pyproject.toml).
+Лицензия: GPL-3.0-or-later (версии до 0.2.16 включительно выпущены под Apache-2.0). Статус: Alpha (judging по classifiers в pyproject.toml).
 
 ## Ключевые идеи и фичи (из README)
 

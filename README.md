@@ -8,7 +8,7 @@
 
 [install](#install) · [quick start](#quick-start) · [docs](#docs) · [security](SECURITY.md) · [contributing](CONTRIBUTING.md)
 
-[![License](https://img.shields.io/badge/license-Apache--2.0-666666?labelColor=333333)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPL--3.0--or--later-666666?labelColor=333333)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Plural-Organization/Plural?label=release&labelColor=333333&color=666666)](https://github.com/Plural-Organization/Plural/releases/latest)
 [![PyPI](https://img.shields.io/pypi/v/plural-agent?label=pypi&labelColor=333333&color=666666)](https://pypi.org/project/plural-agent/)
 [![Python](https://img.shields.io/badge/python-3.12%2B-666666?labelColor=333333)](https://www.python.org/downloads/)
@@ -80,4 +80,4 @@ plural learns from [pi](https://github.com/badlogic/pi-mono), [opencode](https:/
 
 ## license
 
-plural is licensed under the [apache license 2.0](LICENSE).
+plural is free software, licensed under the [GNU General Public License, version 3 or (at your option) any later version](LICENSE). Versions up to and including 0.2.16 were released under the Apache License 2.0 and stay available under it.
