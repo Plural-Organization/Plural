@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { copyText } from "../lib/clipboard";
 import { cx } from "../lib/cx";
-import { reachable, teamJoinCommand, teamJoinLink, type SessionCard } from "../lib/team";
+import { reachable, teamJoinCommand, teamJoinLink, type SessionCard } from "@plural/client";
 import type { TeamState } from "../hooks/useTeam";
 import styles from "./TeamPanel.module.css";
 

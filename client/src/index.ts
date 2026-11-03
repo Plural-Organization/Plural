@@ -10,6 +10,7 @@ export * from "./reduce";
 export * from "./search";
 export * from "./session";
 export * from "./slash";
+export * from "./team";
 export * from "./tools";
 export * from "./usage";
 export * from "./wire";
