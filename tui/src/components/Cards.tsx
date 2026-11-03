@@ -255,7 +255,10 @@ export function AssistantCard({ item, syntax, expanded, onToggle }: AssistantPro
   const view = long && !expanded ? collapseText(item.text, REPLY_LINES) : { text: item.text, hidden: 0 };
   return (
     <box flexDirection="row" marginBottom={1}>
-      <text fg={theme.text} marginRight={1}>⏺</text>
+      {/* A box that cannot shrink: a margin on the text is squeezed away when the first line is longer than the row. */}
+      <box width={2} flexShrink={0}>
+        <text fg={theme.text}>⏺</text>
+      </box>
       <box flexDirection="column" flexGrow={1} flexShrink={1}>
         <markdown content={view.text} syntaxStyle={syntax} streaming={item.streaming} renderNode={renderNode} tableOptions={table()} />
         {long ? (
