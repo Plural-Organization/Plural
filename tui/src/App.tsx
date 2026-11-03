@@ -18,6 +18,7 @@ import {
   stepMatch,
   status,
   type Command,
+  type Conflict,
   type ConnectionStatus,
   type PermissionMode,
   type PluginAsked,
@@ -48,7 +49,6 @@ import { contextRows, helpRows, pluginRows, policyRows, skillRows, usageRows, wh
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
 import { describeConflict, type SpaceRow, type Summary } from "./spaces";
-import type { Conflict } from "./team";
 import { explain } from "./failure";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";

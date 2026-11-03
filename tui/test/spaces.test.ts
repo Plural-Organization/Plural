@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { buildSpaces, describeConflict, ownConflicts, OWN, type Visit } from "../src/spaces";
-import type { Conflict, SessionCard, TeamView } from "../src/team";
+import type { Conflict, SessionCard, TeamView } from "@plural/client";
 
 const card = (owner: string, status: SessionCard["status"] = "idle", branch: string | null = "main", viewers = 0): SessionCard => ({
   room: `r_${owner}`,
