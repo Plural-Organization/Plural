@@ -14,7 +14,7 @@ export class CommandRejected extends Error {
 export class ConnectionClosed extends Error {}
 
 // A relay may serve only Plural clients. A browser cannot set this header and is let in by its origin.
-const USER_AGENT = "plural-client";
+export const USER_AGENT = "plural-client";
 
 function openSocket(url: string): WebSocket {
   if (typeof document !== "undefined") {
