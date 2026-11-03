@@ -7,6 +7,7 @@ BIN_DIR="${PLURAL_INSTALL_DIR:-$HOME/.local/bin}"
 RELEASES="${PLURAL_RELEASE_URL:-https://github.com/$REPO/releases}"
 HOST_PACKAGE="${PLURAL_HOST_PACKAGE:-}"
 EXTRAS="${PLURAL_EXTRAS:-}"
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/plural"
 
 if [ -t 1 ]; then
   BOLD="$(printf '\033[1m')"
@@ -77,6 +78,81 @@ asset_url() {
   else
     echo "$RELEASES/download/v${VERSION#v}/$1"
   fi
+}
+
+# Stops a process and everything it started. Killing only the subshell of a download leaves its
+# curl running, and a curl left behind writes into the cache while the next run resumes the same file.
+stop_tree() {
+  [ -n "${1:-}" ] || return 0
+  for child in $(ps -axo pid=,ppid= 2>/dev/null | awk -v parent="$1" '$2 == parent { print $1 }'); do
+    stop_tree "$child"
+  done
+  kill "$1" 2>/dev/null || true
+}
+
+# Two installs share one download cache, so only one runs at a time. A lock left by a process that
+# is gone is taken over.
+LOCK=""
+acquire_lock() {
+  mkdir -p "$CACHE"
+  lock="$CACHE/install.lock"
+  if ! mkdir "$lock" 2>/dev/null; then
+    other="$(cat "$lock/pid" 2>/dev/null || true)"
+    if [ -n "$other" ] && kill -0 "$other" 2>/dev/null; then
+      fail "another plural install is running (process $other). Wait for it, or stop it and run this again"
+    fi
+    rm -rf "$lock"
+    mkdir "$lock" 2>/dev/null || fail "another plural install is running. Wait for it, or stop it and run this again"
+  fi
+  printf '%s\n' "$$" > "$lock/pid"
+  LOCK="$lock"
+}
+
+release_lock() {
+  [ -z "$LOCK" ] || rm -rf "$LOCK"
+  LOCK=""
+}
+
+mb() {
+  awk -v bytes="$1" 'BEGIN { printf "%.1f", bytes / 1048576 }'
+}
+
+# The size a download will have, when the server says so.
+content_length() {
+  curl -fsSIL --connect-timeout 8 --max-time 20 "$1" 2>/dev/null |
+    awk 'tolower($1) == "content-length:" { value = $2 } END { gsub(/\r/, "", value); print value + 0 }'
+}
+
+# The downloads run side by side in the background, so curl's own bar is off. On a terminal this shows
+# one line that moves, so a slow connection does not look like a hang.
+watch_downloads() {
+  [ -t 2 ] || return 0
+  seen=0
+  while kill -0 "$1" 2>/dev/null || kill -0 "$2" 2>/dev/null; do
+    line=""
+    sum=0
+    for name in plural plural-host; do
+      entry="$(cat "$CACHE/progress-$name" 2>/dev/null || true)"
+      [ -n "$entry" ] || continue
+      target="${entry% *}"
+      total="${entry##* }"
+      [ -f "$target" ] || continue
+      size="$(wc -c < "$target" | tr -d ' ')"
+      sum=$((sum + size))
+      if [ "${total:-0}" -gt 0 ] 2>/dev/null; then
+        part="$(mb "$size")/$(mb "$total") MB"
+      else
+        part="$(mb "$size") MB"
+      fi
+      line="${line:+$line · }$name $part"
+    done
+    if [ -n "$line" ]; then
+      printf '\r\033[K  %s · %s MB/s' "$line" "$(mb $((sum - seen)))" >&2
+      seen=$sum
+    fi
+    sleep 1
+  done
+  printf '\r\033[K' >&2
 }
 
 fetch_small() {
@@ -160,11 +236,13 @@ checksum_of() {
   awk '{print $1; exit}' "$1"
 }
 
+# A connection that stalls (under 1 KB/s for 30 s) is dropped and retried from where it stopped, so a
+# dead link ends instead of waiting for ever.
 download() {
   if [ -t 2 ]; then
-    curl -fL --progress-bar --retry 5 --retry-delay 2 --retry-connrefused --connect-timeout 20 -C - "$1" -o "$2"
+    curl -fL --progress-bar --retry 5 --retry-delay 2 --retry-connrefused --connect-timeout 20 --speed-time 30 --speed-limit 1024 -C - "$1" -o "$2"
   else
-    curl -fsSL --retry 5 --retry-delay 2 --retry-connrefused --connect-timeout 20 -C - "$1" -o "$2"
+    curl -fsSL --retry 5 --retry-delay 2 --retry-connrefused --connect-timeout 20 --speed-time 30 --speed-limit 1024 -C - "$1" -o "$2"
   fi
 }
 
@@ -179,9 +257,10 @@ install_binary() {
   name="$1"
   os="$(detect_os)"
   arch="$(detect_arch)"
-  cache="${XDG_CACHE_HOME:-$HOME/.cache}/plural"
+  cache="$CACHE"
   work="$(mktemp -d)"
   trap 'rm -rf "$work"' EXIT
+  trap 'exit 143' TERM HUP
   # The xz archive is a third smaller, so it is what a slow connection should wait for. A release
   # from before it existed, or a machine that cannot unpack it, takes the gzip one.
   asset="$name-$os-$arch.tar.xz"
@@ -202,6 +281,7 @@ install_binary() {
     step "Using the download of $name from an earlier run"
   else
     step "Downloading $name for $os-$arch"
+    printf '%s %s\n' "$download_dir/$asset" "$(content_length "$(asset_url "$asset")")" > "$cache/progress-$name"
     download "$(asset_url "$asset")" "$download_dir/$asset" || fail "could not download $asset from $RELEASES, run the installer again to continue where it stopped"
     (cd "$download_dir" && sha256_check "$asset.sha256") || {
       rm -f "$download_dir/$asset"
@@ -226,6 +306,7 @@ install_binary() {
   fi
   printf '%s\n' "$hash" > "$cache/installed-$name-$os-$arch"
   rm -rf "$download_dir"
+  rm -f "$cache/progress-$name"
 }
 
 install_client() {
@@ -265,24 +346,38 @@ if [ "$VERSION" = "latest" ]; then
   fi
 fi
 
+acquire_lock
+
 # The client and the host each wait on the network, so they download side by side.
 client_log="$(mktemp)"
 host_log="$(mktemp)"
+client_pid=""
+host_pid=""
+cleanup() {
+  stop_tree "$client_pid"
+  stop_tree "$host_pid"
+  rm -f "$client_log" "$host_log" "$CACHE/progress-plural" "$CACHE/progress-plural-host"
+  release_lock
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM HUP
 install_client >"$client_log" 2>&1 &
 client_pid=$!
 install_host_any >"$host_log" 2>&1 &
 host_pid=$!
-trap 'kill "$client_pid" "$host_pid" 2>/dev/null || true; rm -f "$client_log" "$host_log"' EXIT
 step "Downloading plural and plural-host"
+watch_downloads "$client_pid" "$host_pid"
 failed=0
 wait "$client_pid" || failed=1
 cat "$client_log"
 wait "$host_pid" || failed=1
 cat "$host_log"
+client_pid=""
+host_pid=""
 if [ "$failed" = 1 ]; then
   exit 1
 fi
-trap - EXIT
 rm -f "$client_log" "$host_log"
 
 path_missing=0
