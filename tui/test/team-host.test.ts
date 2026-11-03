@@ -88,7 +88,7 @@ describe("plural team create --tunnel", () => {
   });
 
   test("the relay is started behind one proxy and the team is made on the tunnel address", () => {
-    expect(relayArgs(4321, "/data/teams.db")).toEqual(["relay", "--teams", "/data/teams.db", "--port", "4321", "--proxy-hops", "1"]);
+    expect(relayArgs(4321, "/data/teams.db")).toEqual(["relay", "--teams", "/data/teams.db", "--port", "4321", "--proxy-hops", "1", "--teams-per-owner", "1000"]);
     expect(createArgs(REQUEST, "wss://calm.example.dev")).toEqual(["team", "create", "kbtu", "--relay", "wss://calm.example.dev", "--json"]);
     expect(createArgs({ ...REQUEST, member: "Vlad" }, "wss://x")).toEqual(["team", "create", "kbtu", "--relay", "wss://x", "--json", "--as", "Vlad"]);
   });
@@ -105,6 +105,29 @@ describe("plural team create --tunnel", () => {
     await hosting.stop();
     expect(tunnel.stopped).toBe(true);
     expect(started[0]?.child.signals).toEqual(["SIGTERM"]);
+  });
+
+  test("closing disbands the team while the relay and the tunnel still answer", async () => {
+    const { deps, started, tunnel } = harness();
+    const run = deps.run;
+    const stoppedAtDisband: boolean[] = [];
+    deps.run = (args, stdio) => {
+      if (args[1] === "disband") {
+        stoppedAtDisband.push(tunnel.stopped);
+      }
+      return run(args, stdio);
+    };
+    const hosting = await openTeam(REQUEST, undefined, deps);
+    await hosting.stop();
+    expect(started.map((entry) => entry.args.slice(0, 3))).toEqual([expect.arrayContaining(["relay"]), expect.arrayContaining(["team"]), ["team", "disband", "--yes"]]);
+    expect(stoppedAtDisband).toEqual([false]);
+    expect(tunnel.stopped).toBe(true);
+  });
+
+  test("a team that was never made is not disbanded", async () => {
+    const { deps, started } = harness({ createStatus: 1, printed: "no" });
+    await expect(openTeam(REQUEST, undefined, deps)).rejects.toThrow();
+    expect(started.some((entry) => entry.args[1] === "disband")).toBe(false);
   });
 
   test("the team is created only once the tunnel answers", async () => {

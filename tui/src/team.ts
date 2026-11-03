@@ -1,6 +1,6 @@
 import { createHash, createPrivateKey, randomBytes, sign, type KeyObject } from "node:crypto";
 import { USER_AGENT, type TeamProof } from "@plural/client";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { dataDir } from "./paths";
 
@@ -55,6 +55,61 @@ export function loadTeam(directory: string = dataDir()): Team | null {
   } catch {
     return null;
   }
+}
+
+// Hosts of tunnels that open for one session. Their address changes at every start and a team made on one
+// ends with it. A tunnel of your own, on a domain of yours, is not on this list. The host command keeps
+// the same list (src/plural/host/team.py).
+const TUNNEL_SUFFIXES = [".trycloudflare.com", ".ngrok-free.app", ".ngrok-free.dev", ".ngrok.app", ".ngrok.dev", ".ngrok.io", ".loca.lt"];
+// What a tunnel provider answers for an address nothing listens on any more.
+const TUNNEL_GONE = new Set([404, 502, 503, 504, 530]);
+
+export function isTunnelHost(host: string): boolean {
+  const name = (host.toLowerCase().split(":")[0] ?? "");
+  return TUNNEL_SUFFIXES.some((suffix) => name.endsWith(suffix));
+}
+
+export function closedTunnel(host: string): string {
+  return `the tunnel ${host} is closed, and the team on it ended with it. Ask the team owner to start it again and send a new invite`;
+}
+
+export type RelayState = "alive" | "dead" | "unknown";
+
+// Only an answer that is not ours means the relay is gone: a timeout or a refused connection may be this
+// machine being offline, so those stay unknown.
+export async function relayState(relay: string, fetcher: typeof fetch = fetch): Promise<RelayState> {
+  try {
+    const response = await fetcher(`${httpBase(relay)}/healthz`, { headers: { "user-agent": USER_AGENT }, signal: AbortSignal.timeout(4000) });
+    return response.ok ? "alive" : "dead";
+  } catch {
+    return "unknown";
+  }
+}
+
+export function clearTeam(directory: string = dataDir()): void {
+  rmSync(join(directory, "team.json"), { force: true });
+}
+
+// A team made on a tunnel ends with it. Leaves it when the tunnel is closed, and says so.
+export async function leaveClosedTunnel(directory: string = dataDir(), fetcher: typeof fetch = fetch): Promise<string | null> {
+  const team = loadTeam(directory);
+  if (team === null || !isTunnelHost(new URL(httpBase(team.profile.relay)).host)) {
+    return null;
+  }
+  if ((await relayState(team.profile.relay, fetcher)) !== "dead") {
+    return null;
+  }
+  clearTeam(directory);
+  return `you left ${team.profile.team_name}: its tunnel is closed, and a team on a tunnel ends with it`;
+}
+
+async function refusal(response: Response, relay: string): Promise<Error> {
+  const detail = (await response.json().catch(() => null)) as { error?: string } | null;
+  const host = new URL(httpBase(relay)).host;
+  if (detail?.error === undefined && isTunnelHost(host) && TUNNEL_GONE.has(response.status)) {
+    return new Error(closedTunnel(host));
+  }
+  return new Error(detail?.error ?? `the relay answered ${response.status}`);
 }
 
 export function httpBase(relay: string): string {
@@ -119,8 +174,7 @@ export async function fetchSessions(team: Team, fetcher: typeof fetch = fetch): 
     signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) {
-    const detail = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(detail.error ?? `the relay answered ${response.status}`);
+    throw await refusal(response, team.profile.relay);
   }
   return ((await response.json()) as { sessions: SessionCard[] }).sessions;
 }
@@ -137,8 +191,7 @@ export async function createTeamInvite(team: Team, fetcher: typeof fetch = fetch
     signal: AbortSignal.timeout(8000),
   });
   if (!response.ok) {
-    const detail = (await response.json().catch(() => ({}))) as { error?: string };
-    throw new Error(detail.error ?? `the relay answered ${response.status}`);
+    throw await refusal(response, team.profile.relay);
   }
   return (await response.json()) as { code: string; expires_at: string | null };
 }

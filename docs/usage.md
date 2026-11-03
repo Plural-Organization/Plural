@@ -158,7 +158,7 @@ plural team create Backend --tunnel ngrok        # or cloudflared
 
 The banner of the session shows two links: the room link (`plural join "…"`, for someone you want in this session) and the team link (`plural team join <code> --relay <address>`, for people who should join the team; reusable, with no expiry, and `plural team invite` can make another). Quit the session and the relay and the tunnel stop with it. The directory file is `~/.plural/teams.db`.
 
-Your machine is the directory, so while that session is closed nobody can join or see the team's cards; sessions that are already open go on. A free ngrok address and a cloudflared quick tunnel change on every start, and the team is bound to the relay's address, so after a restart everyone has to join again. For a team that stays, run the relay on a server or behind a fixed domain and use `--relay`. `--tunnel` and `--relay` cannot be combined.
+Your machine is the directory, so while that session is closed nobody can join or see the team's cards; sessions that are already open go on. A free ngrok address and a cloudflared quick tunnel change on every start, and the team is bound to the relay's address, so after a restart everyone has to join again. Closing the session disbands the team while the tunnel is still up, so the owner is not left in a team that points at a closed address. A teammate who still has it is told that the tunnel is closed, and `plural` (or `plural team leave`, `status`, `create`, `join`) leaves that team by itself the next time; a relay that is only offline is never left this way. For a team that stays, run the relay on a server or behind a fixed domain and use `--relay`. `--tunnel` and `--relay` cannot be combined.
 
 ### Showing your session to the team
 

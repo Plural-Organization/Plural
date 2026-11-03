@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { createPrivateKey } from "node:crypto";
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { authorization, createTeamInvite, fetchSessions, httpBase, joinMessage, loadTeam, pickTeamSession, requestMessage, TeamWatcher, teamJoinCommand, teamProof, type SessionCard, type Team } from "../src/team";
+import { authorization, closedTunnel, createTeamInvite, fetchSessions, httpBase, isTunnelHost, joinMessage, leaveClosedTunnel, loadTeam, pickTeamSession, relayState, requestMessage, TeamWatcher, teamJoinCommand, teamProof, type SessionCard, type Team } from "../src/team";
 
 const PEM = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f\n-----END PRIVATE KEY-----\n";
 
@@ -192,5 +192,62 @@ describe("joining a teammate's session", () => {
     expect(() => pickTeamSession(sessions, "m_vlad", "@cleo")).toThrow("not sharing a session");
     expect(() => pickTeamSession(sessions, "m_vlad", "@vlad")).toThrow("your own session");
     expect(() => pickTeamSession(sessions, "m_vlad", "@")).toThrow("usage");
+  });
+});
+
+describe("a team on a tunnel", () => {
+  const answering = (status: number | "offline") =>
+    (async () => {
+      if (status === "offline") {
+        throw new TypeError("fetch failed");
+      }
+      return new Response(status === 200 ? '{"ok":true}' : "<html>tunnel gone</html>", { status });
+    }) as unknown as typeof fetch;
+  const saved = (relay: string): string => {
+    const directory = mkdtempSync(join(tmpdir(), "plural-tunnel-"));
+    writeFileSync(join(directory, "team.json"), JSON.stringify({ ...profile, relay }));
+    writeFileSync(join(directory, "identity.pem"), PEM);
+    return directory;
+  };
+
+  test("only the tunnels that open for one session are told apart", () => {
+    for (const host of ["calm-fox.trycloudflare.com", "a1b2.ngrok-free.app", "x.ngrok.io", "abc.loca.lt:443"]) {
+      expect(isTunnelHost(host)).toBe(true);
+    }
+    for (const host of ["relay.plrl.host", "relay.example.com", "127.0.0.1:8787", "notngrok.io"]) {
+      expect(isTunnelHost(host)).toBe(false);
+    }
+  });
+
+  test("the relay is gone only when something else answers for it", async () => {
+    expect(await relayState("wss://a.trycloudflare.com", answering(200))).toBe("alive");
+    expect(await relayState("wss://a.trycloudflare.com", answering(530))).toBe("dead");
+    expect(await relayState("wss://a.trycloudflare.com", answering("offline"))).toBe("unknown");
+  });
+
+  test("a team whose tunnel is closed is left, and says why", async () => {
+    const directory = saved("wss://gone.trycloudflare.com");
+    expect(await leaveClosedTunnel(directory, answering(530))).toContain("you left Backend: its tunnel is closed");
+    expect(existsSync(join(directory, "team.json"))).toBe(false);
+  });
+
+  test("a team is kept when its tunnel answers, when this machine is offline, or when it is no tunnel", async () => {
+    for (const [relay, fetcher] of [
+      ["wss://up.trycloudflare.com", answering(200)],
+      ["wss://gone.trycloudflare.com", answering("offline")],
+      ["wss://relay.example.com", answering(530)],
+    ] as const) {
+      const directory = saved(relay);
+      expect(await leaveClosedTunnel(directory, fetcher)).toBeNull();
+      expect(existsSync(join(directory, "team.json"))).toBe(true);
+    }
+  });
+
+  test("a closed tunnel is named, not shown as a relay answer", async () => {
+    const gone = { ...team(), profile: { ...profile, relay: "wss://gone.trycloudflare.com" } };
+    const fetcher = answering(530);
+    await expect(fetchSessions(gone, fetcher)).rejects.toThrow(closedTunnel("gone.trycloudflare.com"));
+    await expect(createTeamInvite(gone, fetcher)).rejects.toThrow("is closed");
+    await expect(fetchSessions(team(), fetcher)).rejects.toThrow("the relay answered 530");
   });
 });

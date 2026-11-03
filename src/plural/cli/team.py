@@ -18,6 +18,7 @@ from plural.host.team import (
     TeamStore,
     create_team,
     join_team,
+    tunnel_closed,
 )
 from plural.protocol.team import NAME_PATTERN, SessionStatus
 
@@ -71,7 +72,21 @@ def _run[T](work: Coroutine[Any, Any, T]) -> T:
         raise typer.Exit(1) from error
 
 
+def _left_closed_tunnel(store: TeamStore) -> TeamProfile | None:
+    """A team made on a tunnel ends with it: leave it here, the relay is gone."""
+    current = store.load()
+    if current is None or not tunnel_closed(current):
+        return None
+    store.clear()
+    console.print(
+        f"[yellow]You left {escape(current.team_name)}: its tunnel is closed, "
+        "and a team on a tunnel ends with it.[/yellow]"
+    )
+    return current
+
+
 def _already(store: TeamStore) -> None:
+    _left_closed_tunnel(store)
     current = store.load()
     if current is not None:
         console.print(
@@ -163,6 +178,8 @@ def kick(name: Annotated[str, typer.Argument(help="Who to remove.")]) -> None:
 @team_app.command()
 def leave() -> None:
     store = _store()
+    if _left_closed_tunnel(store) is not None:
+        return
     profile = _joined(store)
     _run(DirectoryClient(store, profile).remove(profile.member.id))
     store.clear()
@@ -172,6 +189,8 @@ def leave() -> None:
 @team_app.command()
 def disband(yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask.")] = False) -> None:
     store = _store()
+    if _left_closed_tunnel(store) is not None:
+        return
     profile = _joined(store)
     if not yes and not typer.confirm(f"Delete the team {profile.team_name} for everyone?"):
         raise typer.Exit(1)
@@ -182,7 +201,9 @@ def disband(yes: Annotated[bool, typer.Option("--yes", "-y", help="Do not ask.")
 
 @team_app.command()
 def status() -> None:
-    profile = _store().load()
+    store = _store()
+    _left_closed_tunnel(store)
+    profile = store.load()
     if profile is None:
         console.print("Not in a team.")
         return
