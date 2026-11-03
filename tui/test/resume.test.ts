@@ -18,6 +18,8 @@ beforeAll(() => {
     PLURAL_HOST_CMD: "uv run plural-host",
     PLURAL_DATA_DIR: join(directory, "data"),
     PLURAL_PROVIDER: "fake",
+    // A relay nothing answers on: a host that opened a room on one would make these tests wait.
+    PLURAL_RELAY_URL: "ws://127.0.0.1:9",
   })) {
     saved[name] = process.env[name];
     process.env[name] = value;
@@ -60,7 +62,7 @@ async function connect(host: HostHandle): Promise<SessionClient> {
 }
 
 test("a session is found by the folder, by its title and by its start, and resumes in its own room", async () => {
-  const first = await startLocalHost(["--workspace", workspace, "--title", "billing work", "--name", "vlad"]);
+  const first = await startLocalHost(["--local", "--workspace", workspace, "--title", "billing work", "--name", "vlad"]);
   const client = await connect(first);
   await client.send({ type: "prompt.submit", text: "hello there", delivery: "now" });
   await until(() => client.projection.state.run === null && client.projection.state.transcript.length >= 2);
@@ -79,7 +81,7 @@ test("a session is found by the folder, by its title and by its start, and resum
   expect(resolveSession({ kind: "id", value: "billing" }, sessions, "/nowhere").room).toBe(first.room);
   expect(resolveSession({ kind: "id", value: first.room.slice(0, 8) }, sessions, "/nowhere").room).toBe(first.room);
 
-  const again = await startLocalHost(["--room", first.room, "--name", "vlad"]);
+  const again = await startLocalHost(["--local", "--room", first.room, "--name", "vlad"]);
   expect(again.room).toBe(first.room);
   const back = await connect(again);
   await until(() => back.projection.state.transcript.some((entry) => entry.kind === "prompt" && entry.text === "hello there"));
