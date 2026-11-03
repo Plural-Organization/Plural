@@ -39,10 +39,6 @@ class RequestDump:
         self._folder = folder
         self._count: int | None = None
 
-    @property
-    def folder(self) -> Path:
-        return self._folder
-
     def write(self, request: LlmRequest, purpose: str) -> Path:
         self._folder.mkdir(parents=True, exist_ok=True)
         if self._count is None:

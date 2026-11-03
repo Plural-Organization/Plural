@@ -2,7 +2,7 @@ import { createCliRenderer } from "@opentui/core";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { createRoot } from "@opentui/react";
 import { useReducer, useRef } from "react";
-import { rejoinLink, type JoinedRoom } from "./joined";
+import type { JoinedRoom } from "./joined";
 import { ago, inFolder, type SessionInfo } from "./sessions";
 import { truncate } from "./lib/wrap";
 import { theme } from "./theme";
@@ -143,8 +143,4 @@ export async function pickSession(sessions: SessionInfo[], joined: JoinedRoom[],
       />,
     );
   });
-}
-
-export function describePick(pick: Pick): string {
-  return pick.kind === "host" ? `${pick.info.title} (${pick.info.room})` : `joined room ${pick.room.room} (${rejoinLink(pick.room).split("?")[0]})`;
 }
