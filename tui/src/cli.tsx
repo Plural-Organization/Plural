@@ -23,7 +23,7 @@ import { pickSession } from "./picker";
 import { composePrompt, readStdin, runPrint } from "./print";
 import { startupCommands } from "./startup";
 import { runUpdate, skewNote, Updater } from "./update";
-import { fetchSessions, loadTeam, pickTeamSession, TeamWatcher, teamProof, type Team } from "./team";
+import { fetchSessions, leaveClosedTunnel, loadTeam, pickTeamSession, TeamWatcher, teamProof, type Team } from "./team";
 import { listSessions, resolveSession, type SessionInfo } from "./sessions";
 import { openTeam, type TeamHosting } from "./team-host";
 import { parseTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
@@ -265,6 +265,10 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   if (options.print) {
     await printOnce(options, name);
     return;
+  }
+  const left = hosting === null ? await leaveClosedTunnel() : null;
+  if (left !== null) {
+    process.stderr.write(`${left}\n`);
   }
   const settings = loadSettings();
   const alerts = new Alerts();

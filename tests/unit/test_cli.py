@@ -258,6 +258,25 @@ def test_the_relay_can_serve_only_plural_clients(monkeypatch: pytest.MonkeyPatch
     assert seen["web_origins"] == ["https://a.example", "https://b.example"]
 
 
+def test_a_relay_for_one_person_can_own_more_teams_per_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[object] = []
+
+    def fake_create_app(_limits: object = None, **options: object) -> object:
+        seen.append(options["team_limits"])
+        return object()
+
+    def fake_run(_app: object, **_options: object) -> None:
+        return None
+
+    monkeypatch.setattr(relay_app, "create_app", fake_create_app)
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    assert runner.invoke(app, ["relay"]).exit_code == 0
+    assert runner.invoke(app, ["relay", "--teams-per-owner", "1000"]).exit_code == 0
+    assert [getattr(limits, "max_teams_per_owner") for limits in seen] == [3, 1000]  # noqa: B009
+
+
 def test_relay_limits_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     seen: list[tuple[RelayLimits | None, int, Path | None]] = []
 

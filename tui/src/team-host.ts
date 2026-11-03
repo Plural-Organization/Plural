@@ -28,7 +28,8 @@ const TUNNEL_MS = 60_000;
 const POLL_MS = 100;
 
 export function relayArgs(port: number, teams: string): string[] {
-  return ["relay", "--teams", teams, "--port", String(port), "--proxy-hops", "1"];
+  // A relay for one person: the cap on teams per key guards a public relay and only gets in the way here.
+  return ["relay", "--teams", teams, "--port", String(port), "--proxy-hops", "1", "--teams-per-owner", "1000"];
 }
 
 export function createArgs(request: TeamHostRequest, relay: string): string[] {
@@ -179,8 +180,15 @@ export async function openTeam(
     report(relayLost);
   });
   let tunnel: Tunnel | null = null;
+  let made = false;
   const stop = async (): Promise<void> => {
     process.removeListener("exit", reap);
+    if (made) {
+      // The team lives only as long as this relay and tunnel, so it ends with them: disbanding while they
+      // still answer removes it from the relay and from this machine's profile, so nothing is left that
+      // points at an address that is about to close.
+      await disband(deps.run(["team", "disband", "--yes"], ["ignore", "ignore", "ignore"]));
+    }
     await tunnel?.stop();
     await terminate(relay);
   };
@@ -192,13 +200,14 @@ export async function openTeam(
     step("waiting for the tunnel to answer…");
     await untilAnswering(deps, tunnel.url, () => relayLost);
     step("creating the team…");
-    const made = await created(deps.run(createArgs(request, tunnel.url), ["ignore", "pipe", "pipe"]));
+    const team = await created(deps.run(createArgs(request, tunnel.url), ["ignore", "pipe", "pipe"]));
+    made = true;
     return {
-      team: made.team,
+      team: team.team,
       relay: tunnel.url,
-      code: made.code,
-      minutes: made.minutes,
-      joinCommand: `plural team join ${made.code} --relay ${tunnel.url}`,
+      code: team.code,
+      minutes: team.minutes,
+      joinCommand: `plural team join ${team.code} --relay ${tunnel.url}`,
       onLost: (listener) => {
         listeners.push(listener);
         if (reported !== null) {
@@ -211,6 +220,22 @@ export async function openTeam(
     await stop();
     throw error;
   }
+}
+
+// Best effort and short: closing must not hang on a relay that is already gone.
+async function disband(child: ChildProcess): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const give = setTimeout(() => {
+      child.kill("SIGKILL");
+      resolve();
+    }, 5000);
+    const done = (): void => {
+      clearTimeout(give);
+      resolve();
+    };
+    child.once("exit", done);
+    child.once("error", done);
+  });
 }
 
 interface Created {

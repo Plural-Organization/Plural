@@ -21,6 +21,7 @@ from plural.host.config import DEFAULT_RELAY_URL, HostSettings
 from plural.host.team import TeamStore
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import AdmissionMode, PromptMode
+from plural.relay.directory import TeamLimits
 from plural.relay.limits import RelayLimits
 from plural.storage.jsonl_export import export_jsonl
 from plural.storage.sessions import delete_session, list_sessions, read_session, session_path
@@ -34,6 +35,7 @@ app.add_typer(team_app, name="team")
 app.command(name="ls")(ls)
 console = Console()
 DEFAULT_LIMITS = RelayLimits()
+DEFAULT_TEAM_LIMITS = TeamLimits()
 
 
 @app.command()
@@ -269,6 +271,14 @@ def relay(
             envvar="PLURAL_RELAY_TEAMS",
         ),
     ] = None,
+    teams_per_owner: Annotated[
+        int,
+        typer.Option(
+            min=1,
+            help="Teams one key may own. A relay run for one person can raise it.",
+            envvar="PLURAL_RELAY_TEAMS_PER_OWNER",
+        ),
+    ] = DEFAULT_TEAM_LIMITS.max_teams_per_owner,
     clients_only: Annotated[
         bool,
         typer.Option(
@@ -300,6 +310,7 @@ def relay(
             limits,
             proxy_hops=proxy_hops,
             teams=teams,
+            team_limits=TeamLimits(max_teams_per_owner=teams_per_owner),
             clients_only=clients_only,
             web_origins=[item.strip() for item in web_origins.split(",") if item.strip()],
         ),
