@@ -28,8 +28,11 @@ export type Parsed =
   | { kind: "passthrough"; args: string[] }
   | { kind: "join"; link: string | null; displayName: string | null }
   | { kind: "team_host"; name: string; tunnel: string; member: string | null }
-  | { kind: "team_join"; args: string[] }
+  | { kind: "team_enter"; args: string[] }
   | { kind: "session"; options: SessionOptions };
+
+// A script or a help request wants the host command alone, not a session after it.
+const SCRIPT_FLAGS = new Set(["--json", "--help", "-h"]);
 
 const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm", "team", "ls"]);
 
@@ -115,7 +118,8 @@ export function parseArgs(input: string[]): Parsed {
   if (first === "--selftest") return { kind: "selftest" };
   if (first === "--help" || first === "-h") return { kind: "help" };
   if (first === "team" && rest[0] === "create" && rest.includes("--tunnel")) return teamHost(rest.slice(1));
-  if (first === "team" && rest[0] === "join") return { kind: "team_join", args: argv };
+  if (first === "team" && rest[0] === "join") return { kind: "team_enter", args: argv };
+  if (first === "team" && rest[0] === "create" && !rest.some((arg) => SCRIPT_FLAGS.has(arg))) return { kind: "team_enter", args: argv };
   if (first !== undefined && PASSTHROUGH.has(first)) return { kind: "passthrough", args: argv };
   if (first === "update") return update(rest);
   if (first === "join") return join(rest);

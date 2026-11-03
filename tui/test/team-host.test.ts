@@ -73,11 +73,12 @@ describe("plural team create --tunnel", () => {
     expect(parseArgs(["team", "create", "kbtu", "--tunnel=cloudflared"])).toMatchObject({ kind: "team_host", tunnel: "cloudflared" });
   });
 
-  test("without a tunnel the host creates the team itself", () => {
+  test("without a tunnel the host creates the team and the session opens after it", () => {
     expect(parseArgs(["team", "create", "kbtu", "--relay", "wss://r.example"])).toEqual({
-      kind: "passthrough",
+      kind: "team_enter",
       args: ["team", "create", "kbtu", "--relay", "wss://r.example"],
     });
+    expect(parseArgs(["team", "create", "kbtu", "--json"])).toMatchObject({ kind: "passthrough" });
   });
 
   test("a relay of your own, a missing name and a stray word are refused", () => {
