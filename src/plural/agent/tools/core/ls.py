@@ -6,7 +6,9 @@ from plural.protocol.models import ToolRisk
 
 
 class LsArgs(ToolArgs):
-    path: str = Field(default=".", description="Directory relative to the workspace root, or absolute outside it.")
+    path: str = Field(
+        default=".", description="Directory relative to the workspace root, or absolute outside it."
+    )
 
 
 class LsTool(TypedTool[LsArgs]):
