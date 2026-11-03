@@ -27,6 +27,7 @@ class ProcResult:
     exit_code: int
     output: str
     timed_out: bool = False
+    omitted_bytes: int = 0
 
 
 @dataclass(frozen=True, slots=True)
