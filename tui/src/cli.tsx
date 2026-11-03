@@ -209,6 +209,10 @@ async function printOnce(options: SessionOptions, name: string): Promise<void> {
   if (prompt === "") {
     fail("-p needs a prompt: plural -p \"your question\", or pipe text into it");
   }
+  // One question for one agent: nobody joins, so no room is opened on a relay unless one was named.
+  if (!options.hostArgs.some((flag) => ADDRESS_FLAGS.includes(flag))) {
+    options.hostArgs.push("--local");
+  }
   const saved = loadSettings();
   let commands;
   try {
