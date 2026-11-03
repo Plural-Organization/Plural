@@ -58,16 +58,3 @@ export function Compacting({ tokens }: { tokens: number }) {
     </box>
   );
 }
-
-export function Busy({ text }: { text: string }) {
-  const elapsed = useElapsed(true);
-  return (
-    <box paddingX={2} height={1} flexShrink={0}>
-      <text fg={theme.dim}>
-        <Spinner color={theme.info} />
-        <span fg={theme.info}> {text}…</span>
-        {elapsed > 0 ? ` ${elapsed}s` : ""}
-      </text>
-    </box>
-  );
-}

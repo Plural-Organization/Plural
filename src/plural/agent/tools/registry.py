@@ -86,10 +86,6 @@ class ToolRegistry:
         """Grows each time a deferred tool is loaded, so a run knows to declare it."""
         return self._revision
 
-    @property
-    def loaded(self) -> frozenset[str]:
-        return frozenset(self._loaded)
-
     def load(self, names: Iterable[str]) -> tuple[str, ...]:
         """Declare deferred tools from now on and return the ones that were not declared yet."""
         entries = self._entries()

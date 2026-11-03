@@ -6,8 +6,6 @@ from plural.agent.skills import SkillError, SkillLibrary, parse_package
 from plural.agent.tools.base import ToolArgs, ToolCtx, ToolError, ToolResult, ToolSpec, TypedTool
 from plural.protocol.models import SkillScope, ToolRisk
 
-MAX_LISTED_FILES = 50
-
 
 class SkillSearchArgs(ToolArgs):
     query: str = Field(min_length=1, max_length=100, description="What the skill should help with.")

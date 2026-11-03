@@ -551,5 +551,3 @@ function ReadyLine({ choice, apiKey, settings }: { choice: AgentChoice; apiKey: 
     </text>
   );
 }
-
-export { THEME_NAMES };

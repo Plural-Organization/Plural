@@ -23,9 +23,6 @@ class RuleSet(Model):
                 return rule.action
         return None
 
-    def extended(self, *rules: Rule) -> Self:
-        return self.model_copy(update={"rules": (*self.rules, *rules)})
-
     @classmethod
     def from_mapping(cls, spec: Mapping[str, Mapping[str, str]]) -> Self:
         rules = tuple(
