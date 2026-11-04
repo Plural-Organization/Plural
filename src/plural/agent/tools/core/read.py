@@ -14,7 +14,9 @@ from plural.protocol.models import ToolRisk
 
 
 class ReadArgs(ToolArgs):
-    path: str = Field(description="File path relative to the workspace root, or output:N.")
+    path: str = Field(
+        description="File path relative to the workspace root, absolute outside it, or output:N."
+    )
     offset: int = Field(default=0, ge=0, description="Zero-based first line.")
     limit: int = Field(default=MAX_LINES, ge=1, le=MAX_LINES, description="Maximum lines.")
 
