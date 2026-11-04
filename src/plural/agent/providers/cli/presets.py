@@ -2,6 +2,7 @@
 
 from typing import Final
 
+from plural.agent.providers.cli.agents import AGENT_CLIS
 from plural.agent.providers.preset import Preset
 
 PRESETS: Final[tuple[Preset, ...]] = (
@@ -35,5 +36,15 @@ PRESETS: Final[tuple[Preset, ...]] = (
         models=("gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.5"),
         hint="Streams replies from Codex CLI and keeps one session for this room",
         connection="oauth",
+    ),
+    *(
+        Preset(
+            id=cli.adapter,
+            label=cli.label,
+            adapter=cli.adapter,
+            hint=f"Uses the installed {cli.label} and its own sign-in ({cli.login})",
+            connection="oauth",
+        )
+        for cli in AGENT_CLIS.values()
     ),
 )

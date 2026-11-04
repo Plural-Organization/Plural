@@ -22,6 +22,7 @@ from plural.agent.providers.base import (
     ToolCallRequest,
     UsageReport,
 )
+from plural.agent.providers.cli.answer import TextFieldStream
 from plural.protocol.models import Usage
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
@@ -180,130 +181,6 @@ def _window(result: dict[str, object]) -> int | None:
     return max(windows, default=None)
 
 
-def _string_end(raw: str, start: int) -> int | None:
-    """Return the position after a complete JSON string, or None while it is partial."""
-    index = start + 1
-    while index < len(raw):
-        char = raw[index]
-        if char == '"':
-            return index + 1
-        if char == "\\":
-            if index + 1 >= len(raw):
-                return None
-            index += 2
-            if raw[index - 1] == "u":
-                if len(raw) < index + 4:
-                    return None
-                index += 4
-        else:
-            index += 1
-    return None
-
-
-def _value_end(raw: str, start: int) -> int | None:
-    if start >= len(raw):
-        return None
-    if raw[start] == '"':
-        return _string_end(raw, start)
-    depth = 0
-    index = start
-    while index < len(raw):
-        char = raw[index]
-        if char == '"':
-            end = _string_end(raw, index)
-            if end is None:
-                return None
-            index = end
-            continue
-        if char in "[{":
-            depth += 1
-        elif char in "]}":
-            if depth == 0:
-                return index
-            depth -= 1
-            if depth == 0:
-                return index + 1
-        elif char == "," and depth == 0:
-            return index
-        index += 1
-    return None
-
-
-def _text_value_start(raw: str) -> int | None:
-    """Find the top-level `text` string in the incremental structured output."""
-    index = 0
-    while index < len(raw) and raw[index].isspace():
-        index += 1
-    if index >= len(raw) or raw[index] != "{":
-        return None
-    index += 1
-    while index < len(raw):
-        while index < len(raw) and (raw[index].isspace() or raw[index] == ","):
-            index += 1
-        if index >= len(raw) or raw[index] == "}":
-            return None
-        if raw[index] != '"':
-            return None
-        key_start = index
-        key_end = _string_end(raw, index)
-        if key_end is None:
-            return None
-        key = json.loads(raw[key_start:key_end])
-        index = key_end
-        while index < len(raw) and raw[index].isspace():
-            index += 1
-        if index >= len(raw) or raw[index] != ":":
-            return None
-        index += 1
-        while index < len(raw) and raw[index].isspace():
-            index += 1
-        if key == "text":
-            return index + 1 if index < len(raw) and raw[index] == '"' else None
-        index = _value_end(raw, index)
-        if index is None:
-            return None
-    return None
-
-
-class _TextFieldStream:
-    def __init__(self) -> None:
-        self.raw = ""
-        self.start: int | None = None
-        self.emitted = ""
-
-    def feed(self, fragment: str) -> str:
-        self.raw += fragment
-        if self.start is None:
-            self.start = _text_value_start(self.raw)
-        if self.start is None:
-            return ""
-        end = self.start
-        while end < len(self.raw):
-            char = self.raw[end]
-            if char == '"':
-                break
-            if char == "\\":
-                if end + 1 >= len(self.raw):
-                    break
-                if self.raw[end + 1] == "u":
-                    if len(self.raw) < end + 6:
-                        break
-                    end += 6
-                else:
-                    end += 2
-            else:
-                end += 1
-        try:
-            decoded = json.loads(f'"{self.raw[self.start : end]}"')
-        except json.JSONDecodeError:
-            return ""
-        if not isinstance(decoded, str) or not decoded.startswith(self.emitted):
-            return ""
-        delta = decoded[len(self.emitted) :]
-        self.emitted = decoded
-        return delta
-
-
 class ClaudeCodeProvider:
     def __init__(
         self, *, model: str = DEFAULT_MODEL, workspace: Path, cli: str | None = None
@@ -372,7 +249,7 @@ class ClaudeCodeProvider:
         process.stdin.close()
         stderr_reader = asyncio.create_task(process.stderr.read())
         stopping = asyncio.create_task(cancel.wait())
-        text_stream = _TextFieldStream()
+        text_stream = TextFieldStream()
         streamed_plain_text = ""
         # Text written outside the structured answer, which usually repeats it.
         loose_text = ""

@@ -1,6 +1,6 @@
 import type { Role } from "@plural/client";
 import type { Keys } from "./credentials";
-import { presetOf, presets, type AgentChoice, type PresetId } from "./presets";
+import { isAgentCli, presetOf, presets, type AgentChoice, type PresetId } from "./presets";
 import type { Settings } from "./settings";
 import type { UpdateState } from "./update";
 import { relayProblem, type ShareMode } from "./share";
@@ -113,7 +113,7 @@ export function modelRows(state: ModelState): Row[] {
       enabled: true,
     },
   ];
-  const credentials = preset.needsKey || choice.preset === "custom" || choice.preset === "anthropic_oauth" || choice.preset === "claude_code" || choice.preset === "codex_cli";
+  const credentials = preset.needsKey || choice.preset === "custom" || choice.preset === "anthropic_oauth" || choice.preset === "claude_code" || choice.preset === "codex_cli" || isAgentCli(preset.provider);
   if (credentials) {
     rows.push(header("credentials", "Account"));
   }
@@ -147,6 +147,12 @@ export function modelRows(state: ModelState): Row[] {
     rows.push({
       id: "codex-cli-login", kind: "note", label: "Install: npm install -g @openai/codex",
       value: "", hint: "install on the host, then run codex login; Save checks both before switching", enabled: false,
+    });
+  }
+  if (isAgentCli(preset.provider)) {
+    rows.push({
+      id: "agent-cli-login", kind: "note", label: `Sign in: ${preset.hint.match(/\(([^)]*)\)$/)?.[1] ?? "with the CLI on the host"}`,
+      value: "", hint: "install it on the host and sign in once; leave the model empty for its default", enabled: false,
     });
   }
   if (preset.provider !== "fake") {
