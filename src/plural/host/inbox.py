@@ -180,12 +180,26 @@ InboxMessage = (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class _Queued:
+    message: InboxMessage
+    external: bool = False
+
+
 class Inbox:
-    def __init__(self) -> None:
-        self._queue: asyncio.Queue[InboxMessage] = asyncio.Queue()
+    def __init__(self, *, external_limit: int = 1024) -> None:
+        self._queue: asyncio.Queue[_Queued] = asyncio.Queue()
+        self._external = asyncio.BoundedSemaphore(external_limit)
 
     def put(self, message: InboxMessage) -> None:
-        self._queue.put_nowait(message)
+        self._queue.put_nowait(_Queued(message))
+
+    async def put_external(self, message: Incoming | Disconnected) -> None:
+        await self._external.acquire()
+        self._queue.put_nowait(_Queued(message, external=True))
 
     async def get(self) -> InboxMessage:
-        return await self._queue.get()
+        queued = await self._queue.get()
+        if queued.external:
+            self._external.release()
+        return queued.message

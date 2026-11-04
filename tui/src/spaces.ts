@@ -1,4 +1,4 @@
-import type { Conflict, SessionCard, SessionStatus, TeamView } from "./team";
+import type { Conflict, SessionCard, SessionStatus, TeamView } from "@plural/client";
 
 export type Phase = "idle" | "running" | "waiting" | "done";
 

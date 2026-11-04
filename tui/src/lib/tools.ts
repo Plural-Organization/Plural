@@ -1,6 +1,5 @@
 export {
   bodyLines,
-  bodyOf,
   diffStats,
   displayName,
   exitCode,
@@ -8,6 +7,5 @@ export {
   lastLine,
   metaOf,
   oneLine,
-  type ToolFacts,
   type ToolKind,
 } from "@plural/client";

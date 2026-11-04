@@ -18,6 +18,7 @@ import {
   stepMatch,
   status,
   type Command,
+  type Conflict,
   type ConnectionStatus,
   type PermissionMode,
   type PluginAsked,
@@ -48,7 +49,6 @@ import { contextRows, helpRows, pluginRows, policyRows, skillRows, usageRows, wh
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
 import { describeConflict, type SpaceRow, type Summary } from "./spaces";
-import type { Conflict } from "./team";
 import { explain } from "./failure";
 import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
 import type { AgentControl } from "./control";
@@ -1447,7 +1447,6 @@ export function App({
       : me?.role === "participant" && state.prompt_mode === "review"
         ? "Propose a prompt, the host approves it"
         : "Message the agent, / for commands";
-  const disabled = null;
   const showPanel = settings.panel && width >= MIN_WIDTH_FOR_PANEL;
 
   if (intro) {
@@ -1565,7 +1564,6 @@ export function App({
         ) : null}
         <Composer
           focused={active && focus === "composer" && !dialog && !inviteOpen && !shareOpen && extrasPrompt === null && setup === null}
-          disabled={disabled}
           placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
           remember={!asking?.secret}
           role={me?.role}
@@ -1573,7 +1571,7 @@ export function App({
           commands={suggested}
           seed={seed}
           label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
-          route={asking || editing || disabled ? () => null : (text) => routeOf(text, state, projection.meId)}
+          route={asking || editing ? () => null : (text) => routeOf(text, state, projection.meId)}
           delivery={delivery}
           onSubmit={submit}
           images={images.map((image) => image.name)}
@@ -1689,5 +1687,3 @@ export function App({
     </box>
   );
 }
-
-export { SIDEBAR_WIDTH };

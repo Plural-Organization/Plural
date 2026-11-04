@@ -1,0 +1,113 @@
+{
+  "identity": {
+    "seed_hex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "pkcs8_hex": "302e020100300506032b657004220420000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "public_key": "A6EHv_POEL4dcN0Y50vAmWfk1jCbpQ1fHdyGZBJVMbg",
+    "member_id": "m_56475aa75463474c"
+  },
+  "certificate": "eyJ0ZXN0IjoxfQ.c2ln",
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/teams/t_1/sessions",
+      "body_hex": "",
+      "timestamp": 1767225600,
+      "nonce": "0011223344556677",
+      "message": "GET\n/teams/t_1/sessions\n1767225600\n0011223344556677\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "signature": "SNVwQl-lzPfxqKLuKNwx15hWCrfntJUN335RMmohDAJxg933HZF4uaZcn1LQtDWahy3LHGQXOvzgZmdyZ4WqBA",
+      "authorization": "Plural cert=eyJ0ZXN0IjoxfQ.c2ln ts=1767225600 nonce=0011223344556677 sig=SNVwQl-lzPfxqKLuKNwx15hWCrfntJUN335RMmohDAJxg933HZF4uaZcn1LQtDWahy3LHGQXOvzgZmdyZ4WqBA"
+    },
+    {
+      "method": "POST",
+      "path": "/teams/t_1/invites",
+      "body_hex": "",
+      "timestamp": 1767225600,
+      "nonce": "0011223344556677",
+      "message": "POST\n/teams/t_1/invites\n1767225600\n0011223344556677\ne3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "signature": "YG-FksBLaOgLWGFCrh8BgPn2ijT7tzwhO6Hwc-pAPlHlo_5Kxd0Q5wn5V9Yf8e6POR78UCnRrZbMbbzArUgQBA",
+      "authorization": "Plural cert=eyJ0ZXN0IjoxfQ.c2ln ts=1767225600 nonce=0011223344556677 sig=YG-FksBLaOgLWGFCrh8BgPn2ijT7tzwhO6Hwc-pAPlHlo_5Kxd0Q5wn5V9Yf8e6POR78UCnRrZbMbbzArUgQBA"
+    },
+    {
+      "method": "post",
+      "path": "/teams/t_1/members",
+      "body_hex": "7b226e616d65223a22d090d0bbd0b8d18f222c22726f6c65223a226d656d626572227d",
+      "timestamp": 1767225600,
+      "nonce": "0011223344556677",
+      "message": "POST\n/teams/t_1/members\n1767225600\n0011223344556677\n95a0dd835dd23d54be2be1d2a6c667e3d549d1c24704783bfa569536f5b926f6",
+      "signature": "QNTOKifMHmYnGRaf9tzr0MsHR97UPSOvcyIv3aqRqBHByoSmfPzMtmcmXgjA2EySZvi65Zm88zqI4sLEvBfECQ",
+      "authorization": "Plural cert=eyJ0ZXN0IjoxfQ.c2ln ts=1767225600 nonce=0011223344556677 sig=QNTOKifMHmYnGRaf9tzr0MsHR97UPSOvcyIv3aqRqBHByoSmfPzMtmcmXgjA2EySZvi65Zm88zqI4sLEvBfECQ"
+    }
+  ],
+  "joins": [
+    {
+      "url": "wss://relay.example.com/r_abc",
+      "room": "r_abc",
+      "timestamp": 1767225600,
+      "nonce": "0011223344556677",
+      "message": "plural-team-join\nwss://relay.example.com/r_abc\nr_abc\n1767225600\n0011223344556677",
+      "proof": {
+        "certificate": "eyJ0ZXN0IjoxfQ.c2ln",
+        "url": "wss://relay.example.com/r_abc",
+        "ts": 1767225600,
+        "nonce": "0011223344556677",
+        "proof": "18ZgusNtXP_mmRIZSLyYqM3nS63o2qhFzEUAJUvsw26LFXAE8wL-OeTa6FEj5_m8ahA-G_WKMvD2eQ04xxERAg"
+      }
+    },
+    {
+      "url": "wss://127.0.0.1:8787/r_x?token=1",
+      "room": "r_x",
+      "timestamp": 1767225600,
+      "nonce": "0011223344556677",
+      "message": "plural-team-join\nwss://127.0.0.1:8787/r_x?token=1\nr_x\n1767225600\n0011223344556677",
+      "proof": {
+        "certificate": "eyJ0ZXN0IjoxfQ.c2ln",
+        "url": "wss://127.0.0.1:8787/r_x?token=1",
+        "ts": 1767225600,
+        "nonce": "0011223344556677",
+        "proof": "o-rKQBCXK9cNBoYUQ6qPTM5PkYP6qAPQGf89uRQmNWcv5VEm7RL9Oud9FiSFagQ0kztanjgVC5A1FawWBgPOCg"
+      }
+    }
+  ],
+  "tunnel_hosts": [
+    {
+      "host": "abc.trycloudflare.com",
+      "tunnel": true
+    },
+    {
+      "host": "ABC.Ngrok-Free.App:443",
+      "tunnel": true
+    },
+    {
+      "host": "x.ngrok-free.dev",
+      "tunnel": true
+    },
+    {
+      "host": "x.ngrok.io",
+      "tunnel": true
+    },
+    {
+      "host": "x.loca.lt",
+      "tunnel": true
+    },
+    {
+      "host": "relay.example.com",
+      "tunnel": false
+    },
+    {
+      "host": "relay.example.com:8787",
+      "tunnel": false
+    },
+    {
+      "host": "mytrycloudflare.com",
+      "tunnel": false
+    },
+    {
+      "host": "trycloudflare.com",
+      "tunnel": false
+    },
+    {
+      "host": "127.0.0.1:8787",
+      "tunnel": false
+    }
+  ]
+}
