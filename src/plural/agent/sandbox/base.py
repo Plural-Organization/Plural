@@ -108,6 +108,8 @@ class Workspace:
         return path.as_posix()
 
     def is_denied(self, path: Path) -> bool:
+        # A walk lists links by their own name; judge the file they open, like `resolve` does.
+        path = path.resolve()
         if path.is_relative_to(self.root):
             return is_denied_path(path.relative_to(self.root))
         grant = self._grant_for(path)

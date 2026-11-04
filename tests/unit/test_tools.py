@@ -39,6 +39,16 @@ async def test_workspace_boundaries(ctx: ToolCtx) -> None:
         await run(ctx, "read", path=".env")
 
 
+async def test_search_skips_links_that_leave_the_workspace(ctx: ToolCtx, tmp_path: Path) -> None:
+    outside = tmp_path.parent / f"{tmp_path.name}-outside.txt"
+    outside.write_text("needle-secret\n")
+    (tmp_path / "notes.txt").symlink_to(outside)
+    (tmp_path / "own.txt").symlink_to(tmp_path / "src" / "app.py")
+    assert "needle-secret" not in await run(ctx, "grep", pattern="needle")
+    assert "notes.txt" not in await run(ctx, "glob", pattern="*.txt")
+    assert "own.txt" in await run(ctx, "glob", pattern="*.txt")
+
+
 async def test_edit_requires_unique_match(ctx: ToolCtx) -> None:
     diff = await run(ctx, "edit", path="src/app.py", old="value = 1", new="value = 2")
     assert "+value = 2" in diff
