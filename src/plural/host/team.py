@@ -8,10 +8,11 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from pydantic import ValidationError
 
+from plural.host.relay_http import ConnectFailed, urlopen
 from plural.protocol.models import Model
 from plural.protocol.relay import USER_AGENT
 from plural.protocol.team import (
@@ -27,7 +28,7 @@ from plural.protocol.team import (
 from plural.security.identity import CertVerifier, Identity, InvalidCertificate, authorization
 
 RENEW_BEFORE = timedelta(days=7)
-REQUEST_TIMEOUT_S = 15
+REQUEST_TIMEOUT_S = 8
 
 
 class TeamError(Exception):
@@ -145,12 +146,25 @@ def tunnel_closed(profile: TeamProfile) -> bool:
     return is_tunnel_host(host) and relay_state(profile.relay) == "dead"
 
 
+def _read(request: Request) -> bytes:
+    # A connection that never opened sent nothing, so one more try is safe for every method.
+    try:
+        with urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
+            return response.read()
+    except HTTPError:
+        raise
+    except URLError as error:
+        if not isinstance(error.reason, ConnectFailed):
+            raise
+    with urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
+        return response.read()
+
+
 def _call(method: str, url: str, body: bytes | None, headers: dict[str, str]) -> Any:
     # Cloudflare in front of a relay refuses urllib's default agent (error 1010).
     request = Request(url, data=body, method=method, headers={"user-agent": USER_AGENT, **headers})
     try:
-        with urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
-            payload = response.read()
+        payload = _read(request)
     except HTTPError as error:
         try:
             message = json.loads(error.read())["error"]
@@ -161,7 +175,10 @@ def _call(method: str, url: str, body: bytes | None, headers: dict[str, str]) ->
             message = f"the relay answered {error.code}"
         raise TeamError(str(message)) from error
     except (URLError, TimeoutError, OSError) as error:
-        raise TeamError(f"cannot reach the relay at {urlsplit(url).netloc}") from error
+        host = urlsplit(url).netloc
+        if isinstance(getattr(error, "reason", error), ConnectFailed | TimeoutError):
+            raise TeamError(f"the relay at {host} did not answer, try again in a moment") from error
+        raise TeamError(f"cannot reach the relay at {host}") from error
     return json.loads(payload) if payload else None
 
 

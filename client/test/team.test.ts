@@ -210,6 +210,38 @@ describe("the directory calls", () => {
     ]);
   });
 
+  test("a request that never reached the relay is made once more, signed again", async () => {
+    const nonces: string[] = [];
+    let calls = 0;
+    const flaky: TeamPlatform = {
+      ...platform(() => json({ sessions: [] })),
+      fetch: async (_url, init) => {
+        nonces.push((init.headers as Record<string, string>)["authorization"] ?? "");
+        calls += 1;
+        if (calls === 1) {
+          throw new TypeError("fetch failed");
+        }
+        return json({ sessions: [] });
+      },
+    };
+    expect(await fetchSessions(PROFILE, flaky)).toEqual([]);
+    expect(calls).toBe(2);
+    expect(new Set(nonces).size).toBe(2);
+  });
+
+  test("a relay that does not answer is named, and a timeout is not repeated", async () => {
+    let calls = 0;
+    const silent: TeamPlatform = {
+      ...platform(() => json({})),
+      fetch: async () => {
+        calls += 1;
+        throw new DOMException("timed out", "TimeoutError");
+      },
+    };
+    await expect(fetchSessions(PROFILE, silent)).rejects.toThrow("the relay at relay.example.com did not answer, try again in a moment");
+    expect(calls).toBe(1);
+  });
+
   test("a refusal carries the relay's reason", async () => {
     await expect(createTeamInvite(PROFILE, platform(() => json({ error: "only the owner can invite" }, 403)))).rejects.toThrow("only the owner");
     await expect(answer(json({}, 500), PROFILE.relay)).rejects.toThrow("the relay answered 500");
