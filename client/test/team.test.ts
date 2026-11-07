@@ -5,6 +5,7 @@ import {
   certificateWindow,
   closedTunnel,
   createTeamInvite,
+  disbandTeamOnRelay,
   fetchSessions,
   firstSession,
   httpBase,
@@ -14,6 +15,7 @@ import {
   pickTeamSession,
   reachable,
   renewCertificate,
+  RelayError,
   renewalDue,
   teamJoinCommand,
   teamJoinLink,
@@ -240,6 +242,18 @@ describe("the directory calls", () => {
     };
     await expect(fetchSessions(PROFILE, silent)).rejects.toThrow("the relay at relay.example.com did not answer, try again in a moment");
     expect(calls).toBe(1);
+  });
+
+  test("disbanding is a signed DELETE of the team, answered with no body", async () => {
+    const seen: Seen[] = [];
+    await disbandTeamOnRelay(PROFILE, platform(() => new Response(null, { status: 204 }), seen));
+    expect(`${seen[0]?.method} ${seen[0]?.url}`).toBe("DELETE https://relay.example.com/teams/t_1");
+  });
+
+  test("a refusal keeps the status the relay answered", async () => {
+    const refused = createTeamInvite(PROFILE, platform(() => json({ error: "you are not a member of this team" }, 401)));
+    await expect(refused).rejects.toBeInstanceOf(RelayError);
+    await expect(refused).rejects.toMatchObject({ status: 401 });
   });
 
   test("a refusal carries the relay's reason", async () => {

@@ -12,6 +12,8 @@ export interface ShellProps {
   watcher?: TeamWatcher;
   home: string;
   shareHost?: (folder: string) => Promise<void>;
+  // Leaves the team on the relay and forgets it here; without it the panel has no leave button.
+  leave?: (team: Team) => Promise<void>;
   connect: (card: SessionCard, team: Team) => Session;
 }
 
@@ -26,9 +28,12 @@ const TITLES: Record<Phase, string> = {
   idle: "plural",
 };
 
-export function Shell({ app, team, watcher, home, shareHost, connect }: ShellProps) {
+export function Shell({ app, team: joined, watcher, home, shareHost, leave: leaveOnRelay, connect }: ShellProps) {
   const renderer = useRenderer();
   const [settings, setSettings] = useState<Settings>(app.settings ?? DEFAULT_SETTINGS);
+  // Leaving takes effect at once: the panel, the visits and the host's share go, whatever the relay is doing.
+  const [left, setLeft] = useState(false);
+  const team = left ? null : joined;
   const [view, setView] = useState<TeamView | null>(watcher?.view ?? null);
   const [visits, setVisits] = useState<Open[]>([]);
   const [active, setActive] = useState(OWN);
@@ -36,7 +41,7 @@ export function Shell({ app, team, watcher, home, shareHost, connect }: ShellPro
 
   useEffect(() => watcher?.subscribe(setView), [watcher]);
 
-  const rows = useMemo(() => buildSpaces({ home, team: view, visits, active, summaries }), [home, view, visits, active, summaries]);
+  const rows = useMemo(() => buildSpaces({ home, team: left ? null : view, visits, active, summaries }), [home, left, view, visits, active, summaries]);
 
   const own = summaries[OWN]?.phase ?? "idle";
   useEffect(() => {
@@ -67,12 +72,26 @@ export function Shell({ app, team, watcher, home, shareHost, connect }: ShellPro
 
   const summary = (id: string) => (next: Summary) => setSummaries((current) => (current[id]?.phase === next.phase ? current : { ...current, [id]: next }));
 
-  const conflicts = useMemo(() => ownConflicts(view), [view]);
+  const conflicts = useMemo(() => ownConflicts(left ? null : view), [left, view]);
+  const leave =
+    team === null || leaveOnRelay === undefined
+      ? undefined
+      : {
+          owner: team.profile.member.role === "owner",
+          run: async (): Promise<void> => {
+            await leaveOnRelay(team);
+            watcher?.stop();
+            setVisits([]);
+            setActive(OWN);
+            setLeft(true);
+          },
+        };
   const shared = {
     spaces: rows,
-    teamName: view?.name ?? null,
-    teamError: view?.error ?? null,
+    teamName: team === null ? null : (view?.name ?? null),
+    teamError: team === null ? null : (view?.error ?? null),
     onOpenSpace: open,
+    onLeaveTeam: leave,
   };
   const inviteTeam =
     team !== null && team.profile.member.role === "owner"

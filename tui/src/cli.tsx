@@ -23,7 +23,7 @@ import { pickSession } from "./picker";
 import { composePrompt, readStdin, runPrint } from "./print";
 import { startupCommands } from "./startup";
 import { runUpdate, skewNote, Updater } from "./update";
-import { fetchSessions, leaveClosedTunnel, loadTeam, teamProof, type Team } from "./team";
+import { fetchSessions, leaveClosedTunnel, leaveTeam, loadTeam, teamProof, type Team } from "./team";
 import { listSessions, resolveSession, type SessionInfo } from "./sessions";
 import { openTeam, type TeamHosting } from "./team-host";
 import { parseTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
@@ -386,6 +386,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
       <Shell
         team={team}
         shareHost={team === null ? undefined : shareHost}
+        leave={team === null ? undefined : leaveTeam}
         watcher={watcher}
         home={basename(process.cwd())}
         connect={(card, member) =>
