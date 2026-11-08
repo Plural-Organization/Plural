@@ -1,0 +1,154 @@
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+from plural.agent.providers.base import (
+    LlmMessage,
+    LlmRequest,
+    ProviderError,
+    Stop,
+    TextDelta,
+    ToolCallReady,
+    ToolSchema,
+    UsageReport,
+)
+from plural.agent.providers.cli.agents import AGENT_CLIS
+from plural.agent.providers.cli.agents.base import Event
+from plural.agent.providers.cli.agents.copilot import CopilotCliProvider
+from plural.agent.providers.cli.agents.gemini import GeminiCliProvider
+from plural.agent.providers.cli.agents.opencode import OpencodeCliProvider
+from plural.agent.providers.cli.agents.qwen import QwenCliProvider
+from plural.agent.providers.cli.answer import parse_answer
+from plural.agent.providers.cli.presets import PRESETS
+
+ANSWER = json.dumps(
+    {"text": "Reading it.", "tool_calls": [{"name": "read", "args": {"path": "a"}}]}
+)
+REQUEST = LlmRequest(
+    system="Be careful.",
+    messages=(LlmMessage(role="user", content="Read a"),),
+    tools=(ToolSchema(name="read", description="Read a file", parameters={"type": "object"}),),
+)
+
+
+def fake_cli(tmp_path: Path, lines: list[dict[str, object]], *, exit_code: int = 0) -> Path:
+    """A CLI that records how it was called, then prints these JSON lines."""
+    script = tmp_path / "fake-cli"
+    record = tmp_path / "call.json"
+    script.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\n"
+        "stdin = '' if sys.stdin.isatty() else sys.stdin.read()\n"
+        f"json.dump({{'argv': sys.argv[1:], 'stdin': stdin, 'cwd': os.getcwd()}}, "
+        f"open({str(record)!r}, 'w'))\n"
+        f"for line in json.loads({json.dumps(lines)!r}):\n"
+        "    print(json.dumps(line), flush=True)\n"
+        f"sys.exit({exit_code})\n"
+    )
+    script.chmod(0o755)
+    return script
+
+
+async def run(provider: object, request: LlmRequest = REQUEST) -> list[object]:
+    assert hasattr(provider, "stream")
+    return [event async for event in provider.stream(request, cancel=asyncio.Event())]  # type: ignore[attr-defined]
+
+
+def test_every_agent_cli_has_a_preset() -> None:
+    adapters = {preset.adapter for preset in PRESETS}
+    assert set(AGENT_CLIS) <= adapters
+    for adapter, provider in AGENT_CLIS.items():
+        assert provider.adapter == adapter
+        assert provider.label
+        assert provider.binary
+        assert provider.login
+
+
+def test_an_answer_is_found_in_a_fence_or_after_a_sentence() -> None:
+    fenced = f"Sure.\n```json\n{ANSWER}\n```"
+    assert parse_answer(fenced) == ("Reading it.", [("read", {"path": "a"})])
+    assert parse_answer("no json here") is None
+    assert parse_answer('{"other": 1}') is None
+
+
+async def test_copilot_streams_the_text_and_returns_the_tool_call(tmp_path: Path) -> None:
+    half = len(ANSWER) // 2
+    cli = fake_cli(
+        tmp_path,
+        [
+            {"type": "assistant.message_delta", "data": {"deltaContent": ANSWER[:half]}},
+            {"type": "assistant.message_delta", "data": {"deltaContent": ANSWER[half:]}},
+            {"type": "assistant.message", "data": {"content": ANSWER}},
+            {"type": "result", "exitCode": 0},
+        ],
+    )
+    events = await run(CopilotCliProvider(model="gpt-5", cli=str(cli)))
+    assert "".join(e.text for e in events if isinstance(e, TextDelta)) == "Reading it."
+    calls = [e.call for e in events if isinstance(e, ToolCallReady)]
+    assert [(c.name, c.args) for c in calls] == [("read", {"path": "a"})]
+    assert events[-1] == Stop(reason="tool_use")
+    sent = json.loads((tmp_path / "call.json").read_text())
+    argv = sent["argv"]
+    assert argv[argv.index("--model") + 1] == "gpt-5"
+    assert argv[argv.index("--available-tools") + 1] == ""
+    assert "Be careful." in argv[argv.index("-p") + 1]
+    # The CLI's own tools see an empty folder, not the workspace.
+    assert not sent["cwd"].startswith(str(tmp_path))
+
+
+async def test_qwen_gets_the_request_on_stdin_and_reports_usage(tmp_path: Path) -> None:
+    cli = fake_cli(
+        tmp_path,
+        [
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": ANSWER}]}},
+            {
+                "type": "result",
+                "result": ANSWER,
+                "usage": {"input_tokens": 10, "cache_read_input_tokens": 90, "output_tokens": 5},
+            },
+        ],
+    )
+    events = await run(QwenCliProvider(cli=str(cli)))
+    usage = next(e for e in events if isinstance(e, UsageReport)).usage
+    assert usage.prompt_tokens == 100
+    sent = json.loads((tmp_path / "call.json").read_text())
+    assert "Read a" in sent["stdin"]
+    assert "--model" not in sent["argv"]
+    assert "-m" not in sent["argv"]
+
+
+async def test_a_plain_reply_without_json_is_the_text(tmp_path: Path) -> None:
+    cli = fake_cli(tmp_path, [{"type": "message", "role": "assistant", "content": "hello"}])
+    events = await run(GeminiCliProvider(cli=str(cli)))
+    assert "".join(e.text for e in events if isinstance(e, TextDelta)) == "hello"
+    assert events[-1] == Stop(reason="end_turn")
+
+
+async def test_a_cli_error_names_how_to_sign_in(tmp_path: Path) -> None:
+    cli = fake_cli(tmp_path, [{"type": "error", "error": {"name": "AuthError"}}], exit_code=1)
+    with pytest.raises(ProviderError, match="opencode auth login"):
+        await run(OpencodeCliProvider(cli=str(cli)))
+
+
+async def test_a_tool_plural_does_not_have_is_refused(tmp_path: Path) -> None:
+    answer = json.dumps({"text": "", "tool_calls": [{"name": "shell", "args": {}}]})
+    cli = fake_cli(tmp_path, [{"type": "assistant.message", "data": {"content": answer}}])
+    with pytest.raises(ProviderError, match="unavailable tool: shell"):
+        await run(CopilotCliProvider(cli=str(cli)))
+
+
+def test_opencode_counts_the_cached_prompt_apart() -> None:
+    provider = OpencodeCliProvider(cli=sys.executable)
+    event = provider.parse(
+        {
+            "type": "step_finish",
+            "part": {"tokens": {"input": 7, "output": 3, "cache": {"read": 40, "write": 2}}},
+        }
+    )
+    assert event is not None
+    assert event.usage is not None
+    assert (event.usage.input_tokens, event.usage.cache_read_tokens) == (7, 40)
+    assert provider.parse({"type": "text", "part": {"text": "hi"}}) == Event(message="hi")

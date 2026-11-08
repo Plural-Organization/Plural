@@ -45,7 +45,18 @@ def fast_settings(settings: HostSettings, environ: Mapping[str, str]) -> HostSet
         case "openai":
             model = _openai_fast(settings.base_url)
             return settings.model_copy(update={"model": model}) if model else None
-        case "claude_code" | "codex_cli":
+        case (
+            "claude_code"
+            | "codex_cli"
+            | "gemini_cli"
+            | "qwen_cli"
+            | "copilot_cli"
+            | "cursor_cli"
+            | "kimi_cli"
+            | "grok_cli"
+            | "amp_cli"
+            | "opencode_cli"
+        ):
             if environ.get("ANTHROPIC_API_KEY"):
                 return settings.model_copy(
                     update={

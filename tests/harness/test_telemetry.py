@@ -214,3 +214,16 @@ async def test_the_context_is_broken_down_and_scaled_to_the_provider_count(
     } <= kinds
     assert abs(sum(part.tokens for part in fill.parts) - fill.tokens) <= len(fill.parts)
     assert fill.hit == 0.75
+
+
+async def test_the_context_is_the_last_request_when_usage_sums_several(tmp_path: Path) -> None:
+    summed = Usage(input_tokens=4, cache_write_tokens=1977, cache_read_tokens=1849)
+    last = Usage(input_tokens=2, cache_write_tokens=128, cache_read_tokens=1849)
+    provider = ScriptedProvider([(UsageReport(usage=summed, last=last), *reply("done"))])
+    loop = make_loop(tmp_path, provider, StubGate())
+    await collect(loop, turn("go"))
+
+    fill = loop.fill()
+    assert 1979 <= fill.tokens < 2000
+    assert fill.hit == 0.934
+    assert loop.usage == summed

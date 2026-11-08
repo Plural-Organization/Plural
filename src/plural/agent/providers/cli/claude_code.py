@@ -22,6 +22,7 @@ from plural.agent.providers.base import (
     ToolCallRequest,
     UsageReport,
 )
+from plural.agent.providers.cli.answer import TextFieldStream
 from plural.protocol.models import Usage
 
 DEFAULT_MODEL = "claude-sonnet-5-5"
@@ -55,11 +56,15 @@ def _schema(request: LlmRequest) -> dict[str, Any]:
 
 INSTRUCTIONS = (
     "Continue this conversation. The available Plural tools and then each message of the "
-    "conversation follow as JSON blocks. When a tool is needed, return its exact name and JSON "
-    "arguments in tool_calls; Plural will request approval and run it. Do not claim a tool has "
-    "run before its result appears in a later message. Images a message lists follow it under "
-    "the same label. Otherwise answer in text."
+    "conversation follow as JSON blocks. You have no tools of your own: these tools cannot be "
+    "called directly, only through your structured answer. When a tool is needed, return its "
+    "exact name and JSON arguments in tool_calls; Plural will request approval and run it. Do "
+    "not claim a tool has run before its result appears in a later message. Images a message "
+    "lists follow it under the same label. Otherwise answer in text."
 )
+
+# Claude Code's tool for the answer that `--json-schema` asks for.
+ANSWER_TOOL = "StructuredOutput"
 
 
 def _input(request: LlmRequest) -> bytes:
@@ -102,6 +107,66 @@ def _input(request: LlmRequest) -> bytes:
     return (json.dumps(line, ensure_ascii=False) + "\n").encode()
 
 
+def _usage(data: object) -> Usage | None:
+    if not isinstance(data, dict):
+        return None
+    usage = cast("dict[str, object]", data)
+
+    def count(key: str) -> int:
+        value = usage.get(key)
+        return value if isinstance(value, int) else 0
+
+    return Usage(
+        input_tokens=count("input_tokens"),
+        output_tokens=count("output_tokens"),
+        cache_read_tokens=count("cache_read_input_tokens"),
+        cache_write_tokens=count("cache_creation_input_tokens"),
+    )
+
+
+def _last_usage(usage: object) -> Usage | None:
+    """The last request's usage, which a result's `iterations` lists after the others."""
+    if not isinstance(usage, dict):
+        return None
+    iterations = cast("dict[str, object]", usage).get("iterations")
+    if not isinstance(iterations, list) or not iterations:
+        return None
+    return _usage(cast("list[object]", iterations)[-1])
+
+
+def _native_calls(message: dict[str, object], names: set[str]) -> tuple[str, list[ToolCallRequest]]:
+    """The text and the Plural tools an assistant message called directly, as if its own.
+
+    Claude Code has none of them, so it would only answer "No such tool available"; the calls
+    are taken as if the model had returned them in its structured answer.
+    """
+    content = message.get("content")
+    text: list[str] = []
+    calls: list[ToolCallRequest] = []
+    for raw in cast("list[object]", content) if isinstance(content, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        block = cast("dict[str, object]", raw)
+        name = block.get("name")
+        args = block.get("input")
+        if block.get("type") == "text" and isinstance(block.get("text"), str):
+            text.append(cast("str", block["text"]))
+        elif (
+            block.get("type") == "tool_use"
+            and isinstance(name, str)
+            and name in names
+            and isinstance(args, dict)
+        ):
+            calls.append(
+                ToolCallRequest(
+                    id=f"toolu_{uuid4().hex}",
+                    name=name,
+                    args=cast("dict[str, JsonValue]", args),
+                )
+            )
+    return "".join(text).strip(), calls
+
+
 def _window(result: dict[str, object]) -> int | None:
     """The context window in a result's per-model usage, the largest if several models ran."""
     models = result.get("modelUsage")
@@ -114,130 +179,6 @@ def _window(result: dict[str, object]) -> int | None:
         and isinstance(window := cast("dict[str, object]", usage).get("contextWindow"), int)
     ]
     return max(windows, default=None)
-
-
-def _string_end(raw: str, start: int) -> int | None:
-    """Return the position after a complete JSON string, or None while it is partial."""
-    index = start + 1
-    while index < len(raw):
-        char = raw[index]
-        if char == '"':
-            return index + 1
-        if char == "\\":
-            if index + 1 >= len(raw):
-                return None
-            index += 2
-            if raw[index - 1] == "u":
-                if len(raw) < index + 4:
-                    return None
-                index += 4
-        else:
-            index += 1
-    return None
-
-
-def _value_end(raw: str, start: int) -> int | None:
-    if start >= len(raw):
-        return None
-    if raw[start] == '"':
-        return _string_end(raw, start)
-    depth = 0
-    index = start
-    while index < len(raw):
-        char = raw[index]
-        if char == '"':
-            end = _string_end(raw, index)
-            if end is None:
-                return None
-            index = end
-            continue
-        if char in "[{":
-            depth += 1
-        elif char in "]}":
-            if depth == 0:
-                return index
-            depth -= 1
-            if depth == 0:
-                return index + 1
-        elif char == "," and depth == 0:
-            return index
-        index += 1
-    return None
-
-
-def _text_value_start(raw: str) -> int | None:
-    """Find the top-level `text` string in the incremental structured output."""
-    index = 0
-    while index < len(raw) and raw[index].isspace():
-        index += 1
-    if index >= len(raw) or raw[index] != "{":
-        return None
-    index += 1
-    while index < len(raw):
-        while index < len(raw) and (raw[index].isspace() or raw[index] == ","):
-            index += 1
-        if index >= len(raw) or raw[index] == "}":
-            return None
-        if raw[index] != '"':
-            return None
-        key_start = index
-        key_end = _string_end(raw, index)
-        if key_end is None:
-            return None
-        key = json.loads(raw[key_start:key_end])
-        index = key_end
-        while index < len(raw) and raw[index].isspace():
-            index += 1
-        if index >= len(raw) or raw[index] != ":":
-            return None
-        index += 1
-        while index < len(raw) and raw[index].isspace():
-            index += 1
-        if key == "text":
-            return index + 1 if index < len(raw) and raw[index] == '"' else None
-        index = _value_end(raw, index)
-        if index is None:
-            return None
-    return None
-
-
-class _TextFieldStream:
-    def __init__(self) -> None:
-        self.raw = ""
-        self.start: int | None = None
-        self.emitted = ""
-
-    def feed(self, fragment: str) -> str:
-        self.raw += fragment
-        if self.start is None:
-            self.start = _text_value_start(self.raw)
-        if self.start is None:
-            return ""
-        end = self.start
-        while end < len(self.raw):
-            char = self.raw[end]
-            if char == '"':
-                break
-            if char == "\\":
-                if end + 1 >= len(self.raw):
-                    break
-                if self.raw[end + 1] == "u":
-                    if len(self.raw) < end + 6:
-                        break
-                    end += 6
-                else:
-                    end += 2
-            else:
-                end += 1
-        try:
-            decoded = json.loads(f'"{self.raw[self.start : end]}"')
-        except json.JSONDecodeError:
-            return ""
-        if not isinstance(decoded, str) or not decoded.startswith(self.emitted):
-            return ""
-        delta = decoded[len(self.emitted) :]
-        self.emitted = decoded
-        return delta
 
 
 class ClaudeCodeProvider:
@@ -308,11 +249,17 @@ class ClaudeCodeProvider:
         process.stdin.close()
         stderr_reader = asyncio.create_task(process.stderr.read())
         stopping = asyncio.create_task(cancel.wait())
-        text_stream = _TextFieldStream()
+        text_stream = TextFieldStream()
         streamed_plain_text = ""
         # Text written outside the structured answer, which usually repeats it.
         loose_text = ""
         result: dict[str, object] | None = None
+        names = {tool.name for tool in request.tools}
+        # The block being written; only the answer's own input carries its text.
+        block_tool: str | None = None
+        # Each request's usage by message id, while no result sums them.
+        requests: dict[str, Usage] = {}
+        native: tuple[str, list[ToolCallRequest]] | None = None
         try:
             while True:
                 line_reader = asyncio.create_task(process.stdout.readline())
@@ -336,6 +283,18 @@ class ClaudeCodeProvider:
                 if event.get("type") == "result":
                     result = event
                     continue
+                message = event.get("message")
+                if event.get("type") == "assistant" and isinstance(message, dict):
+                    message_data = cast("dict[str, object]", message)
+                    usage = _usage(message_data.get("usage"))
+                    if usage is not None:
+                        requests[str(message_data.get("id"))] = usage
+                    text, calls = _native_calls(message_data, names)
+                    if calls:
+                        # Claude Code would go on to answer that it has no such tool.
+                        native = (text, calls)
+                        process.kill()
+                        break
                 if event.get("type") != "stream_event":
                     yield ProviderActivity(source=str(event.get("type") or "event"))
                     continue
@@ -343,6 +302,10 @@ class ClaudeCodeProvider:
                 if not isinstance(inner, dict):
                     continue
                 inner_data = cast("dict[str, object]", inner)
+                block = inner_data.get("content_block")
+                if inner_data.get("type") == "content_block_start" and isinstance(block, dict):
+                    block_name = cast("dict[str, object]", block).get("name")
+                    block_tool = block_name if isinstance(block_name, str) else None
                 delta = inner_data.get("delta")
                 if not isinstance(delta, dict):
                     # Block starts and stops and message deltas: the model is still working.
@@ -357,7 +320,11 @@ class ClaudeCodeProvider:
                         yield ProviderActivity(source="text_delta")
                     case "input_json_delta":
                         partial = delta_data.get("partial_json")
-                        text = text_stream.feed(partial) if isinstance(partial, str) else ""
+                        text = (
+                            text_stream.feed(partial)
+                            if isinstance(partial, str) and block_tool in {None, ANSWER_TOOL}
+                            else ""
+                        )
                         if text:
                             streamed_plain_text += text
                             yield TextDelta(text=text)
@@ -374,6 +341,17 @@ class ClaudeCodeProvider:
                 await process.wait()
             await asyncio.gather(stderr_reader, stopping, return_exceptions=True)
         if cancel.is_set():
+            return
+        if native is not None:
+            text, calls = native
+            if text and not streamed_plain_text:
+                yield TextDelta(text=text)
+            for call in calls:
+                yield ToolCallReady(call=call)
+            if requests:
+                spent = list(requests.values())
+                yield UsageReport(usage=sum(spent[1:], spent[0]), last=spent[-1])
+            yield Stop(reason="tool_use")
             return
         stderr = stderr_reader.result()
         if result is None:
@@ -422,20 +400,9 @@ class ClaudeCodeProvider:
                 call=ToolCallRequest(id=f"toolu_{uuid4().hex}", name=name, args=tool_args)
             )
         self._window = _window(result) or self._window
-        usage = result.get("usage")
-        if isinstance(usage, dict):
-            usage_data = cast("dict[str, object]", usage)
-
-            def token_count(key: str) -> int:
-                value = usage_data.get(key)
-                return value if isinstance(value, int) else 0
-
-            yield UsageReport(
-                usage=Usage(
-                    input_tokens=token_count("input_tokens"),
-                    output_tokens=token_count("output_tokens"),
-                    cache_read_tokens=token_count("cache_read_input_tokens"),
-                    cache_write_tokens=token_count("cache_creation_input_tokens"),
-                )
-            )
+        # A result sums every request Claude Code made for this answer; the last one holds the
+        # conversation as it now stands.
+        usage = _usage(result.get("usage"))
+        if usage is not None:
+            yield UsageReport(usage=usage, last=_last_usage(result.get("usage")))
         yield Stop(reason="tool_use" if calls else "end_turn")

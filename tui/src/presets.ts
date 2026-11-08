@@ -4,10 +4,35 @@
  */
 export type PresetId = string;
 
+/** Agent CLIs the host runs through one provider that asks them for a JSON answer (agent_cli.py). */
+export const AGENT_CLIS = [
+  "gemini_cli",
+  "qwen_cli",
+  "copilot_cli",
+  "cursor_cli",
+  "kimi_cli",
+  "grok_cli",
+  "amp_cli",
+  "opencode_cli",
+] as const;
+
+export type ProviderKind =
+  | "fake"
+  | "anthropic"
+  | "anthropic_oauth"
+  | "claude_code"
+  | "codex_cli"
+  | "openai"
+  | (typeof AGENT_CLIS)[number];
+
+export function isAgentCli(provider: string): boolean {
+  return (AGENT_CLIS as readonly string[]).includes(provider);
+}
+
 export interface Preset {
   id: PresetId;
   label: string;
-  provider: "fake" | "anthropic" | "anthropic_oauth" | "claude_code" | "codex_cli" | "openai";
+  provider: ProviderKind;
   baseUrl: string;
   needsKey: boolean;
   editableUrl: boolean;
@@ -66,7 +91,7 @@ export const DEFAULT_CHOICE: AgentChoice = { preset: "demo", model: "", baseUrl:
 
 export interface AgentConfig {
   preset?: PresetId;
-  provider: "fake" | "anthropic" | "anthropic_oauth" | "claude_code" | "codex_cli" | "openai";
+  provider: ProviderKind;
   provider_name?: string;
   model: string | null;
   base_url: string | null;
