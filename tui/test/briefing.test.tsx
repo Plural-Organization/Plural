@@ -80,10 +80,10 @@ test("the briefing arrives as a card with where it is from and how fresh, and sa
   fake.emit({ type: "briefing.resolved", request_id: "b_1", participant_id: CLEO.id, decision: "granted", decided_by: "p_host" });
   await frame(setup, "being written");
   fake.emit({ type: "briefing.delivered", request_id: "b_1", to: CLEO.id, text: BRIEFING, as_of_seq: 42, update: false, error: null });
-  const card = await frame(setup, "briefing from vlad");
+  const card = await frame(setup, "answer from vlad");
   expect(card).toContain("as of event 42");
   expect(card).toContain("Goal: fix login. Done: added a retry in login.py.");
-  expect(card).toContain("/brief give hands it to your agent");
+  expect(card).toContain("give to my agent");
 });
 
 test("a refusal and a failure are told plainly", async () => {
@@ -126,7 +126,7 @@ test("giving a briefing outside a visit explains where it goes", async () => {
   const fake = room(CLEO);
   const setup = await mount(fake);
   fake.emit({ type: "briefing.delivered", request_id: "b_1", to: CLEO.id, text: BRIEFING, as_of_seq: 42, update: false, error: null });
-  await frame(setup, "briefing from vlad");
+  await frame(setup, "answer from vlad");
   await say(setup, "/brief give");
   await frame(setup, "goes to your own agent");
   await say(setup, "/brief give");
@@ -150,7 +150,7 @@ const alia: SessionCard = {
   updated_at: NOW,
 };
 
-test("from a teammate's session /brief give puts the briefing in my own agent's notes", async () => {
+test("from a teammate's session /ask give puts the answer in my own agent's notes", async () => {
   const own = room(HOST);
   const visit = new FakeSession();
   const me = { id: "p_team_vlad", name: "vlad", role: "viewer", connected: true } as const;
@@ -179,12 +179,113 @@ test("from a teammate's session /brief give puts the briefing in my own agent's 
   await frame(setup, "viewing alia");
 
   visit.emit({ type: "briefing.delivered", request_id: "b_1", to: me.id, text: BRIEFING, as_of_seq: 42, update: false, error: null });
-  await frame(setup, "briefing from alia");
-  await say(setup, "/brief give");
+  await frame(setup, "answer from alia");
+  await say(setup, "/ask give");
   await frame(setup, "is in your agent's notes");
   expect(own.commands).toEqual([{ type: "briefing.import", source: "alia", as_of_seq: 42, text: BRIEFING }]);
   expect(visit.commands).toEqual([]);
 
   own.emit({ type: "briefing.imported", item: { id: "bi_1", source: "alia", as_of_seq: 42, chars: BRIEFING.length, at: NOW }, text: BRIEFING });
+  watcher.stop();
+});
+
+// Asking a teammate without opening their session: the courier.
+function teammate(): FakeSession {
+  const visit = new FakeSession();
+  const me = { id: "p_team_vlad", name: "vlad", role: "viewer", connected: true } as const;
+  const them = { id: "p_host", name: "alia", role: "host", connected: true } as const;
+  visit.emit({ type: "session.welcome", room: "r_alia", token: "t", participant: me, base_policy: [], agent: "openai · gpt-5" });
+  visit.emit({ type: "session.snapshot", state: { ...visit.projection.state, participants: { [me.id]: me, [them.id]: them } }, streaming: {}, typing: [] });
+  return visit;
+}
+
+async function mountTeam(connect: () => Session, sessions: SessionCard[] = [alia]): Promise<{ setup: Setup; own: FakeSession; watcher: TeamWatcher }> {
+  const own = room(HOST);
+  const fetcher = (async () => new Response(JSON.stringify({ sessions }))) as unknown as typeof fetch;
+  const watcher = new TeamWatcher(team.profile, () => fetchSessions(team, fetcher), 60_000);
+  const setup = await testRender(
+    <Shell
+      team={team}
+      watcher={watcher}
+      home="api"
+      connect={connect}
+      app={{ client: own, room: "r_1", version: "0.2.5", guestLink: null, settings: { ...DEFAULT_SETTINGS, setupSeen: true }, onQuit: () => undefined }}
+    />,
+    { width: 120, height: 40 },
+  );
+  open.push(setup);
+  await watcher.refresh();
+  await frame(setup, "alia");
+  return { setup, own, watcher };
+}
+
+test("/ask @name asks a teammate's agent from my own session, and the answer comes to my chat", async () => {
+  const visit = teammate();
+  const { setup, own, watcher } = await mountTeam(() => visit);
+  await say(setup, "/ask @alia how does /orders work?");
+  await frame(setup, "asking @alia: how does /orders work?");
+  expect(visit.commands).toEqual([{ type: "briefing.request", focus: "how does /orders work?", update: false }]);
+  visit.emit({ type: "briefing.requested", request: { id: "b_1", participant_id: "p_team_vlad", name: "vlad", focus: null, update: false, requested_at: NOW } });
+  await frame(setup, "waiting for alia to agree");
+  visit.emit({ type: "briefing.resolved", request_id: "b_1", participant_id: "p_team_vlad", decision: "granted", decided_by: "p_host" });
+  await frame(setup, "alia agreed");
+  visit.emit({ type: "briefing.delivered", request_id: "b_1", to: "p_team_vlad", text: BRIEFING, as_of_seq: 42, update: false, error: null });
+  const card = await frame(setup, "answer from alia");
+  expect(card).toContain("Goal: fix login.");
+  expect(visit.isClosed).toBe(true);
+  expect(own.commands).toEqual([]);
+
+  await say(setup, "/ask give");
+  await frame(setup, "is in your agent's notes");
+  expect(own.commands).toEqual([{ type: "briefing.import", source: "alia", as_of_seq: 42, text: BRIEFING }]);
+  watcher.stop();
+});
+
+test("the card's own button gives the answer to my agent", async () => {
+  const visit = teammate();
+  const { setup, own, watcher } = await mountTeam(() => visit);
+  await say(setup, "/ask @alia --update");
+  expect(visit.commands).toEqual([{ type: "briefing.request", focus: null, update: true }]);
+  visit.emit({ type: "briefing.delivered", request_id: "b_1", to: "p_team_vlad", text: BRIEFING, as_of_seq: 7, update: true, error: null });
+  const card = await frame(setup, "give to my agent");
+  const lines = card.split("\n");
+  const row = lines.findIndex((line) => line.includes("give to my agent"));
+  await setup.mockMouse.click(lines[row]!.indexOf("give to my agent") + 1, row);
+  await frame(setup, "is in your agent's notes");
+  expect(own.commands).toEqual([{ type: "briefing.import", source: "alia", as_of_seq: 7, text: BRIEFING }]);
+  watcher.stop();
+});
+
+test("a teammate who is not sharing, or who says no, is told in plain words", async () => {
+  const visit = teammate();
+  const { setup, watcher } = await mountTeam(() => visit);
+  await say(setup, "/ask @bek what is up?");
+  await frame(setup, "bek is not sharing a session right now");
+  await say(setup, "/ask @alia hello");
+  visit.emit({ type: "briefing.resolved", request_id: "b_1", participant_id: "p_team_vlad", decision: "denied", decided_by: "p_host" });
+  await frame(setup, "alia said no to the briefing");
+  watcher.stop();
+});
+
+test("outside a team /ask says what it needs", async () => {
+  const fake = room(HOST);
+  const setup = await mount(fake);
+  await say(setup, "/ask @alia hello");
+  await frame(setup, "once you are in a team");
+  expect(fake.commands).toEqual([]);
+});
+
+test("typing @ after /ask lists the people who share a session, with where they are", async () => {
+  const visit = teammate();
+  const { setup, watcher } = await mountTeam(() => visit, [alia, { ...alia, owner: "bek", owner_id: "m_bek", room: "r_bek", branch: "feat/x", status: "running" }]);
+  await setup.mockInput.typeText("/ask @");
+  const hints = await frame(setup, "@bek");
+  expect(hints).toContain("@alia");
+  expect(hints).toContain("plural · feat/x · running");
+  await setup.mockInput.typeText("b");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  await setup.renderOnce();
+  await setup.mockInput.pressTab();
+  await frame(setup, "❯ /ask @bek");
   watcher.stop();
 });

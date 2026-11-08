@@ -17,6 +17,7 @@ import {
   SlashError,
   stepMatch,
   status,
+  type Briefing,
   type Command,
   type Conflict,
   type ConnectionStatus,
@@ -24,7 +25,8 @@ import {
   type PluginAsked,
   type Session,
 } from "@plural/client";
-import { COMMANDS, pluginHints, skillHints } from "./commands";
+import { COMMANDS, pluginHints, skillHints, type AskTarget } from "./commands";
+import { parseAsk } from "./lib/ask";
 import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
@@ -51,7 +53,7 @@ import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
 import { describeConflict, type SpaceRow, type Summary } from "./spaces";
 import { explain } from "./failure";
-import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
+import { absorb, emptyFeed, lastReply, withBanner, withBriefing, withNotice, type Feed, type FeedItem, type Tone } from "./feed";
 import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
 import type { AgentChoice, PresetId } from "./presets";
@@ -95,6 +97,9 @@ export interface AppProps {
   onClose?: () => void;
   onSummary?: (summary: Summary) => void;
   onGiveBriefing?: (briefing: { source: string; as_of_seq: number; text: string }) => Promise<void>;
+  // Asks a teammate's agent without opening their session; `target` is `name` or `name:repo`.
+  onAsk?: (target: string, request: { focus: string | null; update: boolean }, progress: (text: string) => void) => Promise<Briefing>;
+  askTargets?: AskTarget[];
   conflicts?: Conflict[];
   splash?: boolean;
   onQuit: () => void;
@@ -148,6 +153,8 @@ export function App({
   onClose,
   onSummary,
   onGiveBriefing,
+  onAsk,
+  askTargets,
   conflicts = [],
   splash = false,
   onQuit,
@@ -678,6 +685,40 @@ export function App({
 
   const show = (title: string, rows: Row[], tone: "accent" | "warn" | "danger" = "accent"): void => setTray({ kind: "text", title, tone, rows });
   const warn = (title: string, text: string): void => show(title, [[{ text, fg: theme.warn }]], "warn");
+  const showBriefingSharing = (): void => {
+    const waiting = Object.values(state.briefing_requests);
+    show("asks", [
+      [{ text: `this session shares briefings: ${state.briefing_sharing}`, bold: true }, { text: "  (/ask share off|ask|team)", fg: theme.dim }],
+      [{ text: "ask a teammate's agent: /ask @name <question>", fg: theme.dim }],
+      ...waiting.map((ask): Row => [{ text: ask.name }, { text: ask.focus ? `  ${ask.focus}` : "", fg: theme.dim }]),
+    ]);
+  };
+  const askTeammate = (target: string, request: { focus: string | null; update: boolean }): void => {
+    if (!onAsk) {
+      warn("ask", "you can ask a teammate's agent once you are in a team: plural team join");
+      return;
+    }
+    notify("dim", `asking @${target}${request.focus ? `: ${request.focus}` : ""}`);
+    onAsk(target, request, (text) => notify("dim", text)).then(
+      (briefing) => commit(withBriefing(feedRef.current, briefing)),
+      (error: unknown) => notify("warn", error instanceof Error ? error.message : String(error)),
+    );
+  };
+  // From a teammate's session the answer goes to my own host; in my own session I am the host.
+  const giveBriefing = (item: Extract<FeedItem, { kind: "briefing" }>): void => {
+    const briefing = { source: item.from, as_of_seq: item.asOf, text: item.text };
+    if (onGiveBriefing) {
+      onGiveBriefing(briefing).then(
+        () => notify("ok", `${item.from}'s answer is in your agent's notes, it reads it at its next prompt. Click “you” to go back`),
+        (error: unknown) => notify("warn", error instanceof Error ? error.message : String(error)),
+      );
+    } else if (isHost) {
+      send({ type: "briefing.import", ...briefing });
+      notify("ok", `${item.from}'s answer is in your agent's notes, it reads it at its next prompt`);
+    } else {
+      warn("ask", "an answer goes to your own agent: ask for it from your own session, or from a teammate's");
+    }
+  };
 
   const install = (global: boolean): void => {
     const current = trayRef.current;
@@ -1116,34 +1157,30 @@ export function App({
         }
         return true;
       }
+      case "ask":
       case "brief": {
-        const [verb, ...more] = rest;
-        if (isHost) {
-          if (verb === "share" && ["off", "ask", "team"].includes(more[0] ?? "")) {
-            send({ type: "session.set_briefing_sharing", mode: more[0] as "off" | "ask" | "team" });
+        const intent = parseAsk(rest);
+        if (intent.kind === "share") {
+          if (!isHost) {
+            warn("ask", "only the host sets who may ask this session");
+          } else if (intent.mode !== null) {
+            send({ type: "session.set_briefing_sharing", mode: intent.mode });
           } else {
-            const waiting = Object.values(state.briefing_requests);
-            show("briefings", [
-              [{ text: `this session shares briefings: ${state.briefing_sharing}`, bold: true }, { text: "  (/brief share off|ask|team)", fg: theme.dim }],
-              ...waiting.map((ask): Row => [{ text: ask.name }, { text: ask.focus ? `  ${ask.focus}` : "", fg: theme.dim }]),
-            ]);
+            showBriefingSharing();
           }
-        } else if (verb === "give") {
+        } else if (intent.kind === "give") {
           const last = feedRef.current.items.filter((entry) => entry.kind === "briefing").at(-1);
           if (last === undefined || last.kind !== "briefing") {
-            warn("brief", "there is no briefing here yet, /brief asks for one");
-          } else if (!onGiveBriefing) {
-            warn("brief", "a briefing goes to your own agent, ask for it from a teammate's session");
+            warn("ask", "there is no answer here yet, /ask @name <question> asks for one");
           } else {
-            onGiveBriefing({ source: last.from, as_of_seq: last.asOf, text: last.text }).then(
-              () => notify("ok", `${last.from}'s briefing is in your agent's notes, it reads it at its next prompt. Click “you” to go back`),
-              (error: unknown) => notify("warn", error instanceof Error ? error.message : String(error)),
-            );
+            giveBriefing(last);
           }
+        } else if (intent.target !== null) {
+          askTeammate(intent.target, { focus: intent.focus, update: intent.update });
+        } else if (isHost) {
+          showBriefingSharing();
         } else {
-          const update = verb === "update";
-          const focus = (update ? more : rest).join(" ").trim();
-          send({ type: "briefing.request", focus: focus === "" ? null : focus, update });
+          send({ type: "briefing.request", focus: intent.focus, update: intent.update });
         }
         return true;
       }
@@ -1536,6 +1573,7 @@ export function App({
                   started={chatting}
                   onToggle={toggle}
                   onCopy={(text) => copy(text, "Copied", `${text.length} characters`)}
+                  onGive={giveBriefing}
                 />
               </box>
             );
@@ -1574,6 +1612,7 @@ export function App({
           role={me?.role}
           people={mentionable(state, projection.meId)}
           commands={suggested}
+          askTargets={askTargets}
           seed={seed}
           label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
           route={asking || editing ? () => null : (text) => routeOf(text, state, projection.meId)}

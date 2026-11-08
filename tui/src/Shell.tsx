@@ -1,7 +1,8 @@
 import { useRenderer } from "@opentui/react";
-import { teamJoinCommand, type Session, type SessionCard, type TeamView, type TeamWatcher } from "@plural/client";
+import { askTeammate, pickTeamSession, teamJoinCommand, type Session, type SessionCard, type TeamView, type TeamWatcher } from "@plural/client";
 import { useEffect, useMemo, useState } from "react";
 import { App, type AppProps } from "./App";
+import type { AskTarget } from "./commands";
 import { buildSpaces, OWN, ownConflicts, type Phase, type Summary, type Visit } from "./spaces";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { createTeamInvite, type Team } from "./team";
@@ -86,7 +87,24 @@ export function Shell({ app, team: joined, watcher, home, shareHost, leave: leav
             setLeft(true);
           },
         };
+  // Everyone else who shares a session; a name that has several says which one after a colon.
+  const askTargets = useMemo<AskTarget[]>(() => {
+    const others = team === null || left ? [] : (view?.sessions ?? []).filter((card) => card.owner_id !== team.profile.member.id);
+    return others.map((card) => ({
+      name: others.filter((other) => other.owner === card.owner).length > 1 ? `${card.owner}:${card.repo}` : card.owner,
+      detail: `${card.repo}${card.branch === null ? "" : ` · ${card.branch}`} · ${card.status}`,
+    }));
+  }, [team, left, view]);
+  const ask =
+    team === null
+      ? undefined
+      : async (target: string, request: { focus: string | null; update: boolean }, progress: (text: string) => void) => {
+          const card = pickTeamSession(view?.sessions ?? [], team.profile.member.id, target);
+          return askTeammate(connect(card, team), request, { from: card.owner, onProgress: progress });
+        };
   const shared = {
+    onAsk: ask,
+    askTargets,
     spaces: rows,
     teamName: team === null ? null : (view?.name ?? null),
     teamError: team === null ? null : (view?.error ?? null),

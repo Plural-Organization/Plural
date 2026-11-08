@@ -204,18 +204,21 @@ Only edits and writes by the agent count, not commands it runs in the shell, and
 Each person's agent has its own model and its own context, so one agent cannot just read the other's conversation. What it can have is a **briefing**: a short, structured account of a teammate's session, written by their agent for yours. It works between any two models, Codex on one side and Gemini on the other.
 
 ```
-(in alia's session, opened from the side panel or with plural join @alia)
-/brief                              # a briefing of the whole session
-/brief how was the login fixed?     # one that starts with the answer to your question
-/brief update                       # only what changed since the briefing you already have
-/brief give                         # put the latest one in MY agent's notes
+/ask @alia how was the login fixed?    # from your own session, no need to open hers
+/ask @alia                             # a briefing of her whole session
+/ask @alia --update                    # only what changed since the briefing you already have
+/ask @alia:api what is left?           # she has several sessions: say which
+/ask give                              # put the latest answer in MY agent's notes
+/ask share off|ask|team                # (host) who may ask this session
 ```
 
-How it goes: you ask, **alia's host agrees** (a card with `y` and `n`, unless she set `/brief share team` for anyone in the room or `/brief share off`), her agent writes it, and it shows up in her session as a card for you only. You read it. Nothing reaches your agent until you type `/brief give`, and then your agent sees it before its next prompt.
+Type `/ask @` and the people who share a session are listed, with their repository, branch and whether the agent is working. `/ask` without a name asks the session you are looking at, as `/brief` always did, and `/brief` still works as the same command.
 
-A briefing has two parts. The first is facts from alia's host, not from the model: the repository, the branch, the commit, how many files are uncommitted, and every file her agent changed this session with `+added −removed`. The second is the model's account: the goal, what was done and why, what was tried and dropped, the state, what is open, and exact names and commands. It is capped at about 450 words and 20,000 characters, secrets are redacted, and file contents are not pasted. `/brief update` sends the model what you already have and asks only for the difference.
+How it goes: your client joins her session for a moment as a viewer, you ask, **alia's host agrees** (a card with `y` and `n`, unless she set `/ask share team` for anyone in the room or `/ask share off`), her agent writes it, and the answer comes back as a card in your own chat with **give to my agent** and copy. You read it; her session sees nothing of what comes back. Nothing reaches your agent until you give it (the button or `/ask give`), and then your agent sees it before its next prompt. If she does not answer in 5 minutes, you are told.
 
-Your agent treats it as notes from a colleague that nobody checked, not as instructions. Because the text came from someone else's session, **once you have given a briefing to your agent, every run of that session asks you before it writes or runs anything**, even in auto mode, until you start a new session. The same briefing is not accepted twice, and it survives a restart. You wait a minute between requests, and one is open at a time.
+A briefing has two parts. The first is facts from alia's host, not from the model: the repository, the branch, the commit, how many files are uncommitted, and every file her agent changed this session with `+added −removed`. The second is the model's account: the goal, what was done and why, what was tried and dropped, the state, what is open, and exact names and commands. It is capped at about 450 words and 20,000 characters, secrets are redacted, and file contents are not pasted. `--update` sends the model what you already have and asks only for the difference.
+
+Your agent treats it as notes from a colleague that nobody checked, not as instructions. Because the text came from someone else's session, **once you have given an answer to your agent, every run of that session asks you before it writes or runs anything**, even in auto mode, until you start a new session. The same briefing is not accepted twice, and it survives a restart. You wait a minute between requests, and one is open at a time.
 
 ### Asking to write
 
