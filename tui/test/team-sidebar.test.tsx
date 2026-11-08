@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "bun:test";
 import { createPrivateKey } from "node:crypto";
 import { testRender } from "@opentui/react/test-utils";
-import type { Session } from "@plural/client";
+import { TeamWatcher, type Session, type SessionCard } from "@plural/client";
 import { Shell } from "../src/Shell";
 import { DEFAULT_SETTINGS } from "../src/settings";
-import { TeamWatcher, type SessionCard, type Team } from "../src/team";
+import { fetchSessions, type Team } from "../src/team";
 import { FakeSession, HOST } from "./support/fake-session";
 
 type Setup = Awaited<ReturnType<typeof testRender>>;
@@ -97,7 +97,7 @@ async function mount(sessions: SessionCard[], reachable = () => true): Promise<M
     }
     return new Response(JSON.stringify({ sessions }));
   }) as unknown as typeof fetch;
-  const watcher = new TeamWatcher(team, fetcher, 60_000);
+  const watcher = new TeamWatcher(team.profile, () => fetchSessions(team, fetcher), 60_000);
   const setup = await testRender(
     <Shell
       team={team}

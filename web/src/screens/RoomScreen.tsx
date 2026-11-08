@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { label, mentionable, status, type JoinLink, type ProposalView } from "@plural/client";
+import { label, mentionable, status, type JoinLink, type ProposalView, type SessionCard } from "@plural/client";
 import { Board, type Pointer } from "../components/Board";
 import { Canvas } from "../components/Canvas";
 import { Composer } from "../components/Composer";
@@ -23,7 +23,7 @@ import { useSubmit } from "../hooks/useSubmit";
 import { useToast } from "../hooks/useToast";
 import { useTyping } from "../hooks/useTyping";
 import type { TeamState } from "../hooks/useTeam";
-import type { SessionCard, Team } from "../lib/team";
+import type { Team } from "../lib/team";
 import type { Space } from "../App";
 import { activity } from "../lib/activity";
 import { canvasDocs } from "../lib/canvas";

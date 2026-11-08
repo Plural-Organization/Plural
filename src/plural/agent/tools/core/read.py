@@ -1,12 +1,22 @@
 from pydantic import Field
 
-from plural.agent.tools.base import ToolArgs, ToolCtx, ToolError, ToolResult, ToolSpec, TypedTool
+from plural.agent.tools.base import (
+    Reach,
+    ToolArgs,
+    ToolCtx,
+    ToolError,
+    ToolResult,
+    ToolSpec,
+    TypedTool,
+)
 from plural.agent.tools.truncation import MAX_LINES, OUTPUT_PREFIX, truncate_head
 from plural.protocol.models import ToolRisk
 
 
 class ReadArgs(ToolArgs):
-    path: str = Field(description="File path relative to the workspace root, or output:N.")
+    path: str = Field(
+        description="File path relative to the workspace root, absolute outside it, or output:N."
+    )
     offset: int = Field(default=0, ge=0, description="Zero-based first line.")
     limit: int = Field(default=MAX_LINES, ge=1, le=MAX_LINES, description="Maximum lines.")
 
@@ -22,6 +32,9 @@ class ReadTool(TypedTool[ReadArgs]):
 
     def subject(self, args: ReadArgs) -> str:
         return args.path
+
+    def reach(self, args: ReadArgs) -> Reach | None:
+        return None if args.path.startswith(OUTPUT_PREFIX) else Reach(args.path, write=False)
 
     async def run(self, args: ReadArgs, ctx: ToolCtx) -> ToolResult:
         if args.path.startswith(OUTPUT_PREFIX):

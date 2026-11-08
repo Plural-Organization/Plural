@@ -23,9 +23,6 @@ class RuleSet(Model):
                 return rule.action
         return None
 
-    def extended(self, *rules: Rule) -> Self:
-        return self.model_copy(update={"rules": (*self.rules, *rules)})
-
     @classmethod
     def from_mapping(cls, spec: Mapping[str, Mapping[str, str]]) -> Self:
         rules = tuple(
@@ -59,9 +56,15 @@ DEFAULT_RULES: Final = RuleSet.from_mapping(
         "multi_edit": {"*": "ask"},
         "bash": {
             "*": "ask",
-            "git status*": "allow",
-            "git diff*": "allow",
-            "ls*": "allow",
+            "git status": "allow",
+            "git status *": "allow",
+            "git diff": "allow",
+            "git diff *": "allow",
+            # git takes any unambiguous start of an option: these write a file or run a program.
+            "git diff *--o*": "ask",
+            "git diff *--ext*": "ask",
+            "ls": "allow",
+            "ls *": "allow",
             "rm -rf*": "deny",
         },
     }

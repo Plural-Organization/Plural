@@ -23,7 +23,6 @@ function Failure({ delivery }: { delivery: Extract<Delivery, { state: "failed" }
 
 interface ComposerProps {
   focused: boolean;
-  disabled: string | null;
   placeholder: string;
   role: Role | undefined;
   people?: Mentionable[];
@@ -59,7 +58,7 @@ const BINDINGS: KeyBinding[] = [
 ];
 
 export function Composer(props: ComposerProps) {
-  const { focused, disabled, placeholder, role, seed, label } = props;
+  const { focused, placeholder, role, seed, label } = props;
   const area = useRef<TextareaRenderable>(null);
   const [value, setValue] = useState("");
   const [choice, setChoice] = useState(0);
@@ -237,9 +236,9 @@ export function Composer(props: ComposerProps) {
 
   const route = props.route?.(value.trimStart()) ?? null;
   const routeColor = route === null ? theme.accent : route.blocked ? theme.warn : ROUTE_COLORS()[route.kind];
-  const color = disabled ? theme.line : focused ? routeColor : theme.dim;
+  const color = focused ? routeColor : theme.dim;
   const lines = value === "" ? 0 : value.split("\n").length;
-  const shown = disabled ?? (focused ? placeholder : `${placeholder}  ·  click or press tab to type`);
+  const shown = focused ? placeholder : `${placeholder}  ·  click or press tab to type`;
   const progress = props.delivery?.state === "sending" ? " · sending…" : props.delivery?.state === "sent" ? " · ✓ delivered" : "";
   const head = route !== null ? `→ ${route.label} · ${route.note}` : (label ?? "");
   const more = value === "" ? "" : `${lines > 1 ? ` · ${lines} lines` : ""} · ⇧↵ new line`;
@@ -282,7 +281,7 @@ export function Composer(props: ComposerProps) {
             flexGrow={1}
             minHeight={1}
             maxHeight={8}
-            focused={focused && !disabled}
+            focused={focused}
             placeholder={shown}
             placeholderColor={theme.dim}
             textColor={theme.text}

@@ -93,19 +93,21 @@ class RelayLink:
                         if link is None:
                             link = links[connection_id] = RelayConnection(connection_id, outbox)
                         try:
-                            inbox.put(Incoming(link, Envelope.model_validate_json(data)))
+                            await inbox.put_external(
+                                Incoming(link, Envelope.model_validate_json(data))
+                            )
                         except ValidationError:
                             continue
                     case RelayClosed(conn=connection_id):
                         closed = links.pop(connection_id, None)
                         if closed is not None:
-                            inbox.put(Disconnected(closed))
+                            await inbox.put_external(Disconnected(closed))
                     case RelayOpen():
                         pass
         finally:
             writer.cancel()
             for link in links.values():
-                inbox.put(Disconnected(link))
+                await inbox.put_external(Disconnected(link))
 
 
 async def _pump(socket: ClientConnection, outbox: asyncio.Queue[str]) -> None:
