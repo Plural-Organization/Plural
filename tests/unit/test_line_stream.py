@@ -1,5 +1,8 @@
 from pathlib import Path
 
+import pytest
+
+from plural.agent.sandbox import local
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.streaming import MAX_BATCH_LINES, MAX_STREAMED_CHARS, LineStream
 
@@ -48,6 +51,15 @@ def test_streaming_stops_after_the_cap_but_flush_is_safe() -> None:
     assert sum(len(chunk) for chunk in sent) == MAX_STREAMED_CHARS
 
 
+def test_a_line_without_a_newline_is_bounded() -> None:
+    sent: list[str] = []
+    stream = LineStream(sent.append, clock=Clock())
+    stream.feed("x" * (MAX_STREAMED_CHARS * 2))
+    stream.feed("\n")
+    stream.flush()
+    assert "".join(sent) == "x" * MAX_STREAMED_CHARS
+
+
 async def test_the_local_backend_streams_chunks_and_returns_everything(tmp_path: Path) -> None:
     chunks: list[str] = []
     result = await LocalBackend().run(
@@ -81,3 +93,17 @@ async def test_a_timeout_still_reports_a_timeout(tmp_path: Path) -> None:
         timeout=0.3,
     )
     assert result.timed_out
+
+
+async def test_the_local_backend_keeps_only_a_bounded_output_tail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(local, "MAX_CAPTURE_BYTES", 8)
+    result = await LocalBackend().run(
+        "printf '0123456789ab'",
+        cwd=tmp_path,
+        env={"PATH": "/usr/bin:/bin"},
+        timeout=10,
+    )
+    assert result.output == "456789ab"
+    assert result.omitted_bytes == 4

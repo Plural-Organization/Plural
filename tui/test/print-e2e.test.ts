@@ -18,6 +18,8 @@ beforeAll(() => {
     PLURAL_DATA_DIR: join(root, "data"),
     PLURAL_HOST_CMD: `uv run --project ${PROJECT} plural-host`,
     PLURAL_PROVIDER: "fake",
+    // A relay nothing answers on: if -p opened a room on a relay, these tests would wait for it.
+    PLURAL_RELAY_URL: "ws://127.0.0.1:9",
   };
   delete env["ANTHROPIC_API_KEY"];
   delete env["OPENAI_API_KEY"];

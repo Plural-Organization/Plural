@@ -32,6 +32,20 @@ def test_defaults() -> None:
     assert evaluate(policy, read_env, HOST).action is PolicyAction.DENY
 
 
+def test_read_only_commands_cannot_write_or_run_programs() -> None:
+    policy = Policy()
+    for command in ("git status -s", "git diff HEAD~1", "ls -la src", "ls"):
+        assert evaluate(policy, bash(command), HOST).action is PolicyAction.ALLOW, command
+    for command in (
+        "git diff --output=/tmp/x",
+        "git diff --outpu=/tmp/x",
+        "git diff --ext-diff",
+        "git diff-tree --output=/tmp/x HEAD",
+        "lsof -i",
+    ):
+        assert evaluate(policy, bash(command), HOST).action is PolicyAction.ASK, command
+
+
 def test_last_match_wins() -> None:
     rules = RuleSet.from_mapping({"bash": {"*": "deny", "make*": "allow"}})
     assert evaluate(Policy(rules=rules), bash("make test"), HOST).action is PolicyAction.ALLOW

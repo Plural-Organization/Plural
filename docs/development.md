@@ -16,6 +16,7 @@ The same checks CI runs:
 ```bash
 uv run ruff check . && uv run ruff format --check . && uv run pyright && uv run lint-imports
 uv run python scripts/gen_schema.py --check && uv run python scripts/gen_fixtures.py --check
+uv run python scripts/gen_team_vectors.py --check
 uv run pytest
 
 npm run typecheck --workspace client && npm test --workspace client
@@ -87,6 +88,8 @@ uv run python scripts/gen_fixtures.py
 ```
 
 The fixtures are produced by the Python reducer and replayed by the TypeScript tests, so the two implementations cannot drift apart unnoticed. See [`protocol.md`](protocol.md).
+
+The team signatures are checked the same way. `scripts/gen_team_vectors.py` writes `client/test/fixtures/team-vectors.json`: request and join messages, their ed25519 signatures from a fixed key, and the tunnel hosts, all made by the Python code. The Python, terminal and browser tests each reproduce those values exactly, so a change to what is signed fails all three until it is made in all three.
 
 ## Provider catalog
 

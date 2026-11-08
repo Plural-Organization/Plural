@@ -21,10 +21,6 @@ export function extras(): readonly ExtraStatus[] {
   return known;
 }
 
-export function missingExtras(): ExtraStatus[] {
-  return known.filter((extra) => !extra.installed);
-}
-
 /** The SDK a preset still needs, or null when it needs none or it is already installed. */
 export function missingFor(preset: Preset): ExtraStatus | null {
   if (!preset.extra) {

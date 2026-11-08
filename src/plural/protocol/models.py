@@ -96,6 +96,9 @@ class ApprovalDecision(StrEnum):
     ALWAYS = "always"
     REJECT = "reject"
     BLOCK = "block"
+    # Answers to a folder request only: open the folder for reading, or for reading and writing.
+    READ = "read"
+    WRITE = "write"
 
 
 class PolicyAction(StrEnum):
@@ -195,6 +198,14 @@ class QueuedPrompt(Model):
     delivery: Delivery
 
 
+class FolderAccess(Model):
+    """A request to reach a folder outside the workspace, put to the host before the call itself."""
+
+    folder: str
+    write: bool
+    broad: bool = False
+
+
 class ApprovalView(Model):
     id: str
     call: ToolCallView
@@ -202,6 +213,7 @@ class ApprovalView(Model):
     timeout_at: datetime
     suggested_patterns: tuple[str, ...] = ()
     warnings: tuple[str, ...] = ()
+    folder: FolderAccess | None = None
 
 
 class PolicyRuleView(Model):

@@ -1,10 +1,10 @@
 import { useRenderer } from "@opentui/react";
-import type { Session } from "@plural/client";
+import { teamJoinCommand, type Session, type SessionCard, type TeamView, type TeamWatcher } from "@plural/client";
 import { useEffect, useMemo, useState } from "react";
 import { App, type AppProps } from "./App";
 import { buildSpaces, OWN, ownConflicts, type Phase, type Summary, type Visit } from "./spaces";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
-import { createTeamInvite, teamJoinCommand, type SessionCard, type Team, type TeamView, type TeamWatcher } from "./team";
+import { createTeamInvite, type Team } from "./team";
 
 export interface ShellProps {
   app: AppProps;
@@ -76,7 +76,7 @@ export function Shell({ app, team, watcher, home, shareHost, connect }: ShellPro
   };
   const inviteTeam =
     team !== null && team.profile.member.role === "owner"
-      ? async (): Promise<string> => teamJoinCommand(team, (await createTeamInvite(team)).code)
+      ? async (): Promise<string> => teamJoinCommand(team.profile, (await createTeamInvite(team)).code)
       : undefined;
   const change = (next: Settings): void => {
     setSettings(next);

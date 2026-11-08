@@ -245,6 +245,17 @@ The host decides how much the agent may do without asking. `shift+tab` cycles th
 
 Deny rules hold in every mode, and a run that contains a participant's prompt still asks before edits and commands, even in auto mode. When a plan is ready the host picks how to start it: `a` in auto mode, `e` accepting edits, `y` asking before changes, or `n` to keep planning. A restarted host always comes back in the default mode.
 
+## Folders outside the session
+
+The agent's file tools (`read`, `ls`, `glob`, `grep`, `write`, `edit`, `multi_edit`) work inside the folder the session was started in. A path outside it is refused, unless the host opens that folder first.
+
+- When a run that contains a participant's prompt reaches for a folder outside the session, the host gets a red card before anything else: who asks, which folder, whether the agent wants to read or to change files. The host answers **read** (`r`), **read + write** (`w`) or **refuse** (`n`). Enter on the card refuses, so a stray key opens nothing.
+- It is asked every time. Nothing is remembered: the answer holds for that one call, and the next call for the same folder asks again. A folder opened for reading cannot be written, whatever the call asks for.
+- Only after the host opens the folder does the call itself go through the usual approval, as in the permission modes above.
+- The host's own prompts open folders without a question, since they are the host's own disk. The deny-list still holds everywhere (`.ssh`, `.aws`, `.gnupg`, `.plural`, `.env`, keys): a protected folder is never offered and never opened.
+- The filesystem root, the home folder or a folder that holds it is marked on the card as broad.
+- Shell commands are not covered. `bash` is not opened to other folders by this, it asks the host as before, and it is not sandboxed: a command can reach any path the host's user can. Treat a command that is approved as running with the host's full rights.
+
 ## Skills
 
 A skill is a folder with a `SKILL.md`: a name and a description up top, instructions below, and any files it refers to next to it. It is the same format Claude Code, Codex and the [skills.sh](https://skills.sh) catalog use, so skills from Vercel, Anthropic or any public GitHub repository work as they are.

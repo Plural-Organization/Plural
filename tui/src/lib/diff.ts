@@ -1,1 +1,1 @@
-export { gutterWidth, languageFor, parseDiff, type DiffKind, type DiffLine } from "@plural/client";
+export { gutterWidth, languageFor, parseDiff, type DiffLine } from "@plural/client";

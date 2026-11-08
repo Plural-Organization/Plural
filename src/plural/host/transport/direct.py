@@ -89,9 +89,9 @@ class DirectTransport:
                 except ValidationError:
                     log.warning("direct.malformed_envelope", connection=link.id)
                     continue
-                inbox.put(Incoming(link, envelope))
+                await inbox.put_external(Incoming(link, envelope))
         except ConnectionClosed:
             pass
         finally:
-            inbox.put(Disconnected(link))
+            await inbox.put_external(Disconnected(link))
             pump.cancel()

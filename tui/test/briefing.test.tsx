@@ -1,11 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
 import { createPrivateKey } from "node:crypto";
 import { testRender } from "@opentui/react/test-utils";
-import type { Session } from "@plural/client";
+import { TeamWatcher, type Session, type SessionCard } from "@plural/client";
 import { App } from "../src/App";
 import { Shell } from "../src/Shell";
 import { DEFAULT_SETTINGS } from "../src/settings";
-import { TeamWatcher, type SessionCard, type Team } from "../src/team";
+import { fetchSessions, type Team } from "../src/team";
 import { ALIA, FakeSession, HOST } from "./support/fake-session";
 
 type Setup = Awaited<ReturnType<typeof testRender>>;
@@ -158,7 +158,7 @@ test("from a teammate's session /brief give puts the briefing in my own agent's 
   visit.emit({ type: "session.welcome", room: "r_alia", token: "t", participant: me, base_policy: [], agent: "openai · gpt-5" });
   visit.emit({ type: "session.snapshot", state: { ...visit.projection.state, participants: { [me.id]: me, [them.id]: them } }, streaming: {}, typing: [] });
   const fetcher = (async () => new Response(JSON.stringify({ sessions: [alia] }))) as unknown as typeof fetch;
-  const watcher = new TeamWatcher(team, fetcher, 60_000);
+  const watcher = new TeamWatcher(team.profile, () => fetchSessions(team, fetcher), 60_000);
   const setup = await testRender(
     <Shell
       team={team}

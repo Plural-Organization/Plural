@@ -4,7 +4,7 @@ from typing import Final
 
 from pydantic import Field
 
-from plural.agent.tools.base import ToolArgs, ToolCtx, ToolResult, ToolSpec, TypedTool
+from plural.agent.tools.base import Reach, ToolArgs, ToolCtx, ToolResult, ToolSpec, TypedTool
 from plural.agent.tools.truncation import truncate_head
 from plural.protocol.models import ToolRisk
 
@@ -26,6 +26,9 @@ class GlobTool(TypedTool[GlobArgs]):
 
     def subject(self, args: GlobArgs) -> str:
         return args.pattern
+
+    def reach(self, args: GlobArgs) -> Reach | None:
+        return Reach(args.path, write=False)
 
     async def run(self, args: GlobArgs, ctx: ToolCtx) -> ToolResult:
         base = ctx.workspace.resolve(args.path)

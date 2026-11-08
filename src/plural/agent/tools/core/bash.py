@@ -46,7 +46,10 @@ class BashTool(TypedTool[BashArgs]):
             )
         finally:
             stream.flush()
-        body = truncate_tail(result.output, full=ctx.outputs)
+        body = truncate_tail(result.output, full=None if result.omitted_bytes else ctx.outputs)
+        if result.omitted_bytes:
+            notice = f"[output truncated: {result.omitted_bytes} bytes omitted]"
+            body = f"{notice}\n{body}" if body else notice
         if result.timed_out:
             notice = f"[timed out after {args.timeout_s:g}s]"
             return ToolResult(f"{body}\n{notice}" if body else notice, is_error=True)
