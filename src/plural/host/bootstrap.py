@@ -58,6 +58,8 @@ from plural.host.team_admission import TeamAdmission
 from plural.host.transport.base import HostTransport
 from plural.host.transport.direct import DirectTransport
 from plural.host.transport.relay_link import RelayLink
+from plural.importers import Imported, ImportNotFound, bring_in
+from plural.protocol.commands import BriefingImport
 from plural.protocol.models import HOST_PARTICIPANT_ID, Participant, Role
 from plural.security.keys import load_or_create_host_key
 from plural.security.secrets import Redactor
@@ -169,13 +171,27 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         workspace = await asyncio.to_thread(Workspace.at, settings.workspace)
     except FileNotFoundError as error:
         raise ConfigError(f"the workspace {settings.workspace} does not exist") from error
+    imported = await _foreign(settings)
     store = await SqliteEventStore.open(settings.state_dir / "sessions" / f"{room}.db")
     try:
-        return await _assemble(settings, provider, room, workspace, store)
+        return await _assemble(settings, provider, room, workspace, store, imported)
     except BaseException:
         # The store's thread would keep a host that failed to start from exiting.
         await store.close()
         raise
+
+
+async def _foreign(settings: HostSettings) -> BriefingImport | None:
+    """The session of another agent this one starts from, when --import asked for one."""
+    if settings.import_from is None:
+        return None
+    try:
+        found: Imported = await asyncio.to_thread(
+            bring_in, settings.import_from, settings.workspace
+        )
+    except ImportNotFound as error:
+        raise ConfigError(str(error)) from error
+    return BriefingImport(source=found.source, as_of_seq=found.as_of, text=found.text)
 
 
 async def _assemble(
@@ -184,6 +200,7 @@ async def _assemble(
     room: str,
     workspace: Workspace,
     store: SqliteEventStore,
+    imported: BriefingImport | None = None,
 ) -> Host:
     api_key = resolve_api_key(settings, os.environ)
     ids, clock = UlidGenerator(), SystemClock()
@@ -348,6 +365,7 @@ async def _assemble(
         briefing=briefing,
         ledger=ledger,
         team_sweep_s=settings.team_roster_ttl_s,
+        imported=imported,
     )
     desk.attach(actor.board)
     await actor.start()

@@ -39,6 +39,7 @@ usage
   plural update [--check]     install the latest version
   plural sessions [--json]    list your sessions
   plural rm <id>              delete a session
+  plural import claude[:id]   start a session from your latest Claude Code one in this folder
   plural team create <name> [--relay <url>]  create a team (on the Plural relay unless --relay) and open its rooms
   plural team create <name> --tunnel cloudflared|ngrok  create a team behind a tunnel and open a session in it
   plural team join <code> [--relay <url>]  join a team (the Plural relay unless --relay) and open its rooms

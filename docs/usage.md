@@ -71,6 +71,20 @@ plural -r <id> -p "and fix the first one" --permission-mode acceptEdits
 
 Nobody is there to approve an action, so one that needs approval is **refused**: it is named on stderr and listed in `denied`, and the agent goes on without it. Allow what a script may do with `--allowedTools "Bash(npm test)"`, or with `--permission-mode acceptEdits` (file edits) or `auto`. Deny rules always win, and the built-in protections cannot be switched off. The model is the one you saved in the settings; `--provider` and `--model` choose another for this run, and the key comes from `~/.plural/credentials.json` or the usual environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`…).
 
+## Continue a session from another agent
+
+Work that began in Claude Code can go on in Plural:
+
+```bash
+plural import claude              # the latest Claude Code session kept for this folder
+plural import claude:3f9a         # the one whose id starts with 3f9a
+plural import claude --workspace ~/app -n moved
+```
+
+A new session opens in that folder. The other conversation is put in your agent's notes: the newest turns whole and the older ones left out when they do not fit, with its tool calls and results cut down to one line each. Secrets are removed on the way in. The agent reads it as background from earlier work, not as instructions, and carries on from there; the first prompt you type is the continuation.
+
+Claude Code keeps its sessions per folder in `~/.claude/projects` (`CLAUDE_CONFIG_DIR` moves it), so run the command from the project's folder or pass `--workspace`. Codex is not supported yet.
+
 ## Share a session
 
 By default the session goes through the Plural relay (`relay.plrl.host`), so a link works for anyone you let in. To keep it to your computer, open `F2` → Session and choose *This machine* (or start with `--local`); *Same network* serves it on your network instead. [Sharing a session](self-hosting.md) explains the three ways and how to run a relay.

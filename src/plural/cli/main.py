@@ -55,6 +55,13 @@ def host(
     public_url: Annotated[str | None, typer.Option(help="Public ws(s) URL for links.")] = None,
     room: Annotated[str | None, typer.Option(help="Resume an existing room.")] = None,
     title: Annotated[str | None, typer.Option(help="Name of this session.")] = None,
+    import_from: Annotated[
+        str | None,
+        typer.Option(
+            "--import",
+            help="Start from a session of another agent: claude, or claude:<id start>.",
+        ),
+    ] = None,
     name: Annotated[str | None, typer.Option(help="Host display name.")] = None,
     prompts: Annotated[
         PromptMode | None,
@@ -87,6 +94,7 @@ def host(
         "public_url": public_url,
         "room": room,
         "title": title,
+        "import_from": import_from,
         "host_name": name,
         "prompt_mode": prompts,
         "admission": admission,

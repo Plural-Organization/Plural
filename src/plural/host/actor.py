@@ -4,6 +4,7 @@ import binascii
 import hashlib
 import json
 from collections.abc import Coroutine, Sequence
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import PurePath
@@ -301,7 +302,9 @@ class SessionActor:
         briefing: BriefingService | None = None,
         ledger: ChangeLedger | None = None,
         team_sweep_s: float = 30.0,
+        imported: BriefingImport | None = None,
     ) -> None:
+        self._imported = imported
         self._team_sweep_s = team_sweep_s
         self._briefing = briefing
         self._ledger = ledger
@@ -412,6 +415,9 @@ class SessionActor:
             if changed is not None:
                 await self._emit(changed, actor_id=self._host.id)
         await self._set_permission_mode(PermissionMode.DEFAULT, actor_id=self._host.id)
+        if self._imported is not None:
+            with suppress(Conflict):
+                await self._import_briefing(self._host, self._imported)
         if self._skills is not None:
             await self._skills.refresh()
             await self._sync_skills()
