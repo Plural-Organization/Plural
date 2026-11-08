@@ -401,6 +401,11 @@ function loadHistory(
   for (const entry of state.chat) {
     items.push(chatItem(entry, state, meId));
   }
+  // The agent's notes were filled before this client came in, so the feed would never say so.
+  for (const entry of state.briefings_imported) {
+    counter += 1;
+    items.unshift({ kind: "notice", id: `n${counter}`, tone: "ok", text: `${entry.source} is in the agent's notes (${entry.chars.toLocaleString("en")} characters)` });
+  }
   const approvals = Object.fromEntries(Object.values(state.approvals).map((approval) => [approval.id, approval.call]));
   return { ...feed, items, counter, approvals, history: true };
 }
