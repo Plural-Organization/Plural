@@ -1,6 +1,10 @@
 FROM python:3.12-slim
 COPY --from=ghcr.io/astral-sh/uv:0.9.11 /uv /bin/uv
-RUN useradd --system --create-home --uid 10001 plural
+# The base image lags behind Debian's security fixes by days; take them now.
+RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
+ && rm -rf /var/lib/apt/lists/* \
+ && useradd --system --create-home --uid 10001 plural
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH" PORT=8787 PLURAL_RELAY_BIND=0.0.0.0 PLURAL_RELAY_PROXY_HOPS=1
 COPY pyproject.toml uv.lock README.md ./
