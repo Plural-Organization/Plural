@@ -1,5 +1,6 @@
 FROM python:3.12-slim
 RUN apt-get update \
+ && apt-get upgrade -y --no-install-recommends \
  && apt-get install -y --no-install-recommends git openssh-client ca-certificates curl ripgrep \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --create-home --uid 10001 plural \
