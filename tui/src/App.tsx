@@ -43,6 +43,7 @@ import { SCOPES, TrayView, type Form, type FormStep, type McpWizard, type Row, t
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, Working } from "./components/Working";
 import { InviteDialog } from "./components/InviteDialog";
+import { LeaveDialog } from "./components/LeaveDialog";
 import { ShareDialog } from "./components/ShareDialog";
 import { candidateFolders } from "./folders";
 import { contextRows, helpRows, pluginRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
@@ -72,6 +73,8 @@ export interface AppProps {
   teamLink?: string | null;
   onInviteTeam?: () => Promise<string>;
   onShareHost?: (folder: string) => Promise<void>;
+  // Leaving the team (or deleting it, for its owner): what the button says and what it does once confirmed.
+  onLeaveTeam?: { owner: boolean; run: () => Promise<void> };
   settings?: Settings;
   onSettings?: (settings: Settings) => void;
   control?: AgentControl | null;
@@ -124,6 +127,7 @@ export function App({
   teamLink = null,
   onInviteTeam,
   onShareHost,
+  onLeaveTeam,
   settings: initialSettings,
   onSettings,
   control = null,
@@ -157,6 +161,7 @@ export function App({
   const [dialog, setDialog] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const [setup, setSetup] = useState<{ first: boolean; back: boolean } | null>(null);
   const [extrasPrompt, setExtrasPrompt] = useState<{ preselect: string | null; reason: string | null; back: boolean } | null>(null);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
@@ -1306,7 +1311,7 @@ export function App({
   };
 
   useKeyboard((key) => {
-    if (!active || dialog || inviteOpen || shareOpen || intro || extrasPrompt !== null || setup !== null) {
+    if (!active || dialog || inviteOpen || shareOpen || leaveOpen || intro || extrasPrompt !== null || setup !== null) {
       return;
     }
     if (key.ctrl && key.name === "w" && viewing !== null && onClose) {
@@ -1563,7 +1568,7 @@ export function App({
           <SearchBar query={query} count={hits.length} position={hitIndex} preview={matched} onQuery={search} onStep={step} onClose={closeSearch} />
         ) : null}
         <Composer
-          focused={active && focus === "composer" && !dialog && !inviteOpen && !shareOpen && extrasPrompt === null && setup === null}
+          focused={active && focus === "composer" && !dialog && !inviteOpen && !shareOpen && !leaveOpen && extrasPrompt === null && setup === null}
           placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
           remember={!asking?.secret}
           role={me?.role}
@@ -1683,7 +1688,10 @@ export function App({
           onClose={() => setShareOpen(false)}
         />
       ) : null}
-      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} onInvite={() => setInviteOpen(true)} onShare={onShareHost ? () => setShareOpen(true) : undefined} update={update} /> : null}
+      {leaveOpen && onLeaveTeam && teamName ? (
+        <LeaveDialog width={width} height={height} teamName={teamName} owner={onLeaveTeam.owner} onConfirm={onLeaveTeam.run} onClose={() => setLeaveOpen(false)} />
+      ) : null}
+      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} onInvite={() => setInviteOpen(true)} onShare={onShareHost ? () => setShareOpen(true) : undefined} onLeaveTeam={onLeaveTeam ? { label: onLeaveTeam.owner ? "disband team" : "leave team", press: () => setLeaveOpen(true) } : undefined} update={update} /> : null}
     </box>
   );
 }

@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { closedTunnel, type SessionCard } from "@plural/client";
-import { createTeamInvite, fetchSessions, leaveClosedTunnel, loadTeam, platformOf, relayState, teamProof, type Team } from "../src/team";
+import { createTeamInvite, fetchSessions, leaveClosedTunnel, leaveTeam, loadTeam, platformOf, relayState, teamProof, type Team } from "../src/team";
 
 const PEM = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f\n-----END PRIVATE KEY-----\n";
 
@@ -180,5 +180,52 @@ describe("a team on a tunnel", () => {
     await expect(fetchSessions(gone, fetcher)).rejects.toThrow(closedTunnel("gone.trycloudflare.com"));
     await expect(createTeamInvite(gone, fetcher)).rejects.toThrow("is closed");
     await expect(fetchSessions(team(), fetcher)).rejects.toThrow("the relay answered 530");
+  });
+});
+
+describe("leaving a team", () => {
+  const kept = (): string => {
+    const directory = mkdtempSync(join(tmpdir(), "plural-leave-"));
+    writeFileSync(join(directory, "team.json"), JSON.stringify(profile));
+    writeFileSync(join(directory, "identity.pem"), PEM);
+    return directory;
+  };
+  const relay = (outcome: number | "offline", seen: string[] = []) =>
+    (async (url: string, init: RequestInit) => {
+      seen.push(`${init.method} ${new URL(url).pathname}`);
+      if (outcome === "offline") {
+        throw new DOMException("timed out", "TimeoutError");
+      }
+      return outcome === 204 ? new Response(null, { status: 204 }) : new Response(JSON.stringify(outcome === 200 ? { id: "m_vlad" } : { error: "refused" }), { status: outcome });
+    }) as unknown as typeof fetch;
+  const member = (): Team => ({ ...team(), profile: { ...profile, member: { id: "m_alia", name: "alia", role: "member" } } });
+
+  test("a member leaves by removing themselves, an owner deletes the team, and the profile goes", async () => {
+    for (const [who, outcome, request] of [
+      [member(), 200, "DELETE /teams/t_1/members/m_alia"],
+      [team(), 204, "DELETE /teams/t_1"],
+    ] as const) {
+      const directory = kept();
+      const seen: string[] = [];
+      await leaveTeam(who, directory, relay(outcome, seen));
+      expect(seen).toEqual([request]);
+      expect(existsSync(join(directory, "team.json"))).toBe(false);
+    }
+  });
+
+  test("a relay that no longer knows this member leaves nothing to undo, so the profile goes", async () => {
+    for (const status of [401, 404]) {
+      const directory = kept();
+      await leaveTeam(member(), directory, relay(status));
+      expect(existsSync(join(directory, "team.json"))).toBe(false);
+    }
+  });
+
+  test("a relay that fails or does not answer keeps the profile, so leaving can be tried again", async () => {
+    for (const outcome of [500, 403, "offline"] as const) {
+      const directory = kept();
+      await expect(leaveTeam(member(), directory, relay(outcome))).rejects.toThrow();
+      expect(existsSync(join(directory, "team.json"))).toBe(true);
+    }
   });
 });

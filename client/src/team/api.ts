@@ -38,16 +38,30 @@ export async function teamProof(profile: TeamProfile, platform: TeamPlatform, ur
   return { certificate: profile.certificate, url, ts: timestamp, nonce, proof: await platform.sign(joinMessage(url, room, timestamp, nonce)) };
 }
 
+// The relay refused, with the status it answered: a caller may treat 401 or 404 as "already gone".
+export class RelayError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "RelayError";
+  }
+}
+
 export async function answer<T>(response: Response, relay: string): Promise<T> {
+  if (response.status === 204) {
+    return undefined as T;
+  }
   if (response.ok) {
     return (await response.json()) as T;
   }
   const detail = (await response.json().catch(() => null)) as { error?: string } | null;
   const host = new URL(httpBase(relay)).host;
   if (detail?.error === undefined && isTunnelHost(host) && TUNNEL_GONE.has(response.status)) {
-    throw new Error(closedTunnel(host));
+    throw new RelayError(closedTunnel(host), response.status);
   }
-  throw new Error(detail?.error ?? `the relay answered ${response.status}`);
+  throw new RelayError(detail?.error ?? `the relay answered ${response.status}`, response.status);
 }
 
 const isTimeout = (error: unknown): boolean => error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
@@ -84,4 +98,9 @@ export async function renewCertificate(profile: TeamProfile, platform: TeamPlatf
 
 export async function leaveTeamOnRelay(profile: TeamProfile, platform: TeamPlatform): Promise<void> {
   await signed(profile, platform, "DELETE", `/teams/${profile.team_id}/members/${profile.member.id}`);
+}
+
+// Owner only: deletes the team for everyone.
+export async function disbandTeamOnRelay(profile: TeamProfile, platform: TeamPlatform): Promise<void> {
+  await signed(profile, platform, "DELETE", `/teams/${profile.team_id}`);
 }
