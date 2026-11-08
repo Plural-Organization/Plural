@@ -11,6 +11,7 @@ from typer.testing import CliRunner
 from plural import __version__
 from plural.cli.main import app
 from plural.host import team
+from plural.host.relay_http import ConnectFailed
 from plural.host.team import TeamError, TeamProfile, TeamStore
 from plural.protocol.team import MemberView, TeamRole
 
@@ -40,6 +41,45 @@ def test_directory_requests_identify_plural_not_python_urllib(
 
     assert seen[0].get_header("User-agent") == f"plural/{__version__}"
     assert seen[0].get_header("Content-type") == "application/json"
+
+
+def test_a_connection_that_never_opened_is_tried_once_more(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[int] = []
+
+    def flaky(request: Request, **_: Any) -> _Response:
+        calls.append(1)
+        if len(calls) == 1:
+            raise URLError(ConnectFailed("no answer"))
+        return _Response(b'{"ok":true}')
+
+    monkeypatch.setattr(team, "urlopen", flaky)
+    assert team._call("GET", "https://relay.example/teams", None, {}) == {"ok": True}  # pyright: ignore[reportPrivateUsage]
+    assert len(calls) == 2
+
+
+def test_a_request_that_may_have_been_sent_is_not_repeated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[int] = []
+
+    def slow(request: Request, **_: Any) -> _Response:
+        calls.append(1)
+        raise URLError(TimeoutError("timed out"))
+
+    monkeypatch.setattr(team, "urlopen", slow)
+    with pytest.raises(TeamError, match="did not answer, try again in a moment"):
+        team._call("POST", "https://relay.example/teams", b"{}", {})  # pyright: ignore[reportPrivateUsage]
+    assert len(calls) == 1
+
+
+def test_two_failed_connections_say_the_relay_did_not_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _answer(monkeypatch, URLError(ConnectFailed("no answer")))
+    with pytest.raises(TeamError, match="did not answer, try again in a moment"):
+        team._call("GET", "https://relay.example/teams", None, {})  # pyright: ignore[reportPrivateUsage]
 
 
 def _profile(relay: str) -> TeamProfile:

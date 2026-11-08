@@ -210,7 +210,7 @@ test("an empty team and an unreachable relay say so", async () => {
   up = false;
   await watcher.refresh();
   const offline = await frame(setup, "team offline");
-  expect(offline).toContain("refused");
+  expect(offline).toContain("did not");
 });
 
 test("without a team the panel has no spaces", async () => {
