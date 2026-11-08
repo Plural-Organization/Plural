@@ -1,6 +1,14 @@
 from pydantic import Field
 
-from plural.agent.tools.base import ToolArgs, ToolCtx, ToolError, ToolResult, ToolSpec, TypedTool
+from plural.agent.tools.base import (
+    Reach,
+    ToolArgs,
+    ToolCtx,
+    ToolError,
+    ToolResult,
+    ToolSpec,
+    TypedTool,
+)
 from plural.agent.tools.diffs import unified_diff
 from plural.protocol.models import ToolRisk
 
@@ -31,7 +39,7 @@ def replace(text: str, edit: Replacement) -> str:
 
 
 async def apply(ctx: ToolCtx, raw_path: str, edits: tuple[Replacement, ...]) -> ToolResult:
-    path = ctx.workspace.resolve(raw_path)
+    path = ctx.workspace.resolve(raw_path, write=True)
     async with ctx.locks(path):
         data = await ctx.backend.read_file(path)
         ctx.stamps.check(path, data)
@@ -61,6 +69,9 @@ class EditTool(TypedTool[EditArgs]):
 
     def subject(self, args: EditArgs) -> str:
         return args.path
+
+    def reach(self, args: EditArgs) -> Reach | None:
+        return Reach(args.path, write=True)
 
     async def run(self, args: EditArgs, ctx: ToolCtx) -> ToolResult:
         return await apply(ctx, args.path, (args,))

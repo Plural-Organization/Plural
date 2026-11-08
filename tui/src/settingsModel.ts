@@ -364,10 +364,6 @@ export function nextPreset(current: AgentChoice["preset"], direction: 1 | -1): A
 
 export type ConnectionType = "oauth" | "api_key" | "local";
 
-export function connectionLabel(connection: ConnectionType): string {
-  return connection === "oauth" ? "OAuth / account" : connection === "api_key" ? "API key" : "Local / demo";
-}
-
 export function nextConnection(current: AgentChoice["preset"], direction: 1 | -1): AgentChoice["preset"] {
   const groups: ConnectionType[] = ["oauth", "api_key", "local"];
   const currentGroup = presetOf(current).connection;

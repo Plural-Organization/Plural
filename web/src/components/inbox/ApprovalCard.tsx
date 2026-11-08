@@ -3,13 +3,20 @@ import { cx } from "../../lib/cx";
 import { nameOf } from "./items";
 import styles from "./Inbox.module.css";
 
-type Decision = "once" | "always" | "reject" | "block";
+type Decision = "once" | "always" | "reject" | "block" | "read" | "write";
 
 const BUTTONS: { decision: Decision; key: string; label: string; tone?: string }[] = [
   { decision: "once", key: "y", label: "allow once", tone: "primary" },
   { decision: "always", key: "a", label: "for the session" },
   { decision: "reject", key: "n", label: "reject" },
   { decision: "block", key: "b", label: "block", tone: "danger" },
+];
+
+// A folder outside the session is answered with how far it opens, or not at all.
+const FOLDER_BUTTONS: { decision: Decision; key: string; label: string; tone?: string }[] = [
+  { decision: "read", key: "r", label: "read" },
+  { decision: "write", key: "w", label: "read + write", tone: "danger" },
+  { decision: "reject", key: "n", label: "refuse", tone: "primary" },
 ];
 
 function timeLeft(timeoutAt: string, now: number): string {
@@ -24,7 +31,51 @@ interface ApprovalCardProps {
   send: (command: Command) => void;
 }
 
+function FolderCard({ approval, state, now, send }: ApprovalCardProps) {
+  const folder = approval.folder;
+  if (!folder) {
+    return null;
+  }
+  const call = approval.call;
+  const who = nameOf(state, approval.provenance.initiator_id);
+  return (
+    <div className={cx(styles.card, styles.folder)} role="alertdialog" aria-label="folder outside the session">
+      <div className={styles.head}>
+        <span className={styles.folderTitle}>
+          ⚠ Folder outside the session: {who} asks the agent to {folder.write ? "CHANGE" : "READ"} files here
+        </span>
+        <span className="muted mono">{timeLeft(approval.timeout_at, now)}</span>
+      </div>
+      <pre className={cx(styles.subject, styles.folderPath)}>{folder.folder}</pre>
+      <p className={styles.why}>
+        for <b>{call.name}</b> {call.subject}
+      </p>
+      {folder.broad ? (
+        <p className={styles.warning} role="alert">
+          ⚠ This is your whole disk or your home folder, not a project.
+        </p>
+      ) : null}
+      <p className={styles.why}>Asked every time, nothing is remembered. “read” opens it for this one call only; “read + write” also lets the agent change files here.</p>
+      <div className={styles.actions}>
+        {FOLDER_BUTTONS.map((button) => (
+          <button
+            key={button.decision}
+            className={cx("button", button.tone)}
+            type="button"
+            onClick={() => send({ type: "approval.respond", approval_id: approval.id, decision: button.decision })}
+          >
+            <kbd>{button.key}</kbd> {button.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function ApprovalCard({ approval, state, now, send }: ApprovalCardProps) {
+  if (approval.folder) {
+    return <FolderCard approval={approval} state={state} now={now} send={send} />;
+  }
   const call = approval.call;
   const guest = approval.provenance.initiator_role !== "host";
   const extra = Object.entries(call.args).filter(([key]) => key !== "command" && key !== "path");

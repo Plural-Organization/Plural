@@ -142,7 +142,9 @@
         "once",
         "always",
         "reject",
-        "block"
+        "block",
+        "read",
+        "write"
       ],
       "type": "string"
     },

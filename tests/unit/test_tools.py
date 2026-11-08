@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from pydantic import JsonValue
 
+from plural.agent.sandbox import local
 from plural.agent.sandbox.base import PathDenied, PathOutsideWorkspace, Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import ToolArgs, ToolCtx, ToolError, args_schema
@@ -36,6 +37,16 @@ async def test_workspace_boundaries(ctx: ToolCtx) -> None:
         await run(ctx, "read", path="../outside.txt")
     with pytest.raises(PathDenied):
         await run(ctx, "read", path=".env")
+
+
+async def test_search_skips_links_that_leave_the_workspace(ctx: ToolCtx, tmp_path: Path) -> None:
+    outside = tmp_path.parent / f"{tmp_path.name}-outside.txt"
+    outside.write_text("needle-secret\n")
+    (tmp_path / "notes.txt").symlink_to(outside)
+    (tmp_path / "own.txt").symlink_to(tmp_path / "src" / "app.py")
+    assert "needle-secret" not in await run(ctx, "grep", pattern="needle")
+    assert "notes.txt" not in await run(ctx, "glob", pattern="*.txt")
+    assert "own.txt" in await run(ctx, "glob", pattern="*.txt")
 
 
 async def test_edit_requires_unique_match(ctx: ToolCtx) -> None:
@@ -121,6 +132,16 @@ async def test_long_bash_output_is_kept_whole_for_read(ctx: ToolCtx) -> None:
 
 async def test_short_bash_output_is_not_kept(ctx: ToolCtx) -> None:
     assert not (await run(ctx, "bash", command="echo hi")).startswith("[truncated")
+    with pytest.raises(ToolError, match="no longer kept"):
+        await run(ctx, "read", path="output:1")
+
+
+async def test_bash_reports_when_the_captured_output_is_truncated(
+    ctx: ToolCtx, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(local, "MAX_CAPTURE_BYTES", 8)
+    output = await run(ctx, "bash", command="printf '0123456789ab'")
+    assert output == "[output truncated: 4 bytes omitted]\n456789ab\n[exit 0]"
     with pytest.raises(ToolError, match="no longer kept"):
         await run(ctx, "read", path="output:1")
 

@@ -197,6 +197,18 @@ def test_a_host_stays_on_this_machine_when_asked_or_given_its_own_address(
     assert ported.relay_url == DEFAULT_RELAY_URL
 
 
+def test_local_overrides_a_relay_from_the_environment(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clean_address_environment(monkeypatch, tmp_path)
+    monkeypatch.setenv("PLURAL_RELAY_URL", "wss://relay.example.com")
+    assert host_settings(monkeypatch, ["--workspace", str(tmp_path)]).relay_url == (
+        "wss://relay.example.com"
+    )
+    local = host_settings(monkeypatch, ["--workspace", str(tmp_path), "--local"])
+    assert local.relay_url is None
+
+
 def test_the_environment_can_give_a_host_its_own_address(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:

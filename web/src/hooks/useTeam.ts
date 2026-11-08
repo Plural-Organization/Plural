@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { createTeamInvite, fetchSessions, joinTeam, leaveTeam, forgetTeam, loadTeam, renewIfDue, type SessionCard, type Team, type TeamInvite } from "../lib/team";
+import type { SessionCard, TeamInvite } from "@plural/client";
+import { createTeamInvite, fetchSessions, joinTeam, leaveTeam, forgetTeam, loadTeam, renewIfDue, type Team } from "../lib/team";
 
 // As in the terminal's side panel, the team's sessions are asked for every few seconds.
 const REFRESH_MS = 5000;

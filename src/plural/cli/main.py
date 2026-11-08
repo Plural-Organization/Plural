@@ -97,7 +97,9 @@ def host(
     if name is None and "PLURAL_HOST_NAME" not in os.environ:
         options["host_name"] = getpass.getuser()
     settings = HostSettings(**options)
-    if not local and _wants_relay(settings):
+    if local:
+        settings = settings.model_copy(update={"relay_url": None})
+    elif _wants_relay(settings):
         settings = settings.model_copy(update={"relay_url": _default_relay(settings)})
     from plural.host.providers import ConfigError
     from plural.host.team_presence import PresenceUnavailable

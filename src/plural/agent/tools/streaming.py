@@ -19,8 +19,12 @@ class LineStream:
         self._last = clock()
 
     def feed(self, text: str) -> None:
+        if self._streamed >= MAX_STREAMED_CHARS:
+            return
         self._partial += text
         *lines, self._partial = self._partial.split("\n")
+        remaining = MAX_STREAMED_CHARS - self._streamed
+        self._partial = self._partial[:remaining]
         self._ready.extend(f"{line}\n" for line in lines)
         if len(self._ready) >= MAX_BATCH_LINES or self._clock() - self._last >= MIN_INTERVAL_S:
             self.flush()

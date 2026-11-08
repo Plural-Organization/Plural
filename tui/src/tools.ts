@@ -15,18 +15,9 @@ export function setTools(list: readonly ToolStatus[]): void {
   known = [...list];
 }
 
-export function tools(): readonly ToolStatus[] {
-  return known;
-}
-
 export function toolFor(preset: Preset): ToolStatus | null {
   if (!preset.tool) {
     return null;
   }
   return known.find((tool) => tool.id === preset.tool) ?? null;
-}
-
-export function missingTool(preset: Preset): ToolStatus | null {
-  const tool = toolFor(preset);
-  return tool !== null && !tool.installed ? tool : null;
 }
