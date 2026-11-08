@@ -13,7 +13,7 @@ export const COMMANDS: CommandHint[] = [
   { name: "who", usage: "/who", description: "list participants" },
   { name: "team", usage: "/team <message>", description: "write to the room, the agent does not see it" },
   { name: "invite", usage: "/invite [link|once|viewer|revoke|open|approve]", description: "copy the room link, or a one-time invite, or change who may join", hostOnly: true },
-  { name: "brief", usage: "/brief [question] · /brief update · /brief give", description: "ask a teammate's agent for a briefing of their session, then hand it to yours (host: /brief share off|ask|team)" },
+  { name: "ask", usage: "/ask @name <question> · /ask give", description: "ask a teammate's agent about their session, then hand the answer to yours (host: /ask share off|ask|team)" },
   { name: "access", usage: "/access [note]", description: "ask the host for the right to write (host: allow|deny|revoke <name>)" },
   { name: "kick", usage: "/kick <name>", description: "remove someone from the session; a team member stays out", hostOnly: true },
   { name: "mode", usage: "/mode open|review", description: "who may prompt directly", hostOnly: true },
@@ -63,17 +63,35 @@ export function mentionHints(value: string, people: Mentionable[]): CommandHint[
   }));
 }
 
+/** A teammate's session `/ask` can reach: `name` is what follows the @, `detail` says where they are. */
+export interface AskTarget {
+  name: string;
+  detail: string;
+}
+
+export function askHints(value: string, targets: AskTarget[]): CommandHint[] | null {
+  const typing = /^(\/(?:ask|brief)\s+)@([^\s]*)$/i.exec(value);
+  if (typing === null) {
+    return null;
+  }
+  const prefix = (typing[2] ?? "").toLowerCase();
+  return targets
+    .filter((target) => target.name.toLowerCase().startsWith(prefix))
+    .map((target) => ({ name: target.name, usage: `@${target.name}`, description: target.detail, insert: `${typing[1] ?? ""}@${target.name} ` }));
+}
+
 export function suggestions(
   value: string,
   role: Role | undefined,
   people: Mentionable[] = [],
   plugins: CommandHint[] = [],
+  targets: AskTarget[] = [],
 ): CommandHint[] {
   if (value.startsWith("/") && !value.includes(" ") && !value.includes("\n")) {
     const prefix = value.slice(1).toLowerCase();
     return visibleCommands(role, plugins).filter((command) => command.name.startsWith(prefix));
   }
-  return mentionHints(value, people);
+  return askHints(value, targets) ?? mentionHints(value, people);
 }
 
 export function visibleSuggestionWindow(
