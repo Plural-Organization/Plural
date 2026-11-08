@@ -257,6 +257,64 @@ async def test_the_roster_is_asked_for_now_and_then_not_every_time(setup: Setup)
     assert setup.roster.calls == 2
 
 
+async def test_someone_who_just_joined_gets_in_before_the_roster_expires(setup: Setup) -> None:
+    alia = setup.member("alia")
+    await setup.admission.still_member(alia.member_id)
+    setup.clock.advance(seconds=5)
+    bek = setup.member("bek")
+    member = await setup.admission.admit(setup.proof(bek, setup.certificate(bek, "bek")), ROOM)
+    assert member == TeamMember(id=bek.member_id, name="bek")
+    assert setup.roster.calls == 2
+
+
+async def test_a_stranger_cannot_make_the_host_ask_for_the_roster_on_every_join(
+    setup: Setup,
+) -> None:
+    alia = setup.member("alia")
+    await setup.admission.still_member(alia.member_id)
+    setup.clock.advance(seconds=5)
+    gone = setup.member("gone", listed=False)
+    certificate = setup.certificate(gone, "gone")
+    for attempt in range(5):
+        await refused(
+            setup.admission.admit(
+                setup.proof(gone, certificate, nonce=f"nonce-{attempt:04}"), ROOM
+            ),
+            Unauthorized,
+            "no longer in the team",
+        )
+    assert setup.roster.calls == 2
+    setup.clock.advance(seconds=2)
+    await refused(
+        setup.admission.admit(setup.proof(gone, certificate, nonce="nonce-0009"), ROOM),
+        Unauthorized,
+        "no longer in the team",
+    )
+    assert setup.roster.calls == 3
+
+
+async def test_a_second_look_at_the_roster_that_fails_lets_nobody_in(setup: Setup) -> None:
+    alia = setup.member("alia")
+    await setup.admission.still_member(alia.member_id)
+    setup.clock.advance(seconds=5)
+    bek = setup.member("bek")
+    setup.roster.down = True
+    await refused(
+        setup.admission.admit(setup.proof(bek, setup.certificate(bek, "bek")), ROOM),
+        Forbidden,
+        "cannot check the team",
+    )
+
+
+async def test_someone_already_on_the_roster_costs_no_second_look(setup: Setup) -> None:
+    alia = setup.member("alia")
+    certificate = setup.certificate(alia, "alia")
+    await setup.admission.admit(setup.proof(alia, certificate, nonce="nonce-0001"), ROOM)
+    setup.clock.advance(seconds=5)
+    await setup.admission.admit(setup.proof(alia, certificate, nonce="nonce-0002"), ROOM)
+    assert setup.roster.calls == 1
+
+
 async def test_a_removal_is_noticed_once_the_roster_is_refreshed(setup: Setup) -> None:
     alia = setup.member("alia")
     assert await setup.admission.still_member(alia.member_id)
