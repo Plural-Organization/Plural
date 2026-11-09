@@ -1,5 +1,5 @@
 import { Button, Chip, Description, Header, Label, ListBox, Separator, type Selection } from "@heroui/react";
-import { Eye, Plus, UserPlus, Warning } from "@phosphor-icons/react";
+import { Eye, Plus, UserPlus, Warning, SidebarSimple } from "@phosphor-icons/react";
 import { useState } from "react";
 import { reachable, teamJoinLink, type SessionCard } from "@plural/client";
 import type { Space } from "../App";
@@ -7,6 +7,8 @@ import type { TeamState } from "../hooks/useTeam";
 import { copyText } from "../lib/clipboard";
 import { LogoMark } from "./LogoMark";
 import { PersonAvatar } from "./PersonAvatar";
+import { AgentLogo } from "./AgentLogo";
+import { agentMark } from "../lib/agents";
 
 const STATUS = { running: "Working", waiting: "Waiting for its host", idle: "Idle" } as const;
 
@@ -17,11 +19,12 @@ interface RailProps {
   onSwitch: (room: string) => void;
   onWatch: (card: SessionCard, url: string) => void;
   onAdd: () => void;
+  onHide: () => void;
 }
 
 // The left column: the team's live sessions and the rooms joined by link. Picking one opens it on the right, and
 // a room stays connected once opened, so moving back is instant.
-export function Rail({ team, spaces, active, onSwitch, onWatch, onAdd }: RailProps) {
+export function Rail({ team, spaces, active, onSwitch, onWatch, onAdd, onHide }: RailProps) {
   const [note, setNote] = useState<string | null>(null);
   const profile = team.team?.profile ?? null;
   const open = new Set(spaces.map((space) => space.link.room));
@@ -72,10 +75,13 @@ export function Rail({ team, spaces, active, onSwitch, onWatch, onAdd }: RailPro
   };
 
   return (
-    <aside className="rail flex h-full min-h-0 flex-col border-r border-border bg-surface" aria-label="Sessions">
+    <aside className="rail frame flex h-full min-h-0 flex-col" aria-label="Sessions">
       <div className="flex h-14 flex-none items-center gap-2.5 px-4">
         <LogoMark size={26} className="text-foreground" />
         <span className="font-display text-lg font-semibold tracking-[-0.03em]">plural</span>
+        <Button isIconOnly variant="ghost" size="sm" className="ml-auto" aria-label="Hide the sessions" onPress={onHide}>
+          <SidebarSimple size={18} />
+        </Button>
       </div>
       <Separator />
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
@@ -91,7 +97,14 @@ export function Rail({ team, spaces, active, onSwitch, onWatch, onAdd }: RailPro
               <ListBox aria-label={`${profile.team_name} sessions`} selectionMode="single" selectedKeys={selected} onSelectionChange={pick}>
                 {team.sessions.map((card) => (
                   <ListBox.Item key={card.room} id={card.room} textValue={card.owner}>
-                    <PersonAvatar seed={card.owner} />
+                    <span className="relative flex-none">
+                      <PersonAvatar seed={card.owner} />
+                      {agentMark(card.agent) ? (
+                        <span className="absolute -right-1 -bottom-1 grid size-[18px] place-items-center rounded-full border-2 border-surface bg-surface-secondary">
+                          <AgentLogo label={card.agent} size={10} />
+                        </span>
+                      ) : null}
+                    </span>
                     <div className="flex min-w-0 flex-1 flex-col">
                       <Label className="truncate">{card.owner}</Label>
                       <Description className="truncate">{card.title ?? `${card.repo}${card.branch ? ` on ${card.branch}` : ""}`}</Description>

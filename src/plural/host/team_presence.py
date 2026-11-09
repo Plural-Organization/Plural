@@ -87,6 +87,7 @@ def draft_of(
         endpoints=endpoints_of(settings, room),
         repo_id=repo.repo_id,
         touching=board.touching(now or datetime.now(UTC)) if board is not None else (),
+        agent=settings.agent_label()[:120],
     )
 
 

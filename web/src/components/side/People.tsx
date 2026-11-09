@@ -35,10 +35,12 @@ export function People({ projection, isHost, send, onInvite }: PeopleProps) {
                 </span>
                 {typing ? (
                   <span className={styles.typing}>typing…</span>
-                ) : (
-                  <Chip size="sm" variant="soft" color={person.role === "host" ? "accent" : "default"}>
-                    <Chip.Label><span className="cap">{person.role}</span></Chip.Label>
+                ) : person.role === "host" ? (
+                  <Chip size="sm" variant="soft" color="accent">
+                    <Chip.Label>Host</Chip.Label>
                   </Chip>
+                ) : (
+                  <span className={cx(styles.role, "cap")}>{person.role}</span>
                 )}
                 {isHost && person.role !== "host" ? (
                   <Dropdown>

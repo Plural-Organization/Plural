@@ -130,6 +130,22 @@ def test_status_and_viewers_come_from_the_state() -> None:
     assert status_of(state.model_copy(update={"join_requests": knocking})) is SessionStatus.WAITING
 
 
+def test_a_card_names_the_agent_the_session_runs(tmp_path: Path) -> None:
+    from plural.host.config import HostSettings
+    from plural.host.repo import RepoFacts
+    from plural.host.team_presence import draft_of
+
+    settings = HostSettings(
+        workspace=tmp_path,
+        data_dir=tmp_path / "data",
+        provider="codex_cli",
+        model="gpt-6.1-sol",
+        relay_url="wss://relay.example",
+    )
+    draft = draft_of(settings, "r_1", SessionState(), RepoFacts(name="app", branch="main"))
+    assert draft.agent == "Codex CLI · gpt-6.1-sol"
+
+
 def test_a_team_session_needs_a_team_and_an_address(tmp_path: Path) -> None:
     import pytest
 
