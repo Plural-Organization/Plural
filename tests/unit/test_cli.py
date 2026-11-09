@@ -96,13 +96,16 @@ def test_host_passes_the_prompt_mode_flag(
 
 
 def test_ready_line_is_one_json_object() -> None:
-    line = main.ready_line("r_1", "ws://h/r_1?invite=a", "ws://h/r_1?token=t")
+    line = main.ready_line(
+        "r_1", "ws://h/r_1?invite=a", "ws://h/r_1?token=t", "https://h/mcp/r_1/s"
+    )
     assert "\n" not in line
     assert json.loads(line) == {
         "type": "ready",
         "room": "r_1",
         "guest_link": "ws://h/r_1?invite=a",
         "host_link": "ws://h/r_1?token=t",
+        "import_url": "https://h/mcp/r_1/s",
         "version": __version__,
         "protocol": PROTOCOL_VERSION,
     }

@@ -80,3 +80,22 @@ async def test_a_websocket_needs_the_plural_agent_too() -> None:
             f"ws://{relay}/host/r_2", additional_headers={"origin": WEB}, user_agent_header=None
         ) as socket:
             assert socket.protocol.state.name == "OPEN"
+
+
+async def test_the_import_link_is_open_to_chat_services_but_the_rest_stays_gated() -> None:
+    def post(url: str) -> int:
+        request = urllib.request.Request(
+            url, data=b"{}", headers={"user-agent": "Anthropic-connector/1.0"}
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=5) as response:
+                return response.status
+        except urllib.error.HTTPError as error:
+            return error.code
+
+    async with gated_relay() as relay:
+        # Past the gate, and then no host in the room to answer.
+        assert await asyncio.to_thread(post, f"http://{relay}/mcp/r_x/token") == 404
+        assert (
+            await get(f"http://{relay}/metrics", **{"user-agent": "Anthropic-connector/1.0"}) == 403
+        )

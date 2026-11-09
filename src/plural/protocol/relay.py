@@ -11,6 +11,13 @@ from plural.protocol.models import Model
 USER_AGENT = f"plural/{__version__}"
 AGENT_PREFIXES = ("plural/", "plural-client")
 
+# A plain HTTPS request a relay hands to a room's host (the import link a chat service calls).
+# It travels as a relay frame whose connection id starts with CALL_PREFIX, and the host answers
+# with a frame for the same id whose data is a CallReply as JSON.
+CALL_PREFIX = "m_"
+MCP_PATH = "/mcp/"
+MAX_CALL_BYTES = 256 * 1024
+
 
 class RelayOpen(Model):
     type: Literal["relay.open"] = "relay.open"
@@ -28,6 +35,16 @@ class RelayFrame(Model):
 class RelayClosed(Model):
     type: Literal["relay.closed"] = "relay.closed"
     conn: str
+
+
+class CallRequest(Model):
+    token: str
+    body: str
+
+
+class CallReply(Model):
+    status: int
+    body: str = ""
 
 
 RelayMessage = Annotated[RelayOpen | RelayFrame | RelayClosed, Field(discriminator="type")]

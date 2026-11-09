@@ -85,6 +85,14 @@ A new session opens in that folder. The other conversation is put in your agent'
 
 Claude Code keeps its sessions per folder in `~/.claude/projects` (`CLAUDE_CONFIG_DIR` moves it), so run the command from the project's folder or pass `--workspace`. Codex is not supported yet.
 
+## Send a chat from Claude, ChatGPT or Grok
+
+A chat service can hand its own conversation to your session. In the session type `/import`: it shows an address. Add it as a custom connector (an MCP server) in the service, in Claude under Settings → Connectors, in ChatGPT under Settings → Connectors with developer mode, in Grok at grok.com/connectors. Then say to that chat "send the context of this conversation to Plural". It writes a hand-over note (the goal, what was decided, where things stand, the last messages) and sends it with its one tool, `add_data_to_session`.
+
+You are asked first, with a card that shows who sent it, how long it is and its beginning. Accepting puts it in your agent's notes as background, never as instructions, and removes secrets from it. Declining tells the chat so. Everyone in the room then works on top of it.
+
+The address stays the same when you resume the session, so a service is connected once. Anyone who has the address can ask to add something, so keep it private; nothing reaches the agent without your answer. It works through a relay (the default), not with `--local`. Whether you can add a custom connector, and whether it may write, depends on the service and your plan.
+
 ## Share a session
 
 By default the session goes through the Plural relay (`relay.plrl.host`), so a link works for anyone you let in. To keep it to your computer, open `F2` → Session and choose *This machine* (or start with `--local`); *Same network* serves it on your network instead. [Sharing a session](self-hosting.md) explains the three ways and how to run a relay.

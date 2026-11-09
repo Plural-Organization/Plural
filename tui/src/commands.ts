@@ -12,6 +12,7 @@ export const COMMANDS: CommandHint[] = [
   { name: "help", usage: "/help", description: "show commands and keys" },
   { name: "who", usage: "/who", description: "list participants" },
   { name: "team", usage: "/team <message>", description: "write to the room, the agent does not see it" },
+  { name: "import", usage: "/import", description: "the address that lets Claude, ChatGPT or Grok send a chat's context to this session", hostOnly: true },
   { name: "invite", usage: "/invite [link|once|viewer|revoke|open|approve]", description: "copy the room link, or a one-time invite, or change who may join", hostOnly: true },
   { name: "brief", usage: "/brief [question] · /brief update · /brief give", description: "ask a teammate's agent for a briefing of their session, then hand it to yours (host: /brief share off|ask|team)" },
   { name: "access", usage: "/access [note]", description: "ask the host for the right to write (host: allow|deny|revoke <name>)" },

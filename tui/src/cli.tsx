@@ -401,6 +401,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
           room: target.room,
           version: pkg.version,
           guestLink: target.guestLink,
+          importUrl: target.host?.importUrl ?? null,
           teamLink: hosting?.joinCommand ?? null,
           sharing: target.host === null || target.shared,
           settings,

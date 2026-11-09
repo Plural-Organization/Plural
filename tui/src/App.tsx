@@ -69,6 +69,7 @@ export interface AppProps {
   room: string;
   version: string;
   guestLink: string | null;
+  importUrl?: string | null;
   teamLink?: string | null;
   onInviteTeam?: () => Promise<string>;
   onShareHost?: (folder: string) => Promise<void>;
@@ -121,6 +122,7 @@ export function App({
   room,
   version,
   guestLink,
+  importUrl = null,
   teamLink = null,
   onInviteTeam,
   onShareHost,
@@ -1094,6 +1096,20 @@ export function App({
             break;
           default:
             warn("invite", "usage: /invite [link | once | viewer | revoke | open | approve]");
+        }
+        return true;
+      case "import":
+        if (!isHost) {
+          warn("import", "only the host can connect a chat service to this session");
+        } else if (importUrl === null) {
+          warn("import", "this session has no import link: it needs a relay, so start it without --local");
+        } else {
+          show("import a chat", [
+            [{ text: "Add this address as a custom connector (MCP) in Claude, ChatGPT or Grok:", bold: true }],
+            [{ text: importUrl, fg: theme.accent }],
+            [{ text: "Then tell that chat: \"send the context of this conversation to Plural\".", fg: theme.dim }],
+            [{ text: "You are asked before anything reaches your agent. Anyone with this address can ask, so keep it private.", fg: theme.dim }],
+          ]);
         }
         return true;
       case "settings":

@@ -155,13 +155,14 @@ def _saved_workspace(room: str) -> Path:
     return folder
 
 
-def ready_line(room: str, guest_link: str, host_link: str) -> str:
+def ready_line(room: str, guest_link: str, host_link: str, import_url: str | None = None) -> str:
     return json.dumps(
         {
             "type": "ready",
             "room": room,
             "guest_link": guest_link,
             "host_link": host_link,
+            "import_url": import_url,
             "version": __version__,
             "protocol": PROTOCOL_VERSION,
         }
@@ -188,7 +189,10 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
     plural_host = await build_host(settings)
     room_link = plural_host.room_link.link
     if machine:
-        print(ready_line(plural_host.room, room_link, plural_host.host_link), flush=True)
+        print(
+            ready_line(plural_host.room, room_link, plural_host.host_link, plural_host.import_url),
+            flush=True,
+        )
     elif console.is_terminal:
         console.print(
             Panel(

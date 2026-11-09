@@ -47,6 +47,7 @@ from plural.host.inbox import (
     ApprovalNeeded,
     BoardRequest,
     BriefingReady,
+    ChatAccepted,
     Disconnected,
     Inbox,
     InboxMessage,
@@ -478,6 +479,9 @@ class SessionActor:
                 )
             case TeamSweep():
                 await self._sweep_team()
+            case ChatAccepted(command=command):
+                with suppress(Conflict):
+                    await self._import_briefing(self._host, command)
             case BriefingReady(request=ask, text=text, as_of_seq=as_of, error=error):
                 await self._emit(
                     BriefingDelivered(
