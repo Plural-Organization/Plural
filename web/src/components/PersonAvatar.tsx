@@ -1,7 +1,9 @@
 import { Avatar } from "@heroui/react";
-import type { CSSProperties } from "react";
+import { useContext, type CSSProperties } from "react";
+import { Moods, orbOf, seedHash, useLiveSlot } from "../lib/orbs";
+import { PersonOrb } from "./PersonOrb";
 
-// Everyone starts with a soft orb of colour, the same one every time for the same person.
+// The still orb of colour behind everyone's avatar, the same one every time for the same person.
 const ORBS: [string, string, string][] = [
   ["#b4e1ee", "#35b6e6", "#6c63f2"],
   ["#b6ecd0", "#3fcf8e", "#2f7fe0"],
@@ -16,19 +18,27 @@ const ORBS: [string, string, string][] = [
   ["#d6e9b8", "#8ccb45", "#2fa8c9"],
 ];
 
+const PIXELS = { sm: 32, md: 40, lg: 48 } as const;
+const ROUND = { "--avatar-radius": "9999px" } as CSSProperties;
+
 export function orbFor(seed: string): CSSProperties {
-  let hash = 0;
-  for (const char of seed) {
-    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  }
+  const hash = seedHash(seed);
   const [base, middle, core] = ORBS[hash % ORBS.length]!;
   return { background: `radial-gradient(circle at ${54 + (hash % 24)}% ${58 + (hash % 19)}%, ${core} 0, ${middle} 34%, transparent 68%), ${base}` };
 }
 
-export function PersonAvatar({ seed, size = "sm" }: { seed: string; size?: "sm" | "md" | "lg" }) {
+// A person is an orb of their own. It holds still at rest, so a full room costs little,
+// and comes alive while they type or just after they speak.
+// `still` outside a room, where orbs would be spent on people not here; `minor` for the many in the feed.
+export function PersonAvatar({ seed, size = "sm", still = false, minor = false }: { seed: string; size?: "sm" | "md" | "lg"; still?: boolean; minor?: boolean }) {
+  const orb = still ? null : orbOf(seed);
+  const mood = useContext(Moods).get(seed) ?? "idle";
+  const [live, track] = useLiveSlot(orb !== null, minor);
   return (
-    <Avatar size={size}>
-      <Avatar.Fallback style={orbFor(seed)}>{""}</Avatar.Fallback>
+    <Avatar ref={track} size={size} className="rounded-full" style={ROUND}>
+      <Avatar.Fallback style={orbFor(seed)}>
+        {live && orb !== null ? <PersonOrb orb={orb} state={mood === "speaking" ? "speaking" : "thinking"} paused={mood === "idle" || mood === "away"} size={PIXELS[size]} /> : ""}
+      </Avatar.Fallback>
     </Avatar>
   );
 }

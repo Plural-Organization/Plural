@@ -133,7 +133,7 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
       const mine = item.participantId === meId;
       return (
         <article className={cx(styles.row, mine && styles.mine)}>
-          {mine ? null : <PersonAvatar seed={item.name} />}
+          {mine ? null : <PersonAvatar seed={item.participantId} minor />}
           <div className={styles.column}>
           {mine ? null : <div className={styles.who}>{item.name}</div>}
           <div className={styles.bubble}>
@@ -164,7 +164,7 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
       const head = direct ? (item.mine ? `to ${item.toName ?? "someone"}` : `${item.name} to you`) : item.mine ? "to the team" : `${item.name} to the team`;
       return (
         <article className={cx(styles.row, item.mine && styles.mine)}>
-          {item.mine ? null : <PersonAvatar seed={item.name} />}
+          {item.mine ? null : <PersonAvatar seed={item.authorId} minor />}
           <div className={styles.column}>
             <div className={styles.who}>{head}</div>
             <div className={cx(styles.bubble, styles.chat, direct && styles.private, item.mentioned && styles.mentioned)}>

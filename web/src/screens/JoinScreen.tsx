@@ -50,7 +50,7 @@ export function JoinScreen({ notice, team, onJoin, onTeamJoined }: JoinScreenPro
                 <Header>Rooms you were in</Header>
                 {rooms.map((room) => (
                   <ListBox.Item key={room.room} id={room.room} textValue={room.room}>
-                    <PersonAvatar seed={room.room} />
+                    <PersonAvatar seed={room.room} still />
                     <div className="flex min-w-0 flex-col">
                       <Label className="truncate font-mono text-[13px]">{room.room}</Label>
                       <Description className="truncate">as {room.name} on {hostOf(room.url)}</Description>

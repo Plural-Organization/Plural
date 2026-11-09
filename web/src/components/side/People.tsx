@@ -28,7 +28,7 @@ export function People({ projection, isHost, send, onInvite }: PeopleProps) {
             const typing = projection.typing.has(person.id) && person.id !== projection.meId;
             return (
               <li key={person.id} className={cx(styles.person, !person.connected && styles.away)}>
-                <PersonAvatar seed={person.name} />
+                <PersonAvatar seed={person.id} />
                 <span className={styles.name}>
                   {label(state, person)}
                   {person.id === projection.meId ? <span className="muted"> (you)</span> : null}

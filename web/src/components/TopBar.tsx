@@ -1,7 +1,7 @@
-import { Avatar, AvatarGroup, Button, Chip, ProgressBar, Spinner, Tooltip } from "@heroui/react";
+import { AvatarGroup, Button, Chip, ProgressBar, Spinner, Tooltip } from "@heroui/react";
 import { SidebarSimple, SignOut } from "@phosphor-icons/react";
 import { contextMeter, type ConnectionStatus, type Projection } from "@plural/client";
-import { orbFor, PersonAvatar } from "./PersonAvatar";
+import { PersonAvatar } from "./PersonAvatar";
 import { AgentLogo } from "./AgentLogo";
 
 interface TopBarProps {
@@ -37,7 +37,7 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
         </Button>
         <Tooltip.Content>Show the sessions</Tooltip.Content>
       </Tooltip>
-      {host ? <PersonAvatar seed={host.name} /> : null}
+      {host ? <PersonAvatar seed={host.id} /> : null}
       <div className="flex min-w-0 flex-col leading-tight">
         <span className="truncate font-display text-base font-semibold tracking-[-0.01em]">{host ? `${host.name}'s session` : "Room"}</span>
         <Tooltip delay={300}>
@@ -73,9 +73,7 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
         <Tooltip delay={300}>
           <AvatarGroup className="hidden sm:flex" max={4}>
             {here.map((person) => (
-              <Avatar key={person.id} size="sm">
-                <Avatar.Fallback style={orbFor(person.name)}>{""}</Avatar.Fallback>
-              </Avatar>
+              <PersonAvatar key={person.id} seed={person.id} />
             ))}
           </AvatarGroup>
           <Tooltip.Content>{here.length} in the room</Tooltip.Content>

@@ -21,9 +21,11 @@ import { useSession } from "../hooks/useSession";
 import { useStickToBottom } from "../hooks/useStickToBottom";
 import { useSubmit } from "../hooks/useSubmit";
 import { useToast } from "../hooks/useToast";
+import { useMoods } from "../hooks/useMoods";
 import { useTyping } from "../hooks/useTyping";
 import type { Team } from "../lib/team";
 import { activity } from "../lib/activity";
+import { Moods } from "../lib/orbs";
 import { canvasDocs } from "../lib/canvas";
 import { siteFiles } from "../lib/site";
 import { copyText } from "../lib/clipboard";
@@ -222,6 +224,7 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
   useHotkeys({ enabled: invite === null && active, first: items[0], canAbort, send, onEdit: setEditing, onFocusInput: focusInput });
 
   const writing = feed.items.some((item) => item.kind === "assistant" && item.streaming);
+  const moods = useMoods(projection, feed);
   const current = activity(projection, feed);
   const scroll = useStickToBottom(feed, current?.text, active);
   const runStatus = writing ? "writing…" : status(projection).replace(/^… /, "");
@@ -240,178 +243,180 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
         : "Message the agent, / for commands";
 
   return (
-    <div ref={root} className={cx(styles.room, (doc || boardShown) && styles.withCanvas, !doc && !boardShown && sideTucked && styles.tucked)} style={{ "--side": `${sideWidth}px` } as CSSProperties}>
-      <TopBar
-        room={link.room}
-        projection={projection}
-        connection={connection}
-        panelOpen={!sideTucked || doc !== null || boardShown}
-        panelShown={panel && doc === null}
-        railOpen={!railTucked}
-        onCopyRoom={() => void copyText(link.room).then((ok) => ok && flash("room id copied"))}
-        onTogglePanel={() => {
-          setCanvasId(null);
-          setBoardShown(false);
-          if (isNarrow()) setPanel((open) => !open || doc !== null || boardShown);
-          // On a wide screen an open canvas gives way to the panel; otherwise the panel comes and goes.
-          else setSideTucked(doc === null && !boardShown && !sideTucked);
-        }}
-        onLeave={leave}
-        onToggleRail={onToggleRail}
-      />
-
-      <main className={styles.stage}>
-        <div className={styles.scroller} ref={scroll.ref} onScroll={scroll.onScroll}>
-          <div className={styles.content} data-quotable>
-            <SelectionLayer selectors={selectors} version={feed.items} />
-            <div className={styles.welcome}>
-              You joined as {me ? `${me.name}, ${me.role}` : name}
-            </div>
-            {!projection.ready ? (
-              <div className="flex items-center justify-center gap-2.5 py-10 text-sm text-muted">
-                <Spinner size="sm" color="current" />
-                {projection.waiting ? "waiting for the host to let you in…" : connection === "online" ? "loading the session…" : "connecting to the host…"}
-              </div>
-            ) : null}
-            {projection.ready && !feed.items.some((item) => item.kind === "user" || item.kind === "chat" || item.kind === "assistant") ? (
-              <div className={styles.empty}>
-                <h2 className="font-display">
-                  One agent, the whole team.
-                  <br />
-                  <span className="tone-2">Ask it anything.</span>
-                </h2>
-                <p>Everyone here sees the same conversation. Type <kbd>/</kbd> for commands or <kbd>@</kbd> to tag someone.</p>
-              </div>
-            ) : null}
-            <Feed items={feed.items} people={mentionable(state, null)} meId={projection.meId} activity={current} onOpenBoard={state.board.open ? showBoard : undefined} onOpenDoc={(id) => {
-                setBoardShown(false);
-                setCanvasId(id);
-              }} />
-          </div>
-        </div>
-
-        <div className={styles.dock}>
-          {scroll.behind ? (
-            <Button size="sm" variant="tertiary" className={styles.jump} onPress={scroll.jump}>
-              <ArrowDown size={14} />
-              Latest
-            </Button>
-          ) : null}
-          {connection === "offline" ? (
-            <Alert status="warning">
-              <Alert.Indicator />
-              <Alert.Content>
-                <Alert.Description>The connection dropped. Reconnecting…</Alert.Description>
-              </Alert.Content>
-            </Alert>
-          ) : null}
-          <Inbox items={items} state={state} send={send} onEdit={setEditing} answer={session.answer} />
-          <div className={styles.presence}>
-            {typers.length > 0 ? (
-              <span>
-                {typers.length <= 2 ? `${typers.join(" and ")} ${typers.length === 1 ? "is" : "are"} typing…` : `${typers.length} people are typing…`}
-              </span>
-            ) : null}
-            {toast ? <span className={styles.toast}>{toast}</span> : null}
-          </div>
-          {me?.role === "viewer" ? (
-            <div className={styles.watching}>
-              <span>You are watching this session.</span>
-              <Button size="sm" variant="tertiary" isDisabled={me.id in state.access_requests} onPress={() => submit("/access")}>
-                {me.id in state.access_requests ? "Waiting for the host" : "Ask to write"}
-              </Button>
-            </div>
-          ) : null}
-          <Composer
-            role={me?.role}
-            people={mentionable(state, projection.meId)}
-            commands={pluginCommands}
-            placeholder={placeholder}
-            disabled={null}
-            editing={editing}
-            quote={quote}
-            attachments={canDraw ? files.attachments : []}
-            onAttach={canDraw ? (list) => list.forEach((file) => void files.add(file, file.name || "pasted-image.png")) : undefined}
-            onDetach={files.remove}
-            onSubmit={(text) => {
-              typing.stop();
-              scroll.pin();
-              submit(text);
-            }}
-            onCancelEdit={() => setEditing(null)}
-            onEscape={() => canAbort && send({ type: "run.abort" })}
-            onActivity={typing.activity}
-          />
-        </div>
-      </main>
-
-      {boardShown && active ? (
-        <Board
-          strokes={state.board.strokes}
-          pointers={pointers}
-          meId={projection.meId}
-          canDraw={canDraw}
-          isHost={isHost}
-          pictures={session.pictures}
-          fetchPicture={session.fetchPicture}
-          uploadPicture={(file, name) => upload(file, name, projection, send)}
-          onNotice={(text) => session.notify("warn", text)}
-          send={send}
-          sendPresence={sendPresence}
-          onSendToAgent={(image) => {
-            void files.add(image, `board-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}.png`);
-            flash("the board is attached; add a note and send");
-            focusInput();
+    <Moods.Provider value={moods}>
+      <div ref={root} className={cx(styles.room, (doc || boardShown) && styles.withCanvas, !doc && !boardShown && sideTucked && styles.tucked)} style={{ "--side": `${sideWidth}px` } as CSSProperties}>
+        <TopBar
+          room={link.room}
+          projection={projection}
+          connection={connection}
+          panelOpen={!sideTucked || doc !== null || boardShown}
+          panelShown={panel && doc === null}
+          railOpen={!railTucked}
+          onCopyRoom={() => void copyText(link.room).then((ok) => ok && flash("room id copied"))}
+          onTogglePanel={() => {
+            setCanvasId(null);
+            setBoardShown(false);
+            if (isNarrow()) setPanel((open) => !open || doc !== null || boardShown);
+            // On a wide screen an open canvas gives way to the panel; otherwise the panel comes and goes.
+            else setSideTucked(doc === null && !boardShown && !sideTucked);
           }}
-          onClose={() => setBoardShown(false)}
-          full={wide}
-          onToggleFull={() => setWide((value) => !value)}
+          onLeave={leave}
+          onToggleRail={onToggleRail}
         />
-      ) : doc ? (
-        <Canvas
-          doc={doc}
-          docs={docs}
-          selectors={selectors}
-          full={wide}
-          onToggleFull={() => setWide((value) => !value)}
-          onPick={setCanvasId}
-          onClose={() => setCanvasId(null)}
-          site={(page) => (
-            <SitePreview
-              key={page.id}
-              entry={page.text}
-              remote={page.previewId ? { id: page.previewId, open: session.openPreview } : undefined}
-              site={site}
-              pointers={previewPointers}
-              echo={projection.meId === null ? undefined : projection.cursors.get(projection.meId)}
-              canPick={canDraw}
-              sendPresence={sendPresence}
-              onAsk={(text) => {
+
+        <main className={styles.stage}>
+          <div className={styles.scroller} ref={scroll.ref} onScroll={scroll.onScroll}>
+            <div className={styles.content} data-quotable>
+              <SelectionLayer selectors={selectors} version={feed.items} />
+              <div className={styles.welcome}>
+                You joined as {me ? `${me.name}, ${me.role}` : name}
+              </div>
+              {!projection.ready ? (
+                <div className="flex items-center justify-center gap-2.5 py-10 text-sm text-muted">
+                  <Spinner size="sm" color="current" />
+                  {projection.waiting ? "waiting for the host to let you in…" : connection === "online" ? "loading the session…" : "connecting to the host…"}
+                </div>
+              ) : null}
+              {projection.ready && !feed.items.some((item) => item.kind === "user" || item.kind === "chat" || item.kind === "assistant") ? (
+                <div className={styles.empty}>
+                  <h2 className="font-display">
+                    One agent, the whole team.
+                    <br />
+                    <span className="tone-2">Ask it anything.</span>
+                  </h2>
+                  <p>Everyone here sees the same conversation. Type <kbd>/</kbd> for commands or <kbd>@</kbd> to tag someone.</p>
+                </div>
+              ) : null}
+              <Feed items={feed.items} people={mentionable(state, null)} meId={projection.meId} activity={current} onOpenBoard={state.board.open ? showBoard : undefined} onOpenDoc={(id) => {
+                  setBoardShown(false);
+                  setCanvasId(id);
+                }} />
+            </div>
+          </div>
+
+          <div className={styles.dock}>
+            {scroll.behind ? (
+              <Button size="sm" variant="tertiary" className={styles.jump} onPress={scroll.jump}>
+                <ArrowDown size={14} />
+                Latest
+              </Button>
+            ) : null}
+            {connection === "offline" ? (
+              <Alert status="warning">
+                <Alert.Indicator />
+                <Alert.Content>
+                  <Alert.Description>The connection dropped. Reconnecting…</Alert.Description>
+                </Alert.Content>
+              </Alert>
+            ) : null}
+            <Inbox items={items} state={state} send={send} onEdit={setEditing} answer={session.answer} />
+            <div className={styles.presence}>
+              {typers.length > 0 ? (
+                <span>
+                  {typers.length <= 2 ? `${typers.join(" and ")} ${typers.length === 1 ? "is" : "are"} typing…` : `${typers.length} people are typing…`}
+                </span>
+              ) : null}
+              {toast ? <span className={styles.toast}>{toast}</span> : null}
+            </div>
+            {me?.role === "viewer" ? (
+              <div className={styles.watching}>
+                <span>You are watching this session.</span>
+                <Button size="sm" variant="tertiary" isDisabled={me.id in state.access_requests} onPress={() => submit("/access")}>
+                  {me.id in state.access_requests ? "Waiting for the host" : "Ask to write"}
+                </Button>
+              </div>
+            ) : null}
+            <Composer
+              role={me?.role}
+              people={mentionable(state, projection.meId)}
+              commands={pluginCommands}
+              placeholder={placeholder}
+              disabled={null}
+              editing={editing}
+              quote={quote}
+              attachments={canDraw ? files.attachments : []}
+              onAttach={canDraw ? (list) => list.forEach((file) => void files.add(file, file.name || "pasted-image.png")) : undefined}
+              onDetach={files.remove}
+              onSubmit={(text) => {
+                typing.stop();
                 scroll.pin();
                 submit(text);
               }}
-              onNotice={flash}
+              onCancelEdit={() => setEditing(null)}
+              onEscape={() => canAbort && send({ type: "run.abort" })}
+              onActivity={typing.activity}
             />
-          )}
-        />
-      ) : (
-        <Sidebar
-          projection={projection}
-          status={runStatus}
-          waiting={items.length}
-          open={panel}
-          tucked={sideTucked}
-          onHide={() => (isNarrow() ? setPanel(false) : setSideTucked(true))}
-          send={send}
-          onInvite={(role) => send({ type: "invite.create", role, ttl_s: 3600, reusable: role === "participant" })}
-        />
-      )}
-      {!doc && !boardShown && !sideTucked ? (
-        <ResizeHandle label="Width of the room panel" width={sideWidth} bounds={SIDE_WIDTH} direction={-1} onResize={setSideWidth} style={{ right: sideWidth, top: 56 }} />
-      ) : null}
+          </div>
+        </main>
 
-      <QuoteButton enabled={active && me !== undefined && me.role !== "viewer"} onQuote={(text) => setQuote((current) => ({ text, key: (current?.key ?? 0) + 1 }))} />
-      {invite && active ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}
-    </div>
+        {boardShown && active ? (
+          <Board
+            strokes={state.board.strokes}
+            pointers={pointers}
+            meId={projection.meId}
+            canDraw={canDraw}
+            isHost={isHost}
+            pictures={session.pictures}
+            fetchPicture={session.fetchPicture}
+            uploadPicture={(file, name) => upload(file, name, projection, send)}
+            onNotice={(text) => session.notify("warn", text)}
+            send={send}
+            sendPresence={sendPresence}
+            onSendToAgent={(image) => {
+              void files.add(image, `board-${new Date().toISOString().slice(11, 19).replace(/:/g, "")}.png`);
+              flash("the board is attached; add a note and send");
+              focusInput();
+            }}
+            onClose={() => setBoardShown(false)}
+            full={wide}
+            onToggleFull={() => setWide((value) => !value)}
+          />
+        ) : doc ? (
+          <Canvas
+            doc={doc}
+            docs={docs}
+            selectors={selectors}
+            full={wide}
+            onToggleFull={() => setWide((value) => !value)}
+            onPick={setCanvasId}
+            onClose={() => setCanvasId(null)}
+            site={(page) => (
+              <SitePreview
+                key={page.id}
+                entry={page.text}
+                remote={page.previewId ? { id: page.previewId, open: session.openPreview } : undefined}
+                site={site}
+                pointers={previewPointers}
+                echo={projection.meId === null ? undefined : projection.cursors.get(projection.meId)}
+                canPick={canDraw}
+                sendPresence={sendPresence}
+                onAsk={(text) => {
+                  scroll.pin();
+                  submit(text);
+                }}
+                onNotice={flash}
+              />
+            )}
+          />
+        ) : (
+          <Sidebar
+            projection={projection}
+            status={runStatus}
+            waiting={items.length}
+            open={panel}
+            tucked={sideTucked}
+            onHide={() => (isNarrow() ? setPanel(false) : setSideTucked(true))}
+            send={send}
+            onInvite={(role) => send({ type: "invite.create", role, ttl_s: 3600, reusable: role === "participant" })}
+          />
+        )}
+        {!doc && !boardShown && !sideTucked ? (
+          <ResizeHandle label="Width of the room panel" width={sideWidth} bounds={SIDE_WIDTH} direction={-1} onResize={setSideWidth} style={{ right: sideWidth, top: 56 }} />
+        ) : null}
+
+        <QuoteButton enabled={active && me !== undefined && me.role !== "viewer"} onQuote={(text) => setQuote((current) => ({ text, key: (current?.key ?? 0) + 1 }))} />
+        {invite && active ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}
+      </div>
+    </Moods.Provider>
   );
 }

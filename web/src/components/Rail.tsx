@@ -98,7 +98,7 @@ export function Rail({ team, spaces, active, onSwitch, onWatch, onAdd, onHide }:
                 {team.sessions.map((card) => (
                   <ListBox.Item key={card.room} id={card.room} textValue={card.owner}>
                     <span className="relative flex-none">
-                      <PersonAvatar seed={card.owner} />
+                      <PersonAvatar seed={card.owner} still />
                       {agentMark(card.agent) ? (
                         <span className="absolute -right-1 -bottom-1 grid size-[18px] place-items-center rounded-full border-2 border-surface bg-surface-secondary">
                           <AgentLogo label={card.agent} size={10} />
@@ -127,7 +127,7 @@ export function Rail({ team, spaces, active, onSwitch, onWatch, onAdd, onHide }:
               <Header>Joined by link</Header>
               {byLink.map((space) => (
                 <ListBox.Item key={space.link.room} id={space.link.room} textValue={space.owner ?? space.link.room}>
-                  <PersonAvatar seed={space.link.room} />
+                  <PersonAvatar seed={space.link.room} still />
                   <div className="flex min-w-0 flex-col">
                     <Label className="truncate">{space.owner ?? "Room"}</Label>
                     <Description className="truncate font-mono">{space.link.room}</Description>
@@ -157,7 +157,7 @@ export function Rail({ team, spaces, active, onSwitch, onWatch, onAdd, onHide }:
         </div>
         {profile !== null ? (
           <div className="flex items-center gap-2.5 px-1 pt-1">
-            <PersonAvatar seed={profile.member.name} />
+            <PersonAvatar seed={profile.member.name} still />
             <span className="min-w-0 flex-1 truncate text-sm">{profile.member.name}</span>
             <button type="button" className="link-button" onClick={leave}>Leave team</button>
           </div>
