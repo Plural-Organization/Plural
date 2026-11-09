@@ -1,8 +1,12 @@
-import { Button, Description, FieldError, Input, Label, Separator, TextField } from "@heroui/react";
+import { Button, Chip, Description, FieldError, Input, Label, Separator, TextField } from "@heroui/react";
 import { ArrowLeft, Copy, GithubLogo, GoogleLogo } from "@phosphor-icons/react";
 import { useState, type FormEvent } from "react";
 import { parseLink, parseTeamInvite, type JoinLink, type TeamInvite } from "@plural/client";
+import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
+import { signInUrl } from "../lib/accounts";
+import { LinkComputer } from "./LinkComputer";
+import { PersonAvatar } from "./PersonAvatar";
 import { copyText } from "../lib/clipboard";
 import { blockedByMixedContent, hostOf, unwrapLink } from "../lib/links";
 import { rememberName, savedName } from "../lib/saved";
@@ -50,11 +54,12 @@ function sharedOnLoad(): string {
 
 interface JoinFlowProps {
   team: TeamState;
+  account: AccountState;
   onJoin: (link: JoinLink, name: string) => void;
   onTeamJoined: () => void;
 }
 
-export function JoinFlow({ team, onJoin, onTeamJoined }: JoinFlowProps) {
+export function JoinFlow({ team, account, onJoin, onTeamJoined }: JoinFlowProps) {
   const [raw, setRaw] = useState(sharedOnLoad);
   const [target, setTarget] = useState<Target | null>(() => {
     const shared = sharedOnLoad();
@@ -136,6 +141,16 @@ export function JoinFlow({ team, onJoin, onTeamJoined }: JoinFlowProps) {
     </Button>
   );
 
+  if (starting && account.status === "in") {
+    return (
+      <div className="enter flex flex-col gap-4">
+        {back}
+        <h2 className="text-2xl font-medium tracking-[-0.02em]">Start a room</h2>
+        <LinkComputer state={account} />
+      </div>
+    );
+  }
+
   if (starting) {
     return (
       <div className="enter flex flex-col gap-4">
@@ -199,19 +214,43 @@ export function JoinFlow({ team, onJoin, onTeamJoined }: JoinFlowProps) {
       </form>
       <div className="flex items-center gap-3 text-sm text-muted">
         <Separator className="flex-1" />
-        or start your own
+        {account.status === "in" ? "your account" : "or start your own"}
         <Separator className="flex-1" />
       </div>
-      <div className="flex flex-col gap-2.5">
-        <Button variant="tertiary" fullWidth size="lg" onPress={() => setStarting(true)}>
-          <GoogleLogo size={18} weight="bold" />
-          Continue with Google
-        </Button>
-        <Button variant="tertiary" fullWidth size="lg" onPress={() => setStarting(true)}>
-          <GithubLogo size={18} weight="fill" />
-          Continue with GitHub
-        </Button>
-      </div>
+      {account.status === "in" && account.account !== null ? (
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-3.5 py-3">
+            <PersonAvatar seed={account.account.email} />
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-[15px] font-medium">{account.account.email}</p>
+            </div>
+            <button type="button" className="link-button" onClick={() => void account.signOut()}>
+              Sign out
+            </button>
+          </div>
+          <Button fullWidth size="lg" onPress={() => setStarting(true)}>
+            Start a room
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2.5">
+          <Button
+            variant="tertiary"
+            fullWidth
+            size="lg"
+            isDisabled={account.status === "loading"}
+            onPress={() => (account.enabled ? window.location.assign(signInUrl(`${window.location.origin}${window.location.pathname}`)) : setStarting(true))}
+          >
+            <GoogleLogo size={18} weight="bold" />
+            Continue with Google
+          </Button>
+          <Button variant="tertiary" fullWidth size="lg" isDisabled={account.enabled} onPress={() => setStarting(true)}>
+            <GithubLogo size={18} weight="fill" />
+            Continue with GitHub
+            {account.enabled ? <Chip size="sm" variant="soft"><Chip.Label>Soon</Chip.Label></Chip> : null}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

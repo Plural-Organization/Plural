@@ -3,7 +3,9 @@ import { Eye, Plus, UserPlus, Warning, SidebarSimple } from "@phosphor-icons/rea
 import { useState } from "react";
 import { reachable, teamJoinLink, type SessionCard } from "@plural/client";
 import type { Space } from "../App";
+import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
+import { AccountModal } from "./AccountModal";
 import { copyText } from "../lib/clipboard";
 import { LogoMark } from "./LogoMark";
 import { PersonAvatar } from "./PersonAvatar";
@@ -14,6 +16,7 @@ const STATUS = { running: "Working", waiting: "Waiting for its host", idle: "Idl
 
 interface RailProps {
   team: TeamState;
+  account: AccountState;
   spaces: Space[];
   active: string | null;
   onSwitch: (room: string) => void;
@@ -24,8 +27,9 @@ interface RailProps {
 
 // The left column: the team's live sessions and the rooms joined by link. Picking one opens it on the right, and
 // a room stays connected once opened, so moving back is instant.
-export function Rail({ team, spaces, active, onSwitch, onWatch, onAdd, onHide }: RailProps) {
+export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, onHide }: RailProps) {
   const [note, setNote] = useState<string | null>(null);
+  const [accountOpen, setAccountOpen] = useState(false);
   const profile = team.team?.profile ?? null;
   const open = new Set(spaces.map((space) => space.link.room));
   const teamRooms = new Set(team.sessions.map((card) => card.room));
@@ -155,6 +159,12 @@ export function Rail({ team, spaces, active, onSwitch, onWatch, onAdd, onHide }:
             </Button>
           ) : null}
         </div>
+        {account.status === "in" && account.account !== null ? (
+          <Button variant="ghost" size="sm" fullWidth className="justify-start gap-2.5" onPress={() => setAccountOpen(true)}>
+            <PersonAvatar seed={account.account.email} />
+            <span className="min-w-0 flex-1 truncate text-left text-sm">{account.account.email}</span>
+          </Button>
+        ) : null}
         {profile !== null ? (
           <div className="flex items-center gap-2.5 px-1 pt-1">
             <PersonAvatar seed={profile.member.name} />
@@ -163,6 +173,7 @@ export function Rail({ team, spaces, active, onSwitch, onWatch, onAdd, onHide }:
           </div>
         ) : null}
       </div>
+      {accountOpen ? <AccountModal state={account} onClose={() => setAccountOpen(false)} /> : null}
     </aside>
   );
 }
