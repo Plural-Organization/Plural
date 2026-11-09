@@ -1,14 +1,13 @@
 import asyncio
 import json
 import webbrowser
-from datetime import UTC, datetime
 from typing import Annotated
 
 import typer
 from rich.console import Console
 from rich.markup import escape
 
-from plural.host.account import AccountError, AccountStore, claim, device_login, plan_line
+from plural.host.account import AccountError, AccountStore, claim, device_login
 from plural.host.config import DEFAULT_ACCOUNTS_URL, HostSettings
 
 console = Console()
@@ -54,9 +53,7 @@ def login(
     except AccountError as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(1) from error
-    console.print(
-        f"Linked to {escape(entitlement.email)}. {plan_line(entitlement, datetime.now(UTC))}."
-    )
+    console.print(f"Linked to {escape(entitlement.email)}.")
 
 
 def logout() -> None:
@@ -84,20 +81,16 @@ def whoami(
         else:
             console.print("This computer is not linked to an account.")
         raise typer.Exit(1)
-    now = datetime.now(UTC)
     if as_json:
         print(
             json.dumps(
                 {
                     "linked": True,
                     "email": entitlement.email,
-                    "plan": entitlement.plan,
-                    "plan_ends_at": entitlement.plan_ends_at.isoformat(),
                     "certificate_expires_at": entitlement.expires_at.isoformat(),
                     "accounts": entitlement.accounts,
                 }
             )
         )
         return
-    console.print(f"{escape(entitlement.email)}")
-    console.print(plan_line(entitlement, now))
+    console.print(f"Linked to {escape(entitlement.email)}.")

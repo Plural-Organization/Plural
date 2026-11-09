@@ -5,7 +5,7 @@ import socket
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request
@@ -37,9 +37,7 @@ class Entitlement(Model):
     accounts: str
     email: str
     certificate: str
-    plan: Literal["trial", "paid"]
     expires_at: datetime
-    plan_ends_at: datetime
 
 
 def normalize_code(code: str) -> str:
@@ -51,13 +49,6 @@ def accounts_base(url: str) -> str:
     if parts.scheme not in ("http", "https") or not parts.netloc:
         raise AccountError(f"{url} is not an address, use https://host")
     return f"{parts.scheme}://{parts.netloc}"
-
-
-def plan_line(entitlement: Entitlement, now: datetime) -> str:
-    if entitlement.plan == "paid":
-        return "Plan active"
-    days = max(0, -(-int((entitlement.plan_ends_at - now).total_seconds()) // 86400))
-    return "Trial, 1 day left" if days == 1 else f"Trial, {days} days left"
 
 
 def _post(base: str, path: str, body: dict[str, Any]) -> dict[str, Any]:
@@ -137,9 +128,7 @@ def _entitlement(accounts: str, reply: dict[str, Any]) -> Entitlement:
             accounts=accounts,
             email=reply["email"],
             certificate=reply["certificate"],
-            plan=reply["plan"],
             expires_at=reply["expires_at"],
-            plan_ends_at=reply["plan_ends_at"],
         )
     except (KeyError, ValidationError) as error:
         raise AccountError("the accounts service answered with something unexpected") from error

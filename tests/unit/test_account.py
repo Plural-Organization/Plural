@@ -15,11 +15,9 @@ from plural.host import account
 from plural.host.account import (
     AccountError,
     AccountStore,
-    Entitlement,
     claim,
     device_login,
     normalize_code,
-    plan_line,
     renew,
 )
 from plural.host.relay_http import ConnectFailed
@@ -37,14 +35,12 @@ class _Response(io.BytesIO):
         self.close()
 
 
-def reply(*, ends: timedelta = timedelta(days=14), lasts: timedelta = timedelta(days=7)) -> bytes:
+def reply(*, lasts: timedelta = timedelta(days=7)) -> bytes:
     now = datetime.now(UTC)
     return json.dumps(
         {
             "certificate": "body.signature",
-            "plan": "trial",
             "expires_at": (now + lasts).isoformat(),
-            "plan_ends_at": (now + ends).isoformat(),
             "email": "alia@example.com",
         }
     ).encode()
@@ -192,24 +188,6 @@ async def test_a_damaged_file_gives_no_certificate_instead_of_stopping_the_host(
         store.load()
 
 
-def entitlement(**changes: Any) -> Entitlement:
-    base: dict[str, Any] = {
-        "accounts": ACCOUNTS,
-        "email": "alia@example.com",
-        "certificate": "c",
-        "plan": "trial",
-        "expires_at": NOW + timedelta(days=7),
-        "plan_ends_at": NOW + timedelta(days=13, hours=4),
-    }
-    return Entitlement(**{**base, **changes})
-
-
-def test_the_plan_is_told_in_days() -> None:
-    assert plan_line(entitlement(), NOW) == "Trial, 14 days left"
-    assert plan_line(entitlement(plan_ends_at=NOW + timedelta(hours=5)), NOW) == "Trial, 1 day left"
-    assert plan_line(entitlement(plan="paid"), NOW) == "Plan active"
-
-
 @pytest.fixture
 def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("PLURAL_DATA_DIR", str(tmp_path))
@@ -231,10 +209,10 @@ def test_login_links_and_whoami_and_logout_follow(home: Path, service: Service) 
 
 
 def test_login_that_the_service_refuses_exits_with_its_reason(home: Path, service: Service) -> None:
-    service.answer = error(402, "trial_ended", "the free trial is over")
+    service.answer = error(403, "unknown_machine", "this computer is not linked to an account")
     result = CliRunner().invoke(app, ["login", "--code", "K7QF-29XD", "--accounts", ACCOUNTS])
     assert result.exit_code == 1
-    assert "free trial is over" in result.output
+    assert "not linked to an account" in result.output
 
 
 class Script:
