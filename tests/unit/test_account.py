@@ -1,5 +1,6 @@
 import io
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,7 @@ from plural.host.account import (
     AccountStore,
     Entitlement,
     claim,
+    device_login,
     normalize_code,
     plan_line,
     renew,
@@ -214,12 +216,6 @@ def home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-def test_login_without_a_code_says_where_to_get_one(home: Path) -> None:
-    result = CliRunner().invoke(app, ["login"])
-    assert result.exit_code == 2
-    assert "plural login --code" in result.output
-
-
 def test_login_links_and_whoami_and_logout_follow(home: Path, service: Service) -> None:
     runner = CliRunner()
     linked = runner.invoke(app, ["login", "--code", "K7QF-29XD", "--accounts", ACCOUNTS])
@@ -239,3 +235,156 @@ def test_login_that_the_service_refuses_exits_with_its_reason(home: Path, servic
     result = CliRunner().invoke(app, ["login", "--code", "K7QF-29XD", "--accounts", ACCOUNTS])
     assert result.exit_code == 1
     assert "free trial is over" in result.output
+
+
+class Script:
+    """The accounts service for the device flow: what each address answers, in turn."""
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.replies: dict[str, list[bytes | Exception]] = {}
+        self.seen: list[tuple[str, dict[str, Any]]] = []
+        self.sleeps: list[float] = []
+        monkeypatch.setattr(account, "urlopen", self._urlopen)
+        monkeypatch.setattr(account, "pause", self._pause)
+
+    async def _pause(self, seconds: float) -> None:
+        self.sleeps.append(seconds)
+
+    def _urlopen(self, request: Request, **_: Any) -> _Response:
+        assert isinstance(request.data, bytes)
+        path = request.full_url.removeprefix(ACCOUNTS)
+        self.seen.append((path, json.loads(request.data)))
+        answer = self.replies[path].pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return _Response(answer)
+
+
+STARTED = json.dumps(
+    {
+        "device_code": "device-secret",
+        "user_code": "K7QF-29XD",
+        "verification_url": "https://plrl.host/app?device=K7QF-29XD",
+        "expires_in": 600,
+        "interval": 3,
+    }
+).encode()
+
+
+@pytest.fixture
+def script(monkeypatch: pytest.MonkeyPatch) -> Script:
+    return Script(monkeypatch)
+
+
+def quiet(url: str, code: str) -> None:
+    return None
+
+
+def browser(opened: list[str]) -> Callable[[str], bool]:
+    def open_it(url: str) -> bool:
+        opened.append(url)
+        return True
+
+    return open_it
+
+
+def pending() -> HTTPError:
+    return error(400, "authorization_pending", "waiting for the sign-in on the web")
+
+
+async def test_the_device_flow_waits_for_the_browser_and_keeps_the_certificate(
+    store: AccountStore, script: Script
+) -> None:
+    script.replies = {"/device/code": [STARTED], "/device/token": [pending(), pending(), reply()]}
+    shown: list[tuple[str, str]] = []
+    entitlement = await device_login(
+        store, ACCOUNTS, show=lambda url, code: shown.append((url, code))
+    )
+    assert shown == [("https://plrl.host/app?device=K7QF-29XD", "K7QF-29XD")]
+    assert script.sleeps == [3, 3, 3]
+    assert store.load() == entitlement
+    assert entitlement.email == "alia@example.com"
+
+
+async def test_the_device_flow_names_the_computer_and_proves_the_key(
+    store: AccountStore, script: Script
+) -> None:
+    script.replies = {"/device/code": [STARTED], "/device/token": [reply()]}
+    await device_login(store, ACCOUNTS, show=quiet)
+    key = store.signer().verifier.public_b64()
+    (_, started), (_, collected) = script.seen
+    assert started["key"] == key
+    assert started["name"] != ""
+    assert collected["device_code"] == "device-secret"
+    assert TokenVerifier.from_b64(key).verify_proof(
+        b"plural-device:device-secret", collected["signature"]
+    )
+
+
+async def test_asking_too_fast_makes_the_flow_ask_less_often(
+    store: AccountStore, script: Script
+) -> None:
+    slow = error(429, "slow_down", "ask less often")
+    script.replies = {"/device/code": [STARTED], "/device/token": [slow, pending(), reply()]}
+    await device_login(store, ACCOUNTS, show=quiet)
+    assert script.sleeps == [3, 5, 5]
+
+
+async def test_a_refusal_in_the_browser_ends_the_flow(store: AccountStore, script: Script) -> None:
+    refused = error(403, "access_denied", "the sign-in was refused on the web")
+    script.replies = {"/device/code": [STARTED], "/device/token": [pending(), refused]}
+    with pytest.raises(AccountError, match="refused on the web"):
+        await device_login(store, ACCOUNTS, show=quiet)
+    assert store.load() is None
+
+
+async def test_nobody_approving_ends_the_flow_after_the_time_given(
+    store: AccountStore, script: Script
+) -> None:
+    script.replies = {"/device/code": [STARTED], "/device/token": [pending() for _ in range(200)]}
+    with pytest.raises(AccountError, match="in time"):
+        await device_login(store, ACCOUNTS, show=quiet)
+    assert sum(script.sleeps) >= 600
+    assert store.load() is None
+
+
+async def test_an_odd_start_is_not_followed(store: AccountStore, script: Script) -> None:
+    script.replies = {"/device/code": [b'{"user_code": "K7QF-29XD"}']}
+    with pytest.raises(AccountError, match="unexpected"):
+        await device_login(store, ACCOUNTS, show=quiet)
+
+
+def test_login_with_no_code_opens_the_browser_and_links(
+    home: Path, script: Script, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opened: list[str] = []
+    monkeypatch.setattr("plural.cli.account.webbrowser.open", browser(opened))
+    script.replies = {"/device/code": [STARTED], "/device/token": [pending(), reply()]}
+    result = CliRunner().invoke(app, ["login", "--accounts", ACCOUNTS])
+    assert result.exit_code == 0, result.output
+    assert opened == ["https://plrl.host/app?device=K7QF-29XD"]
+    assert "K7QF-29XD" in result.output
+    assert "Linked to alia@example.com" in result.output
+
+
+def test_login_with_no_browser_prints_the_address_only(
+    home: Path, script: Script, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opened: list[str] = []
+    monkeypatch.setattr("plural.cli.account.webbrowser.open", browser(opened))
+    script.replies = {"/device/code": [STARTED], "/device/token": [reply()]}
+    result = CliRunner().invoke(app, ["login", "--accounts", ACCOUNTS, "--no-browser"])
+    assert result.exit_code == 0, result.output
+    assert opened == []
+    assert "https://plrl.host/app?device=K7QF-29XD" in result.output
+
+
+def test_login_that_nobody_approved_exits_with_the_reason(
+    home: Path, script: Script, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr("plural.cli.account.webbrowser.open", browser([]))
+    refused = error(403, "access_denied", "the sign-in was refused on the web")
+    script.replies = {"/device/code": [STARTED], "/device/token": [refused]}
+    result = CliRunner().invoke(app, ["login", "--accounts", ACCOUNTS])
+    assert result.exit_code == 1
+    assert "refused on the web" in result.output

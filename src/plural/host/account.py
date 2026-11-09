@@ -1,6 +1,8 @@
 import asyncio
 import json
 import os
+import socket
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -26,7 +28,9 @@ RENEW_TIMEOUT_S = 6
 
 
 class AccountError(Exception):
-    pass
+    def __init__(self, message: str, code: str | None = None) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 class Entitlement(Model):
@@ -68,11 +72,13 @@ def _post(base: str, path: str, body: dict[str, Any]) -> dict[str, Any]:
         with urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
             payload: dict[str, Any] = json.loads(response.read())
     except HTTPError as error:
+        code = None
         try:
-            message = str(json.loads(error.read())["error"]["message"])
+            problem = json.loads(error.read())["error"]
+            message, code = str(problem["message"]), str(problem["code"])
         except (ValueError, KeyError, TypeError):
             message = f"the accounts service answered {error.code}"
-        raise AccountError(message) from error
+        raise AccountError(message, code) from error
     except (URLError, TimeoutError, OSError) as error:
         if isinstance(getattr(error, "reason", error), ConnectFailed | TimeoutError):
             raise AccountError(f"{host} did not answer, try again in a moment") from error
@@ -169,3 +175,49 @@ async def renew(store: AccountStore, current: Entitlement) -> Entitlement:
     renewed = _entitlement(current.accounts, reply)
     store.save(renewed)
     return renewed
+
+
+async def pause(seconds: float) -> None:
+    await asyncio.sleep(seconds)
+
+
+async def device_login(
+    store: AccountStore,
+    accounts_url: str,
+    *,
+    show: Callable[[str, str], None],
+    sleep: Callable[[float], Awaitable[None]] | None = None,
+) -> Entitlement:
+    """Ask for a code, let the person approve it in a browser, collect the certificate."""
+    base = accounts_base(accounts_url)
+    wait = sleep or pause
+    signer = store.signer()
+    key = signer.verifier.public_b64()
+    name = socket.gethostname().split(".")[0]
+    started = await asyncio.to_thread(_post, base, "/device/code", {"key": key, "name": name})
+    try:
+        device_code = str(started["device_code"])
+        url, user_code = str(started["verification_url"]), str(started["user_code"])
+        interval, lasts = float(started["interval"]), float(started["expires_in"])
+    except (KeyError, TypeError, ValueError) as error:
+        raise AccountError("the accounts service answered with something unexpected") from error
+    show(url, user_code)
+    waited = 0.0
+    while waited < lasts:
+        await wait(interval)
+        waited += interval
+        proof = signer.prove(f"plural-device:{device_code}".encode())
+        body = {"device_code": device_code, "key": key, "signature": proof}
+        try:
+            reply = await asyncio.to_thread(_post, base, "/device/token", body)
+        except AccountError as error:
+            if error.code == "authorization_pending":
+                continue
+            if error.code == "slow_down":
+                interval += 2
+                continue
+            raise
+        entitlement = _entitlement(base, reply)
+        store.save(entitlement)
+        return entitlement
+    raise AccountError("nobody approved the sign-in in time, run plural login again")

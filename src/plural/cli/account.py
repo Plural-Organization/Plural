@@ -1,5 +1,6 @@
 import asyncio
 import json
+import webbrowser
 from datetime import UTC, datetime
 from typing import Annotated
 
@@ -7,7 +8,7 @@ import typer
 from rich.console import Console
 from rich.markup import escape
 
-from plural.host.account import AccountError, AccountStore, claim, plan_line
+from plural.host.account import AccountError, AccountStore, claim, device_login, plan_line
 from plural.host.config import DEFAULT_ACCOUNTS_URL, HostSettings
 
 console = Console()
@@ -26,14 +27,30 @@ def login(
         str,
         typer.Option(help="The accounts service.", envvar="PLURAL_ACCOUNTS_URL"),
     ] = DEFAULT_ACCOUNTS_URL,
+    no_browser: Annotated[
+        bool, typer.Option("--no-browser", help="Print the address instead of opening it.")
+    ] = False,
 ) -> None:
     """Link this computer to your Plural account."""
-    if code is None:
-        console.print("Sign in on the web, choose Start a room, and run the command it shows:")
-        console.print("  plural login --code <code>")
-        raise typer.Exit(2)
+
+    def show(url: str, user_code: str) -> None:
+        opened = not no_browser and webbrowser.open(url)
+        console.print(
+            "Opening your browser to sign in." if opened else "Open this address to sign in:"
+        )
+        console.print(f"  {url}")
+        console.print(
+            f"Check that the page shows the code [bold]{user_code}[/bold]. Waiting for you…"
+        )
+
     try:
-        entitlement = asyncio.run(claim(_store(), code, accounts))
+        if code is None:
+            work = device_login(_store(), accounts, show=show)
+        else:
+            work = claim(_store(), code, accounts)
+        entitlement = asyncio.run(work)
+    except KeyboardInterrupt as error:
+        raise typer.Exit(130) from error
     except AccountError as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(1) from error
