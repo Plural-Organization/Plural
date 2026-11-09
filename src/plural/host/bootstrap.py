@@ -27,6 +27,7 @@ from plural.agent.tools.extra.search import Searcher, WebSearchSlot
 from plural.agent.tools.extra.skills import skill_tools
 from plural.agent.tools.registry import Exposure, builtin_tools
 from plural.core.policy.engine import Policy
+from plural.host.account import AccountStore
 from plural.host.actor import SessionActor
 from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
@@ -352,7 +353,13 @@ async def _assemble(
     desk.attach(actor.board)
     await actor.start()
     transport: HostTransport = (
-        RelayLink(url=settings.relay_url, room=room, signer=signer, preview=actor.preview)
+        RelayLink(
+            url=settings.relay_url,
+            room=room,
+            signer=signer,
+            preview=actor.preview,
+            entitlement=AccountStore(state_dir).certificate,
+        )
         if settings.relay_url
         else DirectTransport(host=settings.bind_host, port=settings.port)
     )

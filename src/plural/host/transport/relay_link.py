@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import binascii
+from collections.abc import Awaitable, Callable
 from contextlib import suppress
 
 import structlog
@@ -61,6 +62,7 @@ class RelayLink:
         queue_size: int = 4096,
         max_delay_s: float = 5,
         preview: PreviewProxy | None = None,
+        entitlement: Callable[[], Awaitable[str | None]] | None = None,
     ) -> None:
         self._url = url.rstrip("/")
         self._room = room
@@ -68,6 +70,7 @@ class RelayLink:
         self._queue_size = queue_size
         self._max_delay_s = max_delay_s
         self._preview = preview
+        self._entitlement = entitlement
 
     async def serve(self, inbox: Inbox) -> None:
         delay = 0.5
@@ -90,6 +93,7 @@ class RelayLink:
             room=self._room,
             public_key=self._signer.verifier.public_b64(),
             proof=self._signer.prove(self._room.encode()),
+            entitlement=None if self._entitlement is None else await self._entitlement(),
         )
         await socket.send(opening.model_dump_json())
         outbox: asyncio.Queue[str] = asyncio.Queue(maxsize=self._queue_size)

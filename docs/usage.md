@@ -428,5 +428,12 @@ Preferences are kept in `tui.json` in the data directory.
 | `plural-host doctor` | Check the environment, the workspace and the provider |
 | `plural-host export <room>` | Dump a session's event log to JSONL |
 | `plural-host host` | Serve a session without the client, for a remote machine |
+| `plural-host login --code <code>` | Link this computer to your account; the web page shows the code |
+| `plural-host whoami [--json]` | Show the account this computer is linked to |
+| `plural-host logout` | Forget the account on this computer |
 
-`plural relay`, `plural doctor` and `plural export` run the same commands.
+`plural relay`, `plural doctor`, `plural export`, `plural login`, `plural whoami` and `plural logout` run the same commands.
+
+### Linking a computer to an account
+
+A relay may ask hosts to belong to an account. Sign in on the web, choose Start a room, and run `plural login --code <code>`: the computer proves it holds its host key by signing the code, and the accounts service answers with a certificate for that key. It is kept in `entitlement.json` in the data directory and renewed on its own before it runs out; a host sends it when it opens a room on a relay (`PLURAL_ACCOUNTS_URL` names another accounts service). Nothing changes for a relay that does not ask, and nobody needs an account to join a room.

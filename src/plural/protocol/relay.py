@@ -17,6 +17,8 @@ class RelayOpen(Model):
     room: str
     public_key: str
     proof: str
+    # A certificate from an accounts service, for a relay that asks hosts to belong to an account.
+    entitlement: str | None = None
 
 
 class RelayFrame(Model):
