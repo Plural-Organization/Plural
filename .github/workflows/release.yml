@@ -89,10 +89,15 @@ jobs:
       fail-fast: true
       matrix:
         include:
-          - { os: darwin, arch: arm64, runner: macos-15 }
-          - { os: linux, arch: x64, runner: ubuntu-22.04 }
-          - { os: linux, arch: arm64, runner: ubuntu-22.04-arm }
+          - { os: darwin, arch: arm64, runner: macos-15, ship: true }
+          # The newest macOS the runners offer: built and smoke tested on every release, so a macOS that breaks the frozen host shows
+          # up here first. Only the macos-15 build ships, so users get one darwin host.
+          - { os: darwin, arch: arm64, runner: macos-latest, ship: false }
+          - { os: linux, arch: x64, runner: ubuntu-22.04, ship: true }
+          - { os: linux, arch: arm64, runner: ubuntu-22.04-arm, ship: true }
     runs-on: ${{ matrix.runner }}
+    # A host that only gets tested must not stop the release.
+    continue-on-error: ${{ !matrix.ship }}
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
@@ -107,6 +112,7 @@ jobs:
           ./stage/plural-host/plural-host doctor
           ./stage/plural-host/plural-host --frozen-selftest
       - name: Package
+        if: matrix.ship
         run: |
           base=plural-host-${{ matrix.os }}-${{ matrix.arch }}
           tar -cf - -C stage plural-host | xz -9e -T0 > "$base.tar.xz"
@@ -115,6 +121,7 @@ jobs:
           $sum "$base.tar.xz" > "$base.tar.xz.sha256"
           $sum "$base.tar.gz" > "$base.tar.gz.sha256"
       - uses: actions/upload-artifact@v4
+        if: matrix.ship
         with:
           name: host-${{ matrix.os }}-${{ matrix.arch }}
           path: |
