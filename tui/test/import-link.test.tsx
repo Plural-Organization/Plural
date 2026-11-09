@@ -34,7 +34,7 @@ async function run(importUrl: string | null): Promise<string> {
   await setup.renderOnce();
   await setup.mockInput.typeText("/import");
   await setup.mockInput.pressEnter();
-  return frame(setup, importUrl ?? "needs a relay");
+  return frame(setup, importUrl ?? "--relay");
 }
 
 test("/import shows the address a chat service sends to", async () => {
@@ -45,5 +45,5 @@ test("/import shows the address a chat service sends to", async () => {
 
 test("/import says why there is no address without a relay", async () => {
   const text = await run(null);
-  expect(text).toContain("needs a relay");
+  expect(text).toContain("--relay");
 });
