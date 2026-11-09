@@ -9,7 +9,7 @@ from plural.protocol.relay import AGENT_PREFIXES
 
 OPEN_PATHS = frozenset({"/healthz"})
 # The relay's own routes: a preview's referer never opens them.
-_OWN_PREFIXES = ("/teams", "/metrics", "/healthz", "/host/")
+_OWN = re.compile(r"/(teams|metrics|healthz|host)(/|$)")
 _PREVIEW = re.compile(r"/p/[^/]+/[^/]+")
 
 
@@ -42,7 +42,7 @@ class ClientGate:
         if scope["type"] == "http" and (
             path.startswith("/p/")
             or (
-                not path.startswith(_OWN_PREFIXES)
+                not _OWN.match(path)
                 and preview_of(
                     headers.get(b"referer", b"").decode("latin-1"),
                     headers.get(b"host", b"").decode("latin-1"),

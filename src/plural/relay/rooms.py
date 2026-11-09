@@ -51,7 +51,8 @@ _UNSAFE_PREVIEW_HEADERS = frozenset(
         "alt-svc",
     }
 )
-# What a host hands out after `/p/<room>/`; anything else is not worth troubling the host with.
+# What a host hands out after `/p/<room>/` (`token_urlsafe(24)`); anything else is not worth
+# troubling the host with.
 _PREVIEW_SECRET = re.compile(r"[A-Za-z0-9_-]{32}(/|$)")
 _FORWARDED_HEADERS = frozenset({"host", "connection", "upgrade", "content-length", "forwarded"})
 

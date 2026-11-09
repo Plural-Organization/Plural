@@ -2,7 +2,7 @@ import { Alert, Button, Chip } from "@heroui/react";
 import { PencilSimple } from "@phosphor-icons/react";
 import { useState, type ReactNode } from "react";
 import type { Mentionable } from "@plural/client";
-import { MentionPeople } from "./Mentions";
+import { MentionPeople, Mentions } from "./Mentions";
 import type { FeedItem } from "@plural/client";
 import type { Activity as Current } from "../../lib/activity";
 import { cx } from "../../lib/cx";
@@ -93,10 +93,12 @@ function Text({ text, anchor }: { text: string; anchor: string }) {
       {segments(text).map((segment, index) =>
         segment.quote ? (
           <blockquote key={index} className={styles.quote}>
-            {segment.text}
+            <Mentions text={segment.text} />
           </blockquote>
         ) : (
-          <span key={index}>{segment.text}</span>
+          <span key={index}>
+            <Mentions text={segment.text} />
+          </span>
         ),
       )}
     </div>

@@ -126,6 +126,7 @@ class PreviewProxy:
         for secret, holder in self._grants.items():
             if holder == participant_id:
                 return self._path(secret)
+        # 32 characters, the shape the relay checks before it passes a request on.
         secret = secrets.token_urlsafe(24)
         self._grants[secret] = participant_id
         return self._path(secret)

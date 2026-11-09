@@ -25,6 +25,12 @@ test("agent mentions highlight session members but leave code, emails and unknow
   expect(html).toContain("@stranger");
 });
 
+test("people's messages highlight the members they name too", () => {
+  const html = renderToStaticMarkup(<Feed people={[{ id: "p_v", label: "vlad", role: "participant", connected: true }]} items={[chat({ text: "@vlad look, @nobody" })]} />);
+  expect(html.match(/data-mention="p_v"/g)).toHaveLength(1);
+  expect(html).toContain("@nobody");
+});
+
 const render = (item: FeedItem) => renderToStaticMarkup(<Feed items={[item]} />);
 
 test("a message for the room says who wrote it and that the agent does not see it", () => {

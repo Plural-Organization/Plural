@@ -1,4 +1,4 @@
-import { Button, Kbd } from "@heroui/react";
+import { Button } from "@heroui/react";
 import { ArrowUp, FileText, Paperclip, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 import { mentionCompletions, mentionNote, type Mentionable, type ProposalView, type Role } from "@plural/client";
@@ -139,6 +139,14 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
     }
   };
 
+  // A tip starts what its key would: a command on an empty line, a mention after the text.
+  const begin = (key: "/" | "@") => {
+    const next = key === "/" ? (value.trim() === "" ? "/" : value) : value === "" || /\s$/.test(value) ? `${value}@` : `${value} @`;
+    setValue(next);
+    onActivity(next);
+    area.current?.focus();
+  };
+
   return (
     <div
       className={styles.composer}
@@ -212,8 +220,12 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
             </>
           ) : null}
           <span className={styles.tips}>
-            <Kbd className="h-5 min-w-5 px-1 text-[11px]"><Kbd.Content>/</Kbd.Content></Kbd> commands
-            <Kbd className="ml-2 h-5 min-w-5 px-1 text-[11px]"><Kbd.Content>@</Kbd.Content></Kbd> people
+            <button type="button" className={styles.tip} disabled={disabled !== null} onClick={() => begin("/")}>
+              <kbd>/</kbd> commands
+            </button>
+            <button type="button" className={styles.tip} disabled={disabled !== null} onClick={() => begin("@")}>
+              <kbd>@</kbd> people
+            </button>
           </span>
           <Button isIconOnly size="sm" className="ml-auto" aria-label="send" isDisabled={disabled !== null || (value.trim() === "" && attachments.length === 0)} onPress={submit}>
             <ArrowUp size={16} weight="bold" />
