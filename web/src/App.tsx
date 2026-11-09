@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Alert } from "@heroui/react";
 import { firstSession, parseLink, type JoinLink, type SessionCard } from "@plural/client";
 import { JoinFlow } from "./components/JoinFlow";
@@ -8,6 +8,8 @@ import { RoomScreen } from "./screens/RoomScreen";
 import { unlockAudio } from "./lib/alert";
 import { useTeam } from "./hooks/useTeam";
 import type { Team } from "./lib/team";
+import { isNarrow, RAIL_WIDTH, SIDE_WIDTH, useTucked, useWidth } from "./lib/panels";
+import { ResizeHandle } from "./components/ResizeHandle";
 
 export interface Space {
   link: JoinLink;
@@ -29,6 +31,10 @@ export function App() {
   // Whether the right side shows the form for joining another room.
   const [adding, setAdding] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
+  const [railTucked, setRailTucked] = useTucked("plural.rail.tucked");
+  const [railWidth, setRailWidth] = useWidth("plural.rail.width", 288, RAIL_WIDTH);
+  const [sideTucked, setSideTucked] = useTucked("plural.side.tucked");
+  const [sideWidth, setSideWidth] = useWidth("plural.side.width", 290, SIDE_WIDTH);
   // Right after joining a team, the first session someone shares opens on its own, as in the terminal.
   const [entering, setEntering] = useState(false);
 
@@ -118,7 +124,7 @@ export function App() {
   }
   const showForm = adding || (active === null && team.team === null);
   return (
-    <div className="workspace" data-rail={railOpen ? "open" : "closed"} data-room={active === null ? "none" : "open"}>
+    <div className="workspace" data-rail={railOpen ? "open" : "closed"} data-rail-tucked={railTucked} style={{ "--rail-w": `${railWidth}px` } as CSSProperties} data-room={active === null ? "none" : "open"}>
       <Rail
         team={team}
         spaces={spaces}
@@ -133,7 +139,9 @@ export function App() {
           setAdding(true);
           setRailOpen(false);
         }}
+        onHide={() => (isNarrow() ? setRailOpen(false) : setRailTucked(true))}
       />
+      {railTucked ? null : <ResizeHandle label="Width of the sessions" width={railWidth} bounds={RAIL_WIDTH} direction={1} onResize={setRailWidth} style={{ left: 8 + railWidth }} />}
       <button type="button" className="rail-scrim" aria-label="Close the list of sessions" onClick={() => setRailOpen(false)} />
       <div className="workspace-main" data-adding={showForm}>
         {spaces.map((space) => (
@@ -144,7 +152,9 @@ export function App() {
               member={space.team}
               active={space.link.room === active && !showForm}
               notice={space.link.room === active ? notice : null}
-              onOpenRail={() => setRailOpen(true)}
+              railTucked={railTucked}
+              side={{ tucked: sideTucked, width: sideWidth, setTucked: setSideTucked, setWidth: setSideWidth }}
+              onToggleRail={() => (isNarrow() ? setRailOpen(true) : setRailTucked(!railTucked))}
               onHost={(owner) => setSpaces((current) => current.map((item) => (item.link.room === space.link.room && item.owner !== owner ? { ...item, owner } : item)))}
               onLeave={(reason) => close(space.link.room, reason)}
             />

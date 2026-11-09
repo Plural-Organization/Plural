@@ -120,6 +120,8 @@ class CardDraft(Model):
     endpoints: tuple[Endpoint, ...] = Field(min_length=1, max_length=4)
     repo_id: str | None = Field(default=None, max_length=200)
     touching: tuple[Touch, ...] = Field(default=(), max_length=50)
+    # The agent the session runs, as the host names it ("Claude Code · claude-sonnet-5-5").
+    agent: str | None = Field(default=None, max_length=120)
 
 
 class SessionCard(CardDraft):

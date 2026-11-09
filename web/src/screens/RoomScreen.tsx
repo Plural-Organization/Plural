@@ -1,6 +1,6 @@
 import { Alert, Button, Spinner } from "@heroui/react";
 import { ArrowDown } from "@phosphor-icons/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { label, mentionable, status, type JoinLink, type ProposalView } from "@plural/client";
 import { Board, type Pointer } from "../components/Board";
 import { Canvas } from "../components/Canvas";
@@ -31,6 +31,8 @@ import { upload } from "../lib/upload";
 import { cx } from "../lib/cx";
 import { pluginHints, skillHints } from "../lib/commands";
 import styles from "./RoomScreen.module.css";
+import { isNarrow, SIDE_WIDTH } from "../lib/panels";
+import { ResizeHandle } from "../components/ResizeHandle";
 
 interface RoomScreenProps {
   link: JoinLink;
@@ -42,12 +44,15 @@ interface RoomScreenProps {
   // Why another space closed, said here when this one takes its place.
   notice?: string | null;
   // Brings back the list of sessions on a narrow screen.
-  onOpenRail: () => void;
+  railTucked: boolean;
+  // The room panel, the same in every open room.
+  side: { tucked: boolean; width: number; setTucked: (tucked: boolean) => void; setWidth: (width: number) => void };
+  onToggleRail: () => void;
   // Says whose session this is, once the room knows.
   onHost: (name: string) => void;
   onLeave: (reason: string | null) => void;
 }
-export function RoomScreen({ link, name, member, active, notice = null, onOpenRail, onHost, onLeave }: RoomScreenProps) {
+export function RoomScreen({ link, name, member, active, notice = null, railTucked, side, onToggleRail, onHost, onLeave }: RoomScreenProps) {
   // The session keeps the callback it started with, so it calls the latest one through a ref.
   const leaving = useRef(onLeave);
   leaving.current = onLeave;
@@ -69,6 +74,7 @@ export function RoomScreen({ link, name, member, active, notice = null, onOpenRa
   );
   const [editing, setEditing] = useState<ProposalView | null>(null);
   const [panel, setPanel] = useState(false);
+  const { tucked: sideTucked, width: sideWidth, setTucked: setSideTucked, setWidth: setSideWidth } = side;
   const { toast, flash } = useToast();
   useEffect(() => {
     if (notice) {
@@ -234,20 +240,24 @@ export function RoomScreen({ link, name, member, active, notice = null, onOpenRa
         : "Message the agent, / for commands";
 
   return (
-    <div ref={root} className={cx(styles.room, (doc || boardShown) && styles.withCanvas)}>
+    <div ref={root} className={cx(styles.room, (doc || boardShown) && styles.withCanvas, !doc && !boardShown && sideTucked && styles.tucked)} style={{ "--side": `${sideWidth}px` } as CSSProperties}>
       <TopBar
         room={link.room}
         projection={projection}
         connection={connection}
-        panelOpen={panel && doc === null}
+        panelOpen={!sideTucked || doc !== null || boardShown}
+        panelShown={panel && doc === null}
+        railOpen={!railTucked}
         onCopyRoom={() => void copyText(link.room).then((ok) => ok && flash("room id copied"))}
         onTogglePanel={() => {
           setCanvasId(null);
           setBoardShown(false);
-          setPanel((open) => !open || doc !== null || boardShown);
+          if (isNarrow()) setPanel((open) => !open || doc !== null || boardShown);
+          // On a wide screen an open canvas gives way to the panel; otherwise the panel comes and goes.
+          else setSideTucked(doc === null && !boardShown && !sideTucked);
         }}
         onLeave={leave}
-        onOpenRail={onOpenRail}
+        onToggleRail={onToggleRail}
       />
 
       <main className={styles.stage}>
@@ -261,6 +271,16 @@ export function RoomScreen({ link, name, member, active, notice = null, onOpenRa
               <div className="flex items-center justify-center gap-2.5 py-10 text-sm text-muted">
                 <Spinner size="sm" color="current" />
                 {projection.waiting ? "waiting for the host to let you in…" : connection === "online" ? "loading the session…" : "connecting to the host…"}
+              </div>
+            ) : null}
+            {projection.ready && !feed.items.some((item) => item.kind === "user" || item.kind === "chat" || item.kind === "assistant") ? (
+              <div className={styles.empty}>
+                <h2 className="font-display">
+                  One agent, the whole team.
+                  <br />
+                  <span className="tone-2">Ask it anything.</span>
+                </h2>
+                <p>Everyone here sees the same conversation. Type <kbd>/</kbd> for commands or <kbd>@</kbd> to tag someone.</p>
               </div>
             ) : null}
             <Feed items={feed.items} people={mentionable(state, null)} meId={projection.meId} activity={current} onOpenBoard={state.board.open ? showBoard : undefined} onOpenDoc={(id) => {
@@ -380,10 +400,15 @@ export function RoomScreen({ link, name, member, active, notice = null, onOpenRa
           status={runStatus}
           waiting={items.length}
           open={panel}
+          tucked={sideTucked}
+          onHide={() => (isNarrow() ? setPanel(false) : setSideTucked(true))}
           send={send}
           onInvite={(role) => send({ type: "invite.create", role, ttl_s: 3600, reusable: role === "participant" })}
         />
       )}
+      {!doc && !boardShown && !sideTucked ? (
+        <ResizeHandle label="Width of the room panel" width={sideWidth} bounds={SIDE_WIDTH} direction={-1} onResize={setSideWidth} style={{ right: sideWidth, top: 56 }} />
+      ) : null}
 
       <QuoteButton enabled={active && me !== undefined && me.role !== "viewer"} onQuote={(text) => setQuote((current) => ({ text, key: (current?.key ?? 0) + 1 }))} />
       {invite && active ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}

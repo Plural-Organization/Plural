@@ -1,23 +1,28 @@
 import { Avatar, AvatarGroup, Button, Chip, ProgressBar, Spinner, Tooltip } from "@heroui/react";
-import { List, SidebarSimple, SignOut } from "@phosphor-icons/react";
+import { SidebarSimple, SignOut } from "@phosphor-icons/react";
 import { contextMeter, type ConnectionStatus, type Projection } from "@plural/client";
 import { orbFor, PersonAvatar } from "./PersonAvatar";
+import { AgentLogo } from "./AgentLogo";
 
 interface TopBarProps {
   room: string;
   projection: Projection;
   connection: ConnectionStatus;
   panelOpen: boolean;
+  // Whether the room panel is slid over the room on a narrow screen.
+  panelShown?: boolean;
+  // Whether the list of sessions shows beside the room on a wide screen.
+  railOpen: boolean;
   onCopyRoom: () => void;
   onTogglePanel: () => void;
   onLeave: () => void;
-  // Opens the list of sessions, which a narrow screen keeps out of the way.
-  onOpenRail?: () => void;
+  // Shows or hides the list of sessions; a narrow screen slides it over the room.
+  onToggleRail: () => void;
 }
 
 const METER_COLOR = { ok: "accent", warn: "warning", danger: "danger" } as const;
 
-export function TopBar({ room, projection, connection, panelOpen, onCopyRoom, onTogglePanel, onLeave, onOpenRail }: TopBarProps) {
+export function TopBar({ room, projection, connection, panelOpen, panelShown = false, railOpen, onCopyRoom, onTogglePanel, onLeave, onToggleRail }: TopBarProps) {
   const state = projection.state;
   const meter = contextMeter(state);
   const people = Object.values(state.participants);
@@ -25,13 +30,16 @@ export function TopBar({ room, projection, connection, panelOpen, onCopyRoom, on
   const host = people.find((person) => person.role === "host");
   const review = state.prompt_mode === "review";
   return (
-    <header className="col-span-full flex h-14 min-w-0 flex-none items-center gap-3 border-b border-border px-3 sm:px-4">
-      <Button isIconOnly variant="ghost" size="sm" className="min-[981px]:hidden" aria-label="sessions" onPress={onOpenRail}>
-        <List size={18} />
-      </Button>
+    <header className="col-span-full flex h-14 min-w-0 flex-none items-center gap-3 px-2 sm:px-3">
+      <Tooltip delay={300}>
+        <Button isIconOnly variant="ghost" size="sm" className={railOpen ? "min-[981px]:hidden" : ""} aria-label="Show the sessions" onPress={onToggleRail}>
+          <SidebarSimple size={18} />
+        </Button>
+        <Tooltip.Content>Show the sessions</Tooltip.Content>
+      </Tooltip>
       {host ? <PersonAvatar seed={host.name} /> : null}
       <div className="flex min-w-0 flex-col leading-tight">
-        <span className="truncate text-[15px] font-medium">{host ? `${host.name}'s session` : "Room"}</span>
+        <span className="truncate font-display text-base font-semibold tracking-[-0.01em]">{host ? `${host.name}'s session` : "Room"}</span>
         <Tooltip delay={300}>
           <button type="button" className="max-w-[16ch] cursor-pointer truncate text-left font-mono text-xs text-muted hover:text-foreground" onClick={onCopyRoom}>
             {room}
@@ -55,8 +63,10 @@ export function TopBar({ room, projection, connection, panelOpen, onCopyRoom, on
         </Tooltip>
       ) : null}
       {projection.agentLabel ? (
-        <Chip size="sm" variant="secondary" className="hidden max-w-[14rem] lg:inline-flex">
-          <Chip.Label className="truncate font-mono">{projection.agentLabel}</Chip.Label>
+        <Chip size="sm" variant="secondary" className="hidden max-w-[16rem] lg:inline-flex">
+          <i className="status-dot" data-status={state.run ? "running" : "idle"} />
+          <AgentLogo label={projection.agentLabel} size={14} decorative />
+          <Chip.Label className="truncate">{projection.agentLabel}</Chip.Label>
         </Chip>
       ) : null}
       {connection === "online" ? (
@@ -76,9 +86,12 @@ export function TopBar({ room, projection, connection, panelOpen, onCopyRoom, on
           <Chip.Label>{connection === "connecting" ? "Connecting" : "Reconnecting"}</Chip.Label>
         </Chip>
       )}
-      <Button isIconOnly variant="ghost" size="sm" className="min-[981px]:hidden" aria-label="room" aria-expanded={panelOpen} onPress={onTogglePanel}>
-        <SidebarSimple size={18} />
-      </Button>
+      <Tooltip delay={300}>
+        <Button isIconOnly variant="ghost" size="sm" className={panelOpen ? "min-[981px]:hidden" : ""} aria-label="The room panel" aria-expanded={panelShown} onPress={onTogglePanel}>
+          <SidebarSimple size={18} className="-scale-x-100" />
+        </Button>
+        <Tooltip.Content>Show the room panel</Tooltip.Content>
+      </Tooltip>
       <Button variant="ghost" size="sm" onPress={onLeave}>
         <SignOut size={16} />
         <span className="hidden sm:inline">Leave</span>
