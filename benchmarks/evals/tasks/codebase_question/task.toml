@@ -1,0 +1,2 @@
+prompt = """How many times does a failed upload to the storage service get retried in production, and how long
+is the wait before the second retry? Answer from the code, with both numbers. Do not change files."""

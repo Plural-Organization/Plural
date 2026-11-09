@@ -1,0 +1,2 @@
+prompt = """`pages.py` drops the last items of a list: `page(list(range(10)), 3)` should give four pages
+and gives three. Find the bug and fix it."""

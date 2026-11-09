@@ -1,0 +1,12 @@
+{
+  "calibration_ms": 91.587,
+  "cases": {
+    "loop_step": 1.48,
+    "long_conversation": 6.888,
+    "replay_per_1k_events": 6.563,
+    "host_start": 39.011,
+    "prompt_direct": 3.401,
+    "prompt_relayed": 4.013,
+    "fanout_10_guests": 1.027
+  }
+}

@@ -1,0 +1,2 @@
+prompt = """Rename the function `fetch_user` to `load_account` everywhere in this repository, including the
+dynamic lookup in `plugins.py`, the docs and the tests. Nothing should mention the old name."""

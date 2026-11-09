@@ -1,0 +1,2 @@
+prompt = """`sh build.sh` should produce `dist/site/index.html`, but it does not. Find out why and fix what is
+wrong. Run it to confirm."""
