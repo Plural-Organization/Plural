@@ -6,6 +6,7 @@ import { Rail } from "./components/Rail";
 import { JoinScreen } from "./screens/JoinScreen";
 import { RoomScreen } from "./screens/RoomScreen";
 import { unlockAudio } from "./lib/alert";
+import { useAccount } from "./hooks/useAccount";
 import { useTeam } from "./hooks/useTeam";
 import type { Team } from "./lib/team";
 import { isNarrow, RAIL_WIDTH, SIDE_WIDTH, useTucked, useWidth } from "./lib/panels";
@@ -28,6 +29,7 @@ export function App() {
   const [active, setActive] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const team = useTeam();
+  const account = useAccount();
   // Whether the right side shows the form for joining another room.
   const [adding, setAdding] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
@@ -120,13 +122,14 @@ export function App() {
     return null;
   }
   if (team.team === null && spaces.length === 0) {
-    return <JoinScreen notice={notice} team={team} onJoin={join} onTeamJoined={() => setEntering(true)} />;
+    return <JoinScreen notice={notice} team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} />;
   }
   const showForm = adding || (active === null && team.team === null);
   return (
     <div className="workspace" data-rail={railOpen ? "open" : "closed"} data-rail-tucked={railTucked} style={{ "--rail-w": `${railWidth}px` } as CSSProperties} data-room={active === null ? "none" : "open"}>
       <Rail
         team={team}
+        account={account}
         spaces={spaces}
         active={active}
         onSwitch={(room) => {
@@ -164,7 +167,7 @@ export function App() {
           <div className="flex h-full items-center justify-center overflow-y-auto p-6">
             <div className="w-full max-w-[26rem]">
               <h2 className="mb-5 text-3xl font-medium tracking-[-0.022em]">Join another room</h2>
-              <JoinFlow team={team} onJoin={join} onTeamJoined={() => setEntering(true)} />
+              <JoinFlow team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} />
               {spaces.length > 0 ? <button type="button" className="link-button mt-4" onClick={() => setAdding(false)}>Back to the room</button> : null}
             </div>
           </div>

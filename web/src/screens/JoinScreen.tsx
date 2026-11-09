@@ -4,6 +4,7 @@ import type { JoinLink } from "@plural/client";
 import { JoinFlow } from "../components/JoinFlow";
 import { LogoMark } from "../components/LogoMark";
 import { PersonAvatar } from "../components/PersonAvatar";
+import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
 import { hostOf } from "../lib/links";
 import { forgetRoom, linkOf, savedRooms, type SavedRoom } from "../lib/saved";
@@ -11,12 +12,13 @@ import { forgetRoom, linkOf, savedRooms, type SavedRoom } from "../lib/saved";
 interface JoinScreenProps {
   notice: string | null;
   team: TeamState;
+  account: AccountState;
   onJoin: (link: JoinLink, name: string) => void;
   onTeamJoined: () => void;
 }
 
 // The page for someone with no room open and no team yet.
-export function JoinScreen({ notice, team, onJoin, onTeamJoined }: JoinScreenProps) {
+export function JoinScreen({ notice, team, account, onJoin, onTeamJoined }: JoinScreenProps) {
   const [rooms, setRooms] = useState<SavedRoom[]>(savedRooms);
   const reopen = (key: Key) => {
     const room = rooms.find((item) => item.room === key);
@@ -36,11 +38,13 @@ export function JoinScreen({ notice, team, onJoin, onTeamJoined }: JoinScreenPro
             <span className="tone-2">or start your own.</span>
           </h1>
         </div>
-        {notice ? <p className="mt-6 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">{notice}</p> : null}
+        {notice ?? account.loginError ? (
+          <p className="mt-6 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">{notice ?? account.loginError}</p>
+        ) : null}
         {/* Double bezel, as on the landing: a thin outer tray holding the form. */}
         <div className="mt-8 rounded-[2rem] border border-white/[0.08] bg-white/[0.02] p-2">
           <div className="rounded-[calc(2rem-0.5rem)] bg-[#0b0b0d] p-5 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)] sm:p-6">
-            <JoinFlow team={team} onJoin={onJoin} onTeamJoined={onTeamJoined} />
+            <JoinFlow team={team} account={account} onJoin={onJoin} onTeamJoined={onTeamJoined} />
           </div>
         </div>
         {rooms.length > 0 ? (
