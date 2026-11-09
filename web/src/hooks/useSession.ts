@@ -13,7 +13,6 @@ import {
   type Feed,
   type JoinLink,
   type PluginAsked,
-  type EventOf,
   type Tone,
 } from "@plural/client";
 import { alertMention, alertNotice } from "../lib/alert";
@@ -43,7 +42,8 @@ export interface SessionView {
 export interface Session extends SessionView {
   send: (command: Command) => void;
   fetchPicture: (attachmentId: string) => void;
-  fetchPreview: (previewId: string, path: string) => Promise<EventOf<"preview.data">>;
+  // This participant's own address of the server the host shares, which the host hands out.
+  openPreview: (previewId: string) => Promise<string>;
   // Presence that may fail quietly: a host from an older release does not know it.
   sendPresence: (command: Command) => boolean;
   notify: (tone: Tone, text: string) => void;
@@ -58,7 +58,7 @@ export class SessionStore {
   private readonly listeners = new Set<() => void>();
   private client: SessionClient | null = null;
   private token: string | null;
-  private readonly previewRequests = new Map<string, { previewId: string; resolve: (data: EventOf<"preview.data">) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+  private readonly previewRequests = new Map<string, { resolve: (url: string) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
 
   private clearPreviewRequests(): void {
     for (const request of this.previewRequests.values()) {
@@ -126,13 +126,12 @@ export class SessionStore {
             continue;
           }
           if (event.type === "preview.changed") this.clearPreviewRequests();
-          if (event.type === "preview.data") {
-            const request = this.previewRequests.get(event.request_id);
-            if (request && request.previewId === event.preview_id) {
+          if (event.type === "preview.opened") {
+            const request = this.previewRequests.get(event.preview_id);
+            if (request) {
               clearTimeout(request.timer);
-              this.previewRequests.delete(event.request_id);
-              if (event.error) request.reject(new Error(event.error));
-              else request.resolve(event);
+              this.previewRequests.delete(event.preview_id);
+              request.resolve(previewUrl(this.link.url, event.path));
             }
             continue;
           }
@@ -204,21 +203,20 @@ export class SessionStore {
     this.client.send({ type: "attachment.fetch", attachment_id: attachmentId }).catch(() => this.asked.delete(attachmentId));
   };
 
-  readonly fetchPreview = (previewId: string, path: string): Promise<EventOf<"preview.data">> => {
+  readonly openPreview = (previewId: string): Promise<string> => {
     const client = this.client;
     if (!client || this.view.connection !== "online") return Promise.reject(new Error("preview is offline"));
-    if (this.previewRequests.size >= 4) return Promise.reject(new Error("too many preview requests"));
-    const requestId = crypto.randomUUID();
+    this.previewRequests.get(previewId)?.reject(new Error("preview asked again"));
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.previewRequests.delete(requestId);
-        reject(new Error("preview request timed out"));
+        this.previewRequests.delete(previewId);
+        reject(new Error("the host did not answer about the preview"));
       }, 15000);
-      this.previewRequests.set(requestId, { previewId, resolve, reject, timer });
-      client.send({ type: "preview.fetch", preview_id: previewId, request_id: requestId, path }).catch((error: unknown) => {
+      this.previewRequests.set(previewId, { resolve, reject, timer });
+      client.send({ type: "preview.open", preview_id: previewId }).catch((error: unknown) => {
         clearTimeout(timer);
-        this.previewRequests.delete(requestId);
-        reject(error);
+        this.previewRequests.delete(previewId);
+        reject(error instanceof Error ? error : new Error(String(error)));
       });
     });
   };
@@ -247,11 +245,18 @@ export class SessionStore {
   }
 }
 
+// The host answers with a path on the relay the session runs on, next to the room's own address.
+export function previewUrl(roomUrl: string, path: string): string {
+  const base = new URL(roomUrl.replace(/[^/]*$/, ""));
+  base.protocol = base.protocol === "wss:" ? "https:" : "http:";
+  return new URL(path, base).toString();
+}
+
 export function useSession(link: JoinLink, name: string, onFatal: (reason: string) => void, team: Team | null = null): Session {
   const [store] = useState(() => new SessionStore(link, name, onFatal, team));
   const view = useSyncExternalStore(store.subscribe, store.snapshot);
   useEffect(() => store.start(), [store]);
-  return { ...view, send: store.send, fetchPicture: store.fetchPicture, fetchPreview: store.fetchPreview, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, answer: store.answer, close: store.close };
+  return { ...view, send: store.send, fetchPicture: store.fetchPicture, openPreview: store.openPreview, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, answer: store.answer, close: store.close };
 }
 
 function messageOf(error: unknown): string {

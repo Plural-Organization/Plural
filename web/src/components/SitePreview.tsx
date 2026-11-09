@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { BoardCursor, Command } from "@plural/client";
-import { bridgeScript, readFrame, TO_FRAME, type PickedComponent, type ToFrame } from "../lib/bridge";
+import { BRIDGE_CODE, bridgeScript, readFrame, TO_FRAME, type PickedComponent, type ToFrame } from "../lib/bridge";
 import { colorFor } from "../lib/colors";
 import { componentPrompt } from "../lib/quote";
 import { buildSite, localTarget, siteEntries, type Site } from "../lib/site";
 import { cx } from "../lib/cx";
-import { buildDevPreview, previewPath, type FetchPreview } from "../lib/devPreview";
 import type { Pointer } from "./Board";
 import styles from "./SitePreview.module.css";
 
@@ -17,7 +16,8 @@ const NOTE_HEIGHT = 120;
 
 interface SitePreviewProps {
   entry: string;
-  remote?: { id: string; fetch: FetchPreview };
+  // A server the host shares: it runs as itself in the frame, from the address the host hands out.
+  remote?: { id: string; open: (previewId: string) => Promise<string> };
   site: Site;
   pointers: Pointer[];
   // My own pointer as the host sent it back.
@@ -33,6 +33,7 @@ export function SitePreview({ entry, remote, site, pointers, echo, canPick, send
   const box = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(entry);
   const [built, setBuilt] = useState<{ html: string; problems: string[] } | null>(null);
+  const [address, setAddress] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -46,12 +47,24 @@ export function SitePreview({ entry, remote, site, pointers, echo, canPick, send
     scrolled.current = 0;
   }, [entry]);
 
+  useEffect(() => {
+    if (!remote) return;
+    let alive = true;
+    setError(null);
+    remote.open(remote.id).then((url) => alive && setAddress(url)).catch((reason: unknown) => {
+      if (alive) setError(reason instanceof Error ? reason.message : String(reason));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [remote?.id, remote?.open]);
+
   // The page is rebuilt from the files whenever the agent changes one, keeping the scroll.
   useEffect(() => {
+    if (remote) return;
     let alive = true;
     const timer = setTimeout(() => {
-      const building = remote ? buildDevPreview(remote.id, page, remote.fetch, bridgeScript(scrolled.current)) : buildSite(site.files, page, bridgeScript(scrolled.current), root);
-      void building.then((next) => {
+      void buildSite(site.files, page, bridgeScript(scrolled.current), root).then((next) => {
         if (alive) {
           setBuilt(next);
           setError(null);
@@ -64,9 +77,16 @@ export function SitePreview({ entry, remote, site, pointers, echo, canPick, send
       alive = false;
       clearTimeout(timer);
     };
-  }, [remote ? 0 : site.version, page, reload, remote?.id, remote?.fetch]);
+  }, [site.version, page, reload, remote?.id]);
 
-  const tell = (message: ToFrame) => frame.current?.contentWindow?.postMessage({ from: TO_FRAME, ...message }, "*");
+  // The host's loader in the page runs this once per page load; the app's scripts run as they are.
+  const bridge = () => {
+    if (address !== null) frame.current?.contentWindow?.postMessage({ from: BRIDGE_CODE, code: bridgeScript(0, true) }, new URL(address).origin);
+    resend();
+  };
+
+  // A live page can go to other sites, which must not get the names on the pointers.
+  const tell = (message: ToFrame) => frame.current?.contentWindow?.postMessage({ from: TO_FRAME, ...message }, address === null ? "*" : new URL(address).origin);
 
   const cursors = JSON.stringify(pointers.map(({ id, name, cursor }) => ({ id, name, color: colorFor(id), x: cursor.x, y: cursor.y })));
   const resend = () => {
@@ -149,12 +169,6 @@ export function SitePreview({ entry, remote, site, pointers, echo, canPick, send
           setPicking(false);
           break;
         case "navigate": {
-          if (remote) {
-            const next = previewPath(page, message.href);
-            if (next !== null) { scrolled.current = 0; closeNote(); setPage(next); }
-            else onNotice("the preview only opens pages from the shared server");
-            break;
-          }
           const target = localTarget(page, message.href, root);
           const html = target === null ? null : [target, `${target}/index.html`].find((path) => siteEntries(site.files).includes(path) || site.files.has(path));
           if (html && /\.html?$/.test(html)) {
@@ -200,7 +214,21 @@ export function SitePreview({ entry, remote, site, pointers, echo, canPick, send
 
   return (
     <div className={styles.preview} ref={box} onPointerLeave={() => share(null)}>
-      {built !== null ? (
+      {remote ? (
+        address !== null ? (
+          <iframe
+            key={reload}
+            ref={frame}
+            className={cx(styles.frame, picking && styles.picking)}
+            title="Shared server preview"
+            sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-downloads"
+            src={address}
+            onLoad={bridge}
+          />
+        ) : (
+          <div className={styles.loading}>opening the shared server…</div>
+        )
+      ) : built !== null ? (
         <iframe
           ref={frame}
           className={cx(styles.frame, picking && styles.picking)}

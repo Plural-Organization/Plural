@@ -270,16 +270,12 @@ class PreviewChanged(EventBase):
     preview: PreviewView | None
 
 
-class PreviewData(TransientEvent):
-    """A bounded resource response delivered only to its requester."""
+class PreviewOpened(TransientEvent):
+    """The requester's own link to the shared server, relative to the relay the session runs on."""
 
-    type: Literal["preview.data"] = "preview.data"
+    type: Literal["preview.opened"] = "preview.opened"
     preview_id: str
-    request_id: str
-    status: int
-    media_type: str
-    content_b64: str = ""
-    error: str | None = None
+    path: str
 
 
 class AttachmentData(TransientEvent):
@@ -552,7 +548,7 @@ Event = Annotated[
     | BoardMoved
     | AttachmentData
     | PreviewChanged
-    | PreviewData
+    | PreviewOpened
     | PluginShown
     | PluginAsked
     | PluginNotified

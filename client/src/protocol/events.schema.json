@@ -1467,7 +1467,7 @@
               "policy.rule_added": "#/$defs/PolicyRuleAdded",
               "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
               "preview.changed": "#/$defs/PreviewChanged",
-              "preview.data": "#/$defs/PreviewData",
+              "preview.opened": "#/$defs/PreviewOpened",
               "prompt.accepted": "#/$defs/PromptAccepted",
               "prompt.dequeued": "#/$defs/PromptDequeued",
               "proposal.approved": "#/$defs/ProposalApproved",
@@ -1583,7 +1583,7 @@
               "$ref": "#/$defs/PreviewChanged"
             },
             {
-              "$ref": "#/$defs/PreviewData"
+              "$ref": "#/$defs/PreviewOpened"
             },
             {
               "$ref": "#/$defs/PluginShown"
@@ -2623,50 +2623,25 @@
       ],
       "type": "object"
     },
-    "PreviewData": {
-      "description": "A bounded resource response delivered only to its requester.",
+    "PreviewOpened": {
+      "description": "The requester's own link to the shared server, relative to the relay the session runs on.",
       "properties": {
-        "content_b64": {
-          "default": "",
-          "type": "string"
-        },
-        "error": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null
-        },
-        "media_type": {
+        "path": {
           "type": "string"
         },
         "preview_id": {
           "type": "string"
         },
-        "request_id": {
-          "type": "string"
-        },
-        "status": {
-          "type": "integer"
-        },
         "type": {
-          "const": "preview.data",
-          "default": "preview.data",
+          "const": "preview.opened",
+          "default": "preview.opened",
           "type": "string"
         }
       },
       "required": [
         "type",
         "preview_id",
-        "request_id",
-        "status",
-        "media_type",
-        "content_b64",
-        "error"
+        "path"
       ],
       "type": "object"
     },
@@ -3868,7 +3843,7 @@
           "policy.rule_added": "#/$defs/PolicyRuleAdded",
           "policy.rule_removed": "#/$defs/PolicyRuleRemoved",
           "preview.changed": "#/$defs/PreviewChanged",
-          "preview.data": "#/$defs/PreviewData",
+          "preview.opened": "#/$defs/PreviewOpened",
           "prompt.accepted": "#/$defs/PromptAccepted",
           "prompt.dequeued": "#/$defs/PromptDequeued",
           "proposal.approved": "#/$defs/ProposalApproved",
@@ -3984,7 +3959,7 @@
           "$ref": "#/$defs/PreviewChanged"
         },
         {
-          "$ref": "#/$defs/PreviewData"
+          "$ref": "#/$defs/PreviewOpened"
         },
         {
           "$ref": "#/$defs/PluginShown"

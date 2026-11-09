@@ -308,11 +308,11 @@ class PreviewSet(Model):
     title: str = Field(default="Local preview", min_length=1, max_length=80)
 
 
-class PreviewFetch(Model):
-    type: Literal["preview.fetch"] = "preview.fetch"
+class PreviewOpen(Model):
+    """Asks for this participant's own link to the shared server, answered with `preview.opened`."""
+
+    type: Literal["preview.open"] = "preview.open"
     preview_id: str = Field(min_length=1, max_length=64)
-    request_id: str = Field(min_length=1, max_length=64)
-    path: str = Field(default="/", min_length=1, max_length=4096)
 
 
 class AttachmentFetch(Model):
@@ -404,7 +404,7 @@ Command = Annotated[
     | BoardMove
     | AttachmentFetch
     | PreviewSet
-    | PreviewFetch
+    | PreviewOpen
     | BoardErase
     | BoardClear
     | QueueCancel

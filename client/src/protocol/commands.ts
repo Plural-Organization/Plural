@@ -113,7 +113,7 @@ export interface CommandsSchema {
     | BoardMove
     | AttachmentFetch
     | PreviewSet
-    | PreviewFetch
+    | PreviewOpen
     | BoardErase
     | BoardClear
     | QueueCancel
@@ -589,14 +589,14 @@ export interface PreviewSet {
   type?: "preview.set";
 }
 /**
+ * Asks for this participant's own link to the shared server, answered with `preview.opened`.
+ *
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
- * via the `definition` "PreviewFetch".
+ * via the `definition` "PreviewOpen".
  */
-export interface PreviewFetch {
-  path?: string;
+export interface PreviewOpen {
   preview_id: string;
-  request_id: string;
-  type?: "preview.fetch";
+  type?: "preview.open";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

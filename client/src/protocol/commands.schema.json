@@ -1061,33 +1061,22 @@
       ],
       "type": "object"
     },
-    "PreviewFetch": {
+    "PreviewOpen": {
+      "description": "Asks for this participant's own link to the shared server, answered with `preview.opened`.",
       "properties": {
-        "path": {
-          "default": "/",
-          "maxLength": 4096,
-          "minLength": 1,
-          "type": "string"
-        },
         "preview_id": {
           "maxLength": 64,
           "minLength": 1,
           "type": "string"
         },
-        "request_id": {
-          "maxLength": 64,
-          "minLength": 1,
-          "type": "string"
-        },
         "type": {
-          "const": "preview.fetch",
-          "default": "preview.fetch",
+          "const": "preview.open",
+          "default": "preview.open",
           "type": "string"
         }
       },
       "required": [
-        "preview_id",
-        "request_id"
+        "preview_id"
       ],
       "type": "object"
     },
@@ -1542,7 +1531,7 @@
           "presence.cursor": "#/$defs/CursorSet",
           "presence.select": "#/$defs/SelectionSet",
           "presence.typing": "#/$defs/TypingSet",
-          "preview.fetch": "#/$defs/PreviewFetch",
+          "preview.open": "#/$defs/PreviewOpen",
           "preview.set": "#/$defs/PreviewSet",
           "prompt.submit": "#/$defs/PromptSubmit",
           "proposal.decide": "#/$defs/ProposalDecide",
@@ -1695,7 +1684,7 @@
           "$ref": "#/$defs/PreviewSet"
         },
         {
-          "$ref": "#/$defs/PreviewFetch"
+          "$ref": "#/$defs/PreviewOpen"
         },
         {
           "$ref": "#/$defs/BoardErase"

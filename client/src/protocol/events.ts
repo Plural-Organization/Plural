@@ -188,7 +188,7 @@ export interface EventsSchema {
     | BoardMoved
     | AttachmentData
     | PreviewChanged
-    | PreviewData
+    | PreviewOpened
     | PluginShown
     | PluginAsked
     | PluginNotified
@@ -662,19 +662,15 @@ export interface PreviewView {
   title: string;
 }
 /**
- * A bounded resource response delivered only to its requester.
+ * The requester's own link to the shared server, relative to the relay the session runs on.
  *
  * This interface was referenced by `EventsSchema`'s JSON-Schema
- * via the `definition` "PreviewData".
+ * via the `definition` "PreviewOpened".
  */
-export interface PreviewData {
-  content_b64: string;
-  error: string | null;
-  media_type: string;
+export interface PreviewOpened {
+  path: string;
   preview_id: string;
-  request_id: string;
-  status: number;
-  type: "preview.data";
+  type: "preview.opened";
 }
 /**
  * What a plugin command shows the person who ran it, and nobody else. It is not logged.
@@ -1389,7 +1385,7 @@ export interface EventRecord {
     | BoardMoved
     | AttachmentData
     | PreviewChanged
-    | PreviewData
+    | PreviewOpened
     | PluginShown
     | PluginAsked
     | PluginNotified

@@ -17,6 +17,12 @@ class RelayLimits:
     max_guests_per_peer: int = 30
     connects_per_second: float = 2.0
     connect_burst: int = 20
+    # A dev server's first page asks for a hundred files or more at once.
+    preview_requests_per_second: float = 50.0
+    preview_burst: int = 300
+    max_preview_requests: int = 64
+    max_preview_body_bytes: int = 1_000_000
+    preview_timeout_s: float = 30.0
 
 
 def peer_of(forwarded: str | None, client: str | None, proxy_hops: int) -> str:

@@ -339,7 +339,7 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
             <SitePreview
               key={page.id}
               entry={page.text}
-              remote={page.previewId ? { id: page.previewId, fetch: session.fetchPreview } : undefined}
+              remote={page.previewId ? { id: page.previewId, open: session.openPreview } : undefined}
               site={site}
               pointers={previewPointers}
               echo={projection.meId === null ? undefined : projection.cursors.get(projection.meId)}
