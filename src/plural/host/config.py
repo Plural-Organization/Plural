@@ -14,6 +14,8 @@ from plural.protocol.models import AdmissionMode, PromptMode
 # The relay a host and a team use when none is named. Everything else is opt-in: --local stays on
 # this machine, --bind and --public-url serve directly, --relay picks another relay.
 DEFAULT_RELAY_URL = "wss://relay.plrl.host"
+# Where a computer is linked to an account.
+DEFAULT_ACCOUNTS_URL = "https://accounts.plrl.host"
 
 
 class HostSettings(BaseSettings):

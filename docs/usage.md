@@ -428,5 +428,13 @@ Preferences are kept in `tui.json` in the data directory.
 | `plural-host doctor` | Check the environment, the workspace and the provider |
 | `plural-host export <room>` | Dump a session's event log to JSONL |
 | `plural-host host` | Serve a session without the client, for a remote machine |
+| `plural-host login [--no-browser]` | Link this computer to your account: opens the browser to approve it |
+| `plural-host login --code <code>` | The same from a code the web page shows, for a computer with no browser to open |
+| `plural-host whoami [--json]` | Show the account this computer is linked to |
+| `plural-host logout` | Forget the account on this computer |
 
-`plural relay`, `plural doctor` and `plural export` run the same commands.
+`plural relay`, `plural doctor`, `plural export`, `plural login`, `plural whoami` and `plural logout` run the same commands.
+
+### Linking a computer to an account
+
+A relay may ask hosts to belong to an account. Run `plural login`: it opens the browser, where you sign in and confirm that the code in the page is the one in your terminal, and the terminal collects the result. With `--no-browser`, or when no browser can open (over SSH, say), it prints the address to open anywhere. From the web page's Start a room you can instead copy `plural login --code <code>`. Either way the computer proves it holds its host key by signing what it sends, and the accounts service answers with a certificate for that key. It is kept in `entitlement.json` in the data directory and renewed on its own before it runs out; a host sends it when it opens a room on a relay (`PLURAL_ACCOUNTS_URL` names another accounts service). Nothing changes for a relay that does not ask, and nobody needs an account to join a room.
