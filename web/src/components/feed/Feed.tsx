@@ -1,12 +1,15 @@
-import { useState, type CSSProperties } from "react";
+import { Alert, Button, Chip } from "@heroui/react";
+import { PencilSimple } from "@phosphor-icons/react";
+import { useState, type ReactNode } from "react";
 import type { Mentionable } from "@plural/client";
 import { MentionPeople } from "./Mentions";
 import type { FeedItem } from "@plural/client";
 import type { Activity as Current } from "../../lib/activity";
-import { colorFor } from "../../lib/colors";
 import { cx } from "../../lib/cx";
 import { docTitle, isDocument, lineCount, toolDoc } from "../../lib/canvas";
 import { segments } from "../../lib/quote";
+import { LogoMark } from "../LogoMark";
+import { PersonAvatar } from "../PersonAvatar";
 import { Activity } from "./Activity";
 import { DocCard } from "./DocCard";
 import { Markdown } from "./Markdown";
@@ -20,11 +23,15 @@ type Block = { kind: "steps"; id: string; tools: ToolItem[] } | Exclude<FeedItem
 function blocks(items: FeedItem[]): Block[] {
   const out: Block[] = [];
   for (const item of items) {
+    const last = out.at(-1);
+    // The same notice twice in a row (a reconnect repeats them) says nothing new.
+    if (item.kind === "notice" && last?.kind === "notice" && last.text === item.text) {
+      continue;
+    }
     if (item.kind !== "tool") {
       out.push(item);
       continue;
     }
-    const last = out.at(-1);
     if (last?.kind === "steps") {
       last.tools.push(item);
     } else {
@@ -96,6 +103,19 @@ function Text({ text, anchor }: { text: string; anchor: string }) {
   );
 }
 
+// The agent's side of the conversation: its mark, then full-width text.
+function AgentEntry({ label, children }: { label: ReactNode; children: ReactNode }) {
+  return (
+    <article className={styles.agent}>
+      <span className={styles.agentMark} aria-hidden="true"><LogoMark size={18} /></span>
+      <div className={styles.agentBody}>
+        <div className={styles.agentName}>{label}</div>
+        {children}
+      </div>
+    </article>
+  );
+}
+
 interface EntryProps {
   item: Exclude<FeedItem, { kind: "tool" }>;
   meId: string | null;
@@ -110,9 +130,11 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
     case "user": {
       const mine = item.participantId === meId;
       return (
-        <article className={cx(styles.row, mine && styles.mine)} style={{ "--who": colorFor(item.participantId) } as CSSProperties}>
+        <article className={cx(styles.row, mine && styles.mine)}>
+          {mine ? null : <PersonAvatar seed={item.name} />}
+          <div className={styles.column}>
+          {mine ? null : <div className={styles.who}>{item.name}</div>}
           <div className={styles.bubble}>
-            {mine ? null : <div className={styles.who}>{item.name}</div>}
             <Text text={item.text} anchor={item.id} />
             {item.full ? (
               <details className={styles.meta}>
@@ -131,6 +153,7 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
           {item.viaProposal || item.role === "viewer" || item.via ? (
             <div className={styles.meta}>{[item.via ? `via /${item.via}` : null, item.viaProposal ? "approved by the host" : item.role === "viewer" ? item.role : null].filter(Boolean).join(" · ")}</div>
           ) : null}
+          </div>
         </article>
       );
     }
@@ -138,22 +161,24 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
       const direct = item.to !== null;
       const head = direct ? (item.mine ? `to ${item.toName ?? "someone"}` : `${item.name} to you`) : item.mine ? "to the team" : `${item.name} to the team`;
       return (
-        <article className={cx(styles.row, item.mine && styles.mine)} style={{ "--who": colorFor(item.authorId) } as CSSProperties}>
-          <div className={cx(styles.bubble, styles.chat, direct && styles.private, item.mentioned && styles.mentioned)}>
+        <article className={cx(styles.row, item.mine && styles.mine)}>
+          {item.mine ? null : <PersonAvatar seed={item.name} />}
+          <div className={styles.column}>
             <div className={styles.who}>{head}</div>
-            <Text text={item.text} anchor={item.id} />
-          </div>
-          <div className={styles.meta}>
-            {direct ? "private, the agent does not see it" : "the agent does not see it"}
-            {item.mentioned && !direct ? " · mentions you" : ""}
+            <div className={cx(styles.bubble, styles.chat, direct && styles.private, item.mentioned && styles.mentioned)}>
+              <Text text={item.text} anchor={item.id} />
+            </div>
+            <div className={styles.meta}>
+              {direct ? "private, the agent does not see it" : "the agent does not see it"}
+              {item.mentioned && !direct ? " · mentions you" : ""}
+            </div>
           </div>
         </article>
       );
     }
     case "assistant":
       return (
-        <article className={styles.agent}>
-          <div className={styles.agentName}>agent</div>
+        <AgentEntry label="Agent">
           {item.text === "" ? (
             <div className="muted">…</div>
           ) : onOpenDoc && isDocument(item.text) ? (
@@ -168,45 +193,34 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
               <Markdown text={item.text} streaming={item.streaming} onOpenCode={onOpenDoc && ((index) => onOpenDoc(`${item.id}:${index}`))} />
             </div>
           )}
-        </article>
+        </AgentEntry>
       );
     case "briefing":
       return (
-        <article className={styles.agent}>
-          <div className={styles.agentName}>
-            briefing from {item.from} · as of event {item.asOf}
-            {item.update ? " · update" : ""}
-          </div>
+        <AgentEntry label={<>Briefing from {item.from}{item.update ? <Chip size="sm" variant="soft" className="ml-2"><Chip.Label>Update</Chip.Label></Chip> : null}</>}>
           <div data-anchor={item.id}>
             <Text text={item.text} anchor={item.id} />
           </div>
-        </article>
+        </AgentEntry>
       );
     case "shown":
       return (
-        <article className={styles.agent}>
-          <div className={styles.agentName}>
-            {item.title} · from /{item.command} · only you see this
-          </div>
+        <AgentEntry label={<>{item.title}<span className="ml-2 font-normal text-muted">/{item.command}, only you see this</span></>}>
           <div data-anchor={item.id}>
             <Text text={item.text} anchor={item.id} />
           </div>
-        </article>
+        </AgentEntry>
       );
     case "notice":
       if (item.action === "board") {
         return (
           <div className={styles.event}>
             <span className={styles.eventIcon} aria-hidden="true">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 20l4-1L19 8l-3-3L5 16l-1 4z" />
-              </svg>
+              <PencilSimple size={16} />
             </span>
             <span className={styles.eventText}>{item.text}</span>
             {onOpenBoard ? (
-              <button type="button" className="button small primary" onClick={onOpenBoard}>
-                open board
-              </button>
+              <Button size="sm" onPress={onOpenBoard}>Open board</Button>
             ) : null}
           </div>
         );
@@ -218,6 +232,16 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
             <code title={item.code}>{item.code}</code>
             <span>{item.text.slice(item.code.length).replace(/^:\s*/, "")}</span>
           </div>
+        );
+      }
+      if (item.tone === "warn" || item.tone === "danger") {
+        return (
+          <Alert status={item.tone === "warn" ? "warning" : "danger"} className={styles.alert}>
+            <Alert.Indicator />
+            <Alert.Content>
+              <Alert.Description className="whitespace-pre-wrap">{item.text}</Alert.Description>
+            </Alert.Content>
+          </Alert>
         );
       }
       return <div className={cx(styles.notice, styles[item.tone])}>{item.text}</div>;

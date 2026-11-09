@@ -1,6 +1,7 @@
 import type { Command, ProposalView, SessionState } from "@plural/client";
 import { cx } from "../../lib/cx";
 import { nameOf } from "./items";
+import { Action } from "./Action";
 import styles from "./Inbox.module.css";
 
 interface ProposalCardProps {
@@ -22,15 +23,9 @@ export function ProposalCard({ proposal, state, send, onEdit }: ProposalCardProp
       </div>
       <div className={styles.text}>{proposal.text}</div>
       <div className={styles.actions}>
-        <button className="button primary" type="button" onClick={() => decide("approve")}>
-          <kbd>y</kbd> send to the agent
-        </button>
-        <button className="button" type="button" onClick={() => onEdit(proposal)}>
-          <kbd>e</kbd> edit first
-        </button>
-        <button className="button" type="button" onClick={() => decide("reject")}>
-          <kbd>n</kbd> reject
-        </button>
+        <Action hint="y" tone="primary" onPress={() => decide("approve")}>send to the agent</Action>
+        <Action hint="e" onPress={() => onEdit(proposal)}>edit first</Action>
+        <Action hint="n" onPress={() => decide("reject")}>reject</Action>
       </div>
     </div>
   );

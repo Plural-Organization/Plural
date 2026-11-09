@@ -1,5 +1,7 @@
+import { Input } from "@heroui/react";
 import { useState } from "react";
 import type { PluginAsked } from "@plural/client";
+import { Action } from "./Action";
 import styles from "./Inbox.module.css";
 
 interface PluginAskCardProps {
@@ -28,24 +30,18 @@ export function PluginAskCard({ ask, answer }: PluginAskCardProps) {
             reply(typed);
           }}
         >
-          <input value={typed} onChange={(event) => setTyped(event.target.value)} aria-label={ask.title} autoFocus />
-          <button className="button primary" type="submit">
-            send
-          </button>
-          <button className="button" type="button" onClick={() => reply(null)}>
-            close
-          </button>
+          <Input value={typed} onChange={(event) => setTyped(event.target.value)} aria-label={ask.title} autoFocus className="min-w-0 flex-1" />
+          <Action tone="primary" type="submit">send</Action>
+          <Action onPress={() => reply(null)}>close</Action>
         </form>
       ) : (
         <div className={styles.actions}>
           {options.map((option, index) => (
-            <button key={option} className={index === 0 ? "button primary" : "button"} type="button" onClick={() => reply(option)}>
+            <Action key={option} tone={index === 0 ? "primary" : undefined} onPress={() => reply(option)}>
               {option}
-            </button>
+            </Action>
           ))}
-          <button className="button" type="button" onClick={() => reply(null)}>
-            close
-          </button>
+          <Action onPress={() => reply(null)}>close</Action>
         </div>
       )}
     </div>

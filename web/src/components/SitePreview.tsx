@@ -242,16 +242,16 @@ export function SitePreview({ entry, remote, site, pointers, echo, canPick, send
       )}
       <div className={styles.tools}>
         {page !== entry ? (
-          <button className="button small ghost" type="button" onClick={() => setPage(entry)} title={`Back to ${entry}`}>
+          <button className="btn small ghost" type="button" onClick={() => setPage(entry)} title={`Back to ${entry}`}>
             ← {entry.split("/").pop()}
           </button>
         ) : null}
-        <button className="button small ghost" type="button" onClick={() => setReload((value) => value + 1)} aria-label="Reload the page" title="Reload the page">
+        <button className="btn small ghost" type="button" onClick={() => setReload((value) => value + 1)} aria-label="Reload the page" title="Reload the page">
           ↻
         </button>
         {canPick ? (
           <button
-            className={cx("button small", !picking && "ghost", picking && styles.on)}
+            className={cx("btn small", !picking && "ghost", picking && styles.on)}
             type="button"
             aria-pressed={picking}
             onClick={() => {
@@ -294,10 +294,10 @@ export function SitePreview({ entry, remote, site, pointers, echo, canPick, send
             }}
           />
           <div className={styles.noteBar}>
-            <button className="button small ghost" type="button" onClick={closeNote}>
+            <button className="btn small ghost" type="button" onClick={closeNote}>
               cancel
             </button>
-            <button className="button small" type="submit" disabled={note.trim() === ""}>
+            <button className="btn small" type="submit" disabled={note.trim() === ""}>
               send to agent
             </button>
           </div>
