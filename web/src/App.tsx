@@ -3,6 +3,7 @@ import { Alert } from "@heroui/react";
 import { firstSession, parseLink, type JoinLink, type SessionCard } from "@plural/client";
 import { JoinFlow } from "./components/JoinFlow";
 import { Rail } from "./components/Rail";
+import { DeviceScreen } from "./screens/DeviceScreen";
 import { JoinScreen } from "./screens/JoinScreen";
 import { RoomScreen } from "./screens/RoomScreen";
 import { unlockAudio } from "./lib/alert";
@@ -118,6 +119,11 @@ export function App() {
     }
   }, [entering, team.team, team.sessions]);
 
+  // `plural login` opens the browser here to ask whether this computer may use the account.
+  const device = account.enabled ? new URLSearchParams(window.location.search).get("device") : null;
+  if (device !== null && device !== "") {
+    return <DeviceScreen code={device} account={account} />;
+  }
   if (team.loading) {
     return null;
   }

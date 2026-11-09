@@ -1,8 +1,8 @@
-import { Button, Chip, Modal } from "@heroui/react";
+import { Button, Modal } from "@heroui/react";
 import { Plus, SignOut } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { AccountState } from "../hooks/useAccount";
-import { activeMachines, planLine, revokeMachine } from "../lib/accounts";
+import { activeMachines, revokeMachine } from "../lib/accounts";
 import { LinkComputer } from "./LinkComputer";
 import { PersonAvatar } from "./PersonAvatar";
 
@@ -39,11 +39,7 @@ export function AccountModal({ state, onClose }: { state: AccountState; onClose:
               <PersonAvatar seed={account.email} size="md" />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[15px] font-medium">{account.email}</p>
-                <p className="text-sm text-muted">{planLine(account)}</p>
               </div>
-              <Chip size="sm" variant="soft" color={account.plan === null ? "warning" : "success"}>
-                <Chip.Label>{account.plan === null ? "No plan" : account.plan === "paid" ? "Paid" : "Trial"}</Chip.Label>
-              </Chip>
             </div>
 
             <section className="flex flex-col gap-2">

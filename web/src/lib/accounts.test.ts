@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { type Account, AccountError, activeMachines, fetchAccount, loginErrorMessage, planLine, signInUrl } from "./accounts";
+import { type Account, AccountError, activeMachines, decideDevice, fetchAccount, loginErrorMessage, signInUrl } from "./accounts";
 import { agentPrompt, linkCommand } from "./agentPrompt";
 
 const BASE = "https://accounts.example";
 
 function account(changes: Partial<Account> = {}): Account {
-  return { id: "a_1", email: "alia@example.com", name: "Alia", plan: "trial", plan_ends_at: "2026-11-23T00:00:00Z", trial_started: true, machines: [], ...changes };
+  return { id: "a_1", email: "alia@example.com", name: "Alia", machines: [], ...changes };
 }
 
 afterEach(() => vi.unstubAllGlobals());
@@ -49,19 +49,6 @@ describe("fetchAccount", () => {
   });
 });
 
-describe("planLine", () => {
-  const now = Date.parse("2026-11-10T00:00:00Z");
-  test("counts the days of the trial", () => {
-    expect(planLine(account(), now)).toBe("Trial, 13 days left");
-    expect(planLine(account({ plan_ends_at: "2026-11-10T20:00:00Z" }), now)).toBe("Trial, 1 day left");
-  });
-  test("tells apart a trial not started, an ended one and a paid plan", () => {
-    expect(planLine(account({ plan: null, trial_started: false }), now)).toContain("first computer");
-    expect(planLine(account({ plan: null }), now)).toBe("Trial ended");
-    expect(planLine(account({ plan: "paid" }), now)).toBe("Plan active");
-  });
-});
-
 test("removed computers are not counted", () => {
   const machine = { id: "m_1", created_at: "2026-11-10T00:00:00Z", last_seen_at: null };
   const all = account({ machines: [{ ...machine, revoked: false }, { ...machine, id: "m_2", revoked: true }] });
@@ -82,3 +69,26 @@ describe("agentPrompt", () => {
     expect(prompt).not.toMatch(/https?:\/\/(?!raw\.githubusercontent\.com\/Plural-Organization)/);
   });
 });
+
+describe("device approval", () => {
+  test("approving and refusing go to the matching address with the session", async () => {
+    const fetcher = vi.fn().mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    vi.stubGlobal("fetch", fetcher);
+    await decideDevice("K7QF-29XD", true);
+    await decideDevice("K7QF-29XD", false);
+    const urls = fetcher.mock.calls.map((call) => String(call[0]));
+    expect(urls[0]).toMatch(/\/device\/K7QF-29XD\/approve$/);
+    expect(urls[1]).toMatch(/\/device\/K7QF-29XD\/deny$/);
+    expect(fetcher.mock.calls[0]![1]).toMatchObject({ method: "POST", credentials: "include" });
+  });
+
+  test("a code that is wrong says so in the service's words", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: "unknown_code", message: "this code is wrong, used or expired" } }), { status: 404 })));
+    await expect(decideDevice("NOPE", true)).rejects.toMatchObject({ status: 404, message: "this code is wrong, used or expired" });
+  });
+
+  test("the way back keeps the code", () => {
+    expect(signInUrl("https://plrl.host/app?device=K7QF-29XD", BASE)).toContain(encodeURIComponent("?device=K7QF-29XD"));
+  });
+});
+

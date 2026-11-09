@@ -9,9 +9,6 @@ export interface Account {
   id: string;
   email: string;
   name: string;
-  plan: "trial" | "paid" | null;
-  plan_ends_at: string | null;
-  trial_started: boolean;
   machines: Machine[];
 }
 
@@ -92,17 +89,21 @@ export async function revokeMachine(id: string): Promise<void> {
   await call(`/machines/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
 
-export function activeMachines(account: Account): Machine[] {
-  return account.machines.filter((machine) => !machine.revoked);
+export interface DeviceRequest {
+  name: string;
+  machine: string;
+  expires_at: string;
+  decided: boolean;
 }
 
-export function planLine(account: Account, now: number = Date.now()): string {
-  if (account.plan === null) {
-    return account.trial_started ? "Trial ended" : "Free trial starts with your first computer";
-  }
-  if (account.plan === "paid") {
-    return "Plan active";
-  }
-  const days = Math.max(0, Math.ceil((Date.parse(account.plan_ends_at ?? "") - now) / 86_400_000));
-  return days === 1 ? "Trial, 1 day left" : `Trial, ${days} days left`;
+export async function fetchDevice(code: string): Promise<DeviceRequest> {
+  return (await (await call(`/device/${encodeURIComponent(code)}`)).json()) as DeviceRequest;
+}
+
+export async function decideDevice(code: string, approve: boolean): Promise<void> {
+  await call(`/device/${encodeURIComponent(code)}/${approve ? "approve" : "deny"}`, { method: "POST" });
+}
+
+export function activeMachines(account: Account): Machine[] {
+  return account.machines.filter((machine) => !machine.revoked);
 }

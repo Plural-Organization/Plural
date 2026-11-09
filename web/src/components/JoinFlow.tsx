@@ -4,7 +4,7 @@ import { useState, type FormEvent } from "react";
 import { parseLink, parseTeamInvite, type JoinLink, type TeamInvite } from "@plural/client";
 import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
-import { planLine, signInUrl } from "../lib/accounts";
+import { signInUrl } from "../lib/accounts";
 import { LinkComputer } from "./LinkComputer";
 import { PersonAvatar } from "./PersonAvatar";
 import { copyText } from "../lib/clipboard";
@@ -223,7 +223,6 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined }: JoinFlowProps)
             <PersonAvatar seed={account.account.email} />
             <div className="min-w-0 flex-1">
               <p className="truncate text-[15px] font-medium">{account.account.email}</p>
-              <p className="text-sm text-muted">{planLine(account.account)}</p>
             </div>
             <button type="button" className="link-button" onClick={() => void account.signOut()}>
               Sign out
