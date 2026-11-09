@@ -22,7 +22,8 @@ plural
 | `--permission-mode default\|acceptEdits\|plan\|auto` | Start in that permission mode |
 | `--allowedTools <tools>`, `--disallowedTools <tools>` | Allow or deny tools for this run, for example `"Bash(git log *)" Read` |
 | `--port <n>`, `--bind <addr>` | Where the host listens in direct mode |
-| `--relay <url>`, `--public-url <url>` | Connect through a relay and set the address in invite links |
+| `--relay <url>`, `--public-url <url>` | Connect through another relay than the Plural relay and set the address in invite links |
+| `--local` | Stay on this machine: no relay, the invite works only here |
 | `--tunnel cloudflared\|ngrok` | Start a tunnel and put its address in the invite links, see [sharing a session](self-hosting.md) |
 
 An option that does not exist is refused, so a typing mistake does not reach the host by accident. A long dash typed by a chat or a keyboard (`—tunnel`) is read as `--tunnel`.
@@ -72,7 +73,7 @@ Nobody is there to approve an action, so one that needs approval is **refused**:
 
 ## Share a session
 
-By default the invite works only on your computer. To let others in, open `F2` → Session and choose *Same network* or *Over the internet*, then start `plural` again. [Sharing a session](self-hosting.md) explains the three ways and how to run a relay.
+By default the session goes through the Plural relay (`relay.plrl.host`), so a link works for anyone you let in. To keep it to your computer, open `F2` → Session and choose *This machine* (or start with `--local`); *Same network* serves it on your network instead. [Sharing a session](self-hosting.md) explains the three ways and how to run a relay.
 
 ## Join a session
 
@@ -130,8 +131,9 @@ A private message is private from the other guests, not from the host: it is sto
 A team is a group of people who run their own plural, each with their own agent and key, and trust each other enough to see who is around. You see every session shared with the team and can open a teammate's session from the side panel.
 
 ```bash
-plural team create Backend --relay wss://relay.example.com --as vlad
-plural team join tm-7f3k9-xq2m4 --relay wss://relay.example.com --as alia
+plural team create Backend --as vlad
+plural team join tm-7f3k9-xq2m4 --as alia
+plural team create Backend --relay wss://relay.example.com   # a relay of your own instead
 plural team members
 plural team invite          # a new code, owner only
 plural team kick alia       # owner only
@@ -140,7 +142,9 @@ plural team disband         # owner only, deletes the team for everyone
 plural team status
 ```
 
-`create` prints an invite code that works once and for an hour; give it to a teammate, who runs `join` with the same relay. After a successful join, Plural opens automatically and the side panel shows every session currently shared with the team; no separate room link is needed. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
+`create` prints a reusable invite code that does not expire; give it to teammates, who run `join` with the same relay. Without `--relay` both use the Plural relay. One key owns at most 3 teams on a relay: delete one with `plural team disband` to make another. After a successful `create` or `join`, Plural opens automatically (`create --json` and `--help` only print) and the side panel shows every session currently shared with the team; no separate room link is needed. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
+
+Inside Plural the team half of the side panel ends with **× leave team** (**× disband team** for the owner, who cannot only leave). It asks first, and the answer enter picks on its own is cancel. Leaving takes effect at once: the team's rows, the sessions you were watching and your share disappear, and the relay is told in the same step, with no separate program to start. If the relay does not answer, the team stays and the dialog says so; one that no longer knows you (the team was deleted, you were removed, the certificate ran out) leaves you out all the same.
 
 ### A team in the browser
 
@@ -154,9 +158,9 @@ With no server at hand, one command starts the relay with a team directory, open
 plural team create Backend --tunnel ngrok        # or cloudflared
 ```
 
-The banner of the session shows two links: the room link (`plural join "…"`, for someone you want in this session) and the team link (`plural team join <code> --relay <address>`, for someone who should join the team; one use, valid for an hour, `plural team invite` makes another). Quit the session and the relay and the tunnel stop with it. The directory file is `~/.plural/teams.db`.
+The banner of the session shows two links: the room link (`plural join "…"`, for someone you want in this session) and the team link (`plural team join <code> --relay <address>`, for people who should join the team; reusable, with no expiry, and `plural team invite` can make another). Quit the session and the relay and the tunnel stop with it. The directory file is `~/.plural/teams.db`.
 
-Your machine is the directory, so while that session is closed nobody can join or see the team's cards; sessions that are already open go on. A free ngrok address and a cloudflared quick tunnel change on every start, and the team is bound to the relay's address, so after a restart everyone has to join again. For a team that stays, run the relay on a server or behind a fixed domain and use `--relay`. `--tunnel` and `--relay` cannot be combined.
+Your machine is the directory, so while that session is closed nobody can join or see the team's cards; sessions that are already open go on. A free ngrok address and a cloudflared quick tunnel change on every start, and the team is bound to the relay's address, so after a restart everyone has to join again. Closing the session disbands the team while the tunnel is still up, so the owner is not left in a team that points at a closed address. A teammate who still has it is told that the tunnel is closed, and `plural` (or `plural team leave`, `status`, `create`, `join`) leaves that team by itself the next time; a relay that is only offline is never left this way. For a team that stays, run the relay on a server or behind a fixed domain and use `--relay`. `--tunnel` and `--relay` cannot be combined.
 
 ### Showing your session to the team
 
@@ -172,7 +176,7 @@ Once you are in a team (`team create` or `team join`), every session you start i
 
 The side panel has a SPACES section: your own session first, then the team's, refreshed every few seconds: `●` working, `◆` waiting for its host, `○` idle, with who, repository and branch, and `👁 2` when two people watch.
 
-**Click a teammate to open their session** in the main area. You see all of it, live, as a viewer, and your own session keeps running in the background: a click on `you` takes you back, `alt+←` and `alt+→` move between spaces, `ctrl+w` closes the one you are in. What you type goes to the session you are looking at. If your own agent needs you while you are away, its row turns `◆ waiting`, the bell rings and the terminal title says so.
+**Click a teammate to open their session** in the main area. You see all of it, live, as a viewer, and your own session keeps running in the background: a click on `you` takes you back, and `ctrl+w` closes the space you are in. What you type goes to the session you are looking at; `alt+←` and `alt+→` remain available for moving between words in the prompt. If your own agent needs you while you are away, its row turns `◆ waiting`, the bell rings and the terminal title says so.
 
 ### Watching a teammate
 
@@ -200,18 +204,21 @@ Only edits and writes by the agent count, not commands it runs in the shell, and
 Each person's agent has its own model and its own context, so one agent cannot just read the other's conversation. What it can have is a **briefing**: a short, structured account of a teammate's session, written by their agent for yours. It works between any two models, Codex on one side and Gemini on the other.
 
 ```
-(in alia's session, opened from the side panel or with plural join @alia)
-/brief                              # a briefing of the whole session
-/brief how was the login fixed?     # one that starts with the answer to your question
-/brief update                       # only what changed since the briefing you already have
-/brief give                         # put the latest one in MY agent's notes
+/ask @alia how was the login fixed?    # from your own session, no need to open hers
+/ask @alia                             # a briefing of her whole session
+/ask @alia --update                    # only what changed since the briefing you already have
+/ask @alia:api what is left?           # she has several sessions: say which
+/ask give                              # put the latest answer in MY agent's notes
+/ask share off|ask|team                # (host) who may ask this session
 ```
 
-How it goes: you ask, **alia's host agrees** (a card with `y` and `n`, unless she set `/brief share team` for anyone in the room or `/brief share off`), her agent writes it, and it shows up in her session as a card for you only. You read it. Nothing reaches your agent until you type `/brief give`, and then your agent sees it before its next prompt.
+Type `/ask @` and the people who share a session are listed, with their repository, branch and whether the agent is working. `/ask` without a name asks the session you are looking at, as `/brief` always did, and `/brief` still works as the same command.
 
-A briefing has two parts. The first is facts from alia's host, not from the model: the repository, the branch, the commit, how many files are uncommitted, and every file her agent changed this session with `+added −removed`. The second is the model's account: the goal, what was done and why, what was tried and dropped, the state, what is open, and exact names and commands. It is capped at about 450 words and 20,000 characters, secrets are redacted, and file contents are not pasted. `/brief update` sends the model what you already have and asks only for the difference.
+How it goes: your client joins her session for a moment as a viewer, you ask, **alia's host agrees** (a card with `y` and `n`, unless she set `/ask share team` for anyone in the room or `/ask share off`), her agent writes it, and the answer comes back as a card in your own chat with **give to my agent** and copy. You read it; her session sees nothing of what comes back. Nothing reaches your agent until you give it (the button or `/ask give`), and then your agent sees it before its next prompt. If she does not answer in 5 minutes, you are told.
 
-Your agent treats it as notes from a colleague that nobody checked, not as instructions. Because the text came from someone else's session, **once you have given a briefing to your agent, every run of that session asks you before it writes or runs anything**, even in auto mode, until you start a new session. The same briefing is not accepted twice, and it survives a restart. You wait a minute between requests, and one is open at a time.
+A briefing has two parts. The first is facts from alia's host, not from the model: the repository, the branch, the commit, how many files are uncommitted, and every file her agent changed this session with `+added −removed`. The second is the model's account: the goal, what was done and why, what was tried and dropped, the state, what is open, and exact names and commands. It is capped at about 450 words and 20,000 characters, secrets are redacted, and file contents are not pasted. `--update` sends the model what you already have and asks only for the difference.
+
+Your agent treats it as notes from a colleague that nobody checked, not as instructions. Because the text came from someone else's session, **once you have given an answer to your agent, every run of that session asks you before it writes or runs anything**, even in auto mode, until you start a new session. The same briefing is not accepted twice, and it survives a restart. You wait a minute between requests, and one is open at a time.
 
 ### Asking to write
 
@@ -242,6 +249,17 @@ The host decides how much the agent may do without asking. `shift+tab` cycles th
 | auto mode | Edits and runs commands without asking |
 
 Deny rules hold in every mode, and a run that contains a participant's prompt still asks before edits and commands, even in auto mode. When a plan is ready the host picks how to start it: `a` in auto mode, `e` accepting edits, `y` asking before changes, or `n` to keep planning. A restarted host always comes back in the default mode.
+
+## Folders outside the session
+
+The agent's file tools (`read`, `ls`, `glob`, `grep`, `write`, `edit`, `multi_edit`) work inside the folder the session was started in. A path outside it is refused, unless the host opens that folder first.
+
+- When a run that contains a participant's prompt reaches for a folder outside the session, the host gets a red card before anything else: who asks, which folder, whether the agent wants to read or to change files. The host answers **read** (`r`), **read + write** (`w`) or **refuse** (`n`). Enter on the card refuses, so a stray key opens nothing.
+- It is asked every time. Nothing is remembered: the answer holds for that one call, and the next call for the same folder asks again. A folder opened for reading cannot be written, whatever the call asks for.
+- Only after the host opens the folder does the call itself go through the usual approval, as in the permission modes above.
+- The host's own prompts open folders without a question, since they are the host's own disk. The deny-list still holds everywhere (`.ssh`, `.aws`, `.gnupg`, `.plural`, `.env`, keys): a protected folder is never offered and never opened.
+- The filesystem root, the home folder or a folder that holds it is marked on the card as broad.
+- Shell commands are not covered. `bash` is not opened to other folders by this, it asks the host as before, and it is not sandboxed: a command can reach any path the host's user can. Treat a command that is approved as running with the host's full rights.
 
 ## Skills
 

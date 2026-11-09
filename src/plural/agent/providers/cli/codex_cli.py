@@ -118,6 +118,22 @@ def _as_str(value: object) -> str | None:
     return value if isinstance(value, str) else None
 
 
+_LIMIT_WORDS = ("usagelimit", "usage limit", "rate limit", "ratelimit", "quota", "limit reached")
+
+
+def _failure(error: dict[str, object] | None, fallback: str) -> str:
+    """Say why a Codex turn failed; a spent usage limit is named as such."""
+    detail = _as_str(error.get("message")) if error else None
+    info = error.get("codexErrorInfo") if error else None
+    if isinstance(info, dict):
+        info = " ".join(cast("dict[str, object]", info))
+    marker = f"{info if isinstance(info, str) else ''} {detail or ''}".lower()
+    if any(word in marker for word in _LIMIT_WORDS):
+        base = "Codex usage limit reached, try again after it resets"
+        return f"{base} ({detail})" if detail else base
+    return detail or fallback
+
+
 def _string_end(raw: str, start: int) -> int | None:
     index = start + 1
     while index < len(raw):
@@ -242,6 +258,41 @@ class _Cancelled(Exception):
     pass
 
 
+# Plural owns the prompt, tools and history, so what Codex would add of its own each turn is
+# turned off: on its own Codex sent ~21.8k tokens for "say ok", with these ~8.2k. `-c` is used
+# throughout because an unknown `--disable` feature stops the server, and an unknown key does not.
+CODEX_TRIM = (
+    # Codex's own shell and web search; user hooks would run on every turn; plugins, apps, goals,
+    # image viewing and sleeping each add tools or instructions.
+    *(
+        f"features.{feature}=false"
+        for feature in (
+            "shell_tool",
+            "unified_exec",
+            "web_search_request",
+            "hooks",
+            "plugins",
+            "apps",
+            "goals",
+            "view_image",
+            "sleep_tool",
+        )
+    ),
+    # The list of skills, Codex's collaboration mode and sandbox rules, and its cwd and shell.
+    "skills.include_instructions=false",
+    "include_collaboration_mode_instructions=false",
+    "include_permissions_instructions=false",
+    "include_environment_context=false",
+)
+
+# Codex's own system prompt, a coding agent's, replaced by this one.
+BASE_INSTRUCTIONS = (
+    "You are the model backend for Plural. Do not run commands, inspect files, or invoke Codex "
+    "tools. Return only the structured response requested for each turn. Plural owns "
+    "conversation history, tools, and approvals."
+)
+
+
 class CodexCliProvider:
     DEFAULT_MODEL = DEFAULT_MODEL
 
@@ -328,14 +379,9 @@ class CodexCliProvider:
                 "app-server",
                 "--listen",
                 "stdio://",
-                "--disable",
-                "shell_tool",
-                "--disable",
-                "unified_exec",
-                "--disable",
-                "web_search_request",
                 "-c",
                 "mcp_servers={}",
+                *(arg for setting in CODEX_TRIM for arg in ("-c", setting)),
                 cwd=self._workspace,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
@@ -449,11 +495,7 @@ class CodexCliProvider:
                     "approvalPolicy": "never",
                     "sandbox": "read-only",
                     "ephemeral": True,
-                    "developerInstructions": (
-                        "You are the model backend for Plural. Do not run commands, inspect files, "
-                        "or invoke Codex tools. Return only the structured response requested "
-                        "for each turn. Plural owns conversation history, tools, and approvals."
-                    ),
+                    "baseInstructions": BASE_INSTRUCTIONS,
                 },
                 cancel=cancel,
             )
@@ -591,8 +633,9 @@ class CodexCliProvider:
                         status = turn.get("status")
                         if status != "completed":
                             turn_error = _as_dict(turn.get("error"))
-                            detail = _as_str(turn_error.get("message")) if turn_error else None
-                            raise ProviderError(f"Codex turn failed: {detail or status}")
+                            raise ProviderError(
+                                _failure(turn_error, f"Codex turn failed: {status}")
+                            )
                         items = turn.get("items")
                         if isinstance(items, list):
                             for raw_item in cast("list[object]", items):
@@ -603,8 +646,8 @@ class CodexCliProvider:
                                         final_text = item_text
                         completed = True
                     elif method == "error":
-                        detail = _as_str(event.get("message"))
-                        raise ProviderError(f"Codex app server: {detail or 'turn failed'}")
+                        nested = _as_dict(event.get("error")) or event
+                        raise ProviderError(_failure(nested, "Codex app server: turn failed"))
 
                 if final_text is None:
                     raise ProviderError("Codex app server returned no answer")

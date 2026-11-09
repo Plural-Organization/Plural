@@ -1,8 +1,10 @@
-import type { KeyBinding, TextareaRenderable } from "@opentui/core";
+import { decodePasteBytes, stripAnsiSequences, type KeyBinding, type PasteEvent, type TextareaRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
 import type { Mentionable, Role, Route } from "@plural/client";
-import { suggestions as suggest, visibleSuggestionWindow, type CommandHint } from "../commands";
+import { suggestions as suggest, visibleSuggestionWindow, type AskTarget, type CommandHint } from "../commands";
+import { imagePath } from "../lib/image-paste";
+import { expandPastes, pasteLabel, shouldCollapse } from "../lib/paste";
 import { theme } from "../theme";
 
 export type Delivery = { state: "sending" } | { state: "sent" } | { state: "failed"; reason: string; restored: boolean };
@@ -21,11 +23,11 @@ function Failure({ delivery }: { delivery: Extract<Delivery, { state: "failed" }
 
 interface ComposerProps {
   focused: boolean;
-  disabled: string | null;
   placeholder: string;
   role: Role | undefined;
   people?: Mentionable[];
   commands?: CommandHint[];
+  askTargets?: AskTarget[];
   seed: { text: string; key: number } | null;
   label: string | null;
   route?: (text: string) => Route | null;
@@ -42,6 +44,7 @@ interface ComposerProps {
   onIdleKey?: (key: string) => boolean;
   images?: string[];
   onPasteImage?: () => void;
+  onPasteImageFile?: (path: string) => Promise<boolean>;
   onDropImage?: () => void;
   remember?: boolean;
 }
@@ -56,7 +59,7 @@ const BINDINGS: KeyBinding[] = [
 ];
 
 export function Composer(props: ComposerProps) {
-  const { focused, disabled, placeholder, role, seed, label } = props;
+  const { focused, placeholder, role, seed, label } = props;
   const area = useRef<TextareaRenderable>(null);
   const [value, setValue] = useState("");
   const [choice, setChoice] = useState(0);
@@ -64,13 +67,18 @@ export function Composer(props: ComposerProps) {
   const history = useRef<string[]>([]);
   const position = useRef(-1);
   const draft = useRef("");
+  const pasted = useRef(new Map<string, string>());
+  const pasteCount = useRef(0);
 
-  const hints = dismissed ? [] : suggest(value, role, props.people ?? [], props.commands);
+  const hints = dismissed ? [] : suggest(value, role, props.people ?? [], props.commands, props.askTargets);
   const selected: CommandHint | undefined = hints[Math.min(choice, Math.max(0, hints.length - 1))];
   const hintWindow = visibleSuggestionWindow(hints, choice);
   const completion = selected ? (selected.insert ?? `/${selected.name} `) : "";
 
   const put = (text: string): void => {
+    if (text === "") {
+      pasted.current.clear();
+    }
     area.current?.setText(text);
     area.current?.gotoBufferEnd();
     setValue(text);
@@ -88,7 +96,7 @@ export function Composer(props: ComposerProps) {
   }, [value === ""]);
 
   const submit = (): void => {
-    const text = (area.current?.plainText ?? "").trim();
+    const text = expandPastes(area.current?.plainText ?? "", pasted.current).trim();
     if (text === "" && (props.images ?? []).length === 0) {
       return;
     }
@@ -98,6 +106,37 @@ export function Composer(props: ComposerProps) {
     position.current = -1;
     put("");
     props.onSubmit(text);
+  };
+
+  // Cmd+V with an image on the clipboard pastes nothing, so the image is taken from the clipboard as with
+  // Ctrl+V; a pasted or dragged image file is attached, and a path to no image stays text. A long text paste
+  // shows as a short label and is sent in full.
+  const paste = (event: PasteEvent): void => {
+    const raw = decodePasteBytes(event.bytes);
+    if (raw.trim() === "" && props.onPasteImage) {
+      event.preventDefault();
+      props.onPasteImage();
+      return;
+    }
+    const path = imagePath(raw);
+    if (path !== null && props.onPasteImageFile) {
+      event.preventDefault();
+      void props.onPasteImageFile(path).then((attached) => {
+        if (!attached) {
+          area.current?.insertText(raw);
+        }
+      });
+      return;
+    }
+    const text = stripAnsiSequences(raw).replace(/\r\n?/g, "\n");
+    if (!shouldCollapse(text)) {
+      return;
+    }
+    event.preventDefault();
+    pasteCount.current += 1;
+    const label = pasteLabel(pasteCount.current, text);
+    pasted.current.set(label, text);
+    area.current?.insertText(label);
   };
 
   const recall = (direction: 1 | -1): void => {
@@ -155,7 +194,10 @@ export function Composer(props: ComposerProps) {
     }
     if (key.name === "escape") {
       key.preventDefault();
-      if (hints.length > 0) {
+      if (position.current >= 0) {
+        position.current = -1;
+        put(draft.current);
+      } else if (hints.length > 0) {
         setDismissed(true);
       } else {
         props.onEscape();
@@ -195,13 +237,23 @@ export function Composer(props: ComposerProps) {
 
   const route = props.route?.(value.trimStart()) ?? null;
   const routeColor = route === null ? theme.accent : route.blocked ? theme.warn : ROUTE_COLORS()[route.kind];
-  const color = disabled ? theme.line : focused ? routeColor : theme.dim;
+  const color = focused ? routeColor : theme.dim;
   const lines = value === "" ? 0 : value.split("\n").length;
-  const shown = disabled ?? (focused ? placeholder : `${placeholder}  ·  click or press tab to type`);
+  const shown = focused ? placeholder : `${placeholder}  ·  click or press tab to type`;
   const progress = props.delivery?.state === "sending" ? " · sending…" : props.delivery?.state === "sent" ? " · ✓ delivered" : "";
   const head = route !== null ? `→ ${route.label} · ${route.note}` : (label ?? "");
   const more = value === "" ? "" : `${lines > 1 ? ` · ${lines} lines` : ""} · ⇧↵ new line`;
   const title = `${head}${more}${progress}`;
+  const HISTORY_ROWS = 6;
+  const recalled = history.current;
+  const browsing = position.current >= 0 && recalled.length > 0;
+  const firstShown = Math.max(0, Math.min(position.current - 2, recalled.length - HISTORY_ROWS));
+  const pastRows = browsing
+    ? recalled
+        .slice(firstShown, firstShown + HISTORY_ROWS)
+        .map((text, offset) => ({ text, index: firstShown + offset }))
+        .reverse()
+    : [];
   return (
     <box flexDirection="column" flexShrink={0} paddingX={1} onMouseDown={() => props.onFocus()}>
       <box
@@ -230,13 +282,14 @@ export function Composer(props: ComposerProps) {
             flexGrow={1}
             minHeight={1}
             maxHeight={8}
-            focused={focused && !disabled}
+            focused={focused}
             placeholder={shown}
             placeholderColor={theme.dim}
             textColor={theme.text}
             backgroundColor={theme.panel}
             focusedBackgroundColor={theme.panel}
             keyBindings={BINDINGS}
+            onPaste={paste}
             onContentChange={() => {
               const text = area.current?.plainText ?? "";
               setValue(text);
@@ -249,6 +302,21 @@ export function Composer(props: ComposerProps) {
           />
         </box>
       </box>
+      {pastRows.length > 0 ? (
+        <box flexDirection="column" paddingLeft={4}>
+          {pastRows.map((row) => {
+            const on = row.index === position.current;
+            const line = (row.text.split("\n")[0] ?? "").slice(0, 80);
+            return (
+              <text key={row.index} fg={on ? theme.accent : theme.dim} wrapMode="none">
+                {on ? "› " : "  "}
+                {line}
+              </text>
+            );
+          })}
+          <text fg={theme.dim}>  ↑↓ earlier prompts · enter sends · esc keeps typing</text>
+        </box>
+      ) : null}
       {hints.length > 0 ? (
         <box flexDirection="column" paddingLeft={4}>
           {hintWindow.items.map((hint, index) => {

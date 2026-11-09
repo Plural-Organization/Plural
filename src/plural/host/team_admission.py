@@ -45,6 +45,7 @@ class TeamAdmission:
         banned: Iterable[str] = (),
         roster_ttl_s: float = 30.0,
         roster_stale_s: float = 300.0,
+        roster_recheck_s: float = 1.0,
         skew_s: int = 60,
     ) -> None:
         self._team_id = team_id
@@ -55,9 +56,11 @@ class TeamAdmission:
         self._banned = set(banned)
         self._ttl = timedelta(seconds=roster_ttl_s)
         self._stale = timedelta(seconds=roster_stale_s)
+        self._recheck = timedelta(seconds=roster_recheck_s)
         self._skew_s = skew_s
         self._roster: dict[str, str] = {}
         self._fetched_at: datetime | None = None
+        self._rechecked_at: datetime | None = None
         self._replays = ReplayGuard(timedelta(seconds=2 * skew_s))
 
     @property
@@ -85,7 +88,7 @@ class TeamAdmission:
             raise Unauthorized("this join was already used")
         if claims.member in self._banned:
             raise Forbidden("the host removed you from this session")
-        if await self._roster_key(claims.member) != claims.key:
+        if await self._confirmed_key(claims.member, claims.key) != claims.key:
             raise Unauthorized("you are no longer in the team")
         return TeamMember(id=claims.member, name=claims.name)
 
@@ -93,6 +96,24 @@ class TeamAdmission:
         if member_id in self._banned:
             return False
         return await self._roster_key(member_id) is not None
+
+    async def _confirmed_key(self, member_id: str, expected: str) -> str | None:
+        """The cached roster can only be behind on someone who has just joined, so a certificate it
+        does not match gets one fresh look. It never lets in anyone the directory does not list, and
+        a removal still waits for the roster to expire, as it does for people already in a room."""
+        key = await self._roster_key(member_id)
+        now = self._clock.now()
+        last = max(filter(None, (self._fetched_at, self._rechecked_at)))
+        if key == expected or now - last < self._recheck:
+            return key
+        self._rechecked_at = now
+        try:
+            listing = await self._members()
+        except Exception as error:
+            raise Forbidden("cannot check the team right now, try again") from error
+        self._roster = {person.id: person.key for person in listing.members}
+        self._fetched_at = now
+        return self._roster.get(member_id)
 
     async def _roster_key(self, member_id: str) -> str | None:
         now = self._clock.now()

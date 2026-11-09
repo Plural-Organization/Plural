@@ -1,9 +1,8 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { parseLink, type JoinLink } from "@plural/client";
+import { firstSession, parseLink, parseTeamInvite, type JoinLink, type SessionCard } from "@plural/client";
 import { Logo } from "../components/Logo";
 import { blockedByMixedContent, hostOf, unwrapLink } from "../lib/links";
 import { forgetRoom, linkOf, rememberName, savedName, savedRooms, type SavedRoom } from "../lib/saved";
-import { firstSession, parseTeamInvite, type SessionCard } from "../lib/team";
 import { TeamPanel } from "../components/TeamPanel";
 import type { TeamState } from "../hooks/useTeam";
 import styles from "./JoinScreen.module.css";

@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from typing import NoReturn
 
 from plural.agent.providers.base import LLMProvider
+from plural.agent.providers.cli.agents import AGENT_CLIS
 from plural.agent.providers.cli.claude_code import ClaudeCodeProvider
 from plural.agent.providers.cli.codex_cli import CodexCliProvider
 from plural.agent.providers.fake import DemoProvider
@@ -99,6 +100,17 @@ def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
                 workspace=settings.workspace,
                 model=settings.model or CodexCliProvider.DEFAULT_MODEL,
             )
+        case (
+            "gemini_cli"
+            | "qwen_cli"
+            | "copilot_cli"
+            | "cursor_cli"
+            | "kimi_cli"
+            | "grok_cli"
+            | "amp_cli"
+            | "opencode_cli"
+        ) as adapter:
+            return AGENT_CLIS[adapter](model=settings.model or "")
         case "openai":
             if not settings.model:
                 raise ConfigError("set PLURAL_MODEL for the openai provider")

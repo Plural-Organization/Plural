@@ -60,7 +60,7 @@ export function onCodeCopy(next: (text: string) => void): void {
 }
 
 export function codeBlockRenderer(context: RenderContext): MarkdownOptions["renderNode"] {
-  return (token) => {
+  const render: NonNullable<MarkdownOptions["renderNode"]> = (token) => {
     if (token.type !== "code") {
       return undefined;
     }
@@ -93,4 +93,7 @@ export function codeBlockRenderer(context: RenderContext): MarkdownOptions["rend
     );
     return box;
   };
+  // Only code blocks are drawn here. Marked as such, the rest of the reply stays one markdown block that keeps
+  // the blank lines between paragraphs and list items; without it every block is drawn flush against the next.
+  return Object.assign(render, { codeBlockOnly: true });
 }

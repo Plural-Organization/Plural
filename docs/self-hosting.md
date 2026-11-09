@@ -4,9 +4,9 @@ A room is only useful if the people you invite can reach your host. There are th
 
 | Way | Who can join | What you need |
 |---|---|---|
-| **This machine** (default) | only you | nothing |
+| **This machine** | only you | nothing |
 | **Same network** | people on your Wi-Fi, office network or VPN | nothing. The invite link carries your network address, and the host listens on every interface |
-| **Over the internet** | anyone with the link | the address of a relay |
+| **Over the internet** (default) | anyone you let in | nothing: the Plural relay, or the address of your own |
 
 With *Over the internet* the host connects out to the relay and so does every guest. Nobody opens a port, which is what makes it work from a home network. The relay only routes frames, it never decides permissions and never stores content. The invite link carries the relay address, so a guest needs no setup.
 
@@ -65,10 +65,16 @@ People join with an invite from the terminal (`plural join "wss://…"`) or from
 A relay that anyone can reach needs limits, so it has them:
 
 - A room is forgotten 15 minutes after its host left and no one is in it. The host can come back within that time and the room is still its own. After it the room id is free.
-- One address can host 3 rooms and bring 30 guests at once, and can open at most 20 connections in a burst and 2 per second after that. A host or a guest over a limit is refused with the close code 4429.
+- One address can host 5 rooms and bring 30 guests at once, and can open at most 20 connections in a burst and 2 per second after that. A host or a guest over a limit is refused with the close code 4429.
 - The relay holds at most 50 rooms.
 
 Behind a proxy every client looks like the proxy. Tell the relay how many proxies are in front of it with `PLURAL_RELAY_PROXY_HOPS` (the images set it to 1, which is right for Caddy, Railway and Render) and it takes the client address from the `X-Forwarded-For` header. Use 0 when the relay is reached directly. If the relay log shows the same `peer=` for different people, raise the number of hops, or raise the limits with `PLURAL_RELAY_MAX_ROOMS`, `PLURAL_RELAY_ROOMS_PER_PEER` and `PLURAL_RELAY_GUESTS_PER_PEER`.
+
+### Only Plural clients
+
+A public relay sees scanners and stray scripts. `plural-host relay --clients-only` (or `PLURAL_RELAY_CLIENTS_ONLY=1`) refuses any request that does not call itself a Plural client, with a 403. Every Plural client says `User-Agent: plural/<version>` (`plural-client` for the TypeScript client). A browser cannot set that header, so list the address of your web client with `--web-origin https://web.example.com` (`PLURAL_RELAY_WEB_ORIGINS`, comma separated). `/healthz` stays open for health checks.
+
+This is a filter, not authentication: anyone can send the header, so the limits above still apply.
 
 ### Teams
 
@@ -78,7 +84,7 @@ A relay can also keep a team directory: who is in which team and the invite code
 plural-host relay --teams /data/teams.db      # or PLURAL_RELAY_TEAMS=/data/teams.db
 ```
 
-Without it the relay serves no teams. The file holds each team's signing key, so keep it private (plural creates it readable by its owner only) and back it up; losing it means the teams have to be created again. Prompts, replies and files never go to the directory. Anyone who can reach the relay can create a team, at most 3 per address per 10 minutes and 500 in all, so put the relay behind a network rule if it should serve only you. In a container, mount a volume for the file.
+Without it the relay serves no teams. The file holds each team's signing key, so keep it private (plural creates it readable by its owner only) and back it up; losing it means the teams have to be created again. Prompts, replies and files never go to the directory. Anyone who can reach the relay can create a team, at most 3 per address per 10 minutes, 3 owned by one key and 500 in all, so put the relay behind a network rule if it should serve only you. In a container, mount a volume for the file.
 
 For a team that lives only as long as your laptop, `plural team create <name> --tunnel ngrok` starts this relay and a tunnel to it for you, see [usage](usage.md#a-team-on-your-own-machine-behind-a-tunnel).
 

@@ -1,6 +1,6 @@
 import type { Role } from "@plural/client";
 import type { Keys } from "./credentials";
-import { presetOf, presets, type AgentChoice, type PresetId } from "./presets";
+import { isAgentCli, presetOf, presets, type AgentChoice, type PresetId } from "./presets";
 import type { Settings } from "./settings";
 import type { UpdateState } from "./update";
 import { relayProblem, type ShareMode } from "./share";
@@ -113,7 +113,7 @@ export function modelRows(state: ModelState): Row[] {
       enabled: true,
     },
   ];
-  const credentials = preset.needsKey || choice.preset === "custom" || choice.preset === "anthropic_oauth" || choice.preset === "claude_code" || choice.preset === "codex_cli";
+  const credentials = preset.needsKey || choice.preset === "custom" || choice.preset === "anthropic_oauth" || choice.preset === "claude_code" || choice.preset === "codex_cli" || isAgentCli(preset.provider);
   if (credentials) {
     rows.push(header("credentials", "Account"));
   }
@@ -147,6 +147,12 @@ export function modelRows(state: ModelState): Row[] {
     rows.push({
       id: "codex-cli-login", kind: "note", label: "Install: npm install -g @openai/codex",
       value: "", hint: "install on the host, then run codex login; Save checks both before switching", enabled: false,
+    });
+  }
+  if (isAgentCli(preset.provider)) {
+    rows.push({
+      id: "agent-cli-login", kind: "note", label: `Sign in: ${preset.hint.match(/\(([^)]*)\)$/)?.[1] ?? "with the CLI on the host"}`,
+      value: "", hint: "install it on the host and sign in once; leave the model empty for its default", enabled: false,
     });
   }
   if (preset.provider !== "fake") {
@@ -218,7 +224,7 @@ export function modelRows(state: ModelState): Row[] {
 const SHARING: { mode: ShareMode; label: string; description: string }[] = [
   { mode: "local", label: "This machine", description: "only you. Invite links work on this computer, good for trying things out" },
   { mode: "network", label: "Same network", description: "teammates on your Wi-Fi, office network or VPN join with a link that carries your network address" },
-  { mode: "relay", label: "Over the internet", description: "through a relay server, so nobody needs an open port. Needs the address of a relay" },
+  { mode: "relay", label: "Over the internet", description: "through a relay server, so nobody needs an open port. The Plural relay unless you set your own address" },
 ];
 
 function joiningRows(state: ModelState, host: boolean): Row[] {
@@ -271,8 +277,8 @@ function shareRows(state: ModelState, host: boolean): Row[] {
       id: "relay",
       kind: "text",
       label: "Relay address",
-      value: state.settings.relayUrl || "not set",
-      hint: problem ?? "for example wss://relay.example.com, see docs/self-hosting.md",
+      value: state.settings.relayUrl || "the Plural relay",
+      hint: problem ?? "leave empty for the Plural relay, or your own such as wss://relay.example.com, see docs/self-hosting.md",
       enabled: host,
     });
   }
@@ -357,10 +363,6 @@ export function nextPreset(current: AgentChoice["preset"], direction: 1 | -1): A
 }
 
 export type ConnectionType = "oauth" | "api_key" | "local";
-
-export function connectionLabel(connection: ConnectionType): string {
-  return connection === "oauth" ? "OAuth / account" : connection === "api_key" ? "API key" : "Local / demo";
-}
 
 export function nextConnection(current: AgentChoice["preset"], direction: 1 | -1): AgentChoice["preset"] {
   const groups: ConnectionType[] = ["oauth", "api_key", "local"];

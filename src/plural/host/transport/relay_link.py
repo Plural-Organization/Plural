@@ -8,7 +8,13 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from plural.host.inbox import Disconnected, Inbox, Incoming
 from plural.protocol.envelope import Envelope
-from plural.protocol.relay import RELAY_MESSAGES, RelayClosed, RelayFrame, RelayOpen
+from plural.protocol.relay import (
+    RELAY_MESSAGES,
+    USER_AGENT,
+    RelayClosed,
+    RelayFrame,
+    RelayOpen,
+)
 from plural.security.tokens import TokenSigner
 
 log = structlog.get_logger(__name__)
@@ -55,7 +61,9 @@ class RelayLink:
         delay = 0.5
         while True:
             try:
-                async with connect(f"{self._url}/host/{self._room}") as socket:
+                async with connect(
+                    f"{self._url}/host/{self._room}", user_agent_header=USER_AGENT
+                ) as socket:
                     delay = 0.5
                     await self._session(socket, inbox)
             except (OSError, WebSocketException) as error:
@@ -85,19 +93,21 @@ class RelayLink:
                         if link is None:
                             link = links[connection_id] = RelayConnection(connection_id, outbox)
                         try:
-                            inbox.put(Incoming(link, Envelope.model_validate_json(data)))
+                            await inbox.put_external(
+                                Incoming(link, Envelope.model_validate_json(data))
+                            )
                         except ValidationError:
                             continue
                     case RelayClosed(conn=connection_id):
                         closed = links.pop(connection_id, None)
                         if closed is not None:
-                            inbox.put(Disconnected(closed))
+                            await inbox.put_external(Disconnected(closed))
                     case RelayOpen():
                         pass
         finally:
             writer.cancel()
             for link in links.values():
-                inbox.put(Disconnected(link))
+                await inbox.put_external(Disconnected(link))
 
 
 async def _pump(socket: ClientConnection, outbox: asyncio.Queue[str]) -> None:

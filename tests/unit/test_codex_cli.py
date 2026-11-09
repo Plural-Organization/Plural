@@ -168,3 +168,63 @@ def test_codex_turn_usage_counts_the_cached_prompt_apart() -> None:
     usage = codex_cli._usage({"tokenUsage": {"last": last, "total": last}})  # pyright: ignore[reportPrivateUsage]
     assert usage == Usage(input_tokens=100, cache_read_tokens=900, output_tokens=7)
     assert codex_cli._usage({}) is None  # pyright: ignore[reportPrivateUsage]
+
+
+def test_codex_usage_limit_is_named_instead_of_turn_failed() -> None:
+    failure = codex_cli._failure  # pyright: ignore[reportPrivateUsage]
+    limited = failure(
+        {"message": "You've hit your usage limit.", "codexErrorInfo": "usageLimitExceeded"},
+        "Codex app server: turn failed",
+    )
+    assert limited.startswith("Codex usage limit reached, try again after it resets")
+    assert "hit your usage limit" in limited
+    assert failure({"codexErrorInfo": "usageLimitExceeded"}, "x") == (
+        "Codex usage limit reached, try again after it resets"
+    )
+    assert failure({"message": "boom"}, "fallback") == "boom"
+    assert failure(None, "fallback") == "fallback"
+
+
+async def test_codex_adds_none_of_its_own_prompt(tmp_path: Path) -> None:
+    record = tmp_path / "codex.jsonl"
+    cli = tmp_path / "codex"
+    cli.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "if sys.argv[1:3] == ['login', 'status'] or '--help' in sys.argv:\n"
+        "    sys.exit(0)\n"
+        f"log = open({str(record)!r}, 'a')\n"
+        "log.write(json.dumps({'argv': sys.argv[1:]}) + '\\n')\n"
+        "for line in sys.stdin:\n"
+        "    msg = json.loads(line)\n"
+        "    if 'id' not in msg: continue\n"
+        "    log.write(json.dumps(msg) + '\\n'); log.flush()\n"
+        "    result = {'thread': {'id': 't'}} if msg['method'] == 'thread/start' else {}\n"
+        "    print(json.dumps({'id': msg['id'], 'result': result}), flush=True)\n"
+        "    if msg['method'] != 'turn/start': continue\n"
+        "    answer = json.dumps({'text': 'ok', 'tool_calls': []})\n"
+        "    print(json.dumps({'method': 'turn/completed', 'params': {'turn': {\n"
+        "        'status': 'completed', 'items': [{'type': 'agentMessage', 'text': answer}]}}}),\n"
+        "        flush=True)\n"
+    )
+    cli.chmod(0o755)
+    provider = CodexCliProvider(workspace=tmp_path, cli=str(cli))
+    request = LlmRequest(system="", messages=(LlmMessage(role="user", content="say ok"),))
+    try:
+        _ = [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    finally:
+        await provider.close()
+    lines = [json.loads(line) for line in record.read_text().splitlines()]
+    argv = lines[0]["argv"]
+    settings = {argv[i + 1] for i, arg in enumerate(argv) if arg == "-c"}
+    assert {
+        "features.shell_tool=false",
+        "features.hooks=false",
+        "features.plugins=false",
+        "skills.include_instructions=false",
+        "include_environment_context=false",
+    } <= settings
+    # An unknown `--disable` feature would stop a newer or older Codex from starting.
+    assert "--disable" not in argv
+    start = next(line for line in lines[1:] if line.get("method") == "thread/start")
+    assert start["params"]["baseInstructions"] == codex_cli.BASE_INSTRUCTIONS

@@ -35,6 +35,7 @@ function approval(warnings: string[]): ApprovalView {
     provenance: { initiator_id: "p_host", initiator_role: "host", origin: "direct" },
     timeout_at: new Date(Date.now() + 120_000).toISOString(),
     suggested_patterns: [],
+    folder: null,
     warnings,
   };
 }

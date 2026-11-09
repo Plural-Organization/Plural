@@ -14,7 +14,7 @@ export type ProposalDecision = "approve" | "reject";
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "ApprovalDecision".
  */
-export type ApprovalDecision = "once" | "always" | "reject" | "block";
+export type ApprovalDecision = "once" | "always" | "reject" | "block" | "read" | "write";
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "BriefingSharing".

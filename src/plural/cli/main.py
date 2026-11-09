@@ -17,10 +17,11 @@ from rich.table import Table
 from plural import __version__
 from plural.cli.format import ago
 from plural.cli.team import ls, team_app
-from plural.host.config import HostSettings
+from plural.host.config import DEFAULT_RELAY_URL, HostSettings
 from plural.host.team import TeamStore
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import AdmissionMode, PromptMode
+from plural.relay.directory import TeamLimits
 from plural.relay.limits import RelayLimits
 from plural.storage.jsonl_export import export_jsonl
 from plural.storage.sessions import delete_session, list_sessions, read_session, session_path
@@ -34,6 +35,7 @@ app.add_typer(team_app, name="team")
 app.command(name="ls")(ls)
 console = Console()
 DEFAULT_LIMITS = RelayLimits()
+DEFAULT_TEAM_LIMITS = TeamLimits()
 
 
 @app.command()
@@ -43,7 +45,13 @@ def host(
     ] = None,
     bind: Annotated[str | None, typer.Option(help="Address for direct mode.")] = None,
     port: Annotated[int | None, typer.Option(help="Port for direct mode.")] = None,
-    relay: Annotated[str | None, typer.Option(help="Relay URL; direct mode when omitted.")] = None,
+    relay: Annotated[
+        str | None,
+        typer.Option(help="Relay URL. Default: your team's relay, else the Plural relay."),
+    ] = None,
+    local: Annotated[
+        bool, typer.Option("--local", help="Stay on this machine: no relay, direct mode.")
+    ] = False,
     public_url: Annotated[str | None, typer.Option(help="Public ws(s) URL for links.")] = None,
     room: Annotated[str | None, typer.Option(help="Resume an existing room.")] = None,
     title: Annotated[str | None, typer.Option(help="Name of this session.")] = None,
@@ -89,6 +97,10 @@ def host(
     if name is None and "PLURAL_HOST_NAME" not in os.environ:
         options["host_name"] = getpass.getuser()
     settings = HostSettings(**options)
+    if local:
+        settings = settings.model_copy(update={"relay_url": None})
+    elif _wants_relay(settings):
+        settings = settings.model_copy(update={"relay_url": _default_relay(settings)})
     from plural.host.providers import ConfigError
     from plural.host.team_presence import PresenceUnavailable
 
@@ -97,6 +109,17 @@ def host(
     except (ConfigError, PresenceUnavailable) as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(1) from error
+
+
+def _wants_relay(settings: HostSettings) -> bool:
+    """A host with no address of its own goes through a relay; --bind and --public-url opt out."""
+    direct = settings.public_url or "bind_host" in settings.model_fields_set
+    return settings.relay_url is None and not direct
+
+
+def _default_relay(settings: HostSettings) -> str:
+    profile = TeamStore(settings.state_dir).load() if settings.team else None
+    return profile.relay if profile is not None else DEFAULT_RELAY_URL
 
 
 def _saved_workspace(room: str) -> Path:
@@ -250,6 +273,30 @@ def relay(
             envvar="PLURAL_RELAY_TEAMS",
         ),
     ] = None,
+    teams_per_owner: Annotated[
+        int,
+        typer.Option(
+            min=1,
+            help="Teams one key may own. A relay run for one person can raise it.",
+            envvar="PLURAL_RELAY_TEAMS_PER_OWNER",
+        ),
+    ] = DEFAULT_TEAM_LIMITS.max_teams_per_owner,
+    clients_only: Annotated[
+        bool,
+        typer.Option(
+            "--clients-only",
+            help="Refuse anything that does not call itself a Plural client (or a --web-origin).",
+            envvar="PLURAL_RELAY_CLIENTS_ONLY",
+        ),
+    ] = False,
+    web_origins: Annotated[
+        str,
+        typer.Option(
+            "--web-origin",
+            help="Comma-separated origins of web clients let in by --clients-only.",
+            envvar="PLURAL_RELAY_WEB_ORIGINS",
+        ),
+    ] = "",
 ) -> None:
     import uvicorn
 
@@ -261,7 +308,14 @@ def relay(
         max_guests_per_peer=guests_per_peer,
     )
     uvicorn.run(
-        create_app(limits, proxy_hops=proxy_hops, teams=teams),
+        create_app(
+            limits,
+            proxy_hops=proxy_hops,
+            teams=teams,
+            team_limits=TeamLimits(max_teams_per_owner=teams_per_owner),
+            clients_only=clients_only,
+            web_origins=[item.strip() for item in web_origins.split(",") if item.strip()],
+        ),
         host=bind,
         port=port,
         log_level="info",

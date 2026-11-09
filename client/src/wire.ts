@@ -13,6 +13,16 @@ export class CommandRejected extends Error {
 
 export class ConnectionClosed extends Error {}
 
+// A relay may serve only Plural clients. A browser cannot set this header and is let in by its origin.
+export const USER_AGENT = "plural-client";
+
+function openSocket(url: string): WebSocket {
+  if (typeof document !== "undefined") {
+    return new WebSocket(url);
+  }
+  return new WebSocket(url, { headers: { "user-agent": USER_AGENT } } as never);
+}
+
 interface Pending {
   resolve: (envelope: Envelope) => void;
   reject: (error: Error) => void;
@@ -34,7 +44,7 @@ export class Wire {
 
   static open(url: string, room: string): Promise<Wire> {
     return new Promise((resolve, reject) => {
-      const socket = new WebSocket(url);
+      const socket = openSocket(url);
       const failed = () => reject(new ConnectionClosed("cannot connect"));
       socket.addEventListener("error", failed, { once: true });
       socket.addEventListener(

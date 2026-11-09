@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { parseLink, type JoinLink } from "@plural/client";
+import { parseLink, type JoinLink, type SessionCard } from "@plural/client";
 import { JoinScreen } from "./screens/JoinScreen";
 import { RoomScreen } from "./screens/RoomScreen";
 import { unlockAudio } from "./lib/alert";
 import { useTeam } from "./hooks/useTeam";
-import type { SessionCard, Team } from "./lib/team";
+import type { Team } from "./lib/team";
 
 export interface Space {
   link: JoinLink;

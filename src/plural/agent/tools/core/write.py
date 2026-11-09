@@ -1,6 +1,6 @@
 from pydantic import Field
 
-from plural.agent.tools.base import ToolArgs, ToolCtx, ToolResult, ToolSpec, TypedTool
+from plural.agent.tools.base import Reach, ToolArgs, ToolCtx, ToolResult, ToolSpec, TypedTool
 from plural.agent.tools.diffs import current_bytes, unified_diff
 from plural.protocol.models import ToolRisk
 
@@ -25,8 +25,11 @@ class WriteTool(TypedTool[WriteArgs]):
     def subject(self, args: WriteArgs) -> str:
         return args.path
 
+    def reach(self, args: WriteArgs) -> Reach | None:
+        return Reach(args.path, write=True)
+
     async def run(self, args: WriteArgs, ctx: ToolCtx) -> ToolResult:
-        path = ctx.workspace.resolve(args.path)
+        path = ctx.workspace.resolve(args.path, write=True)
         data = args.content.encode()
         async with ctx.locks(path):
             existing = await current_bytes(ctx, path)

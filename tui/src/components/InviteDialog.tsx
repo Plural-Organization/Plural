@@ -21,7 +21,7 @@ export function InviteDialog({ width, height, canTeam, teamName, onRoom, onTeam,
 
   const options = [
     { id: "room", icon: "◉", title: "Invite to this room", detail: "copies the room link · anyone with it joins this session" },
-    ...(canTeam ? [{ id: "team", icon: "◆", title: `Invite to team${teamName ? ` ${teamName}` : ""}`, detail: "copies a team join command · one use, valid for an hour" }] : []),
+    ...(canTeam ? [{ id: "team", icon: "◆", title: `Invite to team${teamName ? ` ${teamName}` : ""}`, detail: "copies a team join command · reusable, no expiry" }] : []),
   ];
 
   const choose = (position: number): void => {

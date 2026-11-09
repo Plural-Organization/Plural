@@ -5,14 +5,16 @@ import secrets
 import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
-from urllib.request import Request, urlopen
+from urllib.request import Request
 
 from pydantic import ValidationError
 
+from plural.host.relay_http import ConnectFailed, urlopen
 from plural.protocol.models import Model
+from plural.protocol.relay import USER_AGENT
 from plural.protocol.team import (
     Invite,
     MemberList,
@@ -26,7 +28,7 @@ from plural.protocol.team import (
 from plural.security.identity import CertVerifier, Identity, InvalidCertificate, authorization
 
 RENEW_BEFORE = timedelta(days=7)
-REQUEST_TIMEOUT_S = 15
+REQUEST_TIMEOUT_S = 8
 
 
 class TeamError(Exception):
@@ -96,19 +98,87 @@ def profile_from(relay: str, grant: TeamGrant) -> TeamProfile:
     )
 
 
-def _call(method: str, url: str, body: bytes | None, headers: dict[str, str]) -> Any:
-    request = Request(url, data=body, method=method, headers=headers)
+# Hosts of tunnels that open for one session. Their address changes at every start and a team made
+# on one ends with it. A tunnel of your own, on a domain of yours, is not on this list.
+TUNNEL_SUFFIXES = (
+    ".trycloudflare.com",
+    ".ngrok-free.app",
+    ".ngrok-free.dev",
+    ".ngrok.app",
+    ".ngrok.dev",
+    ".ngrok.io",
+    ".loca.lt",
+)
+# What a tunnel provider answers for an address nothing listens on any more.
+TUNNEL_GONE = frozenset({404, 502, 503, 504, 530})
+
+RelayState = Literal["alive", "dead", "unknown"]
+
+
+def is_tunnel_host(host: str) -> bool:
+    return host.lower().split(":")[0].endswith(TUNNEL_SUFFIXES)
+
+
+def closed_tunnel(host: str) -> str:
+    return (
+        f"the tunnel {host} is closed, and the team on it ended with it. "
+        "Ask the team owner to start it again and send a new invite"
+    )
+
+
+def relay_state(relay: str) -> RelayState:
+    """Whether the relay answers. Only an answer that is not ours means it is gone: a timeout or a
+    refused connection may be this machine being offline, so those stay unknown."""
+    try:
+        with urlopen(
+            Request(f"{http_base(relay)}/healthz", headers={"user-agent": USER_AGENT}),
+            timeout=REQUEST_TIMEOUT_S / 3,
+        ):
+            return "alive"
+    except HTTPError:
+        return "dead"
+    except (URLError, TimeoutError, OSError):
+        return "unknown"
+
+
+def tunnel_closed(profile: TeamProfile) -> bool:
+    host = urlsplit(http_base(profile.relay)).netloc
+    return is_tunnel_host(host) and relay_state(profile.relay) == "dead"
+
+
+def _read(request: Request) -> bytes:
+    # A connection that never opened sent nothing, so one more try is safe for every method.
     try:
         with urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
-            payload = response.read()
+            return response.read()
+    except HTTPError:
+        raise
+    except URLError as error:
+        if not isinstance(error.reason, ConnectFailed):
+            raise
+    with urlopen(request, timeout=REQUEST_TIMEOUT_S) as response:
+        return response.read()
+
+
+def _call(method: str, url: str, body: bytes | None, headers: dict[str, str]) -> Any:
+    # Cloudflare in front of a relay refuses urllib's default agent (error 1010).
+    request = Request(url, data=body, method=method, headers={"user-agent": USER_AGENT, **headers})
+    try:
+        payload = _read(request)
     except HTTPError as error:
         try:
             message = json.loads(error.read())["error"]
         except (ValueError, KeyError, TypeError):
+            host = urlsplit(url).netloc
+            if is_tunnel_host(host) and error.code in TUNNEL_GONE:
+                raise TeamError(closed_tunnel(host)) from error
             message = f"the relay answered {error.code}"
         raise TeamError(str(message)) from error
     except (URLError, TimeoutError, OSError) as error:
-        raise TeamError(f"cannot reach the relay at {urlsplit(url).netloc}") from error
+        host = urlsplit(url).netloc
+        if isinstance(getattr(error, "reason", error), ConnectFailed | TimeoutError):
+            raise TeamError(f"the relay at {host} did not answer, try again in a moment") from error
+        raise TeamError(f"cannot reach the relay at {host}") from error
     return json.loads(payload) if payload else None
 
 

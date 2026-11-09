@@ -2,7 +2,7 @@
 import { userInfo } from "node:os";
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
-import { parseLink, SessionClient } from "@plural/client";
+import { parseLink, pickTeamSession, SessionClient, TeamWatcher } from "@plural/client";
 import pkg from "../package.json" with { type: "json" };
 import { basename } from "node:path";
 import { Shell } from "./Shell";
@@ -23,7 +23,7 @@ import { pickSession } from "./picker";
 import { composePrompt, readStdin, runPrint } from "./print";
 import { startupCommands } from "./startup";
 import { runUpdate, skewNote, Updater } from "./update";
-import { fetchSessions, loadTeam, pickTeamSession, TeamWatcher, teamProof, type Team } from "./team";
+import { fetchSessions, leaveClosedTunnel, leaveTeam, loadTeam, teamProof, type Team } from "./team";
 import { listSessions, resolveSession, type SessionInfo } from "./sessions";
 import { openTeam, type TeamHosting } from "./team-host";
 import { parseTunnelKind, startTunnel, TunnelUnavailable, type Tunnel } from "./tunnel";
@@ -39,8 +39,9 @@ usage
   plural update [--check]     install the latest version
   plural sessions [--json]    list your sessions
   plural rm <id>              delete a session
+  plural team create <name> [--relay <url>]  create a team (on the Plural relay unless --relay) and open its rooms
   plural team create <name> --tunnel cloudflared|ngrok  create a team behind a tunnel and open a session in it
-  plural team join <code> --relay <url>  join a team and open its rooms
+  plural team join <code> [--relay <url>]  join a team (the Plural relay unless --relay) and open its rooms
   plural relay|doctor|export  run the host's own commands
 
 options
@@ -52,6 +53,7 @@ options
   --name <name>               your display name
   --private                   in a team, keep this session to yourself
   --port <n>  --bind <addr>  --relay <url>  --public-url <url>
+  --local                     stay on this machine, no relay
   --tunnel cloudflared|ngrok  share through a tunnel, the link carries its address
   -v, --version  -h, --help
 `;
@@ -166,10 +168,10 @@ async function start(options: SessionOptions, joinLink: string | null, name: str
     return rejoin(found.join);
   }
   const plain = found.hostArgs;
-  if (kind !== null && ["--relay", "--public-url", "--bind"].some((flag) => plain.includes(flag))) {
-    throw new UsageError("--tunnel cannot be combined with --relay, --public-url or --bind");
+  if (kind !== null && ADDRESS_FLAGS.some((flag) => plain.includes(flag))) {
+    throw new UsageError("--tunnel cannot be combined with --relay, --public-url, --bind or --local");
   }
-  const sharing = options.private ? null : loadTeam();
+  const sharing = options.private || plain.includes("--local") ? null : loadTeam();
   const named = [...plain, ...(sharing === null ? [] : ["--team"]), "--name", name];
   const portFlag = plain.indexOf("--port");
   const port = (portFlag === -1 ? 0 : Number(plain[portFlag + 1])) || (await freePort());
@@ -206,6 +208,10 @@ async function printOnce(options: SessionOptions, name: string): Promise<void> {
   const prompt = composePrompt(options.prompt, await readStdin());
   if (prompt === "") {
     fail("-p needs a prompt: plural -p \"your question\", or pipe text into it");
+  }
+  // One question for one agent: nobody joins, so no room is opened on a relay unless one was named.
+  if (!options.hostArgs.some((flag) => ADDRESS_FLAGS.includes(flag))) {
+    options.hostArgs.push("--local");
   }
   const saved = loadSettings();
   let commands;
@@ -263,6 +269,10 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   if (options.print) {
     await printOnce(options, name);
     return;
+  }
+  const left = hosting === null ? await leaveClosedTunnel() : null;
+  if (left !== null) {
+    process.stderr.write(`${left}\n`);
   }
   const settings = loadSettings();
   const alerts = new Alerts();
@@ -322,7 +332,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   }
 
   const team = loadTeam();
-  const watcher = team === null ? undefined : new TeamWatcher(team);
+  const watcher = team === null ? undefined : new TeamWatcher(team.profile, () => fetchSessions(team));
   watcher?.start();
   const keys = loadKeys();
   const control = host?.control ?? null;
@@ -376,6 +386,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
       <Shell
         team={team}
         shareHost={team === null ? undefined : shareHost}
+        leave={team === null ? undefined : leaveTeam}
         watcher={watcher}
         home={basename(process.cwd())}
         connect={(card, member) =>
@@ -464,7 +475,7 @@ async function main(): Promise<void> {
       fail(problem(error));
     }
     await run({ ...emptyOptions(), displayName: name }, null, name, hosting);
-  } else if (parsed.kind === "team_join") {
+  } else if (parsed.kind === "team_enter") {
     const child = runHostCommand(parsed.args);
     const code = await new Promise<number>((resolve, reject) => {
       child.once("error", reject);
@@ -475,7 +486,7 @@ async function main(): Promise<void> {
     }
     const joined = loadTeam();
     if (joined === null) {
-      fail("joined the team, but its profile was not saved");
+      fail("the team was made, but its profile was not saved");
     }
     const name = joined.profile.member.name;
     await run({ ...emptyOptions(), displayName: name }, null, name);

@@ -133,7 +133,7 @@ export type ToolRisk = "read" | "write" | "exec";
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "ApprovalDecision".
  */
-export type ApprovalDecision = "once" | "always" | "reject" | "block";
+export type ApprovalDecision = "once" | "always" | "reject" | "block" | "read" | "write";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "PolicyAction".
@@ -1118,11 +1118,23 @@ export interface ApprovalRequested {
  */
 export interface ApprovalView {
   call: ToolCallView;
+  folder: FolderAccess | null;
   id: string;
   provenance: Provenance;
   suggested_patterns: string[];
   timeout_at: string;
   warnings: string[];
+}
+/**
+ * A request to reach a folder outside the workspace, put to the host before the call itself.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "FolderAccess".
+ */
+export interface FolderAccess {
+  broad: boolean;
+  folder: string;
+  write: boolean;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema

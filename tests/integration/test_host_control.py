@@ -14,6 +14,7 @@ def test_a_client_configures_the_host_over_stdin_and_the_key_stays_off_disk(
         str(Path(sys.executable).parent / "plural-host"),
         "host",
         "--json",
+        "--local",
         "--workspace",
         str(tmp_path),
         "--port",

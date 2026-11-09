@@ -25,9 +25,16 @@ describe("commands", () => {
 
   test("joining a team continues into the TUI", () => {
     expect(parseArgs(["team", "join", "tm-abcde-fghj2", "--relay", "wss://r.example"])).toEqual({
-      kind: "team_join",
+      kind: "team_enter",
       args: ["team", "join", "tm-abcde-fghj2", "--relay", "wss://r.example"],
     });
+  });
+
+  test("creating a team continues into the TUI too, unless a script or help asks", () => {
+    expect(parseArgs(["team", "create", "kbtu"])).toEqual({ kind: "team_enter", args: ["team", "create", "kbtu"] });
+    for (const flag of ["--json", "--help", "-h"]) {
+      expect(parseArgs(["team", "create", "kbtu", flag]).kind).toBe("passthrough");
+    }
   });
 
   test("--private keeps the session out of the team", () => {

@@ -115,14 +115,14 @@ export function PinnedPrompt({ item, width, onJump }: { item: Extract<FeedItem, 
 
 const BRIEFING_LINES = 30;
 
-export function BriefingCard({ item, expanded, onToggle, onCopy }: { item: Extract<FeedItem, { kind: "briefing" }>; expanded: boolean; onToggle: () => void; onCopy: (text: string) => void }) {
+export function BriefingCard({ item, expanded, onToggle, onCopy, onGive }: { item: Extract<FeedItem, { kind: "briefing" }>; expanded: boolean; onToggle: () => void; onCopy: (text: string) => void; onGive: () => void }) {
   const long = item.text.split("\n").length > BRIEFING_LINES;
   const view = long && !expanded ? collapseText(item.text, BRIEFING_LINES) : { text: item.text, hidden: 0 };
   return (
     <box flexDirection="column" marginY={1} backgroundColor={theme.bubble} paddingX={2} paddingY={1}>
       <text>
         <span fg={theme.info}>
-          <b>✉ briefing from {item.from}</b>
+          <b>✉ answer from {item.from}</b>
         </span>
         <span fg={theme.dim}>
           {item.update ? " · update" : ""} · as of event {item.asOf}
@@ -140,7 +140,11 @@ export function BriefingCard({ item, expanded, onToggle, onCopy }: { item: Extra
         <box onMouseDown={() => onCopy(item.text)}>
           <text fg={theme.accent}>copy</text>
         </box>
-        <text fg={theme.dim}>  ·  /brief give hands it to your agent  ·  /brief update refreshes it</text>
+        <text fg={theme.dim}>  ·  </text>
+        <box onMouseDown={onGive}>
+          <text fg={theme.accent}>give to my agent</text>
+        </box>
+        <text fg={theme.dim}>  ·  /ask @{item.from} --update refreshes it</text>
       </box>
     </box>
   );
@@ -255,7 +259,10 @@ export function AssistantCard({ item, syntax, expanded, onToggle }: AssistantPro
   const view = long && !expanded ? collapseText(item.text, REPLY_LINES) : { text: item.text, hidden: 0 };
   return (
     <box flexDirection="row" marginBottom={1}>
-      <text fg={theme.text}>⏺ </text>
+      {/* A box that cannot shrink: a margin on the text is squeezed away when the first line is longer than the row. */}
+      <box width={2} flexShrink={0}>
+        <text fg={theme.text}>⏺</text>
+      </box>
       <box flexDirection="column" flexGrow={1} flexShrink={1}>
         <markdown content={view.text} syntaxStyle={syntax} streaming={item.streaming} renderNode={renderNode} tableOptions={table()} />
         {long ? (
@@ -425,9 +432,10 @@ interface ViewProps {
   started: boolean;
   onToggle: (id: string) => void;
   onCopy: (text: string) => void;
+  onGive: (item: Extract<FeedItem, { kind: "briefing" }>) => void;
 }
 
-export function FeedItemView({ item, syntax, width, expanded, queued = null, runs, started, onToggle, onCopy }: ViewProps) {
+export function FeedItemView({ item, syntax, width, expanded, queued = null, runs, started, onToggle, onCopy, onGive }: ViewProps) {
   switch (item.kind) {
     case "banner":
       return <Banner item={item} compact={started} />;
@@ -442,7 +450,7 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, run
     case "notice":
       return <NoticeCard item={item} />;
     case "briefing":
-      return <BriefingCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} />;
+      return <BriefingCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} onGive={() => onGive(item)} />;
     case "shown":
       return <ShownCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} />;
   }

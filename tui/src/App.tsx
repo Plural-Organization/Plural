@@ -17,18 +17,21 @@ import {
   SlashError,
   stepMatch,
   status,
+  type Briefing,
   type Command,
+  type Conflict,
   type ConnectionStatus,
   type PermissionMode,
   type PluginAsked,
   type Session,
 } from "@plural/client";
-import { COMMANDS, pluginHints, skillHints } from "./commands";
+import { COMMANDS, pluginHints, skillHints, type AskTarget } from "./commands";
+import { parseAsk } from "./lib/ask";
 import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
 import { SearchBar } from "./components/SearchBar";
-import { APPROVAL_DECISIONS, Inbox, inboxItems, type InboxItem } from "./components/Inbox";
+import { Inbox, decisionsOf, defaultChoice, inboxItems, type InboxItem } from "./components/Inbox";
 import { ExtrasDialog } from "./components/ExtrasDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SetupDialog } from "./components/SetupDialog";
@@ -42,20 +45,21 @@ import { SCOPES, TrayView, type Form, type FormStep, type McpWizard, type Row, t
 import { addCommand, MCP_CATALOG, wizardFields } from "./mcpCatalog";
 import { Compacting, Working } from "./components/Working";
 import { InviteDialog } from "./components/InviteDialog";
+import { LeaveDialog } from "./components/LeaveDialog";
 import { ShareDialog } from "./components/ShareDialog";
 import { candidateFolders } from "./folders";
 import { contextRows, helpRows, pluginRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
 import { describeConflict, type SpaceRow, type Summary } from "./spaces";
-import type { Conflict } from "./team";
 import { explain } from "./failure";
-import { absorb, emptyFeed, lastReply, withBanner, withNotice, type Feed, type Tone } from "./feed";
+import { absorb, emptyFeed, lastReply, withBanner, withBriefing, withNotice, type Feed, type FeedItem, type Tone } from "./feed";
 import type { AgentControl } from "./control";
 import type { Keys } from "./credentials";
 import type { AgentChoice, PresetId } from "./presets";
 import type { Tab } from "./settingsModel";
 import { copyToClipboard, IMAGE_LIMIT_BYTES, pasteImage } from "./lib/clipboard";
+import { imageKind, readImageFile } from "./lib/image-paste";
 import { createSyntaxStyle } from "./syntax";
 import { toolRuns } from "./steps";
 import { doneText, firstVerb } from "./verbs";
@@ -71,6 +75,8 @@ export interface AppProps {
   teamLink?: string | null;
   onInviteTeam?: () => Promise<string>;
   onShareHost?: (folder: string) => Promise<void>;
+  // Leaving the team (or deleting it, for its owner): what the button says and what it does once confirmed.
+  onLeaveTeam?: { owner: boolean; run: () => Promise<void> };
   settings?: Settings;
   onSettings?: (settings: Settings) => void;
   control?: AgentControl | null;
@@ -88,10 +94,12 @@ export interface AppProps {
   sharing?: boolean;
   teamError?: string | null;
   onOpenSpace?: (id: string) => void;
-  onCycleSpace?: (direction: 1 | -1) => void;
   onClose?: () => void;
   onSummary?: (summary: Summary) => void;
   onGiveBriefing?: (briefing: { source: string; as_of_seq: number; text: string }) => Promise<void>;
+  // Asks a teammate's agent without opening their session; `target` is `name` or `name:repo`.
+  onAsk?: (target: string, request: { focus: string | null; update: boolean }, progress: (text: string) => void) => Promise<Briefing>;
+  askTargets?: AskTarget[];
   conflicts?: Conflict[];
   splash?: boolean;
   onQuit: () => void;
@@ -124,6 +132,7 @@ export function App({
   teamLink = null,
   onInviteTeam,
   onShareHost,
+  onLeaveTeam,
   settings: initialSettings,
   onSettings,
   control = null,
@@ -141,10 +150,11 @@ export function App({
   sharing = true,
   teamError = null,
   onOpenSpace,
-  onCycleSpace,
   onClose,
   onSummary,
   onGiveBriefing,
+  onAsk,
+  askTargets,
   conflicts = [],
   splash = false,
   onQuit,
@@ -158,6 +168,7 @@ export function App({
   const [dialog, setDialog] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [leaveOpen, setLeaveOpen] = useState(false);
   const [setup, setSetup] = useState<{ first: boolean; back: boolean } | null>(null);
   const [extrasPrompt, setExtrasPrompt] = useState<{ preselect: string | null; reason: string | null; back: boolean } | null>(null);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
@@ -674,6 +685,40 @@ export function App({
 
   const show = (title: string, rows: Row[], tone: "accent" | "warn" | "danger" = "accent"): void => setTray({ kind: "text", title, tone, rows });
   const warn = (title: string, text: string): void => show(title, [[{ text, fg: theme.warn }]], "warn");
+  const showBriefingSharing = (): void => {
+    const waiting = Object.values(state.briefing_requests);
+    show("asks", [
+      [{ text: `this session shares briefings: ${state.briefing_sharing}`, bold: true }, { text: "  (/ask share off|ask|team)", fg: theme.dim }],
+      [{ text: "ask a teammate's agent: /ask @name <question>", fg: theme.dim }],
+      ...waiting.map((ask): Row => [{ text: ask.name }, { text: ask.focus ? `  ${ask.focus}` : "", fg: theme.dim }]),
+    ]);
+  };
+  const askTeammate = (target: string, request: { focus: string | null; update: boolean }): void => {
+    if (!onAsk) {
+      warn("ask", "you can ask a teammate's agent once you are in a team: plural team join");
+      return;
+    }
+    notify("dim", `asking @${target}${request.focus ? `: ${request.focus}` : ""}`);
+    onAsk(target, request, (text) => notify("dim", text)).then(
+      (briefing) => commit(withBriefing(feedRef.current, briefing)),
+      (error: unknown) => notify("warn", error instanceof Error ? error.message : String(error)),
+    );
+  };
+  // From a teammate's session the answer goes to my own host; in my own session I am the host.
+  const giveBriefing = (item: Extract<FeedItem, { kind: "briefing" }>): void => {
+    const briefing = { source: item.from, as_of_seq: item.asOf, text: item.text };
+    if (onGiveBriefing) {
+      onGiveBriefing(briefing).then(
+        () => notify("ok", `${item.from}'s answer is in your agent's notes, it reads it at its next prompt. Click “you” to go back`),
+        (error: unknown) => notify("warn", error instanceof Error ? error.message : String(error)),
+      );
+    } else if (isHost) {
+      send({ type: "briefing.import", ...briefing });
+      notify("ok", `${item.from}'s answer is in your agent's notes, it reads it at its next prompt`);
+    } else {
+      warn("ask", "an answer goes to your own agent: ask for it from your own session, or from a teammate's");
+    }
+  };
 
   const install = (global: boolean): void => {
     const current = trayRef.current;
@@ -985,13 +1030,26 @@ export function App({
       flash("no image in the clipboard");
       return;
     }
+    attachImage(data);
+  };
+
+  const pasteImageFile = async (path: string): Promise<boolean> => {
+    const data = await readImageFile(path);
+    if (data === null) {
+      return false;
+    }
+    attachImage(data);
+    return true;
+  };
+
+  const attachImage = (data: Buffer): void => {
     if (data.length > IMAGE_LIMIT_BYTES) {
       notify("warn", `the image is ${(data.length / 1e6).toFixed(1)} MB, more than ${IMAGE_LIMIT_BYTES / 1e6} MB`);
       return;
     }
     pastes.current += 1;
     const image = {
-      name: `image-${pastes.current}.${data[0] === 0xff ? "jpg" : "png"}`,
+      name: `image-${pastes.current}.${imageKind(data) ?? "png"}`,
       sha256: createHash("sha256").update(data).digest("hex"),
     };
     setImages((current) => [...current, image]);
@@ -1099,34 +1157,30 @@ export function App({
         }
         return true;
       }
+      case "ask":
       case "brief": {
-        const [verb, ...more] = rest;
-        if (isHost) {
-          if (verb === "share" && ["off", "ask", "team"].includes(more[0] ?? "")) {
-            send({ type: "session.set_briefing_sharing", mode: more[0] as "off" | "ask" | "team" });
+        const intent = parseAsk(rest);
+        if (intent.kind === "share") {
+          if (!isHost) {
+            warn("ask", "only the host sets who may ask this session");
+          } else if (intent.mode !== null) {
+            send({ type: "session.set_briefing_sharing", mode: intent.mode });
           } else {
-            const waiting = Object.values(state.briefing_requests);
-            show("briefings", [
-              [{ text: `this session shares briefings: ${state.briefing_sharing}`, bold: true }, { text: "  (/brief share off|ask|team)", fg: theme.dim }],
-              ...waiting.map((ask): Row => [{ text: ask.name }, { text: ask.focus ? `  ${ask.focus}` : "", fg: theme.dim }]),
-            ]);
+            showBriefingSharing();
           }
-        } else if (verb === "give") {
+        } else if (intent.kind === "give") {
           const last = feedRef.current.items.filter((entry) => entry.kind === "briefing").at(-1);
           if (last === undefined || last.kind !== "briefing") {
-            warn("brief", "there is no briefing here yet, /brief asks for one");
-          } else if (!onGiveBriefing) {
-            warn("brief", "a briefing goes to your own agent, ask for it from a teammate's session");
+            warn("ask", "there is no answer here yet, /ask @name <question> asks for one");
           } else {
-            onGiveBriefing({ source: last.from, as_of_seq: last.asOf, text: last.text }).then(
-              () => notify("ok", `${last.from}'s briefing is in your agent's notes, it reads it at its next prompt. Click “you” to go back`),
-              (error: unknown) => notify("warn", error instanceof Error ? error.message : String(error)),
-            );
+            giveBriefing(last);
           }
+        } else if (intent.target !== null) {
+          askTeammate(intent.target, { focus: intent.focus, update: intent.update });
+        } else if (isHost) {
+          showBriefingSharing();
         } else {
-          const update = verb === "update";
-          const focus = (update ? more : rest).join(" ").trim();
-          send({ type: "briefing.request", focus: focus === "" ? null : focus, update });
+          send({ type: "briefing.request", focus: intent.focus, update: intent.update });
         }
         return true;
       }
@@ -1310,12 +1364,7 @@ export function App({
   };
 
   useKeyboard((key) => {
-    if (!active || dialog || inviteOpen || shareOpen || intro || extrasPrompt !== null || setup !== null) {
-      return;
-    }
-    if (key.meta && (key.name === "left" || key.name === "right") && onCycleSpace) {
-      key.preventDefault();
-      onCycleSpace(key.name === "left" ? -1 : 1);
+    if (!active || dialog || inviteOpen || shareOpen || leaveOpen || intro || extrasPrompt !== null || setup !== null) {
       return;
     }
     if (key.ctrl && key.name === "w" && viewing !== null && onClose) {
@@ -1373,7 +1422,7 @@ export function App({
       const direction = key.name === "left" ? -1 : 1;
       setApprovalChoice((current) => ({
         id: item.id,
-        index: Math.max(0, Math.min(APPROVAL_DECISIONS.length - 1, (current?.id === item.id ? current.index : 0) + direction)),
+        index: Math.max(0, Math.min(decisionsOf(item.approval).length - 1, (current?.id === item.id ? current.index : defaultChoice(item.approval)) + direction)),
       }));
     } else if (key.name === "up" || key.name === "k") {
       setApprovalChoice(null);
@@ -1400,9 +1449,11 @@ export function App({
         send({ type: "access.decide", participant_id: item.id, decision: "deny" });
       }
     } else if (item?.kind === "approval") {
-      const decisions: Record<string, "once" | "always" | "reject" | "block"> = { y: "once", a: "always", n: "reject", b: "block" };
-      const index = approvalChoice?.id === item.id ? approvalChoice.index : 0;
-      const decision = key.name === "return" ? APPROVAL_DECISIONS[index] : decisions[key.name];
+      const decisions: Record<string, "once" | "always" | "reject" | "block" | "read" | "write"> = item.approval.folder
+        ? { r: "read", w: "write", n: "reject", x: "reject" }
+        : { y: "once", a: "always", n: "reject", b: "block" };
+      const index = approvalChoice?.id === item.id ? approvalChoice.index : defaultChoice(item.approval);
+      const decision = key.name === "return" ? (decisionsOf(item.approval)[index] as "once" | "always" | "reject" | "block" | "read" | "write" | undefined) : decisions[key.name];
       if (decision) {
         send({ type: "approval.respond", approval_id: item.id, decision });
       }
@@ -1454,7 +1505,6 @@ export function App({
       : me?.role === "participant" && state.prompt_mode === "review"
         ? "Propose a prompt, the host approves it"
         : "Message the agent, / for commands";
-  const disabled = null;
   const showPanel = settings.panel && width >= MIN_WIDTH_FOR_PANEL;
 
   if (intro) {
@@ -1490,7 +1540,7 @@ export function App({
           <box flexShrink={0} height={1} paddingX={2} backgroundColor={theme.panel}>
             <text fg={theme.info} wrapMode="none">
               viewing {viewing}
-              <span fg={theme.dim}> · alt+←/→ switch · ctrl+w closes</span>
+              <span fg={theme.dim}> · ctrl+w closes</span>
             </text>
           </box>
         ) : null}
@@ -1539,6 +1589,7 @@ export function App({
                   started={chatting}
                   onToggle={toggle}
                   onCopy={(text) => copy(text, "Copied", `${text.length} characters`)}
+                  onGive={giveBriefing}
                 />
               </box>
             );
@@ -1571,20 +1622,21 @@ export function App({
           <SearchBar query={query} count={hits.length} position={hitIndex} preview={matched} onQuery={search} onStep={step} onClose={closeSearch} />
         ) : null}
         <Composer
-          focused={active && focus === "composer" && !dialog && !inviteOpen && !shareOpen && extrasPrompt === null && setup === null}
-          disabled={disabled}
+          focused={active && focus === "composer" && !dialog && !inviteOpen && !shareOpen && !leaveOpen && extrasPrompt === null && setup === null}
           placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
           remember={!asking?.secret}
           role={me?.role}
           people={mentionable(state, projection.meId)}
           commands={suggested}
+          askTargets={askTargets}
           seed={seed}
           label={editing ? "editing the proposal: enter approves it, esc cancels" : null}
-          route={asking || editing || disabled ? () => null : (text) => routeOf(text, state, projection.meId)}
+          route={asking || editing ? () => null : (text) => routeOf(text, state, projection.meId)}
           delivery={delivery}
           onSubmit={submit}
           images={images.map((image) => image.name)}
           onPasteImage={() => void pasteFromClipboard()}
+          onPasteImageFile={pasteImageFile}
           onDropImage={() => setImages((current) => current.slice(0, -1))}
           onEscape={escape}
           onTab={() => {
@@ -1675,7 +1727,7 @@ export function App({
           }}
           onTeam={async () => {
             const command = await onInviteTeam!();
-            copy(command, "Team invite copied", "one use · valid for an hour");
+            copy(command, "Team invite copied", "reusable · no expiry");
             setInviteOpen(false);
           }}
           onClose={() => setInviteOpen(false)}
@@ -1691,9 +1743,10 @@ export function App({
           onClose={() => setShareOpen(false)}
         />
       ) : null}
-      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} onInvite={() => setInviteOpen(true)} onShare={onShareHost ? () => setShareOpen(true) : undefined} update={update} /> : null}
+      {leaveOpen && onLeaveTeam && teamName ? (
+        <LeaveDialog width={width} height={height} teamName={teamName} owner={onLeaveTeam.owner} onConfirm={onLeaveTeam.run} onClose={() => setLeaveOpen(false)} />
+      ) : null}
+      {showPanel ? <Sidebar projection={projection} room={room} spaces={spaces} teamName={teamName} teamError={teamError} onOpenSpace={onOpenSpace} inbox={items} running={running} status={runStatus} onSettings={() => setDialog(true)} onInvite={() => setInviteOpen(true)} onShare={onShareHost ? () => setShareOpen(true) : undefined} onLeaveTeam={onLeaveTeam ? { label: onLeaveTeam.owner ? "disband team" : "leave team", press: () => setLeaveOpen(true) } : undefined} update={update} /> : null}
     </box>
   );
 }
-
-export { SIDEBAR_WIDTH };

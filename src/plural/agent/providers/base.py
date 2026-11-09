@@ -84,6 +84,9 @@ class NativeReady(Model):
 class UsageReport(Model):
     kind: Literal["usage"] = "usage"
     usage: Usage
+    # The last request's own usage, when `usage` sums several requests made for one answer;
+    # its prompt is the context the conversation now fills.
+    last: Usage | None = None
 
 
 class Stop(Model):

@@ -92,7 +92,7 @@ export async function startHost(
       mode,
       "--admission",
       admission,
-      ...(relayUrl ? ["--relay", relayUrl] : []),
+      ...(relayUrl ? ["--relay", relayUrl] : ["--local"]),
     ],
     {
       cwd: ROOT,

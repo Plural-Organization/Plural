@@ -204,7 +204,9 @@
         "once",
         "always",
         "reject",
-        "block"
+        "block",
+        "read",
+        "write"
       ],
       "type": "string"
     },
@@ -263,6 +265,17 @@
         "call": {
           "$ref": "#/$defs/ToolCallView"
         },
+        "folder": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FolderAccess"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "id": {
           "type": "string"
         },
@@ -294,7 +307,8 @@
         "provenance",
         "timeout_at",
         "suggested_patterns",
-        "warnings"
+        "warnings",
+        "folder"
       ],
       "type": "object"
     },
@@ -1707,6 +1721,27 @@
         "ts",
         "actor_id",
         "event"
+      ],
+      "type": "object"
+    },
+    "FolderAccess": {
+      "description": "A request to reach a folder outside the workspace, put to the host before the call itself.",
+      "properties": {
+        "broad": {
+          "default": false,
+          "type": "boolean"
+        },
+        "folder": {
+          "type": "string"
+        },
+        "write": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "folder",
+        "write",
+        "broad"
       ],
       "type": "object"
     },

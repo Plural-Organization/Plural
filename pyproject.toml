@@ -3,7 +3,7 @@ name = "plural-agent"
 dynamic = ["version"]
 description = "Multiplayer sessions for one AI agent: shared context, host approvals, attribution, isolation."
 readme = "README.md"
-license = "Apache-2.0"
+license = "GPL-3.0-or-later"
 requires-python = ">=3.12"
 authors = [{ name = "Plural team" }]
 keywords = ["ai", "agent", "multiplayer", "coding-agent", "llm", "tui"]
@@ -11,7 +11,7 @@ classifiers = [
   "Development Status :: 3 - Alpha",
   "Environment :: Console",
   "Intended Audience :: Developers",
-  "License :: OSI Approved :: Apache Software License",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
   "Operating System :: MacOS",
   "Operating System :: POSIX :: Linux",
   "Programming Language :: Python :: 3.12",

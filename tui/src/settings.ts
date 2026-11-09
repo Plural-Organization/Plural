@@ -39,7 +39,7 @@ export const DEFAULT_SETTINGS: Settings = {
   rememberKey: true,
   setupSeen: false,
   extrasSeen: false,
-  share: "local",
+  share: "relay",
   relayUrl: "",
   agent: DEFAULT_CHOICE,
   agentChoices: {},
