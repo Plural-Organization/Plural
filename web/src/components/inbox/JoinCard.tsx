@@ -1,6 +1,7 @@
 import type { Command, JoinRequestView } from "@plural/client";
 import { cx } from "../../lib/cx";
 import { useNow } from "../../hooks/useNow";
+import { Action } from "./Action";
 import styles from "./Inbox.module.css";
 
 interface JoinCardProps {
@@ -23,15 +24,9 @@ export function JoinCard({ request, send }: JoinCardProps) {
         </span>
       </div>
       <div className={styles.actions}>
-        <button className="button primary" type="button" onClick={() => decide("allow")}>
-          <kbd>y</kbd> let in
-        </button>
-        <button className="button" type="button" onClick={() => decide("viewer")}>
-          <kbd>v</kbd> as a viewer
-        </button>
-        <button className="button" type="button" onClick={() => decide("deny")}>
-          <kbd>n</kbd> refuse
-        </button>
+        <Action hint="y" tone="primary" onPress={() => decide("allow")}>let in</Action>
+        <Action hint="v" onPress={() => decide("viewer")}>as a viewer</Action>
+        <Action hint="n" onPress={() => decide("deny")}>refuse</Action>
       </div>
     </div>
   );

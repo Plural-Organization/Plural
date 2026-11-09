@@ -22,8 +22,8 @@
 .pointer { position: absolute; pointer-events: none; transition: left 60ms linear, top 60ms linear; }
 .pointer svg { display: block; fill: var(--who); stroke: var(--bg); stroke-width: 1.2; }
 .pointer span { position: absolute; left: 12px; top: 14px; font: 600 11px/1.5 var(--font-text); color: var(--bg); background: var(--who); border-radius: 4px; padding: 0 6px; white-space: nowrap; }
-.full { position: fixed; inset: 49px 0 0 0; z-index: 6; border-left: 0; }
-@media (max-width: 980px) { .board { position: fixed; inset: 49px 0 0 0; z-index: 6; border-left: 0; } }
+.full { position: fixed; inset: 56px 0 0 19rem; z-index: 6; }
+@media (max-width: 980px) { .board { position: fixed; inset: 56px 0 0 0; z-index: 6; border-left: 0; } }
 @media (prefers-reduced-motion: reduce) { .pointer { transition: none; } }
 .zoom { display: flex; align-items: center; border: 1px solid var(--line); border-radius: 999px; }
 .zoom button { background: none; border: 0; color: var(--muted); font: 500 12px var(--font-text); padding: 3px 9px; cursor: pointer; }

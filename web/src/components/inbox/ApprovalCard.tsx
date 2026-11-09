@@ -1,6 +1,7 @@
 import type { ApprovalView, Command, SessionState } from "@plural/client";
 import { cx } from "../../lib/cx";
 import { nameOf } from "./items";
+import { Action } from "./Action";
 import styles from "./Inbox.module.css";
 
 type Decision = "once" | "always" | "reject" | "block" | "read" | "write";
@@ -58,14 +59,9 @@ function FolderCard({ approval, state, now, send }: ApprovalCardProps) {
       <p className={styles.why}>Asked every time, nothing is remembered. “read” opens it for this one call only; “read + write” also lets the agent change files here.</p>
       <div className={styles.actions}>
         {FOLDER_BUTTONS.map((button) => (
-          <button
-            key={button.decision}
-            className={cx("button", button.tone)}
-            type="button"
-            onClick={() => send({ type: "approval.respond", approval_id: approval.id, decision: button.decision })}
-          >
-            <kbd>{button.key}</kbd> {button.label}
-          </button>
+          <Action key={button.decision} hint={button.key} tone={button.tone} onPress={() => send({ type: "approval.respond", approval_id: approval.id, decision: button.decision })}>
+            {button.label}
+          </Action>
         ))}
       </div>
     </div>
@@ -110,14 +106,9 @@ export function ApprovalCard({ approval, state, now, send }: ApprovalCardProps) 
       </p>
       <div className={styles.actions}>
         {BUTTONS.map((button) => (
-          <button
-            key={button.decision}
-            className={cx("button", button.tone)}
-            type="button"
-            onClick={() => send({ type: "approval.respond", approval_id: approval.id, decision: button.decision })}
-          >
-            <kbd>{button.key}</kbd> {button.label}
-          </button>
+          <Action key={button.decision} hint={button.key} tone={button.tone} onPress={() => send({ type: "approval.respond", approval_id: approval.id, decision: button.decision })}>
+            {button.label}
+          </Action>
         ))}
       </div>
     </div>

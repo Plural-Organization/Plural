@@ -1,6 +1,7 @@
 import type { AccessRequestView, Command } from "@plural/client";
 import { cx } from "../../lib/cx";
 import { useNow } from "../../hooks/useNow";
+import { Action } from "./Action";
 import styles from "./Inbox.module.css";
 
 interface AccessCardProps {
@@ -22,12 +23,8 @@ export function AccessCard({ request, send }: AccessCardProps) {
       </div>
       {request.note ? <div>{request.note}</div> : null}
       <div className={styles.actions}>
-        <button className="button primary" type="button" onClick={() => decide("allow")}>
-          <kbd>y</kbd> let them write
-        </button>
-        <button className="button" type="button" onClick={() => decide("deny")}>
-          <kbd>n</kbd> not now
-        </button>
+        <Action hint="y" tone="primary" onPress={() => decide("allow")}>let them write</Action>
+        <Action hint="n" onPress={() => decide("deny")}>not now</Action>
       </div>
     </div>
   );

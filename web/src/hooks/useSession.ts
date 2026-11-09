@@ -198,7 +198,7 @@ export class SessionStore {
     if (error instanceof CommandRejected && (error.error.code === "unauthorized" || error.error.code === "forbidden")) {
       forgetRoom(this.link.room);
     }
-    this.onFatal(error instanceof CommandRejected ? describe(error) : messageOf(error));
+    this.onFatal(error instanceof CommandRejected ? describe(error, this.team !== null) : messageOf(error));
   }
 }
 
@@ -220,7 +220,11 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function describe(error: CommandRejected): string {
+function describe(error: CommandRejected, viaTeam: boolean): string {
+  // Someone joining through a team holds no invite; the host says what is really wrong.
+  if (viaTeam && (error.error.code === "unauthorized" || error.error.code === "forbidden")) {
+    return error.error.message;
+  }
   switch (error.error.code) {
     case "unauthorized":
       return "This link no longer works. Invites are single-use and expire after an hour, so ask the host for a new one.";

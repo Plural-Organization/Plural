@@ -1,3 +1,5 @@
+import { Spinner } from "@heroui/react";
+import { CaretRight, Check, X } from "@phosphor-icons/react";
 import { useState } from "react";
 import { bodyLines, displayName, kindOf, lastLine, metaOf, oneLine, type FeedItem } from "@plural/client";
 import { useNow } from "../../hooks/useNow";
@@ -34,8 +36,8 @@ export function ToolLine({ item, expanded, onToggle, onOpen }: ToolLineProps) {
     <div className={cx(styles.tool, item.status === "failed" && styles.failed)}>
       <div className={styles.top}>
         <button type="button" className={styles.line} onClick={onToggle} aria-expanded={expanded} title={`${expanded ? "Hide" : "Show"} details: ${item.call.subject}`}>
-          <span className={styles.chevron} aria-hidden="true">{expanded ? "▾" : "▸"}</span>
-          <span className={styles.mark}>{running ? <span className={styles.spin} aria-label="running" /> : item.status === "ok" ? "✓" : "✗"}</span>
+          <CaretRight size={12} weight="bold" className={cx(styles.chevron, expanded && styles.turned)} aria-hidden="true" />
+          <span className={styles.mark}>{running ? <Spinner size="sm" color="current" aria-label="running" /> : item.status === "ok" ? <Check size={13} weight="bold" /> : <X size={13} weight="bold" />}</span>
           <span className={styles.name}>{name}</span>
           <span className={styles.subject}>{oneLine(item.call.subject)}</span>
           {peek ? <span className={styles.peek}>{peek}</span> : null}
@@ -43,7 +45,7 @@ export function ToolLine({ item, expanded, onToggle, onOpen }: ToolLineProps) {
         </button>
         {onOpen ? (
           <button type="button" className={styles.open} onClick={onOpen}>
-            open ›
+            Open
           </button>
         ) : null}
       </div>

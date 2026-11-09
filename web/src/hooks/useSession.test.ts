@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest";
-import { parseLink, SessionClient, type Event, type Role } from "@plural/client";
+import { CommandRejected, parseLink, SessionClient, type Event, type Role } from "@plural/client";
+import type { Team } from "../lib/team";
 import { SessionStore } from "./useSession";
 import { alertNotice } from "../lib/alert";
 
@@ -51,4 +52,24 @@ test("a guest joining alerts the web host, while the host's own join does not", 
     { type: "participant.joined", participant: { id: "p_guest", name: "Alia", role: "participant", connected: true } },
   ]);
   expect(alertNotice).toHaveBeenCalledExactlyOnceWith("Alia joined");
+});
+
+async function refuse(team: Team | null): Promise<string> {
+  vi.spyOn(SessionClient.prototype, "events").mockImplementation(async function* () {
+    yield* [] as never[];
+    throw new CommandRejected({ code: "unauthorized", message: "your clock is off by more than a minute" });
+  });
+  const reasons: string[] = [];
+  const store = new SessionStore(parseLink("wss://relay.example/r_1?join=abc"), "Me", (reason) => reasons.push(reason), team);
+  store.start();
+  await vi.waitFor(() => expect(reasons).toHaveLength(1));
+  return reasons[0]!;
+}
+
+test("a team member is told what the host said, not about invites", async () => {
+  expect(await refuse({} as Team)).toBe("your clock is off by more than a minute");
+});
+
+test("someone with a link still hears that the invite is used up", async () => {
+  expect(await refuse(null)).toContain("Invites are single-use");
 });
