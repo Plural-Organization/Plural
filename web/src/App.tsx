@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { parseLink, type JoinLink, type SessionCard } from "@plural/client";
+import { Alert } from "@heroui/react";
+import { firstSession, parseLink, type JoinLink, type SessionCard } from "@plural/client";
+import { JoinFlow } from "./components/JoinFlow";
+import { Rail } from "./components/Rail";
 import { JoinScreen } from "./screens/JoinScreen";
 import { RoomScreen } from "./screens/RoomScreen";
 import { unlockAudio } from "./lib/alert";
@@ -23,10 +26,17 @@ export function App() {
   const [active, setActive] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const team = useTeam();
+  // Whether the right side shows the form for joining another room.
+  const [adding, setAdding] = useState(false);
+  const [railOpen, setRailOpen] = useState(false);
+  // Right after joining a team, the first session someone shares opens on its own, as in the terminal.
+  const [entering, setEntering] = useState(false);
 
   const open = (space: Space) => {
     unlockAudio();
     setNotice(null);
+    setAdding(false);
+    setRailOpen(false);
     setSpaces((current) => {
       if (current.some((item) => item.link.room === space.link.room)) {
         return current;
@@ -81,28 +91,95 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, [spaces, active]);
 
-  if (spaces.length === 0 || active === null) {
-    return <JoinScreen notice={notice} team={team} onJoin={join} onWatch={watch} />;
+  useEffect(() => {
+    if (!entering) {
+      return;
+    }
+    // Nobody shares anything yet: after a minute the choice is left to this person.
+    const giveUp = setTimeout(() => setEntering(false), 60_000);
+    return () => clearTimeout(giveUp);
+  }, [entering]);
+  useEffect(() => {
+    if (!entering || team.team === null) {
+      return;
+    }
+    const first = firstSession(team.sessions, team.team.profile.member.id, window.location.protocol);
+    if (first !== null) {
+      setEntering(false);
+      watch(first.card, first.url);
+    }
+  }, [entering, team.team, team.sessions]);
+
+  if (team.loading) {
+    return null;
   }
+  if (team.team === null && spaces.length === 0) {
+    return <JoinScreen notice={notice} team={team} onJoin={join} onTeamJoined={() => setEntering(true)} />;
+  }
+  const showForm = adding || (active === null && team.team === null);
   return (
-    <>
-      {spaces.map((space) => (
-        <div key={space.link.room} style={{ display: space.link.room === active ? "contents" : "none" }}>
-          <RoomScreen
-            link={space.link}
-            name={space.name}
-            member={space.team}
-            team={team}
-            active={space.link.room === active}
-            notice={space.link.room === active ? notice : null}
-            spaces={spaces}
-            onSwitch={setActive}
-            onClose={(room) => close(room, null)}
-            onWatch={watch}
-            onLeave={(reason) => close(space.link.room, reason)}
-          />
-        </div>
-      ))}
-    </>
+    <div className="workspace" data-rail={railOpen ? "open" : "closed"} data-room={active === null ? "none" : "open"}>
+      <Rail
+        team={team}
+        spaces={spaces}
+        active={active}
+        onSwitch={(room) => {
+          setAdding(false);
+          setRailOpen(false);
+          setActive(room);
+        }}
+        onWatch={watch}
+        onAdd={() => {
+          setAdding(true);
+          setRailOpen(false);
+        }}
+      />
+      <button type="button" className="rail-scrim" aria-label="Close the list of sessions" onClick={() => setRailOpen(false)} />
+      <div className="workspace-main" data-adding={showForm}>
+        {spaces.map((space) => (
+          <div key={space.link.room} style={{ display: space.link.room === active && !showForm ? "contents" : "none" }}>
+            <RoomScreen
+              link={space.link}
+              name={space.name}
+              member={space.team}
+              active={space.link.room === active && !showForm}
+              notice={space.link.room === active ? notice : null}
+              onOpenRail={() => setRailOpen(true)}
+              onHost={(owner) => setSpaces((current) => current.map((item) => (item.link.room === space.link.room && item.owner !== owner ? { ...item, owner } : item)))}
+              onLeave={(reason) => close(space.link.room, reason)}
+            />
+          </div>
+        ))}
+        {showForm ? (
+          <div className="flex h-full items-center justify-center overflow-y-auto p-6">
+            <div className="w-full max-w-[26rem]">
+              <h2 className="mb-5 text-3xl font-medium tracking-[-0.022em]">Join another room</h2>
+              <JoinFlow team={team} onJoin={join} onTeamJoined={() => setEntering(true)} />
+              {spaces.length > 0 ? <button type="button" className="link-button mt-4" onClick={() => setAdding(false)}>Back to the room</button> : null}
+            </div>
+          </div>
+        ) : active === null ? (
+          <div className="relative isolate flex h-full flex-col items-center justify-center overflow-hidden p-6 text-center">
+            <div className="pixel-grid" aria-hidden="true" />
+            <h2 className="text-4xl font-medium leading-[1.05] tracking-[-0.022em]">
+              Pick a session
+              <br />
+              <span className="tone-2">on the left.</span>
+            </h2>
+            {notice ? (
+              <Alert status="warning" className="mt-5 max-w-md text-left">
+                <Alert.Indicator />
+                <Alert.Content>
+                  <Alert.Description>{notice}</Alert.Description>
+                </Alert.Content>
+              </Alert>
+            ) : null}
+            <p className="mt-4 max-w-[42ch] text-[15px] leading-relaxed text-muted text-pretty">
+              {(entering ? "You are in. The first session someone shares opens here on its own." : "Open anyone's session to read it from the start. Ask the host when you want to write.")}
+            </p>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }

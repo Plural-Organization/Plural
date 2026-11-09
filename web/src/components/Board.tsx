@@ -832,7 +832,7 @@ export function Board(props: BoardProps) {
                 </button>
               ))}
             </div>
-            <button className="button small ghost" type="button" onClick={undo} disabled={mine.length === 0} title="Take back your last mark (Ctrl or Cmd + Z)">
+            <button className="btn small ghost" type="button" onClick={undo} disabled={mine.length === 0} title="Take back your last mark (Ctrl or Cmd + Z)">
               undo
             </button>
           </>
@@ -841,20 +841,20 @@ export function Board(props: BoardProps) {
         )}
         <span className="grow" />
         {isHost ? (
-          <button className="button small ghost" type="button" onClick={() => send({ type: "board.clear", mine: false })} disabled={strokes.length === 0}>
+          <button className="btn small ghost" type="button" onClick={() => send({ type: "board.clear", mine: false })} disabled={strokes.length === 0}>
             clear all
           </button>
         ) : canDraw ? (
-          <button className="button small ghost" type="button" onClick={() => send({ type: "board.clear", mine: true })} disabled={mine.length === 0}>
+          <button className="btn small ghost" type="button" onClick={() => send({ type: "board.clear", mine: true })} disabled={mine.length === 0}>
             clear mine
           </button>
         ) : null}
         {canDraw ? (
           <>
-            <button className="button small ghost" type="button" onClick={() => send({ type: "board.open", open: false })} title="Close the board for everyone">
+            <button className="btn small ghost" type="button" onClick={() => send({ type: "board.open", open: false })} title="Close the board for everyone">
               close for all
             </button>
-            <button className="button small primary" type="button" onClick={toAgent} disabled={strokes.length + pending.length === 0}>
+            <button className="btn small primary" type="button" onClick={toAgent} disabled={strokes.length + pending.length === 0}>
               send to agent
             </button>
           </>
@@ -874,7 +874,7 @@ export function Board(props: BoardProps) {
           </button>
         </div>
         <button
-          className="button small ghost"
+          className="btn small ghost"
           type="button"
           onClick={onToggleFull}
           aria-label={full ? "Back to half the screen" : "Full screen"}
@@ -882,7 +882,7 @@ export function Board(props: BoardProps) {
         >
           <FullIcon full={full} />
         </button>
-        <button className="button small ghost" type="button" onClick={onClose} aria-label="Hide the board" title="Hide the board for you">
+        <button className="btn small ghost" type="button" onClick={onClose} aria-label="Hide the board" title="Hide the board for you">
           ✕
         </button>
       </header>
