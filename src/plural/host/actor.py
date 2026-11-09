@@ -76,6 +76,7 @@ from plural.host.plugins import (
     RunInfo,
 )
 from plural.host.policy_gate import HostPolicyGate
+from plural.host.preview import PreviewProxy
 from plural.host.publisher import Publisher
 from plural.host.team_admission import (
     TeamAdmission,
@@ -126,6 +127,8 @@ from plural.protocol.commands import (
     PluginsRemove,
     PolicyAdd,
     PolicyRemove,
+    PreviewOpen,
+    PreviewSet,
     PromptModeSet,
     PromptSubmit,
     ProposalDecide,
@@ -186,6 +189,8 @@ from plural.protocol.events import (
     PluginShown,
     PolicyRuleAdded,
     PolicyRuleRemoved,
+    PreviewChanged,
+    PreviewOpened,
     PromptAccepted,
     PromptDequeued,
     PromptModeChanged,
@@ -224,6 +229,7 @@ from plural.protocol.models import (
     Participant,
     PermissionMode,
     PluginStatus,
+    PreviewView,
     PromptMode,
     Provenance,
     Role,
@@ -351,6 +357,7 @@ class SessionActor:
         self._typing: dict[str, asyncio.TimerHandle] = {}
         self._selecting: set[str] = set()
         self._pointing: set[str] = set()
+        self._preview = PreviewProxy(publisher.room, online=publisher.is_online)
         self._state = SessionState()
         self._streaming: dict[str, str] = {}
         self._timers: dict[str, asyncio.TimerHandle] = {}
@@ -359,10 +366,16 @@ class SessionActor:
     def state(self) -> SessionState:
         return self._state
 
+    @property
+    def preview(self) -> PreviewProxy:
+        return self._preview
+
     async def start(self) -> None:
         records = await self._store.read()
         for record in records:
             self._state = reduce(self._state, record)
+        if self._state.preview is not None:
+            await self._emit(PreviewChanged(preview=None))
         self._sync_policy()
         if conversation := await self._history(records):
             self._agent.restore(conversation)
@@ -677,6 +690,24 @@ class SessionActor:
                 await self._set_cursor(participant.id, command)
             case BoardOpen() | BoardDraw() | BoardMove():
                 await self._board(command, participant.id, privileged=participant.role is Role.HOST)
+            case PreviewSet(port=None) if self._state.preview is None:
+                pass
+            case PreviewSet():
+                preview = (
+                    PreviewView(id=self._ids.new("pv_"), port=command.port, title=command.title)
+                    if command.port is not None
+                    else None
+                )
+                self._preview.share(command.port)
+                await self._emit(PreviewChanged(preview=preview), actor_id=participant.id)
+            case PreviewOpen():
+                preview = self._state.preview
+                if preview is None or preview.id != command.preview_id:
+                    raise NotFound("this preview is no longer shared")
+                self._publisher.deliver(
+                    connection,
+                    PreviewOpened(preview_id=preview.id, path=self._preview.grant(participant.id)),
+                )
             case AttachmentFetch():
                 if not any(s.image == command.attachment_id for s in self._state.board.strokes):
                     raise NotFound("no such picture on the board")

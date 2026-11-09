@@ -352,7 +352,7 @@ async def _assemble(
     desk.attach(actor.board)
     await actor.start()
     transport: HostTransport = (
-        RelayLink(url=settings.relay_url, room=room, signer=signer)
+        RelayLink(url=settings.relay_url, room=room, signer=signer, preview=actor.preview)
         if settings.relay_url
         else DirectTransport(host=settings.bind_host, port=settings.port)
     )

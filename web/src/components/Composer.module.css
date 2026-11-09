@@ -3,7 +3,11 @@
 .box:focus-within { border-color: oklch(1 0 0 / .22); }
 .dragging { border-color: oklch(1 0 0 / .5); border-style: dashed; }
 .tools { display: flex; align-items: center; gap: 6px; }
-.tips { display: flex; align-items: center; gap: 4px; padding-left: 6px; font-size: 12px; color: var(--dim); }
+.tips { display: flex; align-items: center; gap: 4px; padding-left: 4px; }
+.tip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 4px; border: 0; border-radius: var(--radius-small); background: none; color: var(--dim); font: 12px/1 var(--font-text); cursor: pointer; }
+.tip:hover:not(:disabled) { background: var(--hover); color: var(--fg); }
+.tip:disabled { cursor: default; opacity: .5; }
+.tip kbd { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 6px; background: var(--raise); color: var(--fg); font: 600 11px/1 var(--font-text); }
 @media (max-width: 640px) { .tips { display: none; } }
 .files { list-style: none; margin: 0; padding: 0 6px; display: flex; flex-wrap: wrap; gap: 6px; }
 .file { display: flex; align-items: center; gap: 8px; max-width: 280px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px 8px 4px 4px; font-size: 12px; }

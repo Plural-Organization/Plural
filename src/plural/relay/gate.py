@@ -1,4 +1,6 @@
+import re
 from collections.abc import Collection
+from urllib.parse import urlsplit
 
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
@@ -6,6 +8,18 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from plural.protocol.relay import AGENT_PREFIXES
 
 OPEN_PATHS = frozenset({"/healthz"})
+# The relay's own routes: a preview's referer never opens them.
+_OWN = re.compile(r"/(teams|metrics|healthz|host)(/|$)")
+_PREVIEW = re.compile(r"/p/[^/]+/[^/]+")
+
+
+def preview_of(referer: str | None, netloc: str) -> str | None:
+    """The preview prefix (`/p/<room>/<secret>`) a request came from on this relay, if any."""
+    if not referer:
+        return None
+    parts = urlsplit(referer)
+    match = _PREVIEW.match(parts.path)
+    return match.group(0) if match and parts.netloc == netloc else None
 
 
 class ClientGate:
@@ -23,6 +37,19 @@ class ClientGate:
         headers = {name.lower(): value for name, value in scope["headers"]}
         agent = headers.get(b"user-agent", b"").decode("latin-1").lower()
         origin = headers.get(b"origin", b"").decode("latin-1").rstrip("/")
+        # Previews are pages in a browser: their link is the secret, the host checks it.
+        path = scope["path"]
+        if scope["type"] == "http" and (
+            path.startswith("/p/")
+            or (
+                not _OWN.match(path)
+                and preview_of(
+                    headers.get(b"referer", b"").decode("latin-1"),
+                    headers.get(b"host", b"").decode("latin-1"),
+                )
+            )
+        ):
+            return True
         return agent.startswith(AGENT_PREFIXES) or (origin != "" and origin in self._origins)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:

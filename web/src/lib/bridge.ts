@@ -33,6 +33,8 @@ export type ToFrame = { type: "cursors"; list: FramePointer[] } | { type: "pick"
 
 export const FROM_FRAME = "plural-preview";
 export const TO_FRAME = "plural-host";
+// What a shared server's page waits for before it runs the bridge: the host puts a loader in it.
+export const BRIDGE_CODE = "plural-preview-bridge";
 
 const clamp = (value: unknown, low: number, high: number): number | null =>
   typeof value === "number" && Number.isFinite(value) ? Math.min(high, Math.max(low, value)) : null;
@@ -82,12 +84,16 @@ export function readFrame(data: unknown): FromFrame | null {
   }
 }
 
-export function bridgeScript(scrollY: number): string {
+// On a shared server's page (`live`), links, forms and the app's own errors are the app's: the page
+// navigates and runs by itself, and the bridge only does pointers and picking.
+export function bridgeScript(scrollY: number, live = false): string {
   return `(() => {
-const FROM = ${JSON.stringify(FROM_FRAME)}, TO = ${JSON.stringify(TO_FRAME)}, restore = ${Math.max(0, Math.round(scrollY))};
+const FROM = ${JSON.stringify(FROM_FRAME)}, TO = ${JSON.stringify(TO_FRAME)}, restore = ${Math.max(0, Math.round(scrollY))}, live = ${live};
 const post = (message) => parent.postMessage({ from: FROM, ...message }, "*");
-addEventListener("error", (event) => post({ type: "error", message: String(event.message || event.error || "error") }));
-addEventListener("unhandledrejection", (event) => post({ type: "error", message: String((event.reason && event.reason.message) || event.reason) }));
+if (!live) {
+  addEventListener("error", (event) => post({ type: "error", message: String(event.message || event.error || "error") }));
+  addEventListener("unhandledrejection", (event) => post({ type: "error", message: String((event.reason && event.reason.message) || event.reason) }));
+}
 addEventListener("load", () => { if (restore > 0) scrollTo(0, restore); });
 
 let picking = false, others = [], host = null, layer = null, hoverBox = null, markBox = null;
@@ -174,14 +180,14 @@ addEventListener("click", (event) => {
     draw();
     return;
   }
-  const link = event.target instanceof Element ? event.target.closest("a[href]") : null;
+  const link = !live && event.target instanceof Element ? event.target.closest("a[href]") : null;
   if (!link) return;
   const href = link.getAttribute("href");
   if (!href || href.startsWith("#") || href.startsWith("javascript:")) return;
   event.preventDefault();
   post({ type: /^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("//") ? "external" : "navigate", href });
 }, true);
-addEventListener("submit", (event) => event.preventDefault(), true);
+if (!live) addEventListener("submit", (event) => event.preventDefault(), true);
 addEventListener("keydown", (event) => { if (event.key === "Escape" && picking) { stop(event); post({ type: "pick-cancel" }); } }, true);
 
 addEventListener("message", (event) => {

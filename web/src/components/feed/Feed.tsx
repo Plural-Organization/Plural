@@ -1,6 +1,8 @@
 import { Alert, Button, Chip } from "@heroui/react";
 import { PencilSimple } from "@phosphor-icons/react";
 import { useState, type ReactNode } from "react";
+import type { Mentionable } from "@plural/client";
+import { MentionPeople, Mentions } from "./Mentions";
 import type { FeedItem } from "@plural/client";
 import type { Activity as Current } from "../../lib/activity";
 import { cx } from "../../lib/cx";
@@ -41,6 +43,7 @@ function blocks(items: FeedItem[]): Block[] {
 
 interface FeedProps {
   items: FeedItem[];
+  people?: Mentionable[];
   meId?: string | null;
   activity?: Current | null;
   // Given, long code and documents show as cards that open in the canvas.
@@ -48,7 +51,7 @@ interface FeedProps {
   onOpenBoard?: () => void;
 }
 
-export function Feed({ items, meId = null, activity = null, onOpenDoc, onOpenBoard }: FeedProps) {
+export function Feed({ items, people = [], meId = null, activity = null, onOpenDoc, onOpenBoard }: FeedProps) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const toggle = (id: string) =>
     setOpened((current) => {
@@ -60,7 +63,7 @@ export function Feed({ items, meId = null, activity = null, onOpenDoc, onOpenBoa
     });
 
   return (
-    <div className={styles.feed}>
+    <MentionPeople.Provider value={people}><div className={styles.feed}>
       {blocks(items).map((block) =>
         block.kind === "steps" ? (
           <div key={block.id} className={styles.steps}>
@@ -80,7 +83,7 @@ export function Feed({ items, meId = null, activity = null, onOpenDoc, onOpenBoa
       )}
       <Activity activity={activity} />
     </div>
-  );
+  </MentionPeople.Provider>);
 }
 
 // A message's own text, with the parts it quotes set apart.
@@ -90,10 +93,12 @@ function Text({ text, anchor }: { text: string; anchor: string }) {
       {segments(text).map((segment, index) =>
         segment.quote ? (
           <blockquote key={index} className={styles.quote}>
-            {segment.text}
+            <Mentions text={segment.text} />
           </blockquote>
         ) : (
-          <span key={index}>{segment.text}</span>
+          <span key={index}>
+            <Mentions text={segment.text} />
+          </span>
         ),
       )}
     </div>
