@@ -3,7 +3,7 @@ from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 
-from plural.agent.briefing import briefing_prompt
+from plural.agent.context.briefing import briefing_prompt
 from plural.host.agent_run import AgentRun
 from plural.host.ledger import ChangeLedger
 from plural.host.repo import git_branch, git_dirty, git_head, repo_facts

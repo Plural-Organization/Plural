@@ -3,9 +3,9 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 
 import structlog
 
-from plural.agent.events import AgentEvent, ContextFill, ContextNote, RunEnd, Spend
-from plural.agent.loop import AgentLoop
-from plural.agent.messages import PLUGIN_SOURCE, Message, NotesTurn, UserTurn
+from plural.agent.loop.events import AgentEvent, ContextFill, ContextNote, RunEnd, Spend
+from plural.agent.loop.loop import AgentLoop
+from plural.agent.loop.messages import PLUGIN_SOURCE, Message, NotesTurn, UserTurn
 from plural.agent.providers.base import LLMProvider
 from plural.host.inbox import AgentOutput, Inbox
 from plural.protocol.models import RunEndReason

@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from plural.agent.messages import AssistantTurn, NotesTurn, ToolResultTurn, UserTurn
+from plural.agent.loop.messages import AssistantTurn, NotesTurn, ToolResultTurn, UserTurn
 from plural.host.history import replay
 from plural.protocol.events import (
     BriefingImported,

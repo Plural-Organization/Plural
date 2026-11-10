@@ -9,15 +9,15 @@ from typing import cast
 
 import structlog
 
-from plural.agent.agents import AgentLibrary
-from plural.agent.context import ContextBuilder, Environment
-from plural.agent.loop import AgentLoop, LoopLimits
+from plural.agent.context.context import ContextBuilder, Environment
+from plural.agent.context.telemetry import RequestDump
+from plural.agent.loop.loop import AgentLoop, LoopLimits
 from plural.agent.mcp import BROWSER_SERVER, McpHub, browser_spec
 from plural.agent.providers.base import LLMProvider
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.skills import SkillLibrary
-from plural.agent.telemetry import RequestDump
+from plural.agent.subagents import AgentLibrary
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.core.discovery import ToolSearchTool
 from plural.agent.tools.core.skill import SkillTool
@@ -117,7 +117,7 @@ def build_web_search(
     try:
         from plural.agent.providers.api.anthropic import adapter as anthropic_api
         from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider
-        from plural.agent.tools.extra.web_search import (
+        from plural.agent.providers.web_search import (
             anthropic_oauth_search,
             anthropic_search,
             openai_search,

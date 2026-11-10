@@ -1,6 +1,6 @@
 from datetime import UTC, datetime
 
-from plural.agent.messages import (
+from plural.agent.loop.messages import (
     AssistantTurn,
     NotesTurn,
     SummaryTurn,

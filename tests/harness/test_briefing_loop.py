@@ -5,9 +5,9 @@ import pytest
 from tests.doubles import FakeProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
-from plural.agent.briefing import briefing_prompt
-from plural.agent.loop import BriefingFailed
-from plural.agent.messages import NotesTurn, notes_message
+from plural.agent.context.briefing import briefing_prompt
+from plural.agent.loop.loop import BriefingFailed
+from plural.agent.loop.messages import NotesTurn, notes_message
 from plural.core.provenance import is_guest_originated
 from plural.protocol.models import Role
 
@@ -145,7 +145,7 @@ def test_the_prompt_asks_for_the_parts_a_colleague_needs_and_quotes_the_question
 async def test_a_briefing_asked_in_the_middle_of_a_tool_round_leaves_the_open_round_out(
     tmp_path: Path,
 ) -> None:
-    from plural.agent.messages import AssistantTurn, ToolResultTurn
+    from plural.agent.loop.messages import AssistantTurn, ToolResultTurn
     from plural.agent.providers.base import ToolCallRequest
 
     provider = FakeProvider([reply("<briefing>x</briefing>")])
@@ -172,7 +172,7 @@ async def test_a_briefing_asked_in_the_middle_of_a_tool_round_leaves_the_open_ro
 
 
 def test_a_conversation_with_every_result_in_is_left_whole() -> None:
-    from plural.agent.messages import AssistantTurn, ToolResultTurn, settled
+    from plural.agent.loop.messages import AssistantTurn, ToolResultTurn, settled
     from plural.agent.providers.base import ToolCallRequest
 
     call = ToolCallRequest(id="c1", name="ls", args={})

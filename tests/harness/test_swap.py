@@ -3,7 +3,7 @@ from pathlib import Path
 from tests.doubles import FakeProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
-from plural.agent.messages import AssistantTurn
+from plural.agent.loop.messages import AssistantTurn
 from plural.agent.providers.base import NativeContent, NativeReady
 
 

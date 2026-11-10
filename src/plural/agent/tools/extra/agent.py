@@ -7,13 +7,13 @@ from typing import Final
 import structlog
 from pydantic import Field, JsonValue
 
-from plural.agent.agents import AgentLibrary, AgentSpec
-from plural.agent.context import ContextBuilder, Environment
-from plural.agent.events import MessageEnd, RunEnd, ToolEnd, ToolStart
-from plural.agent.gate import FolderResult, GateResult, PolicyGate
-from plural.agent.loop import AgentLoop
-from plural.agent.messages import UserTurn
+from plural.agent.context.context import ContextBuilder, Environment
+from plural.agent.loop.events import MessageEnd, RunEnd, ToolEnd, ToolStart
+from plural.agent.loop.gate import FolderResult, GateResult, PolicyGate
+from plural.agent.loop.loop import AgentLoop
+from plural.agent.loop.messages import UserTurn
 from plural.agent.providers.base import ToolSchema
+from plural.agent.subagents import AgentLibrary, AgentSpec
 from plural.agent.tools.base import (
     PreparedCall,
     ToolArgs,

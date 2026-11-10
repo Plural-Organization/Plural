@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator, AsyncIterator
 
 import structlog
 
-from plural.agent.interrupt import Interrupted, TimedOut, interruptible
+from plural.agent.loop.interrupt import Interrupted, TimedOut, interruptible
 from plural.agent.providers.base import (
     LlmEvent,
     LLMProvider,

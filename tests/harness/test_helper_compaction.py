@@ -3,9 +3,9 @@ from pathlib import Path
 from tests.doubles import FakeProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
-from plural.agent.compaction import SUMMARY_SYSTEM
-from plural.agent.events import AgentEvent, Compacted
-from plural.agent.loop import LoopLimits
+from plural.agent.context.compaction import SUMMARY_SYSTEM
+from plural.agent.loop.events import AgentEvent, Compacted
+from plural.agent.loop.loop import LoopLimits
 from plural.agent.providers.base import LlmEvent, UsageReport
 from plural.protocol.models import Usage
 

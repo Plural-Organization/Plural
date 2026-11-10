@@ -1,7 +1,7 @@
 from datetime import date
 from pathlib import Path
 
-from plural.agent.context import ContextBuilder, Environment
+from plural.agent.context.context import ContextBuilder, Environment
 from plural.agent.tools.registry import builtin_tools
 
 

@@ -12,15 +12,15 @@ SELFTEST_MODULES = (
     "pydantic_ai.models.anthropic",
     "pydantic_ai.models.openai",
     "plural.host.providers",
-    "plural.agent.agents",
+    "plural.agent.subagents",
 )
 
 
 # Files the host reads at run time. --collect-submodules gathers code only, so each kind of data
 # file is checked here, and the built-in agents are loaded by importing the module that reads them.
 SELFTEST_DATA = (
-    ("plural.agent", "builtin_agents/explore.md"),
-    ("plural.agent", "builtin_skills/plural-plugins/SKILL.md"),
+    ("plural.agent.subagents", "builtin/explore.md"),
+    ("plural.agent.skills", "builtin/plural-plugins/SKILL.md"),
     ("plural.agent.prompts", "system.md"),
     ("plural.storage.migrations", "0001_init.sql"),
 )

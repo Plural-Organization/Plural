@@ -15,7 +15,7 @@ from plural.agent.prompts import tag
 from plural.agent.skills import NAME, frontmatter
 from plural.protocol.models import AgentView, SkillScope
 
-BUILTIN_DIR: Final = Path(__file__).parent / "builtin_agents"
+BUILTIN_DIR: Final = Path(__file__).parent / "builtin"
 AGENT_DIRS: Final = ((".agents", "agents"), (".claude", "agents"), (".plural", "agents"))
 DEFAULT_TURNS: Final = 20
 MAX_TURNS: Final = 50

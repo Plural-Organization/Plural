@@ -19,6 +19,11 @@ from tests.doubles import FakeProvider
 
 from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider
 from plural.agent.providers.base import ProviderError
+from plural.agent.providers.web_search import (
+    PydanticWebSearch,
+    anthropic_oauth_search,
+    web_search_tool,
+)
 from plural.agent.tools.base import ToolError
 from plural.agent.tools.extra.search import (
     Found,
@@ -26,11 +31,6 @@ from plural.agent.tools.extra.search import (
     Source,
     WebSearchSlot,
     WebSearchTool,
-)
-from plural.agent.tools.extra.web_search import (
-    PydanticWebSearch,
-    anthropic_oauth_search,
-    web_search_tool,
 )
 from plural.host.bootstrap import build_web_search
 from plural.host.config import HostSettings

@@ -3,7 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
-from plural.agent.gate import FolderResult, GateResult
+from plural.agent.loop.gate import FolderResult, GateResult
 from plural.core.policy.engine import PLAN_MODE, Policy, ToolInvocation, evaluate, run_limit
 from plural.core.policy.rejections import RejectionLedger
 from plural.core.policy.rules import RuleSet

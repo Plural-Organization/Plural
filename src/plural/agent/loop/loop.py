@@ -8,10 +8,16 @@ from dataclasses import dataclass, field, replace
 import structlog
 from pydantic import ValidationError
 
-from plural.agent.briefing import BRIEFING_TAG
-from plural.agent.compaction import SUMMARY_SYSTEM, extract_tagged, summary_request, with_files
-from plural.agent.context import ContextBuilder, system_text
-from plural.agent.events import (
+from plural.agent.context.briefing import BRIEFING_TAG
+from plural.agent.context.compaction import (
+    SUMMARY_SYSTEM,
+    extract_tagged,
+    summary_request,
+    with_files,
+)
+from plural.agent.context.context import ContextBuilder, system_text
+from plural.agent.context.telemetry import RequestDump, hit_rate, observed
+from plural.agent.loop.events import (
     AgentEvent,
     Compacted,
     Compacting,
@@ -27,9 +33,9 @@ from plural.agent.events import (
     ToolsLoaded,
     ToolStart,
 )
-from plural.agent.gate import GateResult, PolicyGate
-from plural.agent.interrupt import Interrupted, TimedOut, interruptible
-from plural.agent.messages import (
+from plural.agent.loop.gate import GateResult, PolicyGate
+from plural.agent.loop.interrupt import Interrupted, TimedOut, interruptible
+from plural.agent.loop.messages import (
     PLUGIN_SOURCE,
     AssistantTurn,
     Message,
@@ -63,7 +69,6 @@ from plural.agent.providers.base import (
 )
 from plural.agent.providers.resilient import ResilientProvider
 from plural.agent.sandbox.base import SandboxError, Workspace
-from plural.agent.telemetry import RequestDump, hit_rate, observed
 from plural.agent.tools.base import PreparedCall, ToolCtx, ToolError, ToolResult
 from plural.agent.tools.registry import ToolRegistry, UnknownTool
 from plural.core.ports import IdGenerator

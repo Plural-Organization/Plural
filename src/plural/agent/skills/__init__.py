@@ -20,7 +20,7 @@ from plural.security.secrets import is_denied_path
 SKILL_FILE: Final = "SKILL.md"
 SKILL_COMMAND: Final = "/skill:"
 INSTALL_DIR: Final = (".agents", "skills")
-BUILTIN_DIR: Final = Path(__file__).parent / "builtin_skills"
+BUILTIN_DIR: Final = Path(__file__).parent / "builtin"
 SEARCH_DIRS: Final = (INSTALL_DIR, (".claude", "skills"), (".plural", "skills"))
 SEARCH_URL: Final = "https://skills.sh/api/search"
 ARCHIVE_URL: Final = "https://codeload.github.com/{repo}/tar.gz/HEAD"

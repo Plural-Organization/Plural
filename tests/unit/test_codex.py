@@ -6,8 +6,8 @@ from pathlib import Path
 import pytest
 from tests.loop_support import StubGate, collect, make_loop, turn
 
-from plural.agent.events import MessageEnd, RunEnd
-from plural.agent.loop import LoopLimits
+from plural.agent.loop.events import MessageEnd, RunEnd
+from plural.agent.loop.loop import LoopLimits
 from plural.agent.providers.base import LlmImage, LlmMessage, LlmRequest, UsageReport
 from plural.agent.providers.cli import codex as codex_cli
 from plural.agent.providers.cli.codex import CodexCliProvider

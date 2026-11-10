@@ -356,7 +356,7 @@ You review the diff you are given for another agent.
 </report>
 ```
 
-Plain instructions work too. Parts in XML tags, as Plural's own prompts and the built-in `explore` (`src/plural/agent/builtin_agents/explore.md`) use, help the model tell the parts apart.
+Plain instructions work too. Parts in XML tags, as Plural's own prompts and the built-in `explore` (`src/plural/agent/subagents/builtin/explore.md`) use, help the model tell the parts apart.
 
 Every tool call a sub-agent makes goes through the same permissions as the main agent: deny rules, the permission mode and the host's approval for edits and commands. A sub-agent cannot start another one.
 

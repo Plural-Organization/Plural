@@ -12,14 +12,14 @@ from pathlib import PurePath
 import structlog
 from pydantic import ValidationError
 
-from plural.agent import events as agent
-from plural.agent.agents import AgentError, AgentLibrary, AgentSpec, agent_tools
-from plural.agent.loop import AskFailed, BriefingFailed
+from plural.agent.loop import events as agent
+from plural.agent.loop.loop import AskFailed, BriefingFailed
+from plural.agent.loop.messages import Message, NotesTurn, UserTurn
 from plural.agent.mcp import McpError, McpHub, ServerSpec
-from plural.agent.messages import Message, NotesTurn, UserTurn
 from plural.agent.prompts import prompt
 from plural.agent.providers.base import LlmImage
 from plural.agent.skills import SKILL_COMMAND, Package, SkillError, SkillLibrary, parse_package
+from plural.agent.subagents import AgentError, AgentLibrary, AgentSpec, agent_tools
 from plural.agent.tools.extra.board import AGENT_AUTHOR, BoardRefused
 from plural.core import access, approvals, briefings, chat, joins, policies, proposals, visibility
 from plural.core.errors import (

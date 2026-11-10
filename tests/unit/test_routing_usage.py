@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import SecretStr
 
-from plural.agent.agents import EXPLORE, AgentError, AgentLibrary, AgentSpec
+from plural.agent.subagents import EXPLORE, AgentError, AgentLibrary, AgentSpec
 from plural.core.state import reduce
 from plural.host.config import HostSettings
 from plural.host.control import AgentConfig, settings_for

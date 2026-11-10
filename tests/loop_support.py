@@ -1,11 +1,11 @@
 import asyncio
 from pathlib import Path
 
-from plural.agent.context import ContextBuilder
-from plural.agent.events import AgentEvent
-from plural.agent.gate import FolderResult, GateResult
-from plural.agent.loop import AgentLoop, LoopLimits
-from plural.agent.messages import UserTurn
+from plural.agent.context.context import ContextBuilder
+from plural.agent.loop.events import AgentEvent
+from plural.agent.loop.gate import FolderResult, GateResult
+from plural.agent.loop.loop import AgentLoop, LoopLimits
+from plural.agent.loop.messages import UserTurn
 from plural.agent.providers.base import LLMProvider
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend

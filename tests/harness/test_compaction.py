@@ -4,10 +4,10 @@ from pathlib import Path
 from tests.doubles import STALL, FakeProvider, ScriptedProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
-from plural.agent.compaction import SUMMARY_PROMPT, SUMMARY_SYSTEM, extract_summary
-from plural.agent.events import AgentEvent, Compacted, MessageEnd, RunEnd
-from plural.agent.loop import FALLBACK_WINDOW, AgentLoop, LoopLimits
-from plural.agent.messages import (
+from plural.agent.context.compaction import SUMMARY_PROMPT, SUMMARY_SYSTEM, extract_summary
+from plural.agent.loop.events import AgentEvent, Compacted, MessageEnd, RunEnd
+from plural.agent.loop.loop import FALLBACK_WINDOW, AgentLoop, LoopLimits
+from plural.agent.loop.messages import (
     AssistantTurn,
     SummaryTurn,
     ToolResultTurn,

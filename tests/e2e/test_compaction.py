@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.compaction import SUMMARY_SYSTEM
-from plural.agent.messages import summary_message
+from plural.agent.context.compaction import SUMMARY_SYSTEM
+from plural.agent.loop.messages import summary_message
 from plural.agent.providers.base import UsageReport
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import ContextCompact, PromptSubmit

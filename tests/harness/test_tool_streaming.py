@@ -3,7 +3,7 @@ from pathlib import Path
 from tests.doubles import FakeProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
-from plural.agent.events import RunEnd, ToolEnd, ToolOutput, ToolStart
+from plural.agent.loop.events import RunEnd, ToolEnd, ToolOutput, ToolStart
 from plural.protocol.models import RunEndReason
 
 SLOW = "printf 'one\\ntwo\\n'; sleep 0.25; printf 'three\\n'; sleep 0.25; printf 'four'"

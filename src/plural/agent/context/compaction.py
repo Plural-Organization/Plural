@@ -11,7 +11,7 @@ import re
 from collections.abc import Iterable, Sequence
 from typing import Final
 
-from plural.agent.messages import (
+from plural.agent.loop.messages import (
     AssistantTurn,
     Message,
     NotesTurn,
