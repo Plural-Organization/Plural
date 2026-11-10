@@ -8,7 +8,9 @@ import { Rules } from "./Rules";
 import { Section } from "./Section";
 import styles from "./Sidebar.module.css";
 import { Button } from "@heroui/react";
-import { SidebarSimple } from "@phosphor-icons/react";
+import { GearSix, SidebarSimple } from "@phosphor-icons/react";
+import { useState } from "react";
+import { RoomSettings } from "../RoomSettings";
 
 interface SidebarProps {
   projection: Projection;
@@ -23,13 +25,21 @@ interface SidebarProps {
 
 export function Sidebar({ projection, status, waiting, open, tucked, onHide, send, onInvite }: SidebarProps) {
   const isHost = projection.me?.role === "host";
+  const [settingsOpen, setSettingsOpen] = useState(false);
   return (
     <aside className={cx(styles.side, open && styles.open, tucked && styles.tucked)} aria-label="The room">
       <div className={styles.head}>
         <span>The room</span>
-        <Button isIconOnly variant="ghost" size="sm" aria-label="Hide the room panel" onPress={onHide}>
-          <SidebarSimple size={18} className="-scale-x-100" />
-        </Button>
+        <div className="flex items-center">
+          {isHost ? (
+            <Button isIconOnly variant="ghost" size="sm" aria-label="Room settings" onPress={() => setSettingsOpen(true)}>
+              <GearSix size={18} />
+            </Button>
+          ) : null}
+          <Button isIconOnly variant="ghost" size="sm" aria-label="Hide the room panel" onPress={onHide}>
+            <SidebarSimple size={18} className="-scale-x-100" />
+          </Button>
+        </div>
       </div>
       <People projection={projection} isHost={isHost} send={send} onInvite={onInvite} />
       {isHost ? (
@@ -41,6 +51,7 @@ export function Sidebar({ projection, status, waiting, open, tucked, onHide, sen
       <AgentStatus projection={projection} status={status} isHost={isHost} send={send} />
       <PromptMode mode={projection.state.prompt_mode} isHost={isHost} send={send} />
       {isHost ? <Rules projection={projection} send={send} /> : null}
+      {isHost && settingsOpen ? <RoomSettings projection={projection} send={send} onClose={() => setSettingsOpen(false)} /> : null}
     </aside>
   );
 }

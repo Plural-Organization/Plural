@@ -5,13 +5,13 @@ import { parseLink, parseTeamInvite, type JoinLink, type TeamInvite } from "@plu
 import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
 import { signInUrl } from "../lib/accounts";
-import { LinkComputer } from "./LinkComputer";
+import { StartRoom } from "./StartRoom";
 import { PersonAvatar } from "./PersonAvatar";
 import { copyText } from "../lib/clipboard";
 import { blockedByMixedContent, hostOf, unwrapLink } from "../lib/links";
 import { rememberName, savedName } from "../lib/saved";
 
-const INSTALL = "curl -fsSL https://raw.githubusercontent.com/Plural-Organization/Plural/main/install.sh | sh";
+import { INSTALL } from "../lib/install";
 // A team member's name: what teammates see and @name uses.
 const MEMBER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$/;
 
@@ -141,14 +141,9 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined }: JoinFlowProps)
     </Button>
   );
 
-  if (starting && account.status === "in") {
-    return (
-      <div className="enter flex flex-col gap-4">
-        {back}
-        <h2 className="text-2xl font-medium tracking-[-0.02em]">Start a room</h2>
-        <LinkComputer state={account} />
-      </div>
-    );
+
+  if (starting && account.status === "in" && account.account !== null) {
+    return <StartRoom account={account.account} onBack={() => setStarting(false)} onOpen={onJoin} />;
   }
 
   if (starting) {

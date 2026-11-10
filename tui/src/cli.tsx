@@ -45,6 +45,7 @@ usage
   plural team join <code> [--relay <url>]  join a team (the Plural relay unless --relay) and open its rooms
   plural login [--no-browser]  link this computer to your account (opens the browser to approve it)
   plural whoami|logout        show the account this computer is linked to, or forget it
+  plural daemon               let the web client start rooms on this computer, in folders you choose
   plural relay|doctor|export  run the host's own commands
 
 options

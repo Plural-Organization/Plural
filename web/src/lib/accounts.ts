@@ -85,6 +85,16 @@ export async function createClaim(): Promise<Claim> {
   return (await (await call("/claims", { method: "POST" })).json()) as Claim;
 }
 
+export interface Ticket {
+  ticket: string;
+  expires_at: string;
+}
+
+// A minute-long proof for the Plural program on this computer that this page is signed in.
+export async function createTicket(): Promise<Ticket> {
+  return (await (await call("/tickets", { method: "POST" })).json()) as Ticket;
+}
+
 export async function revokeMachine(id: string): Promise<void> {
   await call(`/machines/${encodeURIComponent(id)}`, { method: "DELETE" });
 }
