@@ -71,7 +71,9 @@ packages = ["src/plural"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
-src = ["src", "tests", "scripts"]
+src = ["src", "tests", "scripts", "benchmarks"]
+# Eval tasks are small repositories with bugs in them on purpose.
+extend-exclude = ["benchmarks/evals/tasks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RET", "PT", "ASYNC", "RUF"]
@@ -81,7 +83,8 @@ ignore = ["ASYNC109", "RUF001", "N818"]
 "tests/**" = ["ASYNC110"]
 
 [tool.pyright]
-include = ["src", "tests", "scripts"]
+include = ["src", "tests", "scripts", "benchmarks"]
+exclude = ["benchmarks/evals/tasks"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
 venvPath = "."
