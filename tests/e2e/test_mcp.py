@@ -6,12 +6,12 @@ import pytest
 from pydantic import JsonValue
 
 from plural.agent.providers.base import Stop, ToolCallReady, ToolCallRequest
-from plural.agent.providers.fake import FakeProvider, reply
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import ApprovalRespond, McpAdd, McpToggle, PromptSubmit
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.events import ApprovalRequested, McpChanged, RunEnded, ToolEnded
 from plural.protocol.models import ApprovalDecision, McpStatus
+from tests.doubles import FakeProvider, reply
 from tests.e2e.support import Watcher, running_session
 
 ECHO = str(Path(__file__).parents[1] / "fixtures" / "echo_mcp.py")

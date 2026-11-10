@@ -1,10 +1,10 @@
 from pathlib import Path
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.core.policy.engine import PLAN_MODE
 from plural.protocol.commands import PermissionModeSet, PromptSubmit
 from plural.protocol.events import ApprovalRequested, PermissionModeChanged, RunEnded, ToolEnded
 from plural.protocol.models import PermissionMode
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import running_session
 
 

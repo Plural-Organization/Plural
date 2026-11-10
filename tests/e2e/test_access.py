@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.providers.fake import FakeProvider, reply
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import (
     AccessDecide,
@@ -21,6 +20,7 @@ from plural.protocol.events import (
     RunEnded,
 )
 from plural.protocol.models import AccessDecision, Role
+from tests.doubles import FakeProvider, reply
 from tests.e2e.support import Session, Watcher, running_session
 
 

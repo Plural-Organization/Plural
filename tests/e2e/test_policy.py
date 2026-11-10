@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import (
     ApprovalRespond,
@@ -19,6 +18,7 @@ from plural.protocol.events import (
     ToolEnded,
 )
 from plural.protocol.models import ApprovalDecision, PolicyAction
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import Session, running_session
 
 

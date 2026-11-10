@@ -1,12 +1,12 @@
 from pathlib import Path
 
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.compaction import SUMMARY_SYSTEM
 from plural.agent.events import AgentEvent, Compacted
 from plural.agent.loop import LoopLimits
 from plural.agent.providers.base import LlmEvent, UsageReport
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.protocol.models import Usage
 
 LIMITS = LoopLimits(context_window=1000, compact_reserve=500)

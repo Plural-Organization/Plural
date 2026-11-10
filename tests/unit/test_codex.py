@@ -9,8 +9,8 @@ from tests.loop_support import StubGate, collect, make_loop, turn
 from plural.agent.events import MessageEnd, RunEnd
 from plural.agent.loop import LoopLimits
 from plural.agent.providers.base import LlmImage, LlmMessage, LlmRequest, UsageReport
-from plural.agent.providers.cli import codex_cli
-from plural.agent.providers.cli.codex_cli import CodexCliProvider
+from plural.agent.providers.cli import codex as codex_cli
+from plural.agent.providers.cli.codex import CodexCliProvider
 from plural.protocol.models import RunEndReason, Usage
 
 

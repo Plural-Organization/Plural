@@ -1,9 +1,9 @@
 from pathlib import Path
 
 from plural.agent.providers.base import LlmEvent, Stop, ToolCallReady, ToolCallRequest
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.protocol.commands import PromptSubmit
 from plural.protocol.events import ApprovalRequested, RunEnded, ToolEnded, ToolOutput
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import running_session
 
 

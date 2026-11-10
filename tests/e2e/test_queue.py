@@ -2,7 +2,6 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import (
     ApprovalRespond,
@@ -13,6 +12,7 @@ from plural.protocol.commands import (
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.events import ApprovalRequested, PromptDequeued, RunEnded
 from plural.protocol.models import ApprovalDecision, Delivery, DequeueReason
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import Session, Watcher, running_session
 
 

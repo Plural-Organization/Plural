@@ -16,7 +16,7 @@ from plural.agent.providers.base import (
     TextDelta,
 )
 from plural.agent.providers.catalog import PRESETS
-from plural.agent.providers.cli.codex_cli import CodexCliProvider
+from plural.agent.providers.cli.codex import CodexCliProvider
 from plural.agent.providers.preset import Adapter
 from plural.core.errors import DomainError
 from plural.host.bootstrap import Host, build_web_search

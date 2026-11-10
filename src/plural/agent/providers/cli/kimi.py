@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from plural.agent.providers.cli.agents.base import Call
-from plural.agent.providers.cli.agents.claude_stream import ClaudeStreamCli
+from plural.agent.providers.cli.prompt_cli import Call
+from plural.agent.providers.cli.stream_json import ClaudeStreamCli
 
 
 class KimiCliProvider(ClaudeStreamCli):

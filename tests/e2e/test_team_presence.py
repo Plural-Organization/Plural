@@ -7,7 +7,6 @@ import pytest
 from websockets.asyncio.client import ClientConnection
 from websockets.exceptions import ConnectionClosed, InvalidStatus
 
-from plural.agent.providers.fake import FakeProvider, reply
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.host import team_presence
 from plural.host.bootstrap import build_host
@@ -16,6 +15,7 @@ from plural.host.team import TeamError, TeamStore
 from plural.host.team_presence import TeamPresence, ensure_ready
 from plural.protocol.models import Role
 from plural.protocol.team import CardDraft, Endpoint, EndpointKind, PresenceCard, SessionStatus
+from tests.doubles import FakeProvider, reply
 from tests.e2e.support import CLIENT, RelayServer, Session, Watcher, free_port
 from tests.e2e.team_support import Member, connect_as, two_members
 

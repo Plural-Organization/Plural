@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.providers.fake import FakeProvider, reply
 from plural.client.connection import CommandRejected
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.host.bootstrap import Host, build_host
@@ -18,6 +17,7 @@ from plural.protocol.envelope import ErrorCode
 from plural.protocol.events import ParticipantJoined, ParticipantRevoked, SessionSnapshot
 from plural.protocol.models import Role
 from plural.security.identity import Identity, build_team_proof
+from tests.doubles import FakeProvider, reply
 from tests.e2e.support import CLIENT, RelayServer, Watcher, free_port, refusal
 from tests.e2e.team_support import Member, two_members
 

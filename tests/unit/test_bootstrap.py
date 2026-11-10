@@ -5,7 +5,7 @@ from pydantic import SecretStr
 
 from plural.agent.providers.api.anthropic.adapter import AnthropicProvider
 from plural.agent.providers.api.openai_compat.adapter import OpenAIProvider
-from plural.agent.providers.fake import DemoProvider
+from plural.agent.providers.demo import DemoProvider
 from plural.host.bootstrap import build_host
 from plural.host.config import HostSettings
 from plural.host.providers import ConfigError, build_provider, extra_missing, resolve_api_key

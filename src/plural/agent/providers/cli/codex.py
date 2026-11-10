@@ -3,7 +3,6 @@
 import asyncio
 import json
 import os
-import shutil
 from collections import deque
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -25,9 +24,9 @@ from plural.agent.providers.base import (
     ToolCallRequest,
     UsageReport,
 )
+from plural.agent.providers.cli.base import CliProvider
 from plural.protocol.models import Usage
 
-DEFAULT_MODEL = "gpt-6.1-sol"
 MAX_LINE_BYTES = 16 * 1024 * 1024
 RPC_TIMEOUT_S = 60.0
 
@@ -258,21 +257,17 @@ class _Cancelled(Exception):
     pass
 
 
-class CodexCliProvider:
-    DEFAULT_MODEL = DEFAULT_MODEL
+class CodexCliProvider(CliProvider):
+    adapter = "codex_cli"
+    label = "Codex CLI"
+    binary = "codex"
+    install = "npm install -g @openai/codex"
+    login = "codex login"
+    models = ("gpt-6.1-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.5")
+    hint = "Streams replies from Codex CLI and keeps one session for this room"
 
-    def __init__(
-        self, *, model: str = DEFAULT_MODEL, workspace: Path, cli: str | None = None
-    ) -> None:
-        cli_path = cli or shutil.which("codex")
-        if cli_path is None:
-            raise ProviderError(
-                "Codex CLI is not installed. Run `npm install -g @openai/codex`, "
-                "then `codex login`."
-            )
-        self._cli = cli_path
-        self._model = model
-        self._workspace = workspace
+    def __init__(self, *, model: str = "", workspace: Path, cli: str | None = None) -> None:
+        super().__init__(model=model, workspace=workspace, cli=cli)
         self._process: asyncio.subprocess.Process | None = None
         self._incoming: asyncio.Queue[dict[str, object] | None] | None = None
         self._reader: asyncio.Task[None] | None = None

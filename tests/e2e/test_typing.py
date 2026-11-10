@@ -3,12 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.providers.fake import FakeProvider, reply
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import PromptSubmit, TypingSet
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.events import ParticipantTyping, SessionSnapshot
 from plural.protocol.models import Role
+from tests.doubles import FakeProvider, reply
 from tests.e2e.support import Session, running_session
 
 

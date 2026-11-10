@@ -4,7 +4,6 @@ import pytest
 
 from plural.agent import skills as skill_module
 from plural.agent.providers.base import Stop, ToolCallReady, ToolCallRequest
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import ApprovalRespond, PromptSubmit, SkillsInstall, SkillsSearch
 from plural.protocol.envelope import ErrorCode
@@ -18,6 +17,7 @@ from plural.protocol.events import (
     ToolEnded,
 )
 from plural.protocol.models import ApprovalDecision, SkillScope
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import running_session
 from tests.unit.test_skills import REPO
 

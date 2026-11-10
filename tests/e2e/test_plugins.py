@@ -3,7 +3,6 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import (
     ApprovalRespond,
@@ -32,6 +31,7 @@ from plural.protocol.events import (
     ToolsLoaded,
 )
 from plural.protocol.models import ApprovalDecision, PermissionMode, PluginStatus, Role
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import running_session
 
 PLUGIN = """

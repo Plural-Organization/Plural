@@ -2,7 +2,6 @@ import asyncio
 import json
 from pathlib import Path
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.host.config import HostSettings
 from plural.host.control import Control
 from plural.protocol.commands import ApprovalRespond, PromptSubmit
@@ -14,6 +13,7 @@ from plural.protocol.events import (
     ToolEnded,
 )
 from plural.protocol.models import ApprovalDecision
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import Session, running_session
 
 SECRET = "gsk_Zq9vLw3pT7xN2mB8kR4yH6cD1fJ5sG0aE"

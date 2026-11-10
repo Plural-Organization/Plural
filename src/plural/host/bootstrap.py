@@ -108,7 +108,7 @@ def build_web_search(
     try:
         from plural.agent.providers.api.anthropic import adapter as anthropic_api
         from plural.agent.providers.api.anthropic.oauth import AnthropicOAuthProvider
-        from plural.agent.providers.web_search import (
+        from plural.agent.tools.extra.web_search import (
             anthropic_oauth_search,
             anthropic_search,
             openai_search,

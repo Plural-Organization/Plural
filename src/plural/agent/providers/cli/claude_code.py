@@ -3,7 +3,6 @@
 import asyncio
 import json
 import os
-import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any, cast
@@ -23,9 +22,8 @@ from plural.agent.providers.base import (
     UsageReport,
 )
 from plural.agent.providers.cli.answer import TextFieldStream
+from plural.agent.providers.cli.base import CliProvider
 from plural.protocol.models import Usage
-
-DEFAULT_MODEL = "claude-sonnet-5-5"
 
 
 def _schema(request: LlmRequest) -> dict[str, Any]:
@@ -181,18 +179,32 @@ def _window(result: dict[str, object]) -> int | None:
     return max(windows, default=None)
 
 
-class ClaudeCodeProvider:
-    def __init__(
-        self, *, model: str = DEFAULT_MODEL, workspace: Path, cli: str | None = None
-    ) -> None:
-        cli_path = cli or shutil.which("claude")
-        if cli_path is None:
-            raise ProviderError(
-                "Claude Code CLI is missing. Install it, then run claude auth login."
-            )
-        self._cli = cli_path
-        self._model = model
-        self._workspace = workspace
+class ClaudeCodeProvider(CliProvider):
+    adapter = "claude_code"
+    label = "Claude Code"
+    binary = "claude"
+    install = "npm install -g @anthropic-ai/claude-code"
+    login = "claude auth login"
+    models = (
+        "claude-sonnet-5-5",
+        "claude-opus-5-5",
+        "claude-haiku-5-5",
+        "claude-fable-5-1",
+        "claude-sonnet-5",
+        "claude-opus-5",
+        "claude-fable-5",
+        "claude-opus-4-8",
+        "claude-opus-4-7",
+        "claude-sonnet-4-6",
+        "claude-opus-4-6",
+        "claude-opus-4-5-20251101",
+        "claude-haiku-4-5-20251001",
+        "claude-sonnet-4-5-20250929",
+    )
+    hint = "Uses the installed Claude Code CLI; sign in with claude auth login"
+
+    def __init__(self, *, model: str = "", workspace: Path, cli: str | None = None) -> None:
+        super().__init__(model=model, workspace=workspace, cli=cli)
         self._window: int | None = None
 
     async def context_window(self) -> int | None:

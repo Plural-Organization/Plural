@@ -4,13 +4,13 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.providers.fake import FakeProvider, reply
 from plural.client.connection import CommandRejected
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.protocol.commands import ChatSend, PromptSubmit
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.events import ChatPosted, RunEnded, SessionSnapshot
 from plural.protocol.models import Role
+from tests.doubles import FakeProvider, reply
 from tests.e2e.support import CLIENT, Session, Watcher, running_session
 
 SECRET = "the budget is 40k and we say nothing to the agent"

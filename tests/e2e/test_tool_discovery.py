@@ -1,8 +1,8 @@
 from pathlib import Path
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.protocol.commands import PromptSubmit
 from plural.protocol.events import RunEnded, ToolsLoaded
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import running_session
 
 BOARD = ["board_view", "board_draw", "board_move", "board_erase"]

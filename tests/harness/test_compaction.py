@@ -1,7 +1,7 @@
 import asyncio
 from pathlib import Path
 
-from tests.doubles import STALL, ScriptedProvider
+from tests.doubles import STALL, FakeProvider, ScriptedProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.compaction import SUMMARY_PROMPT, SUMMARY_SYSTEM, extract_summary
@@ -24,7 +24,6 @@ from plural.agent.providers.base import (
     ToolCallRequest,
     UsageReport,
 )
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.protocol.models import RunEndReason, Usage
 
 LIMITS = LoopLimits(context_window=1000, compact_reserve=500)

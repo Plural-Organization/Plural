@@ -1,10 +1,10 @@
 from pathlib import Path
 
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.messages import AssistantTurn
 from plural.agent.providers.base import NativeContent, NativeReady
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 
 
 async def test_a_swapped_provider_answers_next_and_old_native_blocks_are_not_replayed(

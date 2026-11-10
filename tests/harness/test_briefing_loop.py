@@ -2,12 +2,12 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.briefing import briefing_prompt
 from plural.agent.loop import BriefingFailed
 from plural.agent.messages import NotesTurn, notes_message
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.core.provenance import is_guest_originated
 from plural.protocol.models import Role
 

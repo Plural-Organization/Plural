@@ -15,14 +15,14 @@ from plural.agent.providers.base import (
     ToolSchema,
     UsageReport,
 )
-from plural.agent.providers.cli.agents import AGENT_CLIS
-from plural.agent.providers.cli.agents.base import Event
-from plural.agent.providers.cli.agents.copilot import CopilotCliProvider
-from plural.agent.providers.cli.agents.gemini import GeminiCliProvider
-from plural.agent.providers.cli.agents.opencode import OpencodeCliProvider
-from plural.agent.providers.cli.agents.qwen import QwenCliProvider
+from plural.agent.providers.cli import CLI_PROVIDERS, PRESETS
 from plural.agent.providers.cli.answer import parse_answer
-from plural.agent.providers.cli.presets import PRESETS
+from plural.agent.providers.cli.copilot import CopilotCliProvider
+from plural.agent.providers.cli.gemini import GeminiCliProvider
+from plural.agent.providers.cli.opencode import OpencodeCliProvider
+from plural.agent.providers.cli.prompt_cli import Event
+from plural.agent.providers.cli.qwen import QwenCliProvider
+from plural.agent.providers.preset import CLI_ADAPTERS
 
 ANSWER = json.dumps(
     {"text": "Reading it.", "tool_calls": [{"name": "read", "args": {"path": "a"}}]}
@@ -57,10 +57,10 @@ async def run(provider: object, request: LlmRequest = REQUEST) -> list[object]:
     return [event async for event in provider.stream(request, cancel=asyncio.Event())]  # type: ignore[attr-defined]
 
 
-def test_every_agent_cli_has_a_preset() -> None:
-    adapters = {preset.adapter for preset in PRESETS}
-    assert set(AGENT_CLIS) <= adapters
-    for adapter, provider in AGENT_CLIS.items():
+def test_every_cli_has_a_preset_install_and_sign_in() -> None:
+    assert {preset.adapter for preset in PRESETS} == set(CLI_PROVIDERS)
+    assert set(CLI_PROVIDERS) == set(CLI_ADAPTERS)
+    for adapter, provider in CLI_PROVIDERS.items():
         assert provider.adapter == adapter
         assert provider.label
         assert provider.binary
@@ -85,7 +85,7 @@ async def test_copilot_streams_the_text_and_returns_the_tool_call(tmp_path: Path
             {"type": "result", "exitCode": 0},
         ],
     )
-    events = await run(CopilotCliProvider(model="gpt-5", cli=str(cli)))
+    events = await run(CopilotCliProvider(model="gpt-5", workspace=tmp_path, cli=str(cli)))
     assert "".join(e.text for e in events if isinstance(e, TextDelta)) == "Reading it."
     calls = [e.call for e in events if isinstance(e, ToolCallReady)]
     assert [(c.name, c.args) for c in calls] == [("read", {"path": "a"})]
@@ -111,7 +111,7 @@ async def test_qwen_gets_the_request_on_stdin_and_reports_usage(tmp_path: Path) 
             },
         ],
     )
-    events = await run(QwenCliProvider(cli=str(cli)))
+    events = await run(QwenCliProvider(workspace=tmp_path, cli=str(cli)))
     usage = next(e for e in events if isinstance(e, UsageReport)).usage
     assert usage.prompt_tokens == 100
     sent = json.loads((tmp_path / "call.json").read_text())
@@ -122,7 +122,7 @@ async def test_qwen_gets_the_request_on_stdin_and_reports_usage(tmp_path: Path) 
 
 async def test_a_plain_reply_without_json_is_the_text(tmp_path: Path) -> None:
     cli = fake_cli(tmp_path, [{"type": "message", "role": "assistant", "content": "hello"}])
-    events = await run(GeminiCliProvider(cli=str(cli)))
+    events = await run(GeminiCliProvider(workspace=tmp_path, cli=str(cli)))
     assert "".join(e.text for e in events if isinstance(e, TextDelta)) == "hello"
     assert events[-1] == Stop(reason="end_turn")
 
@@ -130,18 +130,18 @@ async def test_a_plain_reply_without_json_is_the_text(tmp_path: Path) -> None:
 async def test_a_cli_error_names_how_to_sign_in(tmp_path: Path) -> None:
     cli = fake_cli(tmp_path, [{"type": "error", "error": {"name": "AuthError"}}], exit_code=1)
     with pytest.raises(ProviderError, match="opencode auth login"):
-        await run(OpencodeCliProvider(cli=str(cli)))
+        await run(OpencodeCliProvider(workspace=tmp_path, cli=str(cli)))
 
 
 async def test_a_tool_plural_does_not_have_is_refused(tmp_path: Path) -> None:
     answer = json.dumps({"text": "", "tool_calls": [{"name": "shell", "args": {}}]})
     cli = fake_cli(tmp_path, [{"type": "assistant.message", "data": {"content": answer}}])
     with pytest.raises(ProviderError, match="unavailable tool: shell"):
-        await run(CopilotCliProvider(cli=str(cli)))
+        await run(CopilotCliProvider(workspace=tmp_path, cli=str(cli)))
 
 
 def test_opencode_counts_the_cached_prompt_apart() -> None:
-    provider = OpencodeCliProvider(cli=sys.executable)
+    provider = OpencodeCliProvider(workspace=Path(), cli=sys.executable)
     event = provider.parse(
         {
             "type": "step_finish",

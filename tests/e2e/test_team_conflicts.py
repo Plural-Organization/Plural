@@ -9,7 +9,6 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.cli.main import app
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.host import team_presence
@@ -28,6 +27,7 @@ from plural.protocol.team import (
     SessionStatus,
     Touch,
 )
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import CLIENT, RelayServer, Watcher, free_port
 from tests.e2e.team_support import connect_as, two_members
 

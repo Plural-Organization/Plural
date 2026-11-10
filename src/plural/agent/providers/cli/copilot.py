@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from plural.agent.providers.cli.agents.base import AgentCliProvider, Call, Event, as_dict
+from plural.agent.providers.cli.prompt_cli import Call, Event, PromptCliProvider, as_dict
 
 
-class CopilotCliProvider(AgentCliProvider):
+class CopilotCliProvider(PromptCliProvider):
     adapter = "copilot_cli"
     label = "GitHub Copilot CLI"
     binary = "copilot"

@@ -3,12 +3,12 @@ from pathlib import Path
 
 from websockets.exceptions import ConnectionClosed
 
-from plural.agent.providers.fake import FakeProvider, reply
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.host.bootstrap import build_host
 from plural.host.config import HostSettings
 from plural.protocol.commands import TypingSet
 from plural.protocol.events import ParticipantTyping
+from tests.doubles import FakeProvider, reply
 from tests.e2e.support import (
     CLIENT,
     ROOM,

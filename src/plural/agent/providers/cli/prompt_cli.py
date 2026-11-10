@@ -1,4 +1,4 @@
-"""An installed agent CLI as a model backend, with the CLI's own sign-in.
+"""Agent CLIs that get the whole request as one prompt and answer in JSON.
 
 None of these CLIs takes Plural's tools as its own, so each call asks for a JSON answer of text
 and tool calls, the way the Claude Code provider does, and reads it back from the CLI's output.
@@ -12,13 +12,12 @@ output (`parse`); starting, streaming, cancelling and reading the answer are sha
 import asyncio
 import json
 import os
-import shutil
 import tempfile
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, Final, cast
+from typing import Final, cast
 from uuid import uuid4
 
 from pydantic import JsonValue
@@ -35,7 +34,7 @@ from plural.agent.providers.base import (
     UsageReport,
 )
 from plural.agent.providers.cli.answer import TextFieldStream, parse_answer
-from plural.agent.providers.preset import AgentCliAdapter
+from plural.agent.providers.cli.base import CliProvider
 from plural.protocol.models import Usage
 
 INSTRUCTIONS: Final = (
@@ -104,22 +103,8 @@ def int_of(data: dict[str, object] | None, *keys: str) -> int:
     return 0
 
 
-class AgentCliProvider(ABC):
-    adapter: ClassVar[AgentCliAdapter]
-    label: ClassVar[str]
-    binary: ClassVar[str]
-    # How to install it and sign in, for the settings screen and error messages.
-    install: ClassVar[str]
-    login: ClassVar[str]
-
-    def __init__(self, *, model: str = "", cli: str | None = None) -> None:
-        path = cli or shutil.which(self.binary)
-        if path is None:
-            raise ProviderError(
-                f"{self.label} is not installed: {self.install}, then {self.login}."
-            )
-        self._path = path
-        self._model = model
+class PromptCliProvider(CliProvider):
+    """A CLI run once per request in an empty folder, its JSON answer read from its output."""
 
     @abstractmethod
     def command(self, prompt: str, run_dir: Path) -> Call:
@@ -146,7 +131,7 @@ class AgentCliProvider(ABC):
     ) -> AsyncIterator[LlmEvent]:
         try:
             process = await asyncio.create_subprocess_exec(
-                self._path,
+                self._cli,
                 *call.argv,
                 cwd=run_dir,
                 stdin=asyncio.subprocess.PIPE

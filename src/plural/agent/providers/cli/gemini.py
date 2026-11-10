@@ -1,17 +1,17 @@
 from pathlib import Path
 
-from plural.agent.providers.cli.agents.base import (
+from plural.agent.providers.cli.prompt_cli import (
     ASK,
-    AgentCliProvider,
     Call,
     Event,
+    PromptCliProvider,
     as_dict,
     int_of,
 )
 from plural.protocol.models import Usage
 
 
-class GeminiCliProvider(AgentCliProvider):
+class GeminiCliProvider(PromptCliProvider):
     adapter = "gemini_cli"
     label = "Gemini CLI"
     binary = "gemini"

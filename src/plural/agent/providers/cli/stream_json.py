@@ -2,7 +2,7 @@
 
 from typing import cast
 
-from plural.agent.providers.cli.agents.base import AgentCliProvider, Event, as_dict, int_of
+from plural.agent.providers.cli.prompt_cli import Event, PromptCliProvider, as_dict, int_of
 from plural.protocol.models import Usage
 
 
@@ -17,7 +17,7 @@ def _usage(data: dict[str, object] | None) -> Usage | None:
     )
 
 
-class ClaudeStreamCli(AgentCliProvider):
+class ClaudeStreamCli(PromptCliProvider):
     """A CLI whose output reads like Claude Code's: assistant messages, deltas and a result."""
 
     def parse(self, event: dict[str, object]) -> Event | None:

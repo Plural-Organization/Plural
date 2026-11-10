@@ -1,16 +1,16 @@
 from pathlib import Path
 
-from plural.agent.providers.cli.agents.base import (
-    AgentCliProvider,
+from plural.agent.providers.cli.prompt_cli import (
     Call,
     Event,
+    PromptCliProvider,
     as_dict,
     int_of,
 )
 from plural.protocol.models import Usage
 
 
-class OpencodeCliProvider(AgentCliProvider):
+class OpencodeCliProvider(PromptCliProvider):
     adapter = "opencode_cli"
     label = "opencode"
     binary = "opencode"

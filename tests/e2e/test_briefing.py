@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from plural.agent.prompts import prompt
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.core import briefings
@@ -40,6 +39,7 @@ from plural.protocol.models import (
     PermissionMode,
     Role,
 )
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import CLIENT, Session, Watcher, free_port, running_session
 
 BRIEFING = "<briefing>Goal: fix login. Done: added a retry in login.py. Open: the test.</briefing>"

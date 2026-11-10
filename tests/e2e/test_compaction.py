@@ -5,11 +5,11 @@ import pytest
 from plural.agent.compaction import SUMMARY_SYSTEM
 from plural.agent.messages import summary_message
 from plural.agent.providers.base import UsageReport
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import ContextCompact, PromptSubmit
 from plural.protocol.events import ContextCompacted, ContextCompacting, ContextUsage, RunEnded
 from plural.protocol.models import EntryKind, Usage
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import running_session
 
 SMALL_WINDOW = {"context_window": 1000, "compact_reserve": 500}

@@ -1,6 +1,7 @@
+"""The demo agent: a scripted provider that needs no model, to try the interface."""
+
 import asyncio
-from collections import deque
-from collections.abc import AsyncIterator, Iterable, Sequence
+from collections.abc import AsyncIterator
 
 from pydantic import JsonValue
 
@@ -22,26 +23,6 @@ def reply(text: str) -> tuple[LlmEvent, ...]:
 def use_tool(name: str, call_id: str = "call_1", **args: JsonValue) -> tuple[LlmEvent, ...]:
     call = ToolCallRequest(id=call_id, name=name, args=args)
     return (ToolCallReady(call=call), Stop(reason="tool_use"))
-
-
-class FakeProvider:
-    def __init__(self, script: Iterable[Sequence[LlmEvent]] = ()) -> None:
-        self._turns: deque[tuple[LlmEvent, ...]] = deque(tuple(turn) for turn in script)
-        self.requests: list[LlmRequest] = []
-
-    def enqueue(self, *turns: Sequence[LlmEvent]) -> None:
-        self._turns.extend(tuple(turn) for turn in turns)
-
-    async def stream(
-        self, request: LlmRequest, *, cancel: asyncio.Event
-    ) -> AsyncIterator[LlmEvent]:
-        self.requests.append(request)
-        turn = self._turns.popleft() if self._turns else reply("Done.")
-        for event in turn:
-            if cancel.is_set():
-                return
-            await asyncio.sleep(0)
-            yield event
 
 
 class DemoProvider:

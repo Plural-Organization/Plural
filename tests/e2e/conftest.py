@@ -3,9 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.protocol.models import PromptMode
-from tests.doubles import StallingProvider
+from tests.doubles import FakeProvider, StallingProvider, reply, use_tool
 from tests.e2e.support import Session, running_session
 
 

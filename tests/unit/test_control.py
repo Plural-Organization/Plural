@@ -4,9 +4,9 @@ from pathlib import Path
 
 import pytest
 from pydantic import SecretStr
+from tests.doubles import FakeProvider, reply
 
 from plural.agent.providers.base import LlmEvent, LlmRequest, ProviderError, TextDelta
-from plural.agent.providers.fake import FakeProvider, reply
 from plural.host import control
 from plural.host.config import HostSettings
 from plural.host.control import AgentConfig, probe, provider_for, settings_for
@@ -47,7 +47,7 @@ def test_providers_are_built_from_a_config_and_missing_pieces_are_named(
         assert command == "claude"
         return "/usr/bin/claude"
 
-    monkeypatch.setattr("plural.agent.providers.cli.claude_code.shutil.which", claude_path)
+    monkeypatch.setattr("plural.agent.providers.cli.base.shutil.which", claude_path)
     provider, settings, key = provider_for(BASE, AgentConfig(provider="fake"))
     assert provider is not None
     assert key is None

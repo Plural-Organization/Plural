@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from pydantic import JsonValue
-from tests.doubles import ScriptedProvider, StallingProvider
+from tests.doubles import FakeProvider, ScriptedProvider, StallingProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.context import ContextBuilder
@@ -28,7 +28,6 @@ from plural.agent.providers.base import (
     ToolCallRequest,
     ToolSchema,
 )
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
