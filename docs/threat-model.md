@@ -49,5 +49,6 @@
 | a viewer reads what the owner did not share | sessions are private and unpublished by default; the card holds no prompts, replies or file contents, only names, repository, status and changed paths |
 | context shared between agents steering the other agent | a shared summary reaches the model as untrusted notes, keeps the guest taint and never changes the system prompt (ADR 0003, ADR 0007) |
 | slow/flooding clients | bounded queues, rate limit and size limit on relay |
+| a chat service, or someone with the import link, pushes text into the agent's context | the address carries a secret made by the host and kept in its state directory; the MCP gateway (a separate service, `Plural-Organization/mcp`) keys hosts by its hash, caps size and open offers and stores nothing, and the host connects out to it (`host/mcp_link.py`); what arrives waits for the host's answer on a card and goes to the agent's notes as background with secrets removed, never as instructions (`host/actor.py`) |
 
 Out of scope for MVP: E2E encryption (relay sees content), Docker isolation.

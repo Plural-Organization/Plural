@@ -57,8 +57,19 @@ def host(
         bool, typer.Option("--local", help="Stay on this machine: no relay, direct mode.")
     ] = False,
     public_url: Annotated[str | None, typer.Option(help="Public ws(s) URL for links.")] = None,
+    mcp_url: Annotated[
+        str | None,
+        typer.Option(help="MCP gateway that lets Claude, ChatGPT or Grok send chats here."),
+    ] = None,
     room: Annotated[str | None, typer.Option(help="Resume an existing room.")] = None,
     title: Annotated[str | None, typer.Option(help="Name of this session.")] = None,
+    import_from: Annotated[
+        str | None,
+        typer.Option(
+            "--import",
+            help="Start from a session of another agent: claude, or claude:<id start>.",
+        ),
+    ] = None,
     name: Annotated[str | None, typer.Option(help="Host display name.")] = None,
     prompts: Annotated[
         PromptMode | None,
@@ -89,8 +100,10 @@ def host(
         "port": port,
         "relay_url": relay,
         "public_url": public_url,
+        "mcp_url": mcp_url,
         "room": room,
         "title": title,
+        "import_from": import_from,
         "host_name": name,
         "prompt_mode": prompts,
         "admission": admission,
@@ -151,13 +164,14 @@ def _saved_workspace(room: str) -> Path:
     return folder
 
 
-def ready_line(room: str, guest_link: str, host_link: str) -> str:
+def ready_line(room: str, guest_link: str, host_link: str, import_url: str | None = None) -> str:
     return json.dumps(
         {
             "type": "ready",
             "room": room,
             "guest_link": guest_link,
             "host_link": host_link,
+            "import_url": import_url,
             "version": __version__,
             "protocol": PROTOCOL_VERSION,
         }
@@ -184,7 +198,10 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
     plural_host = await build_host(settings)
     room_link = plural_host.room_link.link
     if machine:
-        print(ready_line(plural_host.room, room_link, plural_host.host_link), flush=True)
+        print(
+            ready_line(plural_host.room, room_link, plural_host.host_link, plural_host.import_url),
+            flush=True,
+        )
     elif console.is_terminal:
         console.print(
             Panel(

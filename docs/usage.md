@@ -71,6 +71,28 @@ plural -r <id> -p "and fix the first one" --permission-mode acceptEdits
 
 Nobody is there to approve an action, so one that needs approval is **refused**: it is named on stderr and listed in `denied`, and the agent goes on without it. Allow what a script may do with `--allowedTools "Bash(npm test)"`, or with `--permission-mode acceptEdits` (file edits) or `auto`. Deny rules always win, and the built-in protections cannot be switched off. The model is the one you saved in the settings; `--provider` and `--model` choose another for this run, and the key comes from `~/.plural/credentials.json` or the usual environment variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`…).
 
+## Continue a session from another agent
+
+Work that began in Claude Code can go on in Plural:
+
+```bash
+plural import claude              # the latest Claude Code session kept for this folder
+plural import claude:3f9a         # the one whose id starts with 3f9a
+plural import claude --workspace ~/app -n moved
+```
+
+A new session opens in that folder. The other conversation is put in your agent's notes: the newest turns whole and the older ones left out when they do not fit, with its tool calls and results cut down to one line each. Secrets are removed on the way in. The agent reads it as background from earlier work, not as instructions, and carries on from there; the first prompt you type is the continuation.
+
+Claude Code keeps its sessions per folder in `~/.claude/projects` (`CLAUDE_CONFIG_DIR` moves it), so run the command from the project's folder or pass `--workspace`. Codex is not supported yet.
+
+## Send a chat from Claude, ChatGPT or Grok
+
+A chat service can hand its own conversation to your session. In the session type `/import`: it shows an address. Add it as a custom connector (an MCP server) in the service, in Claude under Settings → Connectors, in ChatGPT under Settings → Connectors with developer mode, in Grok at grok.com/connectors. Then say to that chat "send the context of this conversation to Plural". It writes a hand-over note (the goal, what was decided, where things stand, the last messages) and sends it with its one tool, `add_data_to_session`.
+
+You are asked first, with a card that shows who sent it, how long it is and its beginning. Accepting puts it in your agent's notes as background, never as instructions, and removes secrets from it. Declining tells the chat so. Everyone in the room then works on top of it.
+
+The address belongs to your machine, so it stays the same for every session and a service is connected once. Anyone who has the address can ask to add something, so keep it private; nothing reaches the agent without your answer. The chat does not go through your session's relay: it goes through the MCP gateway ([plural-mcp](https://github.com/Plural-Organization/mcp)), which your host connects to and which keeps nothing. Name the gateway with `--mcp-url <url>` or `PLURAL_MCP_URL`; without one, `/import` says there is no address. Whether you can add a custom connector, and whether it may write, depends on the service and your plan.
+
 ## Share a session
 
 By default the session goes through the Plural relay (`relay.plrl.host`), so a link works for anyone you let in. To keep it to your computer, open `F2` → Session and choose *This machine* (or start with `--local`); *Same network* serves it on your network instead. [Sharing a session](self-hosting.md) explains the three ways and how to run a relay.

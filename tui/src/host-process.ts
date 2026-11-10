@@ -6,6 +6,8 @@ export interface HostHandle {
   room: string;
   guestLink: string;
   hostLink: string;
+  /** Where a chat service (Claude, ChatGPT) sends its context to this session; null without a relay. */
+  importUrl: string | null;
   version: string;
   control: AgentControl;
   stop: () => Promise<void>;
@@ -46,7 +48,7 @@ export async function startLocalHost(args: string[]): Promise<HostHandle> {
   });
   const link = new ControlLink((line) => child.stdin?.write(line) ?? false);
   child.on("exit", () => link.close());
-  const ready = await new Promise<{ room: string; guest_link: string; host_link: string; version: string }>(
+  const ready = await new Promise<{ room: string; guest_link: string; host_link: string; import_url?: string | null; version: string }>(
     (resolve, reject) => {
       const timer = setTimeout(() => reject(new HostUnavailable(`the host did not start in time\n${errors}`)), 60_000);
       let buffered = "";
@@ -86,6 +88,7 @@ export async function startLocalHost(args: string[]): Promise<HostHandle> {
     room: ready.room,
     guestLink: ready.guest_link,
     hostLink: ready.host_link,
+    importUrl: ready.import_url ?? null,
     version: ready.version,
     control: link,
     stop: () =>

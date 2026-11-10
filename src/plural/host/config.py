@@ -24,6 +24,7 @@ class HostSettings(BaseSettings):
     workspace: Path = Field(default_factory=Path.cwd)
     data_dir: Path = Path("~/.plural")
     room: str | None = None
+    import_from: str | None = None
     title: str | None = Field(default=None, min_length=1, max_length=80)
     host_name: str = "host"
     prompt_mode: PromptMode | None = None
@@ -32,6 +33,8 @@ class HostSettings(BaseSettings):
     port: int = 7777
     public_url: str | None = None
     relay_url: str | None = None
+    # The MCP gateway a chat service sends chats through. Off until one is named.
+    mcp_url: str | None = None
     team: bool = False
     team_roster_ttl_s: float = Field(default=30, gt=0)
     preset: str | None = None
