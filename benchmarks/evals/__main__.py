@@ -4,19 +4,18 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
 import tomllib
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import suppress
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import structlog
 from tests.e2e.support import free_port
@@ -50,6 +49,8 @@ ABORT_WAIT_S = 15
 # What `codex exec` runs with, as the Codex app server Plural talks to reads it from config.toml.
 CODEX_EFFORT = "medium"
 CODEX_TOOLS = {"command_execution", "file_change", "mcp_tool_call", "web_search"}
+# Where a run's traces and raw logs are kept, set once the run starts.
+kept: Path | None = None
 MAX_LINE_BYTES = 16 * 1024 * 1024
 
 
@@ -318,22 +319,160 @@ async def drive_codex(task: Task, workspace: Path, model: str, outcome: Outcome)
     return reply.read_text() if reply.exists() else ""
 
 
+def keep(folder: Path, task: Task, number: int) -> None:
+    """The run's trace (the session database, with its spans) and the raw logs of a native
+    harness, kept beside the results so they can be read afterwards."""
+    if kept is None:
+        return
+    name = f"{task.id}-{number}"
+    for database in (folder / "data" / "sessions").glob("*.db"):
+        shutil.copy(database, kept / f"{name}.db")
+    for log in folder.glob("*.jsonl"):
+        shutil.copy(log, kept / f"{name}.{log.name}")
+    reply = folder / "reply.txt"
+    if reply.exists():
+        shutil.copy(reply, kept / f"{name}.reply.txt")
+
+
+Native = Callable[[Task, Path, str, Outcome], Coroutine[Any, Any, str]]
+NATIVE: dict[str, Native] = {}
+
+
+async def stream_native(
+    command: list[str], workspace: Path, timeout_s: int, log: Path, outcome: Outcome
+) -> AsyncIterator[dict[str, Any]]:
+    """A native harness's JSON lines, written to `log` as they come; a timeout kills it."""
+    process = await asyncio.create_subprocess_exec(
+        *command,
+        cwd=workspace,
+        stdin=asyncio.subprocess.DEVNULL,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.DEVNULL,
+        limit=MAX_LINE_BYTES,
+    )
+    assert process.stdout is not None
+    try:
+        async with asyncio.timeout(timeout_s):
+            with log.open("wb") as written:
+                async for raw in process.stdout:
+                    written.write(raw)
+                    with suppress(json.JSONDecodeError):
+                        decoded = json.loads(raw)
+                        if isinstance(decoded, dict):
+                            yield decoded
+            await process.wait()
+    except TimeoutError:
+        outcome.status = "timeout"
+        process.kill()
+        await process.wait()
+    if outcome.status == "ran" and process.returncode not in (0, None):
+        outcome.detail = outcome.detail or f"exited with {process.returncode}"
+
+
+async def drive_claude(task: Task, workspace: Path, model: str, outcome: Outcome) -> str:
+    """The task through `claude -p`, Claude Code's own harness: its tools, sandboxed to the
+    workspace, without the user's CLAUDE.md, skills, plugins, hooks or MCP servers."""
+    command = [
+        "claude", "-p", task.prompt, "--output-format", "stream-json", "--verbose",
+        "--model", model, "--safe-mode", "--permission-mode", "acceptEdits",
+        "--settings", json.dumps({"sandbox": {"enabled": True, "autoAllowBashIfSandboxed": True}}),
+    ]  # fmt: skip
+    started = time.monotonic()
+    reply = ""
+    log = workspace.parent / "claude.jsonl"
+    async for event in stream_native(command, workspace, task.timeout_s, log, outcome):
+        kind = event.get("type")
+        if kind == "assistant":
+            outcome.model_turns += 1
+            blocks: list[dict[str, Any]] = event["message"].get("content") or []
+            for block in blocks:
+                if block.get("type") == "tool_use":
+                    outcome.tool_calls += 1
+                    name = block.get("name", "tool")
+                    outcome.tools[name] = outcome.tools.get(name, 0) + 1
+                elif block.get("type") == "text" and block.get("text"):
+                    reply = block["text"]
+        elif kind == "user":
+            message: dict[str, Any] = event.get("message") or {}
+            results: list[Any] = message.get("content") or []
+            for result in results:
+                if isinstance(result, dict) and cast("dict[str, Any]", result).get("is_error"):
+                    outcome.tool_errors += 1
+        elif kind == "result":
+            usage: dict[str, int] = event.get("usage") or {}
+            outcome.input_tokens = usage.get("input_tokens", 0)
+            outcome.cache_read_tokens = usage.get("cache_read_input_tokens", 0)
+            outcome.cache_write_tokens = usage.get("cache_creation_input_tokens", 0)
+            outcome.output_tokens = usage.get("output_tokens", 0)
+            outcome.status = "failed" if event.get("is_error") else "ran"
+            if event.get("is_error"):
+                outcome.detail = str(event.get("result"))[:300]
+            reply = str(event.get("result") or reply)
+    outcome.seconds = round(time.monotonic() - started, 1)
+    return reply
+
+
+async def drive_grok(task: Task, workspace: Path, model: str, outcome: Outcome) -> str:
+    """The task through `grok -p`, Grok Build's own harness, sandboxed to the workspace."""
+    command = [
+        "grok", "-p", task.prompt, "--output-format", "streaming-json", "-m", model,
+        "--sandbox", "workspace", "--permission-mode", "bypassPermissions",
+        "--no-subagents", "--disable-web-search", "--cwd", str(workspace),
+    ]  # fmt: skip
+    started = time.monotonic()
+    text: list[str] = []
+    log = workspace.parent / "grok.jsonl"
+    async for event in stream_native(command, workspace, task.timeout_s, log, outcome):
+        kind = event.get("type")
+        if kind == "text":
+            text.append(str(event.get("data") or ""))
+        elif kind == "usage":
+            outcome.model_turns += 1
+            usage: dict[str, int] = event.get("usage") or {}
+            # Grok's input tokens leave out the part read from the cache.
+            cached = usage.get("cache_read_input_tokens", 0)
+            outcome.input_tokens += usage.get("input_tokens", 0)
+            outcome.cache_read_tokens += cached
+            outcome.cache_write_tokens += usage.get("cache_creation_input_tokens", 0)
+            outcome.output_tokens += usage.get("output_tokens", 0)
+            # Each request's own prompt; the largest is the context's peak.
+            outcome.context_peak = max(outcome.context_peak, usage.get("input_tokens", 0) + cached)
+            outcome.status = "ran"
+        elif kind == "tool_call":
+            outcome.tool_calls += 1
+            name = str(event.get("toolName") or "tool")
+            outcome.tools[name] = outcome.tools.get(name, 0) + 1
+            text.clear()
+        elif kind == "tool_call_update" and event.get("status") == "failed":
+            outcome.tool_errors += 1
+        elif kind == "error":
+            outcome.status = "failed"
+            outcome.detail = str(event.get("message"))[:300]
+    outcome.seconds = round(time.monotonic() - started, 1)
+    return "".join(text)
+
+
+NATIVE.update(codex=drive_codex, claude=drive_claude, grok=drive_grok)
+
+
 async def run_task(
-    task: Task, harness: str, preset: str, model: str, gate: asyncio.Semaphore
+    task: Task, harness: str, preset: str, model: str, gate: asyncio.Semaphore, number: int = 0
 ) -> Outcome:
     outcome = Outcome(task=task.id)
     async with gate:
         with tempfile.TemporaryDirectory(prefix="plural-eval-") as folder:
             try:
                 settings = await asyncio.to_thread(begin, task, folder, preset, model)
-                if harness == "codex":
-                    reply = await drive_codex(task, settings.workspace, model, outcome)
+                if harness in NATIVE:
+                    reply = await NATIVE[harness](task, settings.workspace, model, outcome)
                 else:
                     reply = await drive(task, settings, outcome)
                 await asyncio.to_thread(judge, task, settings.workspace, outcome, reply)
             except Exception as error:  # one broken task must not end the others
                 outcome.status = "error"
                 outcome.detail = f"{type(error).__name__}: {error}"
+            with suppress(OSError):
+                keep(Path(folder), task, number)
     print(line(outcome), flush=True)
     return outcome
 
@@ -399,7 +538,10 @@ def current_agent() -> tuple[str, str]:
 async def run(args: argparse.Namespace, preset: str, model: str) -> list[Outcome]:
     gate = asyncio.Semaphore(args.jobs)
     tasks = load_tasks(args.task) * args.repeat
-    runs = (run_task(task, args.harness, preset, model, gate) for task in tasks)
+    runs = (
+        run_task(task, args.harness, preset, model, gate, number)
+        for number, task in enumerate(tasks)
+    )
     return list(await asyncio.gather(*runs))
 
 
@@ -407,7 +549,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--harness",
-        choices=["plural", "codex"],
+        choices=["plural", "codex", "claude", "grok"],
         default="plural",
         help="codex runs the same tasks through codex exec instead, with the same model",
     )
@@ -436,17 +578,21 @@ def main() -> int:
         preset = args.preset or fallback_preset
         model = args.model or fallback_model
     print(f"{args.harness} · {preset} · {model}", flush=True)
+    global kept
+    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
+    kept = RESULTS / f"{stamp}-{args.harness}-{model.replace('/', '_')}"
+    kept.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="plural-eval-home-") as home:
         if not args.keep_home:
-            # Skills in the home folder go into every prompt; Codex keeps its sign-in in CODEX_HOME.
-            os.environ.setdefault("CODEX_HOME", str(Path.home() / ".codex"))
-            os.environ["HOME"] = home
+            # Skills, agents, MCP servers and plugins in the home folder go into every prompt of
+            # the host, which runs in this process: it alone gets an empty home. The CLIs it starts
+            # and the native harnesses keep the real one, where their sign-ins live.
+            clean = Path(home)
+            Path.home = classmethod(lambda cls: cls(clean))  # type: ignore[method-assign]
         outcomes = asyncio.run(run(args, preset, model))
     totals = summary(outcomes)
     print("\n" + json.dumps({**totals, "context_at_peak": spent_on(outcomes)}, indent=2))
-    RESULTS.mkdir(exist_ok=True)
-    stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    path = RESULTS / f"{stamp}-{args.harness}-{model.replace('/', '_')}.json"
+    path = kept / "results.json"
     report = {
         "harness": args.harness,
         "preset": preset,

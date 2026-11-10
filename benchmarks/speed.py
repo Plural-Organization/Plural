@@ -13,11 +13,11 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 import structlog
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import CLIENT, Session, running_session
 from tests.loop_support import StubGate, collect, make_loop, turn
 
-from plural.agent.loop import LoopLimits
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
+from plural.agent.loop.loop import LoopLimits
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.core.state import reduce
 from plural.protocol.commands import ChatSend, PermissionModeSet, PromptSubmit
