@@ -1,12 +1,12 @@
 """The answer an agent CLI returns for Plural: a JSON object of text and tool calls."""
 
 import json
-from typing import cast
+from typing import Any, cast
 from uuid import uuid4
 
 from pydantic import JsonValue
 
-from plural.agent.providers.base import ToolCallRequest
+from plural.agent.providers.base import LlmRequest, ToolCallRequest
 
 
 def _string_end(raw: str, start: int) -> int | None:
@@ -220,3 +220,32 @@ def tool_call(raw: object, prefix: str = "toolu") -> ToolCallRequest:
     if not isinstance(args, dict):
         return ToolCallRequest(id=call_id, name=name, parse_error="args must be a JSON object")
     return ToolCallRequest(id=call_id, name=name, args=cast("dict[str, JsonValue]", args))
+
+
+def answer_schema(request: LlmRequest) -> dict[str, Any]:
+    """The JSON schema of an answer: text, and calls to the request's tools only. A CLI that
+    can hold a model to a schema (`--json-schema`) gets this, so even a small model answers in
+    the form Plural reads."""
+    names = [tool.name for tool in request.tools]
+    call: dict[str, Any] = {
+        "type": "object",
+        "properties": {
+            "name": {"type": "string", **({"enum": names} if names else {})},
+            "args": {"type": "object"},
+        },
+        "required": ["name", "args"],
+        "additionalProperties": False,
+    }
+    return {
+        "type": "object",
+        "properties": {
+            "text": {"type": "string"},
+            "tool_calls": {
+                "type": "array",
+                "items": call,
+                **({"maxItems": 0} if not names else {}),
+            },
+        },
+        "required": ["text", "tool_calls"],
+        "additionalProperties": False,
+    }

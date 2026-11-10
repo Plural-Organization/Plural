@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 import shutil
 import tempfile
@@ -9,6 +10,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from plural.agent.providers.base import LlmEvent, LlmMessage, LlmRequest, Stop
+from plural.agent.providers.cli.answer import answer_schema
 from plural.agent.providers.cli.prompt_cli import (
     INSTRUCTIONS,
     Call,
@@ -99,8 +101,9 @@ class GrokCliProvider(ClaudeStreamCli):
         self._grok_home = self._home / "grok-home"
         self._grok_home.mkdir()
         self._auth = os.environ.get("GROK_AUTH_PATH") or str(own / "auth.json")
-        # The session the next command starts or resumes.
+        # The session the next command starts or resumes, and the answer's schema.
         self._session: tuple[str, bool] | None = None
+        self._schema: str | None = None
 
     async def close(self) -> None:
         self._sessions.clear()
@@ -119,6 +122,7 @@ class GrokCliProvider(ClaudeStreamCli):
             else:
                 session, prompt, resumed = _Session(uuid4().hex), prompt_text(request), False
             self._session = (_uuid(session.id), resumed)
+            self._schema = json.dumps(answer_schema(request))
             call = self.command(prompt, self._home)
             finished = False
             async for event in self._run(request, call, self._home, cancel):
@@ -159,6 +163,9 @@ class GrokCliProvider(ClaudeStreamCli):
                 "--disallowed-tools",
                 ",".join(OWN_TOOLS),
                 "--no-memory",
+                # Held to the answer's schema, a small model answers with tool calls instead of
+                # announcing what it will do and stopping there.
+                *(["--json-schema", self._schema] if self._schema else []),
                 *session,
             ]
         )

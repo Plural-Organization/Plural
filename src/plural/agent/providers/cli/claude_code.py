@@ -25,36 +25,9 @@ from plural.agent.providers.base import (
     ToolCallRequest,
     UsageReport,
 )
-from plural.agent.providers.cli.answer import TextFieldStream, tool_call
+from plural.agent.providers.cli.answer import TextFieldStream, answer_schema, tool_call
 from plural.agent.providers.cli.base import CliProvider
 from plural.protocol.models import Usage
-
-
-def _schema(request: LlmRequest) -> dict[str, Any]:
-    names = [tool.name for tool in request.tools]
-    call: dict[str, Any] = {
-        "type": "object",
-        "properties": {
-            "name": {"type": "string", **({"enum": names} if names else {})},
-            "args": {"type": "object"},
-        },
-        "required": ["name", "args"],
-        "additionalProperties": False,
-    }
-    return {
-        "type": "object",
-        "properties": {
-            "text": {"type": "string"},
-            "tool_calls": {
-                "type": "array",
-                "items": call,
-                **({"maxItems": 0} if not names else {}),
-            },
-        },
-        "required": ["text", "tool_calls"],
-        "additionalProperties": False,
-    }
-
 
 INSTRUCTIONS = (
     "Continue this conversation. The available Plural tools and then each message of the "
@@ -290,7 +263,7 @@ class ClaudeCodeProvider(CliProvider):
             "--verbose",
             "--include-partial-messages",
             "--json-schema",
-            json.dumps(_schema(request)),
+            json.dumps(answer_schema(request)),
             "--model",
             self._model,
             "--system-prompt",
