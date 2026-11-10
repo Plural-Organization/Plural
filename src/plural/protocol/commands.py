@@ -172,6 +172,15 @@ class PermissionModeSet(Model):
     mode: PermissionMode
 
 
+class TraceGet(Model):
+    """Ask for what a run did, as spans. Without a run, the latest one; `everything` asks for
+    the spans of every run instead, for a picture of the whole session."""
+
+    type: Literal["trace.get"] = "trace.get"
+    run_id: str | None = Field(default=None, max_length=64)
+    everything: bool = False
+
+
 class SkillsSearch(Model):
     type: Literal["skills.search"] = "skills.search"
     query: str = Field(min_length=1, max_length=100)
@@ -382,6 +391,7 @@ Command = Annotated[
     | PromptModeSet
     | PermissionModeSet
     | SkillsSearch
+    | TraceGet
     | SkillsInstall
     | SkillsRemove
     | McpAdd

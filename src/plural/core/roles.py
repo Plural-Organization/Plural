@@ -56,6 +56,7 @@ from plural.protocol.commands import (
     SkillsInstall,
     SkillsRemove,
     SkillsSearch,
+    TraceGet,
     TypingSet,
 )
 from plural.protocol.models import Model, Role
@@ -93,6 +94,7 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         PromptModeSet: HOST_ONLY,
         PermissionModeSet: HOST_ONLY,
         SkillsSearch: CONTRIBUTORS,
+        TraceGet: EVERYONE,
         SkillsInstall: HOST_ONLY,
         SkillsRemove: HOST_ONLY,
         McpAdd: HOST_ONLY,

@@ -143,6 +143,7 @@ from plural.protocol.commands import (
     SkillsRemove,
     SkillsSearch,
     TeamProof,
+    TraceGet,
     TypingSet,
 )
 from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo
@@ -208,6 +209,7 @@ from plural.protocol.events import (
     ToolOutput,
     ToolsLoaded,
     ToolStarted,
+    TraceFound,
     UsageRecorded,
 )
 from plural.protocol.models import (
@@ -239,6 +241,8 @@ from plural.protocol.models import (
     RunEndReason,
     SessionState,
     SkillScope,
+    Span,
+    SpanKind,
     Usage,
     UsageLine,
 )
@@ -340,6 +344,8 @@ class SessionActor:
         self._max_participants = max_participants
         self._knocking: dict[str, Knock] = {}
         self._agent = agent_run
+        # The run the spans being stored belong to, kept for those that close after it ends.
+        self._span_run = ""
         self._registry = approval_registry
         self._gate = gate
         self._vault = vault
@@ -652,6 +658,14 @@ class SessionActor:
                 await self._agents_command(command, actor_id=participant.id)
             case McpAdd() | McpRemove() | McpToggle() | McpRestart() | McpImport():
                 await self._mcp_command(command, actor_id=participant.id)
+            case TraceGet(run_id=wanted, everything=everything):
+                await self._record_spans()
+                runs = await self._store.trace_runs()
+                chosen = None if everything else wanted or (runs[0].run_id if runs else None)
+                spans = await self._store.read_spans(chosen) if chosen or everything else []
+                self._publisher.deliver(
+                    connection, TraceFound(run_id=chosen, spans=tuple(spans), runs=tuple(runs))
+                )
             case SkillsSearch():
                 self._background(self._search_skills(connection, command.query))
             case SkillsInstall():
@@ -1286,6 +1300,37 @@ class SessionActor:
         if servers != self._state.mcp:
             await self._emit(McpChanged(servers=servers), actor_id=actor_id or self._host.id)
 
+    async def _record_spans(self) -> None:
+        """Store what the run did since the last look, named by this host's run, models and
+        people: the loop knows roles and spans, not who prompted or which model a role is."""
+        spans = self._agent.take_spans()
+        if not spans:
+            return
+        run = self._state.run
+        run_id = run.id if run is not None else self._span_run
+        self._span_run = run_id
+        models = {"main": self._agent_label, "fast": self._fast_label or self._agent_label}
+        prompter = run.provenance.initiator_id if run is not None else None
+        named: list[Span] = []
+        for span in spans:
+            actor = (
+                self._host.id
+                if span.kind is SpanKind.APPROVAL
+                else prompter
+                if span.parent_id is None
+                else None
+            )
+            named.append(
+                span.model_copy(
+                    update={
+                        "run_id": run_id,
+                        "model": models.get(span.model, span.model),
+                        "actor_id": actor or span.actor_id,
+                    }
+                )
+            )
+        await self._store.save_spans(named)
+
     async def _record_usage(self) -> None:
         models = {"main": self._agent_label, "fast": self._fast_label or self._agent_label}
         lines = tuple(
@@ -1555,6 +1600,8 @@ class SessionActor:
     async def _on_agent(self, run_id: str, event: agent.AgentEvent) -> None:
         if self._state.run is None or self._state.run.id != run_id:
             return
+        if not isinstance(event, agent.MessageDelta):
+            await self._record_spans()
         match event:
             case agent.MessageStart(message_id=message_id):
                 self._streaming[message_id] = ""
@@ -1612,6 +1659,7 @@ class SessionActor:
             self._registry.resolve(resolved.approval_id, ApprovalDecision.REJECT)
             await self._emit(resolved)
         self._streaming.clear()
+        await self._record_spans()
         await self._record_usage()
         run = self._state.run
         await self._emit(RunEnded(run_id=run_id, reason=reason, usage=usage, error=error))

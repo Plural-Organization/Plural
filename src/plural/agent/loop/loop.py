@@ -68,6 +68,7 @@ from plural.agent.providers.base import (
 from plural.agent.providers.resilient import ResilientProvider
 from plural.agent.tools.base import ToolCtx, ToolResult
 from plural.agent.tools.registry import ToolRegistry
+from plural.agent.tracing import Span, Tracer
 from plural.core.ports import IdGenerator
 from plural.core.provenance import merge
 from plural.protocol.models import (
@@ -76,6 +77,8 @@ from plural.protocol.models import (
     Provenance,
     Role,
     RunEndReason,
+    SpanKind,
+    SpanStatus,
     Usage,
 )
 
@@ -141,6 +144,9 @@ class AgentLoop:
         limits: LoopLimits | None = None,
         helper: LLMProvider | None = None,
         dump: RequestDump | None = None,
+        tracer: Tracer | None = None,
+        span: Span | None = None,
+        role: str = "main",
     ) -> None:
         self._tools = tools
         self._gate = gate
@@ -148,7 +154,10 @@ class AgentLoop:
         self._tool_ctx = tool_ctx
         self._ids = ids
         self._limits = limits or LoopLimits()
-        self._models = Models(provider, helper, wrap=self._resilient, dump=dump)
+        self._models = Models(provider, helper, wrap=self._resilient, dump=dump, main_role=role)
+        self._tracer = tracer or Tracer()
+        # A sub-agent's loop works under the span of the call that started it.
+        self._under = span
         self._prompt: tuple[Sections, tuple[ToolSchema, ...]] | None = None
         self._conversation: list[Message] = []
         self._notes: list[NotesTurn] = []
@@ -247,14 +256,44 @@ class AgentLoop:
     async def compact(self, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         """Summarize the conversation now, outside a prompt, so everyone sees it happen."""
         self._usage = Usage()
+        span = self._begin("compact", "")
         yield Compacting(self._tokens())
         try:
             yield await self._compact(None, cancel, "manual")
         except CompactionFailed as error:
+            self._end(span, RunEndReason.ERROR, str(error))
             yield RunEnd(RunEndReason.ERROR, self._usage, f"compaction failed: {error}")
             return
         yield self.fill()
-        yield RunEnd(RunEndReason.ABORTED if cancel.is_set() else RunEndReason.STOP, self._usage)
+        reason = RunEndReason.ABORTED if cancel.is_set() else RunEndReason.STOP
+        self._end(span, reason, "")
+        yield RunEnd(reason, self._usage)
+
+    @property
+    def tracer(self) -> Tracer:
+        return self._tracer
+
+    def _begin(self, name: str, detail: str) -> Span:
+        """Open the run's span, the one its model and tool calls go under."""
+        span = self._under or self._tracer.start(SpanKind.RUN, name, detail=detail)
+        self._models.span = span
+        self._runner.span = span
+        return span
+
+    def _end(self, span: Span, reason: RunEndReason | None, error: str | None) -> None:
+        self._models.span = None
+        self._runner.span = None
+        if span is self._under:
+            return
+        status = (
+            SpanStatus.OK
+            if reason is RunEndReason.STOP
+            else SpanStatus.CANCELLED
+            if reason is RunEndReason.ABORTED or reason is None
+            else SpanStatus.ERROR
+        )
+        span.end(status, error=(error or "")[:300])
+        self._tracer.settle()
 
     def mark_shared(self) -> None:
         self._shared = True
@@ -311,6 +350,20 @@ class AgentLoop:
 
     async def run(self, prompt: UserTurn, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         """One run: model turns and their tool calls, until the model stops or a limit ends it."""
+        span = self._begin("run", " ".join(prompt.text.split())[:200])
+        ending: RunEnd | None = None
+        try:
+            async for event in self._run(prompt, cancel):
+                if isinstance(event, RunEnd):
+                    # Closed before the event goes out, so whoever sees the run end sees it whole.
+                    ending = event
+                    self._end(span, event.reason, event.error)
+                yield event
+        finally:
+            if ending is None:
+                self._end(span, None, None)
+
+    async def _run(self, prompt: UserTurn, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         provenance = merge(prompt.provenance, SHARED) if self._shared else prompt.provenance
         self._conversation.extend(self._notes)
         self._notes.clear()

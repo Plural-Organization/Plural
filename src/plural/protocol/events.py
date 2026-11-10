@@ -40,6 +40,7 @@ from plural.protocol.models import (
     SessionState,
     SkillHit,
     SkillView,
+    Span,
     TextSelection,
     ToolCallView,
     Usage,
@@ -91,6 +92,17 @@ class SkillsChanged(EventBase):
     skills: tuple[SkillView, ...]
     added: tuple[str, ...] = ()
     removed: tuple[str, ...] = ()
+
+
+class TraceFound(TransientEvent):
+    """The answer to `trace.get`: the spans asked for, and the newest runs to choose from."""
+
+    type: Literal["trace.found"] = "trace.found"
+    # The run the spans belong to; None when they are every run's.
+    run_id: str | None
+    spans: tuple[Span, ...]
+    # The root span of each recent run, newest first.
+    runs: tuple[Span, ...] = ()
 
 
 class SkillsFound(TransientEvent):
@@ -526,6 +538,7 @@ Event = Annotated[
     | PermissionModeChanged
     | SkillsChanged
     | SkillsFound
+    | TraceFound
     | AgentChanged
     | AdmissionChanged
     | JoinRequested

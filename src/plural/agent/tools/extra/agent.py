@@ -32,6 +32,7 @@ from plural.protocol.models import (
     Provenance,
     Role,
     RunEndReason,
+    SpanKind,
     ToolCallView,
     ToolRisk,
     Usage,
@@ -143,7 +144,13 @@ class AgentTool:
             ids=self._ids,
             limits=replace(parent.limits, max_turns=spec.max_turns),
             dump=parent.dump,
+            tracer=ctx.span.tracer if ctx.span is not None else None,
+            span=ctx.span,
+            role=model,
         )
+        if ctx.span is not None:
+            # The call's span becomes the sub-agent's: its model and tool calls open under it.
+            ctx.span.set(kind=SpanKind.AGENT, name=spec.name, detail=task[:200], model=model)
         provenance = ctx.provenance or direct("p_host", Role.HOST)
         turn = UserTurn(
             id=self._ids.new("pm_"),

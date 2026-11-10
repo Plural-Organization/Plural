@@ -317,6 +317,52 @@ class ContextPart(Model):
     name: str | None = None
 
 
+class SpanKind(StrEnum):
+    RUN = "run"
+    LLM = "llm"
+    TOOL = "tool"
+    APPROVAL = "approval"
+    AGENT = "agent"
+
+
+class SpanStatus(StrEnum):
+    RUNNING = "running"
+    OK = "ok"
+    ERROR = "error"
+    DENIED = "denied"
+    CANCELLED = "cancelled"
+
+
+class Span(Model):
+    """One thing a run did: a model call, a tool call, a wait for approval, a sub-agent.
+
+    Spans of a run form a tree through `parent_id`. `usage` is what the span itself spent, not
+    its children; a client adds the children up.
+    """
+
+    id: str
+    parent_id: str | None = None
+    run_id: str = ""
+    kind: SpanKind
+    # The tool, the sub-agent, or what a model call was for (turn, compact, briefing, ...).
+    name: str
+    # A tool call's subject: the path, the command, the query.
+    detail: str = ""
+    model: str = ""
+    # Who prompted the run or answered the approval.
+    actor_id: str | None = None
+    started_ms: int
+    ended_ms: int | None = None
+    status: SpanStatus = SpanStatus.RUNNING
+    usage: Usage = Usage()
+    # A model call: the prompt it sent, which is the context then, and the wait for a first token.
+    context_tokens: int = 0
+    first_ms: int | None = None
+    # A tool call: the size of its result.
+    chars: int = 0
+    error: str = ""
+
+
 class ContextView(Model):
     tokens: int
     window: int

@@ -8,7 +8,7 @@ from plural.agent.loop.loop import AgentLoop
 from plural.agent.loop.messages import PLUGIN_SOURCE, Message, NotesTurn, UserTurn
 from plural.agent.providers.base import LLMProvider
 from plural.host.inbox import AgentOutput, Inbox
-from plural.protocol.models import RunEndReason
+from plural.protocol.models import RunEndReason, Span
 
 log = structlog.get_logger(__name__)
 
@@ -55,6 +55,10 @@ class AgentRun:
 
     def take_spending(self) -> tuple[Spend, ...]:
         return self._loop.take_spending()
+
+    def take_spans(self) -> tuple[Span, ...]:
+        """The spans the run opened or changed since they were last taken."""
+        return self._loop.tracer.take()
 
     def _launch(
         self, run_id: str, events: Callable[[asyncio.Event], AsyncIterator[AgentEvent]]
