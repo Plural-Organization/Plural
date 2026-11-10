@@ -43,4 +43,7 @@ class GlobTool(TypedTool[GlobArgs]):
                 or fnmatchcase(PurePosixPath(relative).name, args.pattern)
             )
         ]
-        return ToolResult(truncate_head("\n".join(matches)) or "(no matches)")
+        shown = truncate_head("\n".join(matches))
+        if len(files) >= WALK_LIMIT:
+            shown += f"\n[only the first {WALK_LIMIT} files were looked at; give a narrower path]"
+        return ToolResult(shown or "(no matches)")
