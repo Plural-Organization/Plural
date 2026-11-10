@@ -45,7 +45,13 @@ export interface SessionView {
 export interface Trace {
   run: TraceFound | null;
   session: TraceFound | null;
+  // Asked and not answered yet: the panel is open and shows that it is loading.
+  waiting: boolean;
+  // What the panel opened on.
+  tab: TraceTab;
 }
+
+export type TraceTab = "run" | "session";
 
 export interface Session extends SessionView {
   send: (command: Command) => void;
@@ -56,6 +62,7 @@ export interface Session extends SessionView {
   sendPresence: (command: Command) => boolean;
   notify: (tone: Tone, text: string) => void;
   clearInvite: () => void;
+  openTrace: (tab?: TraceTab) => void;
   closeTrace: () => void;
   answer: (askId: string, value: string | null) => void;
   close: () => void;
@@ -132,8 +139,9 @@ export class SessionStore {
           }
           if (event.type === "trace.found") {
             // An answer opens the trace; a run's answer and the session's each keep their place.
-            const shown = this.view.trace ?? { run: null, session: null };
-            this.update({ trace: event.run_id === null ? { ...shown, session: event } : { ...shown, run: event } });
+            // An answer that comes after the panel was closed stays closed.
+            const shown = this.view.trace;
+            if (shown !== null) this.update({ trace: event.run_id === null ? { ...shown, session: event, waiting: false } : { ...shown, run: event, waiting: false } });
             continue;
           }
           if (event.type === "plugin.notified") {
@@ -240,6 +248,12 @@ export class SessionStore {
 
   readonly clearInvite = (): void => this.update({ invite: null });
 
+  // The panel opens at once and fills in when the host answers.
+  readonly openTrace = (tab: TraceTab = "run"): void => {
+    this.update({ trace: { run: null, session: null, waiting: true, tab } });
+    this.send({ type: "trace.get", run_id: null, everything: tab === "session" });
+  };
+
   readonly closeTrace = (): void => this.update({ trace: null });
 
   readonly answer = (askId: string, value: string | null): void => {
@@ -273,7 +287,7 @@ export function useSession(link: JoinLink, name: string, onFatal: (reason: strin
   const [store] = useState(() => new SessionStore(link, name, onFatal, team));
   const view = useSyncExternalStore(store.subscribe, store.snapshot);
   useEffect(() => store.start(), [store]);
-  return { ...view, send: store.send, fetchPicture: store.fetchPicture, openPreview: store.openPreview, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, closeTrace: store.closeTrace, answer: store.answer, close: store.close };
+  return { ...view, send: store.send, fetchPicture: store.fetchPicture, openPreview: store.openPreview, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, openTrace: store.openTrace, closeTrace: store.closeTrace, answer: store.answer, close: store.close };
 }
 
 function messageOf(error: unknown): string {

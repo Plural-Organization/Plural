@@ -399,9 +399,11 @@ export interface Span {
   error: string;
   first_ms: number | null;
   id: string;
+  input: string;
   kind: SpanKind;
   model: string;
   name: string;
+  output: string;
   parent_id: string | null;
   run_id: string;
   started_ms: number;

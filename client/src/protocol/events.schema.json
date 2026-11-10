@@ -3510,6 +3510,10 @@
         "id": {
           "type": "string"
         },
+        "input": {
+          "default": "",
+          "type": "string"
+        },
         "kind": {
           "$ref": "#/$defs/SpanKind"
         },
@@ -3518,6 +3522,10 @@
           "type": "string"
         },
         "name": {
+          "type": "string"
+        },
+        "output": {
+          "default": "",
           "type": "string"
         },
         "parent_id": {
@@ -3568,7 +3576,9 @@
         "context_tokens",
         "first_ms",
         "chars",
-        "error"
+        "error",
+        "input",
+        "output"
       ],
       "type": "object"
     },

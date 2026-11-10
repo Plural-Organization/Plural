@@ -11,9 +11,11 @@ interface Hotkeys {
   send: (command: Command) => void;
   onEdit: (proposal: ProposalView) => void;
   onFocusInput: () => void;
+  // t opens the trace, when nothing waits for an answer that t could be mistaken for.
+  onTrace?: () => void;
 }
 
-export function useHotkeys({ enabled, first, canAbort, send, onEdit, onFocusInput }: Hotkeys) {
+export function useHotkeys({ enabled, first, canAbort, send, onEdit, onFocusInput, onTrace }: Hotkeys) {
   useEffect(() => {
     if (!enabled) {
       return;
@@ -44,11 +46,14 @@ export function useHotkeys({ enabled, first, canAbort, send, onEdit, onFocusInpu
       } else if (first?.kind === "proposal" && event.key === "e") {
         event.preventDefault();
         onEdit(first.proposal);
+      } else if (event.key === "t" && first === undefined && onTrace) {
+        event.preventDefault();
+        onTrace();
       } else if (event.key === "/" || (first === undefined && event.key.length === 1 && /\S/.test(event.key))) {
         onFocusInput();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [enabled, first, canAbort, send, onEdit, onFocusInput]);
+  }, [enabled, first, canAbort, send, onEdit, onFocusInput, onTrace]);
 }

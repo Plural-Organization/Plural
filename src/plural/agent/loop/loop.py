@@ -68,7 +68,7 @@ from plural.agent.providers.base import (
 from plural.agent.providers.resilient import ResilientProvider
 from plural.agent.tools.base import ToolCtx, ToolResult
 from plural.agent.tools.registry import ToolRegistry
-from plural.agent.tracing import Span, Tracer
+from plural.agent.tracing import INPUT_CHARS, OUTPUT_CHARS, Span, Tracer, clip
 from plural.core.ports import IdGenerator
 from plural.core.provenance import merge
 from plural.protocol.models import (
@@ -351,9 +351,13 @@ class AgentLoop:
     async def run(self, prompt: UserTurn, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         """One run: model turns and their tool calls, until the model stops or a limit ends it."""
         span = self._begin("run", " ".join(prompt.text.split())[:200])
+        if span is not self._under:
+            span.set(input=clip(prompt.text, INPUT_CHARS))
         ending: RunEnd | None = None
         try:
             async for event in self._run(prompt, cancel):
+                if isinstance(event, MessageEnd) and event.text.strip() and span is not self._under:
+                    span.set(output=clip(event.text, OUTPUT_CHARS))
                 if isinstance(event, RunEnd):
                     # Closed before the event goes out, so whoever sees the run end sees it whole.
                     ending = event

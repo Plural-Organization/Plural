@@ -6,12 +6,74 @@ run goes, stores them and shows them. A sub-agent's loop shares its parent's tra
 its spans under the tool call that started it, which is how its work shows inside the run.
 """
 
+import json
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from itertools import count
 
+from pydantic import JsonValue
+
+from plural.agent.providers.base import LlmRequest, ToolCallRequest
 from plural.protocol.models import Span as SpanView
 from plural.protocol.models import SpanKind, SpanStatus, Usage
+
+# How much of what went in and came out a span keeps. A model call's input is the newest part of
+# its conversation that fits, since the whole of it is in the calls before.
+INPUT_CHARS = 24_000
+OUTPUT_CHARS = 16_000
+SYSTEM_CHARS = 6_000
+MESSAGE_CHARS = 6_000
+
+
+def clip(text: str, limit: int) -> str:
+    """The text, or its head and tail around a note of how much was left out."""
+    if len(text) <= limit:
+        return text
+    half = (limit - 40) // 2
+    return f"{text[:half]}\n… {len(text) - 2 * half} characters left out …\n{text[-half:]}"
+
+
+def _calls(calls: Sequence[ToolCallRequest]) -> list[JsonValue]:
+    return [{"name": call.name, "args": call.args} for call in calls]
+
+
+def request_input(request: LlmRequest) -> str:
+    """A model call's input as JSON: the system prompt and the newest messages that fit."""
+    messages: list[dict[str, JsonValue]] = []
+    room = INPUT_CHARS
+    for message in reversed(request.messages):
+        entry: dict[str, JsonValue] = {
+            "role": message.role,
+            "content": clip(message.content, MESSAGE_CHARS),
+        }
+        if message.tool_calls:
+            entry["tool_calls"] = _calls(message.tool_calls)
+        if message.images:
+            entry["images"] = len(message.images)
+        if message.is_error:
+            entry["error"] = True
+        size = len(json.dumps(entry, ensure_ascii=False))
+        if messages and size > room:
+            break
+        messages.append(entry)
+        room -= size
+    data: dict[str, JsonValue] = {
+        "system": clip(request.system, SYSTEM_CHARS),
+        "messages": list(reversed(messages)),
+        "omitted": len(request.messages) - len(messages),
+        "tools": [tool.name for tool in request.tools],
+    }
+    return json.dumps(data, ensure_ascii=False)
+
+
+def answer_output(text: str, calls: Sequence[ToolCallRequest]) -> str:
+    """A model call's output as JSON: what it wrote and the tool calls it asked for."""
+    data: dict[str, JsonValue] = {"text": clip(text, OUTPUT_CHARS), "tool_calls": _calls(calls)}
+    return json.dumps(data, ensure_ascii=False)
+
+
+def args_input(args: dict[str, JsonValue]) -> str:
+    return clip(json.dumps(args, ensure_ascii=False, indent=2), INPUT_CHARS)
 
 
 class Span:

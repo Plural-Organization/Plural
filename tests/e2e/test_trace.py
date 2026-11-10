@@ -67,6 +67,13 @@ async def test_a_guest_sees_what_a_run_did_and_what_each_part_spent(tmp_path: Pa
         assert under(found.spans, agent)[0].usage.input_tokens == 40
         assert all(span.ended_ms is not None for span in found.spans)
 
+        # A guest sees what tools got and gave, and what the model answered, not what it was sent.
+        assert all(span.input == "" for span in found.spans if span.kind is SpanKind.LLM)
+        assert all(span.output for span in found.spans if span.kind is SpanKind.LLM)
+        await owner.client.send(TraceGet())
+        mine = await owner.next(TraceFound)
+        assert all(span.input for span in mine.spans if span.kind is SpanKind.LLM)
+
         await guest.client.send(TraceGet(everything=True))
         everything = await guest.next(TraceFound)
         assert everything.run_id is None

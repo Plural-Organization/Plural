@@ -663,6 +663,13 @@ class SessionActor:
                 runs = await self._store.trace_runs()
                 chosen = None if everything else wanted or (runs[0].run_id if runs else None)
                 spans = await self._store.read_spans(chosen) if chosen or everything else []
+                if participant.role is not Role.HOST:
+                    # What a model was sent holds the host's system prompt and notes; a guest sees
+                    # the answers, the tool calls and the numbers.
+                    spans = [
+                        span.model_copy(update={"input": ""}) if span.kind is SpanKind.LLM else span
+                        for span in spans
+                    ]
                 self._publisher.deliver(
                     connection, TraceFound(run_id=chosen, spans=tuple(spans), runs=tuple(runs))
                 )
@@ -1326,6 +1333,9 @@ class SessionActor:
                         "run_id": run_id,
                         "model": models.get(span.model, span.model),
                         "actor_id": actor or span.actor_id,
+                        # What went in and out is stored as the room would see it: no secrets.
+                        "input": self._redactor.redact(span.input),
+                        "output": self._redactor.redact(span.output),
                     }
                 )
             )

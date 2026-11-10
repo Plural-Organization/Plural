@@ -361,6 +361,11 @@ class Span(Model):
     # A tool call: the size of its result.
     chars: int = 0
     error: str = ""
+    # What went in and what came out, clipped. A model call's are JSON: its request's system
+    # prompt and newest messages, and its answer's text and tool calls. A tool call's are its
+    # arguments as JSON and its result as text. A run's are the prompt and the last reply.
+    input: str = ""
+    output: str = ""
 
 
 class ContextView(Model):

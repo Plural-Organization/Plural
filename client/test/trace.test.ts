@@ -19,6 +19,8 @@ function span(id: string, parent: string | null, kind: Span["kind"], name: strin
     first_ms: null,
     chars: 0,
     error: "",
+    input: "",
+    output: "",
     ...more,
   };
 }

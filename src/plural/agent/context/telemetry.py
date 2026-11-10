@@ -19,9 +19,10 @@ from plural.agent.providers.base import (
     TextDelta,
     ThinkingDelta,
     ToolCallReady,
+    ToolCallRequest,
     UsageReport,
 )
-from plural.agent.tracing import Span
+from plural.agent.tracing import Span, answer_output, request_input
 from plural.protocol.models import SpanStatus, Usage
 
 log = structlog.get_logger(__name__)
@@ -76,11 +77,21 @@ async def observed(
     # The prompt of the call's last request: the context the conversation filled then.
     context = 0
     failure = ""
+    # What the model wrote and asked for, kept for the span.
+    text: list[str] = []
+    calls: list[ToolCallRequest] = []
     try:
         async for event in events:
             match event:
                 case TextDelta() | ThinkingDelta() | ToolCallReady() if first is None:
                     first = time.monotonic()
+                case _:
+                    pass
+            match event:
+                case TextDelta(text=chunk) if span is not None:
+                    text.append(chunk)
+                case ToolCallReady(call=call) if span is not None:
+                    calls.append(call)
                 case UsageReport(usage=delta, last=last):
                     usage = usage + delta
                     context = (last or delta).prompt_tokens or context
@@ -103,6 +114,8 @@ async def observed(
                 context_tokens=context,
                 first_ms=first_ms,
                 error=failure[:300],
+                input=request_input(request),
+                output=answer_output("".join(text), calls),
             )
         log.info(
             "llm.call",

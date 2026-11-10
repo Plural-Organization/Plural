@@ -1,4 +1,5 @@
 import asyncio
+import json
 from pathlib import Path
 
 from tests.doubles import FakeProvider, ScriptedProvider, reply, use_tool
@@ -6,7 +7,8 @@ from tests.harness.test_subagents import build, delegate
 from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.loop.gate import GateResult
-from plural.agent.providers.base import UsageReport
+from plural.agent.providers.base import LlmMessage, LlmRequest, UsageReport
+from plural.agent.tracing import request_input
 from plural.protocol.models import (
     Provenance,
     Span,
@@ -57,6 +59,14 @@ async def test_a_run_is_a_tree_of_its_model_and_tool_calls(tmp_path: Path) -> No
     assert first.model == "main"
     assert (tool.detail, tool.status) == ("a.txt", SpanStatus.OK)
     assert tool.chars > 0
+    # What went in and came out, as a trace tool shows it.
+    assert json.loads(tool.input) == {"path": "a.txt"}
+    assert "alpha" in tool.output
+    sent = json.loads(first.input)
+    assert sent["messages"][-1] == {"role": "user", "content": "[Host]\nread  the\nfile"}
+    assert "read" in sent["tools"]
+    assert json.loads(first.output)["tool_calls"] == [{"name": "read", "args": {"path": "a.txt"}}]
+    assert (run.input, run.output) == ("read  the\nfile", "done")
     assert all(span.ended_ms is not None and span.ended_ms >= span.started_ms for span in spans)
     # A span the host already took is not handed out again until it changes.
     assert loop.tracer.take() == ()
@@ -104,3 +114,17 @@ async def test_the_wait_for_approval_is_a_span_of_its_own(tmp_path: Path) -> Non
     assert approval.ended_ms is not None
     assert approval.ended_ms - approval.started_ms >= 40
     assert tool.started_ms <= approval.started_ms
+
+
+def test_a_long_input_keeps_its_newest_messages_and_says_how_many_it_left_out() -> None:
+    big = "x" * 9000
+    request = LlmRequest(
+        system="s" * 20_000,
+        messages=tuple(LlmMessage(role="user", content=f"{index} {big}") for index in range(10)),
+    )
+    sent = json.loads(request_input(request))
+    assert len(sent["system"]) < 7000
+    assert "characters left out" in sent["system"]
+    assert sent["messages"][-1]["content"].startswith("9 ")
+    assert sent["omitted"] == 10 - len(sent["messages"])
+    assert 0 < sent["omitted"] < 10

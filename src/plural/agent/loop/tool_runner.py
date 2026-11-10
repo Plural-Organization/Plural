@@ -16,7 +16,7 @@ from plural.agent.providers.base import ToolCallRequest
 from plural.agent.sandbox.base import SandboxError, Workspace
 from plural.agent.tools.base import PreparedCall, ToolCtx, ToolError, ToolResult
 from plural.agent.tools.registry import ToolRegistry, UnknownTool
-from plural.agent.tracing import Span
+from plural.agent.tracing import OUTPUT_CHARS, Span, args_input, clip
 from plural.core.provenance import is_guest_originated
 from plural.protocol.models import Provenance, SpanKind, SpanStatus, ToolCallView, ToolRisk
 from plural.security.secrets import is_denied_path
@@ -111,7 +111,12 @@ class ToolRunner:
         )
         yield ToolStart(view)
         span = (
-            self.span.child(SpanKind.TOOL, prepared.name, detail=prepared.subject[:200])
+            self.span.child(
+                SpanKind.TOOL,
+                prepared.name,
+                detail=prepared.subject[:200],
+                input=args_input(call.args),
+            )
             if self.span
             else None
         )
@@ -185,6 +190,7 @@ class ToolRunner:
                 status,
                 chars=len(result.content),
                 error=result.content[:300] if result.is_error else "",
+                output=clip(result.content, OUTPUT_CHARS),
             )
         log.info(
             "tool.call",

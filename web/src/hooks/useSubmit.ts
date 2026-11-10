@@ -167,6 +167,11 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
         notify("accent", lines.length > 0 ? ["usage", ...lines].join("\n") : "nothing spent yet in this session");
         return;
       }
+      if (parsed.type === "trace.get") {
+        // /trace opens the panel on the latest run; /trace all on the whole session.
+        session.openTrace(parsed.everything ? "session" : "run");
+        return;
+      }
       if (parsed.type === "show.context") {
         notify("accent", contextText(state.context));
         return;
