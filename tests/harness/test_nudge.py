@@ -37,6 +37,22 @@ async def test_a_run_that_stops_at_a_promise_is_reminded_and_goes_on(tmp_path: P
     assert len(provider.requests) == 3
 
 
+async def test_reminders_start_over_after_a_turn_with_tool_calls(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("alpha\n")
+    provider = FakeProvider(
+        [
+            reply("I'll look."),
+            reply("I'll look."),
+            use_tool("read", "c1", path="a.txt"),
+            reply("I'll read it again."),
+            reply("a.txt says alpha."),
+        ]
+    )
+    loop = make_loop(tmp_path, provider, StubGate())
+    await collect(loop, turn("go"))
+    assert len(provider.requests) == 5
+
+
 async def test_reminders_stop_after_two(tmp_path: Path) -> None:
     provider = FakeProvider([reply("I'll look."), reply("I'll look."), reply("I'll look.")])
     loop = make_loop(tmp_path, provider, StubGate())

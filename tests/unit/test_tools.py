@@ -190,3 +190,15 @@ async def test_reading_past_the_end_says_how_long_the_file_is(ctx: ToolCtx) -> N
     )
     whole = await run(ctx, "read", path="short.txt")
     assert "[lines" not in whole
+
+
+async def test_a_leading_double_star_also_matches_the_root(ctx: ToolCtx) -> None:
+    (ctx.workspace.root / "top.py").write_text("")
+    (ctx.workspace.root / "pkg").mkdir()
+    (ctx.workspace.root / "pkg" / "deep.py").write_text("")
+    everything = await run(ctx, "glob", pattern="**/*")
+    assert "top.py" in everything
+    assert "pkg/deep.py" in everything
+    python = await run(ctx, "glob", pattern="**/*.py")
+    assert set(python.split()) >= {"top.py", "pkg/deep.py"}
+    assert set((await run(ctx, "glob", pattern="pkg/*.py")).split()) == {"pkg/deep.py"}

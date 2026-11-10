@@ -87,12 +87,13 @@ from plural.protocol.models import (
 log = structlog.get_logger(__name__)
 
 
-# How often a run reminds the model that it stopped at a promise.
+# How often in a row a run reminds the model that it stopped at a promise; a turn with tool
+# calls starts the count again, so a model that keeps going is never cut off by an old count.
 MAX_NUDGES = 2
 NUDGE = (
-    "You said what you will do but called no tool, so nothing ran and your turn ended there. "
-    "Call the tools now in this answer. If the work is already done, give your final answer "
-    "instead."
+    "Your last answer had no tool calls, so nothing ran: saying a call was made does not make "
+    "it. Put each call you need in tool_calls now, with its name and args. If the work is "
+    "already done, give your final answer with no tool calls."
 )
 # A short reply that ends on what the model is about to do: "I'll read pages.py next."
 _PROMISE = re.compile(
@@ -475,6 +476,8 @@ class AgentLoop:
                     yield ToolsLoaded(fresh)
                 # Tools that all ask to terminate hand the turn back without another model call.
                 has_tool_calls = bool(ended) and not all(result.terminate for result in ended)
+                if has_tool_calls:
+                    nudges = 0
                 if (has_tool_calls or self._steer or self._follow_up) and (
                     limit := self._gate.turn_limit(usage=self._usage, provenance=provenance)
                 ):
