@@ -3,7 +3,10 @@
 import asyncio
 import json
 import os
-from collections.abc import AsyncIterator
+from collections import OrderedDict
+from collections.abc import AsyncIterator, Sequence
+from dataclasses import dataclass, field
+from hashlib import sha256
 from pathlib import Path
 from typing import Any, cast
 from uuid import uuid4
@@ -12,6 +15,7 @@ from pydantic import JsonValue
 
 from plural.agent.providers.base import (
     LlmEvent,
+    LlmMessage,
     LlmRequest,
     ProviderActivity,
     ProviderError,
@@ -21,7 +25,7 @@ from plural.agent.providers.base import (
     ToolCallRequest,
     UsageReport,
 )
-from plural.agent.providers.cli.answer import TextFieldStream
+from plural.agent.providers.cli.answer import TextFieldStream, tool_call
 from plural.agent.providers.cli.base import CliProvider
 from plural.protocol.models import Usage
 
@@ -65,21 +69,27 @@ INSTRUCTIONS = (
 ANSWER_TOOL = "StructuredOutput"
 
 
-def _input(request: LlmRequest) -> bytes:
+def _input(
+    request: LlmRequest, messages: Sequence[LlmMessage] | None = None, shown: int = 0
+) -> bytes:
     """One stream-json user message: the instructions, the tools, then each message in turn.
 
-    Every `claude -p` call starts fresh, so the whole conversation goes along each time. Each
-    message is a block of its own after the tools, so a call repeats the blocks of the one before
-    it from the start and the provider's prompt cache serves them instead of a full-price prompt.
-    An image follows the message it belongs to.
+    A session's first message carries the instructions, the tools and the whole conversation;
+    each later one only the messages that came after it, since Claude Code keeps the rest. Each
+    message is a block of its own, so a call repeats the blocks of the one before it from the start
+    and the provider's prompt cache serves them. An image follows the message it belongs to;
+    `shown` counts the images the session was already sent, so their labels go on.
     """
-    tools = [tool.model_dump(mode="json") for tool in request.tools]
-    content: list[dict[str, Any]] = [
-        {"type": "text", "text": INSTRUCTIONS},
-        {"type": "text", "text": json.dumps({"tools": tools}, ensure_ascii=False)},
-    ]
-    count = 0
-    for message in request.messages:
+    content: list[dict[str, Any]] = []
+    if messages is None:
+        tools = [tool.model_dump(mode="json") for tool in request.tools]
+        content = [
+            {"type": "text", "text": INSTRUCTIONS},
+            {"type": "text", "text": json.dumps({"tools": tools}, ensure_ascii=False)},
+        ]
+        messages = request.messages
+    count = shown
+    for message in messages:
         dumped = message.model_dump(mode="json", exclude_none=True, exclude={"images"})
         images: list[dict[str, Any]] = []
         for image in message.images:
@@ -179,6 +189,56 @@ def _window(result: dict[str, object]) -> int | None:
     return max(windows, default=None)
 
 
+class _Gone(Exception):
+    """The Claude Code process ended before it answered."""
+
+
+# How many conversations keep a Claude Code process of their own: the room's, and its sub-agents'.
+MAX_SESSIONS = 4
+
+
+@dataclass(slots=True)
+class _Session:
+    """A Claude Code process that keeps one conversation between calls.
+
+    Starting `claude -p` costs about a second and a half before the model is even asked, on every
+    call. A session pays that once: later calls send only the messages that came after the last
+    one, and Claude Code keeps the rest of the conversation itself.
+    """
+
+    process: asyncio.subprocess.Process
+    # The messages Claude Code holds, as the last request had them.
+    sent: tuple[LlmMessage, ...] = ()
+    images: int = 0
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    # The end of what Claude Code wrote to stderr, for an error message.
+    errors: bytearray = field(default_factory=bytearray)
+    reader: asyncio.Task[None] | None = None
+
+    @property
+    def alive(self) -> bool:
+        return self.process.returncode is None
+
+    async def close(self) -> None:
+        if self.process.returncode is None:
+            if self.process.stdin is not None:
+                self.process.stdin.close()
+            self.process.kill()
+            await self.process.wait()
+        if self.reader is not None:
+            self.reader.cancel()
+            await asyncio.gather(self.reader, return_exceptions=True)
+
+
+def _key(request: LlmRequest) -> str:
+    """A conversation's identity: its system prompt, its tools and its first message. Requests
+    with the same key continue one another; a compaction, a sub-agent or a side question has a
+    key of its own."""
+    first = request.messages[0].model_dump_json(exclude={"images"}) if request.messages else ""
+    tools = json.dumps([tool.model_dump(mode="json") for tool in request.tools])
+    return sha256(f"{request.system}\0{tools}\0{first}".encode()).hexdigest()
+
+
 class ClaudeCodeProvider(CliProvider):
     adapter = "claude_code"
     label = "Claude Code"
@@ -206,14 +266,13 @@ class ClaudeCodeProvider(CliProvider):
     def __init__(self, *, model: str = "", workspace: Path, cli: str | None = None) -> None:
         super().__init__(model=model, workspace=workspace, cli=cli)
         self._window: int | None = None
+        self._sessions: OrderedDict[str, _Session] = OrderedDict()
 
-    async def context_window(self) -> int | None:
-        """The window Claude Code reported with its last answer."""
-        return self._window
+    async def close(self) -> None:
+        sessions, self._sessions = list(self._sessions.values()), OrderedDict()
+        await asyncio.gather(*(session.close() for session in sessions), return_exceptions=True)
 
-    async def stream(
-        self, request: LlmRequest, *, cancel: asyncio.Event
-    ) -> AsyncIterator[LlmEvent]:
+    async def _start(self, request: LlmRequest) -> _Session:
         command = [
             self._cli,
             "-p",
@@ -253,13 +312,96 @@ class ClaudeCodeProvider(CliProvider):
             )
         except OSError as error:
             raise ProviderError(f"Could not start Claude Code: {error}") from error
+        session = _Session(process)
+        session.reader = asyncio.create_task(_drain(process, session.errors))
+        return session
+
+    async def _session(self, request: LlmRequest) -> tuple[_Session, bytes]:
+        """The process for this request's conversation and what to send it: only the new
+        messages when it already holds the ones before, or everything to a new process."""
+        key = _key(request)
+        session = self._sessions.get(key)
+        if session is not None:
+            self._sessions.move_to_end(key)
+            held = len(session.sent)
+            fresh = request.messages[held:]
+            if (
+                session.alive
+                and request.messages[:held] == session.sent
+                and any(message.role != "assistant" for message in fresh)
+            ):
+                # The model's own answers are in Claude Code's history already.
+                new = [message for message in fresh if message.role != "assistant"]
+                return session, _input(request, new, session.images)
+            del self._sessions[key]
+            await session.close()
+        session = await self._start(request)
+        self._sessions[key] = session
+        while len(self._sessions) > MAX_SESSIONS:
+            _, oldest = self._sessions.popitem(last=False)
+            await oldest.close()
+        return session, _input(request)
+
+    async def _forget(self, session: _Session) -> None:
+        for key, held in list(self._sessions.items()):
+            if held is session:
+                del self._sessions[key]
+        await session.close()
+
+    async def context_window(self) -> int | None:
+        """The window Claude Code reported with its last answer."""
+        return self._window
+
+    async def stream(
+        self, request: LlmRequest, *, cancel: asyncio.Event
+    ) -> AsyncIterator[LlmEvent]:
+        session, payload = await self._session(request)
+        reused = bool(session.sent)
+        async with session.lock:
+            finished = False
+            said = False
+            try:
+                async for event in self._turn(request, session, payload, cancel):
+                    said = True
+                    yield event
+                finished = True
+            except _Gone:
+                if not reused or said:
+                    raise ProviderError(
+                        f"Claude Code stopped: {_tail(session) or 'check claude auth login'}"
+                    ) from None
+            finally:
+                if not finished or cancel.is_set():
+                    # A turn cut short leaves the process mid-answer: it starts over next time.
+                    await self._forget(session)
+        if not finished and not cancel.is_set():
+            # The process it kept had ended in the meantime: one fresh start with everything.
+            fresh, payload = await self._session(request)
+            async with fresh.lock:
+                finished = False
+                try:
+                    async for event in self._turn(request, fresh, payload, cancel):
+                        yield event
+                    finished = True
+                except _Gone:
+                    raise ProviderError(
+                        f"Claude Code stopped: {_tail(fresh) or 'check claude auth login'}"
+                    ) from None
+                finally:
+                    if not finished or cancel.is_set():
+                        await self._forget(fresh)
+
+    async def _turn(
+        self, request: LlmRequest, session: _Session, payload: bytes, cancel: asyncio.Event
+    ) -> AsyncIterator[LlmEvent]:
+        process = session.process
         assert process.stdin is not None
         assert process.stdout is not None
-        assert process.stderr is not None
-        process.stdin.write(_input(request))
-        await process.stdin.drain()
-        process.stdin.close()
-        stderr_reader = asyncio.create_task(process.stderr.read())
+        try:
+            process.stdin.write(payload)
+            await process.stdin.drain()
+        except (BrokenPipeError, ConnectionResetError) as error:
+            raise _Gone from error
         stopping = asyncio.create_task(cancel.wait())
         text_stream = TextFieldStream()
         streamed_plain_text = ""
@@ -293,8 +435,9 @@ class ClaudeCodeProvider(CliProvider):
                     continue
                 event = cast("dict[str, object]", decoded)
                 if event.get("type") == "result":
+                    # The turn is over; the process waits for the next one.
                     result = event
-                    continue
+                    break
                 message = event.get("message")
                 if event.get("type") == "assistant" and isinstance(message, dict):
                     message_data = cast("dict[str, object]", message)
@@ -305,7 +448,7 @@ class ClaudeCodeProvider(CliProvider):
                     if calls:
                         # Claude Code would go on to answer that it has no such tool.
                         native = (text, calls)
-                        process.kill()
+                        await self._forget(session)
                         break
                 if event.get("type") != "stream_event":
                     yield ProviderActivity(source=str(event.get("type") or "event"))
@@ -345,13 +488,9 @@ class ClaudeCodeProvider(CliProvider):
                             yield ProviderActivity(source="input_json_delta")
                     case other:
                         yield ProviderActivity(source=str(other or "delta"))
-            await process.wait()
         finally:
             stopping.cancel()
-            if process.returncode is None:
-                process.kill()
-                await process.wait()
-            await asyncio.gather(stderr_reader, stopping, return_exceptions=True)
+            await asyncio.gather(stopping, return_exceptions=True)
         if cancel.is_set():
             return
         if native is not None:
@@ -365,22 +504,17 @@ class ClaudeCodeProvider(CliProvider):
                 yield UsageReport(usage=sum(spent[1:], spent[0]), last=spent[-1])
             yield Stop(reason="tool_use")
             return
-        stderr = stderr_reader.result()
         if result is None:
-            detail = stderr.decode(errors="replace").strip()[:300]
-            raise ProviderError(
-                f"Claude Code did not return a result: {detail or 'check claude auth login'}"
-            )
-        if process.returncode != 0 or result.get("is_error") is True:
+            # The process ended: before saying anything it is worth one fresh start.
+            raise _Gone
+        if result.get("is_error") is True:
+            await self._forget(session)
             result_detail = result.get("result")
-            detail = (
-                result_detail
-                if isinstance(result_detail, str)
-                else stderr.decode(errors="replace").strip()
-            )[:300]
+            detail = (result_detail if isinstance(result_detail, str) else _tail(session))[:300]
             raise ProviderError(f"Claude Code: {detail or 'run claude auth login'}")
         decoded_answer = result.get("structured_output")
         if not isinstance(decoded_answer, dict):
+            await self._forget(session)
             raise ProviderError(
                 f"Claude Code: {str(result.get('result') or 'no structured answer')[:300]}"
             )
@@ -398,19 +532,11 @@ class ClaudeCodeProvider(CliProvider):
         if remaining_text:
             yield TextDelta(text=remaining_text)
         for raw_call in cast("list[object]", calls):
-            if not isinstance(raw_call, dict):
-                raise ProviderError("Claude Code returned an invalid tool call")
-            call = cast("dict[str, object]", raw_call)
-            name = call.get("name")
-            args = call.get("args")
-            if not isinstance(name, str) or not isinstance(args, dict):
-                raise ProviderError("Claude Code returned an invalid tool call")
-            tool_args = cast("dict[str, JsonValue]", args)
-            if name not in {tool.name for tool in request.tools}:
-                raise ProviderError(f"Claude Code requested an unavailable tool: {name}")
-            yield ToolCallReady(
-                call=ToolCallRequest(id=f"toolu_{uuid4().hex}", name=name, args=tool_args)
-            )
+            # A tool Plural lacks or bad arguments come back to the model as the call's error.
+            yield ToolCallReady(call=tool_call(raw_call))
+        fresh = request.messages[len(session.sent) :]
+        session.images += sum(len(message.images) for message in fresh)
+        session.sent = request.messages
         self._window = _window(result) or self._window
         # A result sums every request Claude Code made for this answer; the last one holds the
         # conversation as it now stands.
@@ -418,3 +544,15 @@ class ClaudeCodeProvider(CliProvider):
         if usage is not None:
             yield UsageReport(usage=usage, last=_last_usage(result.get("usage")))
         yield Stop(reason="tool_use" if calls else "end_turn")
+
+
+async def _drain(process: asyncio.subprocess.Process, kept: bytearray) -> None:
+    """Read stderr as it comes, keeping its end: a full pipe would stall the process."""
+    assert process.stderr is not None
+    while chunk := await process.stderr.read(4096):
+        kept.extend(chunk)
+        del kept[:-4000]
+
+
+def _tail(session: _Session) -> str:
+    return session.errors.decode(errors="replace").strip()[-300:]
