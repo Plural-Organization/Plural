@@ -76,6 +76,10 @@ A public relay sees scanners and stray scripts. `plural-host relay --clients-onl
 
 This is a filter, not authentication: anyone can send the header, so the limits above still apply.
 
+### Hosts with an account
+
+`plural-host relay --accounts-url https://accounts.example.com` (or `PLURAL_RELAY_ACCOUNTS_URL`) makes the relay read the certificate a host sends when it opens a room, check it against the accounts service's public key, and log one line, `relay.entitlement`, with the outcome: `valid`, `none` (no certificate), `expired`, `forged`, `malformed`, `other_key` (a genuine certificate for another host key) or `unverified` (the key had not arrived yet). `/metrics` adds the counts since the relay started. The relay refuses no one for any of these and never calls the service while a host is opening a room: it reads the key in the background and again every hour. Without the option nothing changes. See ADR 0013.
+
 ### Teams
 
 A relay can also keep a team directory: who is in which team and the invite codes. Start it with a file for the data:
