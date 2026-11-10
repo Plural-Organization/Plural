@@ -1,14 +1,13 @@
-import { Alert, Button, Card, Chip, Description, Disclosure, Input, Label, Spinner, TextField } from "@heroui/react";
+import { Alert, Button, Card, Chip, Description, Disclosure, Input, Label, Spinner, Tabs, TextField } from "@heroui/react";
 import { ArrowLeft, Folder, FolderOpen } from "@phosphor-icons/react";
-import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { parseLink, type JoinLink } from "@plural/client";
 import { useAgentSetup } from "../hooks/useAgentSetup";
 import { useDaemon } from "../hooks/useDaemon";
 import type { Account } from "../lib/accounts";
 import { saveAgent } from "../lib/agent";
+import { daemonPrompt, manualSteps } from "../lib/agentPrompt";
 import { DaemonError, daemonMessage, type PickedFolder, pickFolder, relayProblem, roomDefaults, startRoom } from "../lib/daemon";
-import { INSTALL } from "../lib/install";
 import { AgentCard } from "./AgentCard";
 import { CopyBox } from "./CopyBox";
 
@@ -18,50 +17,37 @@ interface StartRoomProps {
   onOpen: (link: JoinLink, name: string) => void;
 }
 
-function Step({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <Card variant="secondary">
-      <Card.Header>
-        <Card.Title className="text-[15px]">{title}</Card.Title>
-      </Card.Header>
-      <Card.Content className="gap-2.5">{children}</Card.Content>
-    </Card>
-  );
-}
-
-// Shown while no Plural answers on this computer: what to run, and that the page notices on its own.
-function Steps({ unlinked }: { unlinked: boolean }) {
+// Shown while no Plural answers on this computer. The agent does everything, or the person runs three
+// commands; either way the page notices the daemon on its own.
+function Setup({ unlinked }: { unlinked: boolean }) {
   return (
     <div className="flex flex-col gap-3">
-      <Alert status="warning">
-        <Alert.Indicator />
-        <Alert.Content>
-          <Alert.Title>{unlinked ? "Plural is running, but not signed in" : "Plural is not running on this computer"}</Alert.Title>
-          <Alert.Description>
-            {unlinked ? "Link it to your account and this page picks it up on its own." : "Start it once and this page picks it up on its own."}
-          </Alert.Description>
-        </Alert.Content>
-      </Alert>
-      {unlinked ? null : (
-        <Step title="1. Install Plural">
-          <CopyBox text={INSTALL} label="Copy the install command" />
-        </Step>
-      )}
-      <Step title={`${unlinked ? "1" : "2"}. Sign in from the terminal`}>
-        <CopyBox text="plural login" label="Copy the login command" />
-        <Description>It opens your browser to approve this computer.</Description>
-      </Step>
-      {unlinked ? null : (
-        <Step title="3. Let this page start rooms">
-          <CopyBox text="plural daemon" label="Copy the daemon command" />
-          <Description>
-            Your browser will ask to access your local network. Choose <strong className="font-medium text-foreground">Allow</strong>: that is how this page talks to Plural on your own computer, and to nothing else.
-          </Description>
-        </Step>
-      )}
+      <p className="text-[15px] font-medium">{unlinked ? "Plural is running, but not signed in." : "Plural is not running on this computer yet."}</p>
+      <Tabs defaultSelectedKey="agent">
+        <Tabs.ListContainer>
+          <Tabs.List aria-label="How to set Plural up">
+            <Tabs.Tab id="agent">
+              Let my agent do it
+              <Tabs.Indicator />
+            </Tabs.Tab>
+            <Tabs.Tab id="self">
+              I&apos;ll do it myself
+              <Tabs.Indicator />
+            </Tabs.Tab>
+          </Tabs.List>
+        </Tabs.ListContainer>
+        <Tabs.Panel id="agent" className="flex flex-col gap-2.5 px-0! pb-0! pt-3">
+          <CopyBox text={daemonPrompt()} label="Copy the prompt" multiline />
+          <Description>Paste it into Claude Code, Codex, Cursor or another agent that can run commands. It installs Plural, starts it, and tells you the two things only you can do.</Description>
+        </Tabs.Panel>
+        <Tabs.Panel id="self" className="flex flex-col gap-2.5 px-0! pb-0! pt-3">
+          <CopyBox text={unlinked ? "plural login" : manualSteps()} label="Copy the commands" multiline />
+          <Description>Run these in a terminal (macOS and Linux). The second opens your browser to approve this computer; when your browser asks to access the local network, choose Allow.</Description>
+        </Tabs.Panel>
+      </Tabs>
       <p className="flex items-center gap-2 text-sm text-muted">
         <Spinner size="sm" color="current" />
-        Looking for Plural on this computer…
+        Waiting for Plural on this computer…
       </p>
     </div>
   );
@@ -134,7 +120,7 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
       <div>
         <h2 className="text-2xl font-medium tracking-[-0.02em]">Start a room</h2>
         <p className="mt-1.5 text-[15px] leading-relaxed text-muted text-pretty">
-          A room runs on your computer, with your agent and your key, in a folder you choose. Only people you let in can join.
+          A room runs on your computer, with your agent, in a folder you choose.
         </p>
       </div>
 
@@ -199,7 +185,7 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
           Looking for Plural on this computer…
         </p>
       ) : (
-        <Steps unlinked={phase === "unlinked"} />
+        <Setup unlinked={phase === "unlinked"} />
       )}
     </div>
   );

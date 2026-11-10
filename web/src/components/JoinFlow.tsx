@@ -1,6 +1,6 @@
 import { Button, Chip, Description, FieldError, Input, Label, Separator, TextField } from "@heroui/react";
 import { ArrowLeft, Copy, GithubLogo, GoogleLogo } from "@phosphor-icons/react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { parseLink, parseTeamInvite, type JoinLink, type TeamInvite } from "@plural/client";
 import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
@@ -57,9 +57,11 @@ interface JoinFlowProps {
   account: AccountState;
   onJoin: (link: JoinLink, name: string) => void;
   onTeamJoined: () => void;
+  // Told when the person opens or closes Start a room, so the page around can make room for it.
+  onStarting?: (starting: boolean) => void;
 }
 
-export function JoinFlow({ team, account, onJoin, onTeamJoined }: JoinFlowProps) {
+export function JoinFlow({ team, account, onJoin, onTeamJoined, onStarting }: JoinFlowProps) {
   const [raw, setRaw] = useState(sharedOnLoad);
   const [target, setTarget] = useState<Target | null>(() => {
     const shared = sharedOnLoad();
@@ -70,6 +72,7 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined }: JoinFlowProps)
     return "target" in read ? read.target : null;
   });
   const [starting, setStarting] = useState(false);
+  useEffect(() => onStarting?.(starting), [starting, onStarting]);
   const [problem, setProblem] = useState<string | null>(null);
   const [name, setName] = useState(savedName);
   const [busy, setBusy] = useState(false);
