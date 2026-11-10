@@ -1,12 +1,9 @@
 import asyncio
-import json
-import time
 from collections import deque
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field, replace
 
 import structlog
-from pydantic import ValidationError
 
 from plural.agent.context.briefing import BRIEFING_TAG
 from plural.agent.context.compaction import (
@@ -16,6 +13,7 @@ from plural.agent.context.compaction import (
     with_files,
 )
 from plural.agent.context.context import ContextBuilder, system_text
+from plural.agent.context.meter import Sections, context_parts, estimate_tokens, signature
 from plural.agent.context.telemetry import RequestDump, hit_rate, observed
 from plural.agent.loop.events import (
     AgentEvent,
@@ -29,12 +27,9 @@ from plural.agent.loop.events import (
     RunEnd,
     Spend,
     ToolEnd,
-    ToolOutput,
     ToolsLoaded,
-    ToolStart,
 )
-from plural.agent.loop.gate import GateResult, PolicyGate
-from plural.agent.loop.interrupt import Interrupted, TimedOut, interruptible
+from plural.agent.loop.gate import PolicyGate
 from plural.agent.loop.messages import (
     PLUGIN_SOURCE,
     AssistantTurn,
@@ -47,6 +42,7 @@ from plural.agent.loop.messages import (
     settled,
     to_llm,
 )
+from plural.agent.loop.tool_runner import ToolRunner
 from plural.agent.prompts import prompt
 from plural.agent.providers.base import (
     ContextOverflow,
@@ -68,23 +64,18 @@ from plural.agent.providers.base import (
     UsageReport,
 )
 from plural.agent.providers.resilient import ResilientProvider
-from plural.agent.sandbox.base import SandboxError, Workspace
-from plural.agent.tools.base import PreparedCall, ToolCtx, ToolError, ToolResult
-from plural.agent.tools.registry import ToolRegistry, UnknownTool
+from plural.agent.tools.base import ToolCtx, ToolResult
+from plural.agent.tools.registry import ToolRegistry
 from plural.core.ports import IdGenerator
-from plural.core.provenance import is_guest_originated, merge
+from plural.core.provenance import merge
 from plural.protocol.models import (
     ContextPart,
-    ContextPartKind,
     Origin,
     Provenance,
     Role,
     RunEndReason,
-    ToolCallView,
-    ToolRisk,
     Usage,
 )
-from plural.security.secrets import is_denied_path
 
 log = structlog.get_logger(__name__)
 
@@ -139,7 +130,6 @@ class _Turn:
         )
 
 
-Sections = tuple[tuple[ContextPartKind, str], ...]
 # The window assumed for a provider that does not say what its model takes.
 FALLBACK_WINDOW = 128_000
 
@@ -185,6 +175,11 @@ class AgentLoop:
         self._compaction_failed = False
         self._verify_compaction = False
         self._provider_close_tasks: set[asyncio.Task[None]] = set()
+        self._runner = ToolRunner(
+            tools=tools, gate=gate, tool_ctx=tool_ctx, timeout_s=self._limits.tool_timeout_s
+        )
+        # The registry's revision the run's tool list was taken at.
+        self._revision = tools.revision
 
     def spend(self, role: str, who: str, usage: Usage, *, uses: int = 0) -> None:
         key = (role, who)
@@ -345,6 +340,7 @@ class AgentLoop:
         return pending
 
     async def run(self, prompt: UserTurn, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
+        """One run: model turns and their tool calls, until the model stops or a limit ends it."""
         provenance = merge(prompt.provenance, SHARED) if self._shared else prompt.provenance
         self._conversation.extend(self._notes)
         self._notes.clear()
@@ -353,7 +349,7 @@ class AgentLoop:
         self.spend("main", "", Usage(), uses=1)
         self._gate.begin_run()
         self._prompt = (self._context.sections(), self._tools.schemas())
-        revision = self._tools.revision
+        self._revision = self._tools.revision
         self._compaction_failed = False
         self._verify_compaction = False
         recovering = False
@@ -361,47 +357,16 @@ class AgentLoop:
         try:
             for _ in range(self._limits.max_turns):
                 if self._should_compact():
-                    reason = "requested" if self._compact_requested else "threshold"
-                    yield Compacting(self._tokens())
-                    try:
-                        yield await self._compact(prompt, cancel, reason)
-                        yield self.fill()
-                    except CompactionFailed as error:
-                        self._compaction_failed = True
-                        log.warning("agent.compaction_failed", error=str(error))
+                    async for event in self._compact_when_due(prompt, cancel):
+                        yield event
                     if cancel.is_set():
                         yield RunEnd(RunEndReason.ABORTED, self._usage)
                         return
                 turn = _Turn(self._ids.new("m_"))
                 yield MessageStart(turn.message_id)
-                measured = len(self._conversation)
                 try:
-                    async for event in self._events(self._request(), cancel):
-                        match event:
-                            case TextDelta(text=text):
-                                turn.text.append(text)
-                                yield MessageDelta(turn.message_id, text, thinking=False)
-                            case ThinkingDelta(text=text):
-                                turn.thinking.append(text)
-                                yield MessageDelta(turn.message_id, text, thinking=True)
-                            case ProviderActivity():
-                                pass
-                            case ToolCallReady(call=call):
-                                turn.calls.append(call)
-                            case NativeReady(content=content):
-                                turn.native = content
-                            case UsageReport(usage=delta, last=last):
-                                self._usage = self._usage + delta
-                                self.spend("main", "", delta)
-                                current = last or delta
-                                if current.prompt_tokens:
-                                    self._context_tokens = current.prompt_tokens
-                                    self._measured = measured
-                                    self._hit = hit_rate(current)
-                                    self._check_compaction_helped()
-                                yield self.fill()
-                            case Stop(reason=reason):
-                                turn.stop = reason
+                    async for event in self._model_turn(turn, cancel):
+                        yield event
                 except ContextOverflow as error:
                     yield MessageEnd(turn.message_id, "", "")
                     if recovering:
@@ -434,7 +399,7 @@ class AgentLoop:
                     return
                 if turn.stop in _UNFINISHED:
                     for call in assistant.tool_calls:
-                        start, end = self._skip(call, _UNFINISHED[turn.stop])
+                        start, end = self._runner.skip(call, _UNFINISHED[turn.stop])
                         self._answer(call, end.result)
                         yield start
                         yield end
@@ -446,29 +411,16 @@ class AgentLoop:
                         return
                     continue
                 ended: list[ToolResult] = []
-                for group in self._groups(assistant.tool_calls):
-                    for call in group:
-                        recent.append(_signature(call))
-                        if len(recent) == recent.maxlen and len(set(recent)) == 1:
-                            yield RunEnd(
-                                RunEndReason.LIMIT, self._usage, "repeated identical tool call"
-                            )
-                            return
-                    async for event in self._execute_group(group, provenance, cancel):
-                        if isinstance(event, ToolEnd):
-                            ended.append(event.result)
-                        yield event
-                    if cancel.is_set():
-                        yield RunEnd(RunEndReason.ABORTED, self._usage)
+                async for event in self._run_tools(
+                    assistant.tool_calls, provenance, cancel, recent
+                ):
+                    if isinstance(event, ToolEnd):
+                        ended.append(event.result)
+                    yield event
+                    if isinstance(event, RunEnd):
                         return
-                if self._tools.revision != revision:
-                    # Tools loaded this turn are declared from the next model call on.
-                    revision = self._tools.revision
-                    known = {schema.name for schema in self._prompt[1]}
-                    schemas = self._tools.schemas()
-                    self._prompt = (self._prompt[0], schemas)
-                    if fresh := tuple(s.name for s in schemas if s.name not in known):
-                        yield ToolsLoaded(fresh)
+                if fresh := self._declare_loaded_tools():
+                    yield ToolsLoaded(fresh)
                 # Tools that all ask to terminate hand the turn back without another model call.
                 has_tool_calls = bool(ended) and not all(result.terminate for result in ended)
                 if (has_tool_calls or self._steer or self._follow_up) and (
@@ -490,6 +442,90 @@ class AgentLoop:
             self._prompt = None
             self._settle()
 
+    async def _compact_when_due(
+        self, prompt: UserTurn, cancel: asyncio.Event
+    ) -> AsyncIterator[AgentEvent]:
+        """Summarize before the next model call; a failure is logged and the run goes on."""
+        reason = "requested" if self._compact_requested else "threshold"
+        yield Compacting(self._tokens())
+        try:
+            yield await self._compact(prompt, cancel, reason)
+            yield self.fill()
+        except CompactionFailed as error:
+            self._compaction_failed = True
+            log.warning("agent.compaction_failed", error=str(error))
+
+    async def _model_turn(self, turn: _Turn, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
+        """One model call: its text and thinking go out as deltas, the rest is kept in `turn`."""
+        measured = len(self._conversation)
+        async for event in self._events(self._request(), cancel):
+            match event:
+                case TextDelta(text=text):
+                    turn.text.append(text)
+                    yield MessageDelta(turn.message_id, text, thinking=False)
+                case ThinkingDelta(text=text):
+                    turn.thinking.append(text)
+                    yield MessageDelta(turn.message_id, text, thinking=True)
+                case ProviderActivity():
+                    pass
+                case ToolCallReady(call=call):
+                    turn.calls.append(call)
+                case NativeReady(content=content):
+                    turn.native = content
+                case UsageReport(usage=delta, last=last):
+                    self._usage = self._usage + delta
+                    self.spend("main", "", delta)
+                    current = last or delta
+                    if current.prompt_tokens:
+                        self._context_tokens = current.prompt_tokens
+                        self._measured = measured
+                        self._hit = hit_rate(current)
+                        self._check_compaction_helped()
+                    yield self.fill()
+                case Stop(reason=reason):
+                    turn.stop = reason
+
+    async def _run_tools(
+        self,
+        calls: Sequence[ToolCallRequest],
+        provenance: Provenance,
+        cancel: asyncio.Event,
+        recent: deque[str],
+    ) -> AsyncIterator[AgentEvent]:
+        """Run a turn's tool calls and record their results. A `RunEnd` is the last event when
+        the run must stop here: the same call repeated too often, or the run was cancelled."""
+        for group in self._runner.groups(calls):
+            for call in group:
+                recent.append(signature(call))
+                if len(recent) == recent.maxlen and len(set(recent)) == 1:
+                    yield RunEnd(RunEndReason.LIMIT, self._usage, "repeated identical tool call")
+                    return
+            results: dict[str, ToolResult] = {}
+            async for event in self._runner.run_group(group, provenance, cancel):
+                if isinstance(event, ToolEnd):
+                    results[event.call_id] = event.result
+                    if len(group) == 1:
+                        self._answer(group[0], event.result)
+                yield event
+            if len(group) > 1:
+                # Calls that ran side by side are answered in the order the model made them.
+                for call in group:
+                    if call.id in results:
+                        self._answer(call, results[call.id])
+            if cancel.is_set():
+                yield RunEnd(RunEndReason.ABORTED, self._usage)
+                return
+
+    def _declare_loaded_tools(self) -> tuple[str, ...]:
+        """Tools loaded this turn are declared from the next model call on; their names."""
+        if self._prompt is None or self._tools.revision == self._revision:
+            return ()
+        self._revision = self._tools.revision
+        known = {schema.name for schema in self._prompt[1]}
+        schemas = self._tools.schemas()
+        self._prompt = (self._prompt[0], schemas)
+        return tuple(schema.name for schema in schemas if schema.name not in known)
+
     def _threshold_of(self, window: int) -> int:
         # A window smaller than twice the reserve still gets half of itself for the conversation.
         return max(window - self._limits.compact_reserve, window // 2)
@@ -501,7 +537,7 @@ class AgentLoop:
     def _tokens(self) -> int:
         """The provider's last count of the prompt, plus an estimate of what came after it."""
         added = self._conversation[self._measured :]
-        return self._context_tokens + sum(_estimate_tokens(message) for message in added)
+        return self._context_tokens + sum(estimate_tokens(message) for message in added)
 
     async def _learn_window(self) -> None:
         if self._limits.context_window is not None:
@@ -608,7 +644,7 @@ class AgentLoop:
         ]
         size = 0
         for index in range(len(self._conversation) - 1, start, -1):
-            size += _estimate_tokens(self._conversation[index])
+            size += estimate_tokens(self._conversation[index])
             if size >= budget:
                 return next((point for point in points if point >= index), None)
         return None
@@ -751,22 +787,9 @@ class AgentLoop:
         return self._prompt or (self._context.sections(), self._tools.schemas())
 
     def _parts(self, tokens: int) -> tuple[ContextPart, ...]:
-        """What the prompt is spent on, estimated, then scaled to the provider's count of it."""
         sections, tools = self._prompt_parts()
-        sizes: dict[tuple[ContextPartKind, str | None], int] = {}
-        for kind, text in sections:
-            sizes[kind, None] = sizes.get((kind, None), 0) + len(text) // 4
-        sizes[ContextPartKind.TOOLS, None] = sum(len(t.model_dump_json()) for t in tools) // 4
-        for message in self._conversation:
-            key = _part_of(message)
-            sizes[key] = sizes.get(key, 0) + _estimate_tokens(message)
-        estimated = sum(sizes.values())
-        # Before the first call the provider has not counted the system prompt and tools.
-        scale = tokens / estimated if self._context_tokens and estimated else 1.0
-        return tuple(
-            ContextPart(kind=kind, name=name, tokens=round(size * scale))
-            for (kind, name), size in sizes.items()
-            if size
+        return context_parts(
+            sections, tools, self._conversation, tokens=tokens, counted=bool(self._context_tokens)
         )
 
     def _request(self) -> LlmRequest:
@@ -776,197 +799,6 @@ class AgentLoop:
             messages=to_llm(self._conversation),
             tools=tools,
         )
-
-    def _groups(self, calls: Sequence[ToolCallRequest]) -> list[list[ToolCallRequest]]:
-        groups: list[list[ToolCallRequest]] = []
-        for call in calls:
-            if groups and self._reads_only(call) and self._reads_only(groups[-1][0]):
-                groups[-1].append(call)
-            else:
-                groups.append([call])
-        return groups
-
-    def _reads_only(self, call: ToolCallRequest) -> bool:
-        if call.parse_error is not None:
-            return False
-        try:
-            return self._tools.prepare(call).risk is ToolRisk.READ
-        except (UnknownTool, ValidationError):
-            return False
-
-    async def _execute_group(
-        self, group: Sequence[ToolCallRequest], provenance: Provenance, cancel: asyncio.Event
-    ) -> AsyncIterator[AgentEvent]:
-        if len(group) == 1:
-            async for event in self._execute(group[0], provenance, cancel):
-                if isinstance(event, ToolEnd):
-                    self._answer(group[0], event.result)
-                yield event
-            return
-        ended: dict[str, ToolEnd] = {}
-        queue: asyncio.Queue[AgentEvent | None] = asyncio.Queue()
-
-        async def pump(call: ToolCallRequest) -> None:
-            try:
-                async for event in self._execute(call, provenance, cancel):
-                    queue.put_nowait(event)
-            finally:
-                queue.put_nowait(None)
-
-        tasks = [asyncio.create_task(pump(call)) for call in group]
-        try:
-            running = len(tasks)
-            while running:
-                event = await queue.get()
-                if event is None:
-                    running -= 1
-                    continue
-                if isinstance(event, ToolEnd):
-                    ended[event.call_id] = event
-                yield event
-        finally:
-            for task in tasks:
-                task.cancel()
-            outcomes = await asyncio.gather(*tasks, return_exceptions=True)
-        for outcome in outcomes:
-            if isinstance(outcome, Exception):
-                raise outcome
-        for call in group:
-            if (end := ended.get(call.id)) is not None:
-                self._answer(call, end.result)
-
-    async def _execute(
-        self, call: ToolCallRequest, provenance: Provenance, cancel: asyncio.Event
-    ) -> AsyncIterator[AgentEvent]:
-        if call.parse_error is not None:
-            for event in self._skip(call, f"Invalid tool call: {call.parse_error}"):
-                yield event
-            return
-        try:
-            prepared = self._tools.prepare(call)
-        except (UnknownTool, ValidationError) as error:
-            for event in self._skip(call, f"Invalid tool call: {error}"):
-                yield event
-            return
-        view = ToolCallView(
-            id=call.id,
-            name=prepared.name,
-            risk=prepared.risk,
-            subject=prepared.subject,
-            args=call.args,
-        )
-        yield ToolStart(view)
-        asked = time.monotonic()
-        ran: float | None = None
-        allowed = False
-        workspace = self._tool_ctx.workspace
-        try:
-            reached = await interruptible(
-                self._reach(prepared, view, provenance, workspace), cancel
-            )
-            verdict = (
-                reached
-                if isinstance(reached, GateResult)
-                else await interruptible(
-                    self._gate.check(view, subject=prepared.subject, provenance=provenance),
-                    cancel,
-                )
-            )
-            if not isinstance(reached, GateResult):
-                workspace = reached
-            allowed = verdict.allowed
-            if verdict.allowed:
-                ran = time.monotonic()
-                queue: asyncio.Queue[str] = asyncio.Queue()
-                runner = asyncio.create_task(
-                    self._invoke(
-                        prepared,
-                        cancel,
-                        replace(
-                            self._tool_ctx,
-                            workspace=workspace,
-                            emit=queue.put_nowait,
-                            provenance=provenance,
-                            cancel=cancel,
-                        ),
-                    )
-                )
-                try:
-                    while not runner.done() or not queue.empty():
-                        getter = asyncio.create_task(queue.get())
-                        await asyncio.wait({runner, getter}, return_when=asyncio.FIRST_COMPLETED)
-                        if getter.done():
-                            yield ToolOutput(call.id, getter.result())
-                        else:
-                            getter.cancel()
-                    result = runner.result()
-                finally:
-                    if not runner.done():
-                        runner.cancel()
-            else:
-                result = ToolResult(f"Denied: {verdict.reason}", is_error=True)
-        except Interrupted:
-            result = ToolResult(_ABORTED, is_error=True)
-        done = time.monotonic()
-        log.info(
-            "tool.call",
-            tool=prepared.name,
-            risk=prepared.risk.value,
-            allowed=allowed,
-            error=result.is_error,
-            chars=len(result.content),
-            truncated="[truncated " in result.content,
-            wait_ms=round(((ran or done) - asked) * 1000),
-            run_ms=round((done - ran) * 1000) if ran is not None else None,
-        )
-        yield ToolEnd(call.id, result)
-
-    async def _reach(
-        self,
-        prepared: PreparedCall,
-        view: ToolCallView,
-        provenance: Provenance,
-        workspace: Workspace,
-    ) -> Workspace | GateResult:
-        """The workspace this call runs in: the usual one, or one with the folder it asked for
-        opened. A call for a folder outside the workspace is the host's to allow before the call
-        itself is put to the usual approval. The host's own runs open their folders without a
-        question, a run with a guest's prompt in it asks; a protected folder is never opened."""
-        reach = prepared.reach
-        if reach is None:
-            return workspace
-        folder = workspace.outside(reach.path)
-        if folder is None:
-            return workspace
-        if is_denied_path(folder):
-            return GateResult(allowed=False, reason=f"{folder} is protected")
-        if not is_guest_originated(provenance):
-            return workspace.granting(folder, write=reach.write)
-        answer = await self._gate.ask_folder(
-            view, folder=folder, write=reach.write, provenance=provenance
-        )
-        if not answer.granted:
-            return GateResult(allowed=False, reason=answer.reason)
-        if reach.write and not answer.write:
-            return GateResult(
-                allowed=False,
-                reason=f"the host opened {folder} for reading only, not for changes",
-            )
-        return workspace.granting(folder, write=answer.write)
-
-    async def _invoke(
-        self, prepared: PreparedCall, cancel: asyncio.Event, ctx: ToolCtx
-    ) -> ToolResult:
-        try:
-            return await interruptible(prepared.execute(ctx), cancel, self._limits.tool_timeout_s)
-        except TimedOut:
-            return ToolResult("Tool timed out", is_error=True)
-        except (ToolError, SandboxError, OSError, UnicodeError) as error:
-            return ToolResult(f"{type(error).__name__}: {error}", is_error=True)
-
-    def _skip(self, call: ToolCallRequest, reason: str) -> tuple[ToolStart, ToolEnd]:
-        view = ToolCallView(id=call.id, name=call.name, risk=ToolRisk.EXEC, args=call.args)
-        return ToolStart(view), ToolEnd(call.id, ToolResult(reason, is_error=True))
 
     def _answer(self, call: ToolCallRequest, result: ToolResult) -> None:
         self._conversation.append(
@@ -1007,38 +839,7 @@ class AgentLoop:
                 return
 
 
-_ABORTED = "Not executed: run aborted"
-
-# What a 1568 px image costs on Anthropic, the largest the terminal client sends.
-IMAGE_TOKENS = 1600
-
 _UNFINISHED: dict[StopReason, str] = {
     "max_tokens": "Not executed: the response hit the output limit before the call was complete",
     "refusal": "Not executed: the model declined the request",
 }
-
-
-def _part_of(message: Message) -> tuple[ContextPartKind, str | None]:
-    match message:
-        case ToolResultTurn(name=name):
-            return ContextPartKind.TOOL_RESULTS, name
-        case SummaryTurn():
-            return ContextPartKind.SUMMARY, None
-        case NotesTurn():
-            return ContextPartKind.NOTES, None
-        case UserTurn() | AssistantTurn():
-            return ContextPartKind.MESSAGES, None
-
-
-def _estimate_tokens(message: Message) -> int:
-    match message:
-        case UserTurn(text=text, images=images):
-            return len(text) // 4 + IMAGE_TOKENS * len(images)
-        case ToolResultTurn(content=text) | SummaryTurn(text=text) | NotesTurn(text=text):
-            return len(text) // 4
-        case AssistantTurn(text=text, tool_calls=calls):
-            return (len(text) + sum(len(_signature(call)) for call in calls)) // 4
-
-
-def _signature(call: ToolCallRequest) -> str:
-    return f"{call.name}:{json.dumps(call.args, sort_keys=True)}"

@@ -4,7 +4,7 @@ from collections.abc import AsyncGenerator, AsyncIterator
 
 import structlog
 
-from plural.agent.loop.interrupt import Interrupted, TimedOut, interruptible
+from plural.agent.loop.interrupt import Interrupted, interruptible
 from plural.agent.providers.base import (
     LlmEvent,
     LLMProvider,
@@ -67,15 +67,23 @@ class ResilientProvider:
         limit = self._first_token_timeout_s
         event_count = 0
         last_event_kind: str | None = None
+        # One wait on the cancel event for the whole stream: a fast model sends hundreds of
+        # events a second, and a new task per event for it was most of this wrapper's cost.
+        stop = asyncio.create_task(cancel.wait())
         try:
             while True:
+                step = asyncio.ensure_future(anext(stream))
                 try:
-                    event = await interruptible(anext(stream), cancel, limit)
-                except StopAsyncIteration:
-                    return
-                except Interrupted:
-                    return
-                except TimedOut:
+                    await asyncio.wait(
+                        {step, stop}, timeout=limit, return_when=asyncio.FIRST_COMPLETED
+                    )
+                finally:
+                    if not step.done():
+                        step.cancel()
+                        await asyncio.gather(step, return_exceptions=True)
+                if step.cancelled():
+                    if stop.done():
+                        return
                     log.warning(
                         "agent.provider_timeout",
                         provider=type(self.inner).__name__,
@@ -84,6 +92,10 @@ class ResilientProvider:
                         last_event_kind=last_event_kind,
                     )
                     raise ProviderError(f"model produced no output for {limit:g}s") from None
+                try:
+                    event = step.result()
+                except StopAsyncIteration:
+                    return
                 event_count += 1
                 last_event_kind = event.kind
                 if isinstance(event, ProviderActivity):
@@ -92,5 +104,7 @@ class ResilientProvider:
                 limit = self._idle_timeout_s
                 yield event
         finally:
+            stop.cancel()
+            await asyncio.gather(stop, return_exceptions=True)
             if isinstance(stream, AsyncGenerator):
                 await stream.aclose()
