@@ -46,6 +46,7 @@ export type {
   SkillHit,
   Span,
   SpanKind,
+  TraceFound,
   SkillScope,
   SkillView,
   TextSelection,

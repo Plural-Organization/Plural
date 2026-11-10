@@ -12,6 +12,7 @@ import { Feed } from "../components/feed/Feed";
 import { Inbox } from "../components/inbox/Inbox";
 import { askItems, inboxItems } from "../components/inbox/items";
 import { InviteDialog } from "../components/InviteDialog";
+import { TraceView } from "../components/TraceView";
 import { Sidebar } from "../components/side/Sidebar";
 import { TopBar } from "../components/TopBar";
 import { useAttachments } from "../hooks/useAttachments";
@@ -412,6 +413,7 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
 
       <QuoteButton enabled={active && me !== undefined && me.role !== "viewer"} onQuote={(text) => setQuote((current) => ({ text, key: (current?.key ?? 0) + 1 }))} />
       {invite && active ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}
+      {session.trace && active ? <TraceView trace={session.trace} projection={projection} send={send} onClose={session.closeTrace} /> : null}
     </div>
   );
 }

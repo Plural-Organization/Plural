@@ -13,6 +13,7 @@ import {
   type Feed,
   type JoinLink,
   type PluginAsked,
+  type TraceFound,
   type Tone,
 } from "@plural/client";
 import { alertMention, alertNotice } from "../lib/alert";
@@ -37,6 +38,13 @@ export interface SessionView {
   pictures: Record<string, string>;
   // Questions plugin commands asked this person, oldest first.
   asks: PluginAsked[];
+  // The trace on screen, null while it is closed: one run's spans, and the whole session's.
+  trace: Trace | null;
+}
+
+export interface Trace {
+  run: TraceFound | null;
+  session: TraceFound | null;
 }
 
 export interface Session extends SessionView {
@@ -48,12 +56,13 @@ export interface Session extends SessionView {
   sendPresence: (command: Command) => boolean;
   notify: (tone: Tone, text: string) => void;
   clearInvite: () => void;
+  closeTrace: () => void;
   answer: (askId: string, value: string | null) => void;
   close: () => void;
 }
 
 export class SessionStore {
-  private view: SessionView = { projection: new Projection(), feed: emptyFeed(), connection: "connecting", invite: null, pictures: {}, asks: [] };
+  private view: SessionView = { projection: new Projection(), feed: emptyFeed(), connection: "connecting", invite: null, pictures: {}, asks: [], trace: null };
   private readonly asked = new Set<string>();
   private readonly listeners = new Set<() => void>();
   private client: SessionClient | null = null;
@@ -119,6 +128,12 @@ export class SessionStore {
           }
           if (event.type === "plugin.asked") {
             this.update({ asks: [...this.view.asks, event] });
+            continue;
+          }
+          if (event.type === "trace.found") {
+            // An answer opens the trace; a run's answer and the session's each keep their place.
+            const shown = this.view.trace ?? { run: null, session: null };
+            this.update({ trace: event.run_id === null ? { ...shown, session: event } : { ...shown, run: event } });
             continue;
           }
           if (event.type === "plugin.notified") {
@@ -225,6 +240,8 @@ export class SessionStore {
 
   readonly clearInvite = (): void => this.update({ invite: null });
 
+  readonly closeTrace = (): void => this.update({ trace: null });
+
   readonly answer = (askId: string, value: string | null): void => {
     this.update({ asks: this.view.asks.filter((ask) => ask.ask_id !== askId) });
     this.client?.send({ type: "plugin.answer", ask_id: askId, value }).catch(() => undefined);
@@ -256,7 +273,7 @@ export function useSession(link: JoinLink, name: string, onFatal: (reason: strin
   const [store] = useState(() => new SessionStore(link, name, onFatal, team));
   const view = useSyncExternalStore(store.subscribe, store.snapshot);
   useEffect(() => store.start(), [store]);
-  return { ...view, send: store.send, fetchPicture: store.fetchPicture, openPreview: store.openPreview, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, answer: store.answer, close: store.close };
+  return { ...view, send: store.send, fetchPicture: store.fetchPicture, openPreview: store.openPreview, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, closeTrace: store.closeTrace, answer: store.answer, close: store.close };
 }
 
 function messageOf(error: unknown): string {
