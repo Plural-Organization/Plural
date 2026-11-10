@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -26,7 +27,9 @@ def test_the_newest_session_is_brought_in_by_default(tmp_path: Path) -> None:
     folder.mkdir()
     keep(tmp_path / "home", folder, "aaaa1111", "first task")
     keep(tmp_path / "home", folder, "bbbb2222", "second task")
-    (tmp_path / "home/projects" / project_folder(folder.resolve()) / "aaaa1111.jsonl").touch()
+    project = tmp_path / "home/projects" / project_folder(folder.resolve())
+    os.utime(project / "bbbb2222.jsonl", (1_000, 1_000))
+    os.utime(project / "aaaa1111.jsonl", (2_000, 2_000))
     found = bring_in("claude", folder, home=tmp_path / "home")
     assert found.source == "Claude Code aaaa1111"
     assert found.as_of == 2
