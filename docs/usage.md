@@ -166,6 +166,8 @@ plural team status
 
 `create` prints a reusable invite code that does not expire; give it to teammates, who run `join` with the same relay. Without `--relay` both use the Plural relay. One key owns at most 3 teams on a relay: delete one with `plural team disband` to make another. After a successful `create` or `join`, Plural opens automatically (`create --json` and `--help` only print) and the side panel shows every session currently shared with the team; no separate room link is needed. Names are what teammates see and `@name` will use: 1 to 32 letters, digits, dots, dashes or underscores, and unique in the team. The relay must run with a team directory (see [running on a server](self-hosting.md#teams)).
 
+Inside Plural the team half of the side panel ends with **× leave team** (**× disband team** for the owner, who cannot only leave). It asks first, and the answer enter picks on its own is cancel. Leaving takes effect at once: the team's rows, the sessions you were watching and your share disappear, and the relay is told in the same step, with no separate program to start. If the relay does not answer, the team stays and the dialog says so; one that no longer knows you (the team was deleted, you were removed, the certificate ran out) leaves you out all the same.
+
 ### A team in the browser
 
 The web client joins a team too: paste the `plural team join …` command into *or join a team* on its first page, or open the invite link the owner made there (*invite to the team* in the side panel). The browser keeps a key of its own, so it is a member of its own with its own name, separate from your terminal. It lists the team's shared sessions, a click opens one as a viewer, and `/access` asks to write. A page served over https reaches only a relay and sessions at `wss://`.
@@ -224,18 +226,21 @@ Only edits and writes by the agent count, not commands it runs in the shell, and
 Each person's agent has its own model and its own context, so one agent cannot just read the other's conversation. What it can have is a **briefing**: a short, structured account of a teammate's session, written by their agent for yours. It works between any two models, Codex on one side and Gemini on the other.
 
 ```
-(in alia's session, opened from the side panel or with plural join @alia)
-/brief                              # a briefing of the whole session
-/brief how was the login fixed?     # one that starts with the answer to your question
-/brief update                       # only what changed since the briefing you already have
-/brief give                         # put the latest one in MY agent's notes
+/ask @alia how was the login fixed?    # from your own session, no need to open hers
+/ask @alia                             # a briefing of her whole session
+/ask @alia --update                    # only what changed since the briefing you already have
+/ask @alia:api what is left?           # she has several sessions: say which
+/ask give                              # put the latest answer in MY agent's notes
+/ask share off|ask|team                # (host) who may ask this session
 ```
 
-How it goes: you ask, **alia's host agrees** (a card with `y` and `n`, unless she set `/brief share team` for anyone in the room or `/brief share off`), her agent writes it, and it shows up in her session as a card for you only. You read it. Nothing reaches your agent until you type `/brief give`, and then your agent sees it before its next prompt.
+Type `/ask @` and the people who share a session are listed, with their repository, branch and whether the agent is working. `/ask` without a name asks the session you are looking at, as `/brief` always did, and `/brief` still works as the same command.
 
-A briefing has two parts. The first is facts from alia's host, not from the model: the repository, the branch, the commit, how many files are uncommitted, and every file her agent changed this session with `+added −removed`. The second is the model's account: the goal, what was done and why, what was tried and dropped, the state, what is open, and exact names and commands. It is capped at about 450 words and 20,000 characters, secrets are redacted, and file contents are not pasted. `/brief update` sends the model what you already have and asks only for the difference.
+How it goes: your client joins her session for a moment as a viewer, you ask, **alia's host agrees** (a card with `y` and `n`, unless she set `/ask share team` for anyone in the room or `/ask share off`), her agent writes it, and the answer comes back as a card in your own chat with **give to my agent** and copy. You read it; her session sees nothing of what comes back. Nothing reaches your agent until you give it (the button or `/ask give`), and then your agent sees it before its next prompt. If she does not answer in 5 minutes, you are told.
 
-Your agent treats it as notes from a colleague that nobody checked, not as instructions. Because the text came from someone else's session, **once you have given a briefing to your agent, every run of that session asks you before it writes or runs anything**, even in auto mode, until you start a new session. The same briefing is not accepted twice, and it survives a restart. You wait a minute between requests, and one is open at a time.
+A briefing has two parts. The first is facts from alia's host, not from the model: the repository, the branch, the commit, how many files are uncommitted, and every file her agent changed this session with `+added −removed`. The second is the model's account: the goal, what was done and why, what was tried and dropped, the state, what is open, and exact names and commands. It is capped at about 450 words and 20,000 characters, secrets are redacted, and file contents are not pasted. `--update` sends the model what you already have and asks only for the difference.
+
+Your agent treats it as notes from a colleague that nobody checked, not as instructions. Because the text came from someone else's session, **once you have given an answer to your agent, every run of that session asks you before it writes or runs anything**, even in auto mode, until you start a new session. The same briefing is not accepted twice, and it survives a restart. You wait a minute between requests, and one is open at a time.
 
 ### Asking to write
 
@@ -445,5 +450,13 @@ Preferences are kept in `tui.json` in the data directory.
 | `plural-host doctor` | Check the environment, the workspace and the provider |
 | `plural-host export <room>` | Dump a session's event log to JSONL |
 | `plural-host host` | Serve a session without the client, for a remote machine |
+| `plural-host login [--no-browser]` | Link this computer to your account: opens the browser to approve it |
+| `plural-host login --code <code>` | The same from a code the web page shows, for a computer with no browser to open |
+| `plural-host whoami [--json]` | Show the account this computer is linked to |
+| `plural-host logout` | Forget the account on this computer |
 
-`plural relay`, `plural doctor` and `plural export` run the same commands.
+`plural relay`, `plural doctor`, `plural export`, `plural login`, `plural whoami` and `plural logout` run the same commands.
+
+### Linking a computer to an account
+
+A relay may ask hosts to belong to an account. Run `plural login`: it opens the browser, where you sign in and confirm that the code in the page is the one in your terminal, and the terminal collects the result. With `--no-browser`, or when no browser can open (over SSH, say), it prints the address to open anywhere. From the web page's Start a room you can instead copy `plural login --code <code>`. Either way the computer proves it holds its host key by signing what it sends, and the accounts service answers with a certificate for that key. It is kept in `entitlement.json` in the data directory and renewed on its own before it runs out; a host sends it when it opens a room on a relay (`PLURAL_ACCOUNTS_URL` names another accounts service). Nothing changes for a relay that does not ask, and nobody needs an account to join a room.

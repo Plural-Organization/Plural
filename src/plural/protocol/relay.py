@@ -17,6 +17,8 @@ class RelayOpen(Model):
     room: str
     public_key: str
     proof: str
+    # A certificate from an accounts service, for a relay that asks hosts to belong to an account.
+    entitlement: str | None = None
 
 
 class RelayFrame(Model):
@@ -30,6 +32,31 @@ class RelayClosed(Model):
     conn: str
 
 
-RelayMessage = Annotated[RelayOpen | RelayFrame | RelayClosed, Field(discriminator="type")]
+class RelayHttpRequest(Model):
+    """A browser's request for a host's preview, which the relay hands to the room's host."""
+
+    type: Literal["relay.http"] = "relay.http"
+    id: str
+    method: str
+    path: str
+    headers: list[tuple[str, str]] = Field(default_factory=list[tuple[str, str]])
+    body: str = ""
+
+
+class RelayHttpReply(Model):
+    """The host's answer in parts: the first carries the status and headers, the last says `end`."""
+
+    type: Literal["relay.http.reply"] = "relay.http.reply"
+    id: str
+    status: int = 0
+    headers: list[tuple[str, str]] = Field(default_factory=list[tuple[str, str]])
+    body: str = ""
+    end: bool = False
+
+
+RelayMessage = Annotated[
+    RelayOpen | RelayFrame | RelayClosed | RelayHttpRequest | RelayHttpReply,
+    Field(discriminator="type"),
+]
 
 RELAY_MESSAGES: TypeAdapter[RelayMessage] = TypeAdapter(RelayMessage)

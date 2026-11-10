@@ -35,6 +35,7 @@ from plural.protocol.events import (
     PluginsChanged,
     PolicyRuleAdded,
     PolicyRuleRemoved,
+    PreviewChanged,
     PromptAccepted,
     PromptDequeued,
     PromptModeChanged,
@@ -214,6 +215,8 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
                 mentions=event.mentions,
             )
             return state.model_copy(update={"chat": (*state.chat, entry)[-CHAT_LIMIT:]})
+        case PreviewChanged(preview=preview):
+            return state.model_copy(update={"preview": preview})
         case BoardOpened(open=open_):
             return state.model_copy(
                 update={"board": state.board.model_copy(update={"open": open_})}

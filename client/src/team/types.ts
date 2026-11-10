@@ -22,6 +22,8 @@ export interface SessionCard {
   updated_at: string;
   repo_id?: string | null;
   conflicts?: Conflict[];
+  // The agent the session runs, as its host names it; older hosts leave it out.
+  agent?: string | null;
 }
 
 export interface TeamProfile {

@@ -17,6 +17,7 @@ from plural.agent.providers.base import (
 )
 from plural.agent.providers.catalog import PRESETS
 from plural.agent.providers.cli.codex_cli import CodexCliProvider
+from plural.agent.providers.preset import Adapter
 from plural.core.errors import DomainError
 from plural.host.bootstrap import Host, build_web_search
 from plural.host.config import HostSettings, preset_values
@@ -46,9 +47,7 @@ class AgentConfig(BaseModel):
     model_config = ConfigDict(frozen=True, extra="ignore")
 
     preset: str | None = Field(default=None, max_length=64)
-    provider: (
-        Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"] | None
-    ) = None
+    provider: Adapter | None = None
     provider_name: str | None = Field(default=None, max_length=64)
     model: str | None = None
     base_url: str | None = None

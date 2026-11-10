@@ -42,6 +42,8 @@ export interface SessionView {
 export interface Session extends SessionView {
   send: (command: Command) => void;
   fetchPicture: (attachmentId: string) => void;
+  // This participant's own address of the server the host shares, which the host hands out.
+  openPreview: (previewId: string) => Promise<string>;
   // Presence that may fail quietly: a host from an older release does not know it.
   sendPresence: (command: Command) => boolean;
   notify: (tone: Tone, text: string) => void;
@@ -56,6 +58,15 @@ export class SessionStore {
   private readonly listeners = new Set<() => void>();
   private client: SessionClient | null = null;
   private token: string | null;
+  private readonly previewRequests = new Map<string, { resolve: (url: string) => void; reject: (error: Error) => void; timer: ReturnType<typeof setTimeout> }>();
+
+  private clearPreviewRequests(): void {
+    for (const request of this.previewRequests.values()) {
+      clearTimeout(request.timer);
+      request.reject(new Error("preview connection closed or changed"));
+    }
+    this.previewRequests.clear();
+  }
 
   constructor(
     private readonly link: JoinLink,
@@ -80,7 +91,10 @@ export class SessionStore {
     const client = new SessionClient(link, { name: this.name, client: CLIENT, team: team ? (room, url) => teamProof(team, url, room) : undefined });
     this.client = client;
     this.update({ projection: client.projection, feed: emptyFeed(), connection: client.status, invite: null, asks: [] });
-    const off = client.onStatus((connection) => this.update({ connection }));
+    const off = client.onStatus((connection) => {
+      if (connection !== "online") this.clearPreviewRequests();
+      this.update({ connection });
+    });
     let alive = true;
     void (async () => {
       try {
@@ -109,6 +123,16 @@ export class SessionStore {
           }
           if (event.type === "plugin.notified") {
             this.notify("accent", `/${event.command}: ${event.text}`);
+            continue;
+          }
+          if (event.type === "preview.changed") this.clearPreviewRequests();
+          if (event.type === "preview.opened") {
+            const request = this.previewRequests.get(event.preview_id);
+            if (request) {
+              clearTimeout(request.timer);
+              this.previewRequests.delete(event.preview_id);
+              request.resolve(previewUrl(this.link.url, event.path));
+            }
             continue;
           }
           if (event.type === "attachment.data") {
@@ -142,6 +166,7 @@ export class SessionStore {
     return () => {
       alive = false;
       off();
+      this.clearPreviewRequests();
       client.close();
     };
   }
@@ -178,6 +203,24 @@ export class SessionStore {
     this.client.send({ type: "attachment.fetch", attachment_id: attachmentId }).catch(() => this.asked.delete(attachmentId));
   };
 
+  readonly openPreview = (previewId: string): Promise<string> => {
+    const client = this.client;
+    if (!client || this.view.connection !== "online") return Promise.reject(new Error("preview is offline"));
+    this.previewRequests.get(previewId)?.reject(new Error("preview asked again"));
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.previewRequests.delete(previewId);
+        reject(new Error("the host did not answer about the preview"));
+      }, 15000);
+      this.previewRequests.set(previewId, { resolve, reject, timer });
+      client.send({ type: "preview.open", preview_id: previewId }).catch((error: unknown) => {
+        clearTimeout(timer);
+        this.previewRequests.delete(previewId);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      });
+    });
+  };
+
   readonly notify = (tone: Tone, text: string): void => this.update({ feed: withNotice(this.view.feed, tone, text) });
 
   readonly clearInvite = (): void => this.update({ invite: null });
@@ -198,15 +241,22 @@ export class SessionStore {
     if (error instanceof CommandRejected && (error.error.code === "unauthorized" || error.error.code === "forbidden")) {
       forgetRoom(this.link.room);
     }
-    this.onFatal(error instanceof CommandRejected ? describe(error) : messageOf(error));
+    this.onFatal(error instanceof CommandRejected ? describe(error, this.team !== null) : messageOf(error));
   }
+}
+
+// The host answers with a path on the relay the session runs on, next to the room's own address.
+export function previewUrl(roomUrl: string, path: string): string {
+  const base = new URL(roomUrl.replace(/[^/]*$/, ""));
+  base.protocol = base.protocol === "wss:" ? "https:" : "http:";
+  return new URL(path, base).toString();
 }
 
 export function useSession(link: JoinLink, name: string, onFatal: (reason: string) => void, team: Team | null = null): Session {
   const [store] = useState(() => new SessionStore(link, name, onFatal, team));
   const view = useSyncExternalStore(store.subscribe, store.snapshot);
   useEffect(() => store.start(), [store]);
-  return { ...view, send: store.send, fetchPicture: store.fetchPicture, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, answer: store.answer, close: store.close };
+  return { ...view, send: store.send, fetchPicture: store.fetchPicture, openPreview: store.openPreview, sendPresence: store.sendPresence, notify: store.notify, clearInvite: store.clearInvite, answer: store.answer, close: store.close };
 }
 
 function messageOf(error: unknown): string {
@@ -220,7 +270,11 @@ function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function describe(error: CommandRejected): string {
+function describe(error: CommandRejected, viaTeam: boolean): string {
+  // Someone joining through a team holds no invite; the host says what is really wrong.
+  if (viaTeam && (error.error.code === "unauthorized" || error.error.code === "forbidden")) {
+    return error.error.message;
+  }
   switch (error.error.code) {
     case "unauthorized":
       return "This link no longer works. Invites are single-use and expire after an hour, so ask the host for a new one.";

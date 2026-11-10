@@ -485,7 +485,14 @@ class BriefingImportView(Model):
     at: datetime
 
 
+class PreviewView(Model):
+    id: str
+    port: int = Field(ge=1, le=65535)
+    title: str = Field(min_length=1, max_length=80)
+
+
 class SessionState(Model):
+    preview: PreviewView | None = None
     last_seq: int = 0
     prompt_mode: PromptMode = PromptMode.OPEN
     permission_mode: PermissionMode = PermissionMode.DEFAULT

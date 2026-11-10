@@ -1,9 +1,24 @@
 """A provider the host can run: which adapter, where, which models, and where its key lives."""
 
 from dataclasses import asdict, dataclass
-from typing import Literal
+from typing import Final, Literal, get_args
 
-Adapter = Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"]
+# Agent CLIs run through one provider that asks them for a JSON answer (cli/agent_cli.py).
+AgentCliAdapter = Literal[
+    "gemini_cli",
+    "qwen_cli",
+    "copilot_cli",
+    "cursor_cli",
+    "kimi_cli",
+    "grok_cli",
+    "amp_cli",
+    "opencode_cli",
+]
+AGENT_CLI_ADAPTERS: Final[tuple[AgentCliAdapter, ...]] = get_args(AgentCliAdapter)
+Adapter = (
+    Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"]
+    | AgentCliAdapter
+)
 Connection = Literal["api_key", "oauth", "local"]
 
 

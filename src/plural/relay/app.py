@@ -2,21 +2,38 @@ import time
 from collections.abc import AsyncGenerator, Callable, Collection
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, PlainTextResponse, RedirectResponse, Response
 from starlette.routing import Route, WebSocketRoute
+from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocket
 
 from plural.relay.directory import TeamDirectory, TeamLimits
-from plural.relay.gate import ClientGate
+from plural.relay.gate import ClientGate, preview_of
 from plural.relay.limits import RelayLimits
 from plural.relay.presence import Presence
 from plural.relay.rooms import Rooms
 from plural.relay.team_routes import team_routes
+
+
+class OutsidePreviews:
+    """Runs a middleware for everything but previews, which answer their own CORS as the app."""
+
+    def __init__(self, app: ASGIApp, *, middleware: Callable[..., ASGIApp], **options: Any) -> None:
+        self._app = app
+        self._wrapped = middleware(app, **options)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        inner = self._app if str(scope.get("path", "")).startswith("/p/") else self._wrapped
+        await inner(scope, receive, send)
+
+
+PREVIEW_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
 
 
 def create_app(
@@ -43,6 +60,19 @@ def create_app(
     async def guest_socket(socket: WebSocket) -> None:
         await rooms.serve_guest(socket, str(socket.path_params["room"]))
 
+    async def preview(request: Request) -> Response:
+        params = request.path_params
+        return await rooms.serve_preview(request, str(params["room"]), str(params["rest"]))
+
+    async def from_preview(request: Request) -> Response:
+        # A preview's page asks for `/assets/app.js` from the relay's root; its own address
+        # (the referer) says which preview it belongs to.
+        prefix = preview_of(request.headers.get("referer"), request.url.netloc)
+        if prefix is None:
+            return PlainTextResponse("not found", 404)
+        query = f"?{request.url.query}" if request.url.query else ""
+        return RedirectResponse(prefix + request.url.path + query, 307)
+
     directory: list[TeamDirectory] = []
 
     @asynccontextmanager
@@ -63,7 +93,8 @@ def create_app(
         middleware=[
             *([Middleware(ClientGate, origins=web_origins)] if clients_only else []),
             Middleware(
-                CORSMiddleware,
+                OutsidePreviews,
+                middleware=CORSMiddleware,
                 allow_origins=["*"],
                 allow_methods=["GET", "POST", "DELETE"],
                 allow_headers=["authorization", "content-type", "ngrok-skip-browser-warning"],
@@ -75,6 +106,8 @@ def create_app(
             Route("/metrics", metrics),
             WebSocketRoute("/host/{room}", host_socket),
             WebSocketRoute("/{room}", guest_socket),
+            Route("/p/{room}/{rest:path}", preview, methods=PREVIEW_METHODS),
+            Route("/{rest:path}", from_preview, methods=PREVIEW_METHODS),
         ],
         lifespan=lifespan,
     )

@@ -2,7 +2,7 @@ import { decodePasteBytes, stripAnsiSequences, type KeyBinding, type PasteEvent,
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
 import type { Mentionable, Role, Route } from "@plural/client";
-import { suggestions as suggest, visibleSuggestionWindow, type CommandHint } from "../commands";
+import { suggestions as suggest, visibleSuggestionWindow, type AskTarget, type CommandHint } from "../commands";
 import { imagePath } from "../lib/image-paste";
 import { expandPastes, pasteLabel, shouldCollapse } from "../lib/paste";
 import { theme } from "../theme";
@@ -27,6 +27,7 @@ interface ComposerProps {
   role: Role | undefined;
   people?: Mentionable[];
   commands?: CommandHint[];
+  askTargets?: AskTarget[];
   seed: { text: string; key: number } | null;
   label: string | null;
   route?: (text: string) => Route | null;
@@ -69,7 +70,7 @@ export function Composer(props: ComposerProps) {
   const pasted = useRef(new Map<string, string>());
   const pasteCount = useRef(0);
 
-  const hints = dismissed ? [] : suggest(value, role, props.people ?? [], props.commands);
+  const hints = dismissed ? [] : suggest(value, role, props.people ?? [], props.commands, props.askTargets);
   const selected: CommandHint | undefined = hints[Math.min(choice, Math.max(0, hints.length - 1))];
   const hintWindow = visibleSuggestionWindow(hints, choice);
   const completion = selected ? (selected.insert ?? `/${selected.name} `) : "";

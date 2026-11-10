@@ -1,24 +1,21 @@
+/* Names the room's own styles use, resolved to the landing page's theme in app.css.
+   --muted, --accent and --danger are the theme's own tokens and are not repeated here. */
 :root {
-  --bg: #0e0f11;
-  --panel: #16171a;
-  --raise: #1d1e22;
-  --hover: #24262b;
-  --fg: #ecebe7;
-  --muted: #9a9ca2;
-  --dim: #63656c;
-  --line: #24252a;
-  --ok: #8fdca6;
-  --warn: #ecc47e;
-  --danger: #ff9a9a;
-  --accent: #b9b4ff;
-  --mine: #23233a;
-  --add-bg: rgba(143, 220, 166, 0.08);
-  --del-bg: rgba(255, 154, 154, 0.08);
-  --radius: 14px;
-  --radius-small: 9px;
-  --font-display: "Bricolage Grotesque", "Helvetica Neue", Arial, sans-serif;
-  --font-text: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --bg: var(--background);
+  --panel: var(--surface);
+  --raise: var(--surface-secondary);
+  --hover: var(--surface-tertiary);
+  --fg: var(--foreground);
+  --dim: oklch(0.52 0.008 286);
+  --line: var(--border);
+  --ok: #7fd4b0;
+  --warn: #f0a080;
+  --mine: var(--surface-secondary);
+  --add-bg: rgba(42, 157, 115, 0.12);
+  --del-bg: rgba(224, 98, 58, 0.12);
+  --radius: 16px;
+  --radius-small: 10px;
+  --font-text: var(--font-sans);
   --side: 290px;
   --content: 780px;
   --gutter-left: max(16px, env(safe-area-inset-left, 0px));

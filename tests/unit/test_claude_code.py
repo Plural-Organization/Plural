@@ -16,6 +16,7 @@ from plural.agent.providers.base import (
     TextDelta,
     ToolCallReady,
     ToolSchema,
+    UsageReport,
 )
 from plural.agent.providers.cli.claude_code import ClaudeCodeProvider
 
@@ -222,3 +223,103 @@ async def test_text_written_beside_the_structured_answer_is_not_shown_twice(
     request = LlmRequest(system="", messages=(LlmMessage(role="user", content="hi"),))
     events = [event async for event in provider.stream(request, cancel=asyncio.Event())]
     assert "".join(e.text for e in events if isinstance(e, TextDelta)) == "The answer."
+
+
+def scripted_cli(tmp_path: Path, lines: list[dict[str, object]], *, then_sleep: float = 0) -> Path:
+    """A Claude Code that prints these stream-json lines, then waits before it exits."""
+    script = tmp_path / "claude"
+    script.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys, time\n"
+        "sys.stdin.read()\n"
+        f"for line in json.loads({json.dumps(lines)!r}):\n"
+        "    print(json.dumps(line), flush=True)\n"
+        f"time.sleep({then_sleep})\n"
+    )
+    script.chmod(0o755)
+    return script
+
+
+TOOLS = (
+    ToolSchema(name="bash", description="Run a command", parameters={"type": "object"}),
+    ToolSchema(name="ls", description="List a folder", parameters={"type": "object"}),
+)
+
+
+async def test_a_plural_tool_called_as_claude_codes_own_still_runs(tmp_path: Path) -> None:
+    usage = {"input_tokens": 3, "cache_read_input_tokens": 900, "output_tokens": 20}
+    cli = scripted_cli(
+        tmp_path,
+        [
+            {
+                "type": "stream_event",
+                "event": {
+                    "type": "content_block_start",
+                    "content_block": {"type": "tool_use", "name": "bash"},
+                },
+            },
+            {
+                "type": "stream_event",
+                "event": {
+                    "type": "content_block_delta",
+                    "delta": {"type": "input_json_delta", "partial_json": '{"text": "no"}'},
+                },
+            },
+            {
+                "type": "assistant",
+                "message": {
+                    "id": "msg_1",
+                    "content": [
+                        {"type": "text", "text": "Listing it."},
+                        {"type": "tool_use", "name": "bash", "input": {"command": "ls -la"}},
+                    ],
+                    "usage": usage,
+                },
+            },
+        ],
+        # Claude Code would answer "No such tool available" and go on.
+        then_sleep=30,
+    )
+    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(cli))
+    request = LlmRequest(
+        system="", messages=(LlmMessage(role="user", content="List it"),), tools=TOOLS
+    )
+    started = time.monotonic()
+    events = [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    assert time.monotonic() - started < 10
+    assert "".join(e.text for e in events if isinstance(e, TextDelta)) == "Listing it."
+    calls = [e.call for e in events if isinstance(e, ToolCallReady)]
+    assert [(call.name, call.args) for call in calls] == [("bash", {"command": "ls -la"})]
+    report = next(e for e in events if isinstance(e, UsageReport))
+    assert report.usage.prompt_tokens == 903
+    assert events[-1] == Stop(reason="tool_use")
+
+
+async def test_the_context_is_the_last_request_of_the_answer(tmp_path: Path) -> None:
+    first = {"input_tokens": 2, "cache_creation_input_tokens": 1849, "output_tokens": 30}
+    last = {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 128,
+        "cache_read_input_tokens": 1849,
+        "output_tokens": 40,
+    }
+    cli = fake_cli(
+        tmp_path,
+        {
+            "structured_output": {"text": "Done.", "tool_calls": []},
+            "usage": {
+                "input_tokens": 4,
+                "cache_creation_input_tokens": 1977,
+                "cache_read_input_tokens": 1849,
+                "output_tokens": 70,
+                "iterations": [first, last],
+            },
+        },
+    )
+    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(cli))
+    request = LlmRequest(system="", messages=(LlmMessage(role="user", content="Hi"),))
+    events = [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    report = next(e for e in events if isinstance(e, UsageReport))
+    assert report.usage.prompt_tokens == 3830
+    assert report.last is not None
+    assert report.last.prompt_tokens == 1979

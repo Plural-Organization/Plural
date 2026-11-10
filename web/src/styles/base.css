@@ -9,16 +9,16 @@ code { font-size: 0.88em; background: var(--raise); padding: 1px 6px; border-rad
 .muted { color: var(--muted); }
 .grow { flex: 1; }
 
-.button { font: 500 13px var(--font-text); color: var(--fg); background: var(--raise); border: 1px solid var(--line); border-radius: 999px; padding: 7px 15px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; transition: background 0.15s, border-color 0.15s; }
-.button:hover:not(:disabled) { background: var(--hover); }
-.button:disabled { opacity: 0.4; cursor: default; }
-.button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
-.button.primary:hover:not(:disabled) { background: #fff; }
-.button.danger { color: var(--danger); }
-.button.ghost { background: transparent; border-color: transparent; color: var(--muted); }
-.button.ghost:hover { color: var(--fg); background: var(--raise); }
-.button.small { font-size: 12px; padding: 4px 11px; }
-.button kbd { font: 10px var(--font-mono); padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; opacity: 0.6; }
+.btn { font: 500 13px var(--font-text); color: var(--fg); background: var(--raise); border: 0; border-radius: 999px; padding: 7px 14px; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; white-space: nowrap; transition: background-color .2s; }
+.btn:hover:not(:disabled) { background: var(--hover); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.btn.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.btn.primary:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 86%, var(--bg)); }
+.btn.danger { color: var(--danger); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--muted); }
+.btn.ghost:hover { color: var(--fg); background: var(--raise); }
+.btn.small { font-size: 12px; padding: 4px 11px; }
+.btn kbd { font: 10px var(--font-mono); padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; opacity: 0.6; }
 .link-button { font: 12px var(--font-text); background: none; border: 0; color: var(--dim); cursor: pointer; padding: 0 2px; }
 .link-button:hover { color: var(--fg); }
 
@@ -28,4 +28,9 @@ code { font-size: 0.88em; background: var(--raise); padding: 1px 6px; border-rad
 .hint { font-size: 13px; color: var(--muted); margin: 0; }
 .hint.warn { color: var(--warn); }
 .hint.danger { color: var(--danger); }
-.label { font: 500 11px var(--font-text); color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; }
+.caps { font: 500 13px var(--font-text); color: var(--muted); }
+.caps::first-letter { text-transform: uppercase; }
+
+/* Sentence case for short labels whose words come in lowercase from the protocol and the shared client. */
+.cap { display: inline-block; }
+.cap::first-letter { text-transform: uppercase; }

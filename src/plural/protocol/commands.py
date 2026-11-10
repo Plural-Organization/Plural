@@ -300,6 +300,21 @@ class BoardMove(Model):
     points: tuple[Unit, ...] = Field(min_length=2, max_length=BOARD_POINTS_LIMIT)
 
 
+class PreviewSet(Model):
+    """The host explicitly shares one loopback HTTP server; None disables it."""
+
+    type: Literal["preview.set"] = "preview.set"
+    port: int | None = Field(default=None, ge=1, le=65535)
+    title: str = Field(default="Local preview", min_length=1, max_length=80)
+
+
+class PreviewOpen(Model):
+    """Asks for this participant's own link to the shared server, answered with `preview.opened`."""
+
+    type: Literal["preview.open"] = "preview.open"
+    preview_id: str = Field(min_length=1, max_length=64)
+
+
 class AttachmentFetch(Model):
     """Asks for the picture of an image on the board; only those are handed out."""
 
@@ -388,6 +403,8 @@ Command = Annotated[
     | BoardDraw
     | BoardMove
     | AttachmentFetch
+    | PreviewSet
+    | PreviewOpen
     | BoardErase
     | BoardClear
     | QueueCancel

@@ -63,6 +63,12 @@ export function withNotice(feed: Feed, tone: Tone, text: string, action?: "done"
   return { ...feed, counter, items: [...feed.items, { kind: "notice", id: `n${counter}`, tone, text, ...(action ? { action } : {}), ...(code ? { code } : {}) }] };
 }
 
+// A briefing a teammate's agent wrote for this person, fetched from outside the session the feed belongs to.
+export function withBriefing(feed: Feed, briefing: { from: string; text: string; asOf: number; update: boolean }): Feed {
+  const counter = feed.counter + 1;
+  return { ...feed, counter, items: [...feed.items, { kind: "briefing", id: `b${counter}`, ...briefing }] };
+}
+
 export function lastReply(feed: Feed): string {
   const parts: string[] = [];
   for (let index = feed.items.length - 1; index >= 0; index -= 1) {

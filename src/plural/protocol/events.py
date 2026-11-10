@@ -31,6 +31,7 @@ from plural.protocol.models import (
     PluginCommandView,
     PluginView,
     PolicyRuleView,
+    PreviewView,
     PromptMode,
     ProposalView,
     Provenance,
@@ -262,6 +263,19 @@ class BoardMoved(EventBase):
     type: Literal["board.moved"] = "board.moved"
     stroke_id: str
     points: tuple[float, ...]
+
+
+class PreviewChanged(EventBase):
+    type: Literal["preview.changed"] = "preview.changed"
+    preview: PreviewView | None
+
+
+class PreviewOpened(TransientEvent):
+    """The requester's own link to the shared server, relative to the relay the session runs on."""
+
+    type: Literal["preview.opened"] = "preview.opened"
+    preview_id: str
+    path: str
 
 
 class AttachmentData(TransientEvent):
@@ -533,6 +547,8 @@ Event = Annotated[
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PreviewChanged
+    | PreviewOpened
     | PluginShown
     | PluginAsked
     | PluginNotified

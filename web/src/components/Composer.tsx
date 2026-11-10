@@ -1,3 +1,5 @@
+import { Button } from "@heroui/react";
+import { ArrowUp, FileText, Paperclip, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 import { mentionCompletions, mentionNote, type Mentionable, type ProposalView, type Role } from "@plural/client";
 import type { Attachment } from "../hooks/useAttachments";
@@ -72,6 +74,11 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
   }, [value]);
 
   useEffect(() => setPick(0), [hints.length]);
+  // The list scrolls, so the one picked with the arrows stays in view.
+  const list = useRef<HTMLUListElement>(null);
+  useEffect(() => {
+    list.current?.children[pick]?.scrollIntoView({ block: "nearest" });
+  }, [pick]);
 
   const submit = () => {
     const text = value.trim();
@@ -132,6 +139,14 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
     }
   };
 
+  // A tip starts what its key would: a command on an empty line, a mention after the text.
+  const begin = (key: "/" | "@") => {
+    const next = key === "/" ? (value.trim() === "" ? "/" : value) : value === "" || /\s$/.test(value) ? `${value}@` : `${value} @`;
+    setValue(next);
+    onActivity(next);
+    area.current?.focus();
+  };
+
   return (
     <div
       className={styles.composer}
@@ -145,7 +160,7 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
       onDrop={drop}
     >
       {hints.length > 0 ? (
-        <ul className={styles.hints} role="listbox" aria-label="Suggestions">
+        <ul ref={list} className={styles.hints} role="listbox" aria-label="Suggestions">
           {hints.map((hint, index) => (
             <li key={hint.key} role="option" aria-selected={index === pick}>
               <span className="mono">{hint.usage}</span>
@@ -159,44 +174,18 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
         <ul className={styles.files} aria-label="Files to send">
           {attachments.map((item) => (
             <li key={item.key} className={styles.file}>
-              {item.preview ? <img src={item.preview} alt="" /> : <span className={styles.icon}>📄</span>}
+              {item.preview ? <img src={item.preview} alt="" /> : <span className={styles.icon}><FileText size={18} /></span>}
               <span className={styles.fileName}>{item.name}</span>
               {item.sha256 === "" ? <span className="muted">loading…</span> : null}
               <span className="muted">{item.size < 1e6 ? `${Math.max(1, Math.round(item.size / 1e3))} KB` : `${(item.size / 1e6).toFixed(1)} MB`}</span>
-              <button type="button" className="link-button" aria-label={`Remove ${item.name}`} onClick={() => onDetach?.(item.key)}>
-                ✕
-              </button>
+              <Button isIconOnly size="sm" variant="ghost" aria-label={`Remove ${item.name}`} onPress={() => onDetach?.(item.key)}>
+                <X size={14} />
+              </Button>
             </li>
           ))}
         </ul>
       ) : null}
-      <div className={`${styles.row} ${dragging ? styles.dragging : ""}`}>
-        {onAttach ? (
-          <>
-            <button
-              type="button"
-              className={styles.attach}
-              aria-label="Attach files or images"
-              title="Attach files or images"
-              disabled={disabled !== null}
-              onClick={() => picker.current?.click()}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21.4 11.1 12.2 20.3a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5" />
-              </svg>
-            </button>
-            <input
-              ref={picker}
-              type="file"
-              multiple
-              hidden
-              onChange={(event) => {
-                onAttach([...(event.target.files ?? [])]);
-                event.target.value = "";
-              }}
-            />
-          </>
-        ) : null}
+      <div className={`${styles.box} ${dragging ? styles.dragging : ""}`}>
         <textarea
           id="composer"
           ref={area}
@@ -212,9 +201,36 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
           onPaste={paste}
           aria-label="Message the room"
         />
-        <button className="button primary" type="button" onClick={submit} disabled={disabled !== null || (value.trim() === "" && attachments.length === 0)}>
-          send
-        </button>
+        <div className={styles.tools}>
+          {onAttach ? (
+            <>
+              <Button isIconOnly size="sm" variant="ghost" aria-label="Attach files or images" isDisabled={disabled !== null} onPress={() => picker.current?.click()}>
+                <Paperclip size={18} />
+              </Button>
+              <input
+                ref={picker}
+                type="file"
+                multiple
+                hidden
+                onChange={(event) => {
+                  onAttach([...(event.target.files ?? [])]);
+                  event.target.value = "";
+                }}
+              />
+            </>
+          ) : null}
+          <span className={styles.tips}>
+            <button type="button" className={styles.tip} disabled={disabled !== null} onClick={() => begin("/")}>
+              <kbd>/</kbd> commands
+            </button>
+            <button type="button" className={styles.tip} disabled={disabled !== null} onClick={() => begin("@")}>
+              <kbd>@</kbd> people
+            </button>
+          </span>
+          <Button isIconOnly size="sm" className="ml-auto" aria-label="send" isDisabled={disabled !== null || (value.trim() === "" && attachments.length === 0)} onPress={submit}>
+            <ArrowUp size={16} weight="bold" />
+          </Button>
+        </div>
       </div>
     </div>
   );

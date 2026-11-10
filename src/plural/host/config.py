@@ -8,11 +8,14 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from plural.agent.providers.base import Effort
 from plural.agent.providers.catalog import Preset, preset
+from plural.agent.providers.preset import AGENT_CLI_ADAPTERS, Adapter
 from plural.protocol.models import AdmissionMode, PromptMode
 
 # The relay a host and a team use when none is named. Everything else is opt-in: --local stays on
 # this machine, --bind and --public-url serve directly, --relay picks another relay.
 DEFAULT_RELAY_URL = "wss://relay.plrl.host"
+# Where a computer is linked to an account.
+DEFAULT_ACCOUNTS_URL = "https://accounts.plrl.host"
 
 
 class HostSettings(BaseSettings):
@@ -35,13 +38,9 @@ class HostSettings(BaseSettings):
     team: bool = False
     team_roster_ttl_s: float = Field(default=30, gt=0)
     preset: str | None = None
-    provider: (
-        Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"] | None
-    ) = None
+    provider: Adapter | None = None
     model: str | None = None
-    fast_provider: (
-        Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"] | None
-    ) = None
+    fast_provider: Adapter | None = None
     fast_model: str | None = None
     api_key: SecretStr | None = None
     base_url: str | None = None
@@ -92,9 +91,7 @@ class HostSettings(BaseSettings):
     def catalog_entry(self) -> Preset | None:
         return preset(self.preset) if self.preset else None
 
-    def resolved_provider(
-        self, environ: Mapping[str, str] | None = None
-    ) -> Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"]:
+    def resolved_provider(self, environ: Mapping[str, str] | None = None) -> Adapter:
         if self.provider is not None:
             return self.provider
         variables = os.environ if environ is None else environ
@@ -117,6 +114,8 @@ class HostSettings(BaseSettings):
             return f"Claude Code · {self.model or 'claude-sonnet-5-5'}"
         if provider == "codex_cli":
             return f"Codex CLI · {self.model or 'gpt-6.1-sol'}"
+        if provider in AGENT_CLI_ADAPTERS:
+            return f"{provider} · {self.model or 'default'}"
         model = self.model or ("claude-opus-5-5" if provider == "anthropic" else "")
         where = " · local" if provider == "openai" and self.base_url else ""
         return f"{provider} · {model}{where}" if model else provider

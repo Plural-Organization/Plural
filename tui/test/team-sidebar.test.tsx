@@ -87,7 +87,8 @@ interface Mounted {
   connects: string[];
 }
 
-async function mount(sessions: SessionCard[], reachable = () => true): Promise<Mounted> {
+async function mount(sessions: SessionCard[], reachable = () => true, extra: { leave?: (team: Team) => Promise<void>; who?: Team } = {}): Promise<Mounted> {
+  const who = extra.who ?? team;
   const own = ownSession();
   const visits = new Map<string, FakeSession>();
   const connects: string[] = [];
@@ -100,7 +101,8 @@ async function mount(sessions: SessionCard[], reachable = () => true): Promise<M
   const watcher = new TeamWatcher(team.profile, () => fetchSessions(team, fetcher), 60_000);
   const setup = await testRender(
     <Shell
-      team={team}
+      team={who}
+      leave={extra.leave}
       watcher={watcher}
       home="api"
       connect={(entry): Session => {
@@ -128,6 +130,87 @@ async function clickRow(setup: Setup, owner: string): Promise<void> {
   await setup.mockMouse.click(lines[row]!.indexOf(owner) + 1, row);
   await setup.renderOnce();
 }
+
+async function clickText(setup: Setup, text: string): Promise<void> {
+  const lines = setup.captureCharFrame().split("\n");
+  const row = lines.findIndex((line) => line.includes(text));
+  if (row === -1) {
+    throw new Error(`no "${text}" in:\n${lines.join("\n")}`);
+  }
+  await setup.mockMouse.click(lines[row]!.indexOf(text) + 1, row);
+  await setup.renderOnce();
+}
+
+const member: Team = { ...team, profile: { ...team.profile, member: { id: "m_alia", name: "alia", role: "member" } } };
+
+test("a member sees leave team and the owner sees disband team, and only when leaving is possible", async () => {
+  const asMember = await mount([card("alia", "idle", "main")], () => true, { leave: async () => undefined, who: member });
+  expect(await frame(asMember.setup, "× leave team")).not.toContain("disband");
+  const asOwner = await mount([card("vlad", "idle", "main")], () => true, { leave: async () => undefined });
+  expect(await frame(asOwner.setup, "× disband team")).not.toContain("leave team");
+  const without = await mount([card("vlad", "idle", "main")]);
+  await frame(without.setup, "SPACES · BACKEND");
+  expect(without.setup.captureCharFrame()).not.toContain("× ");
+});
+
+test("leaving asks first, and enter alone does not confirm", async () => {
+  const left: string[] = [];
+  const { setup } = await mount([card("alia", "idle", "main")], () => true, { leave: async (who) => void left.push(who.profile.member.id), who: member });
+  await frame(setup, "× leave team");
+  await clickText(setup, "× leave team");
+  const asked = await frame(setup, "Leave Backend?");
+  expect(asked).toContain("you need a new invite");
+  await setup.mockInput.pressKey("\r");
+  await gone(setup, "Leave Backend?");
+  expect(left).toEqual([]);
+  expect(setup.captureCharFrame()).toContain("SPACES · BACKEND");
+});
+
+test("an owner is told the team goes for everyone", async () => {
+  const { setup } = await mount([card("vlad", "idle", "main")], () => true, { leave: async () => undefined });
+  await frame(setup, "× disband team");
+  await clickText(setup, "× disband team");
+  const asked = await frame(setup, "Delete Backend for everyone?");
+  expect(asked).toContain("cannot be undone");
+  await setup.mockInput.pressKey("\u001b");
+  await gone(setup, "Delete Backend");
+});
+
+test("confirming leaves at once: the team's panel, the visits and the share go", async () => {
+  const left: string[] = [];
+  const { setup, visits } = await mount([card("alia", "idle", "main"), card("vlad", "idle", "main")], () => true, {
+    leave: async (who) => void left.push(who.profile.member.id),
+    who: member,
+  });
+  await frame(setup, "alia");
+  await clickRow(setup, "alia");
+  await frame(setup, "viewing alia");
+  await clickText(setup, "× leave team");
+  await frame(setup, "Leave Backend?");
+  await setup.mockInput.pressKey("y");
+  await gone(setup, "SPACES");
+  expect(left).toEqual(["m_alia"]);
+  expect(visits.get("r_alia")?.isClosed).toBe(true);
+  expect(setup.captureCharFrame()).not.toContain("viewing alia");
+});
+
+test("a relay that does not answer keeps the team and says why", async () => {
+  const { setup } = await mount([card("alia", "idle", "main")], () => true, {
+    leave: async () => {
+      throw new Error("the relay at r.example.com did not answer, try again in a moment");
+    },
+    who: member,
+  });
+  await frame(setup, "× leave team");
+  await clickText(setup, "× leave team");
+  await frame(setup, "Leave Backend?");
+  await setup.mockInput.pressKey("y");
+  const failed = await frame(setup, "did not answer");
+  expect(failed).toContain("Leave Backend?");
+  await setup.mockInput.pressKey("\u001b");
+  await gone(setup, "Leave Backend?");
+  expect(setup.captureCharFrame()).toContain("SPACES · BACKEND");
+});
 
 test("the panel lists my session and the team's with who, where and what", async () => {
   const { setup, watcher } = await mount([card("alia", "running", "feat/login", 2), card("bek", "waiting", "main"), card("vlad", "idle", "main")]);
@@ -210,7 +293,7 @@ test("an empty team and an unreachable relay say so", async () => {
   up = false;
   await watcher.refresh();
   const offline = await frame(setup, "team offline");
-  expect(offline).toContain("refused");
+  expect(offline).toContain("did not");
 });
 
 test("without a team the panel has no spaces", async () => {

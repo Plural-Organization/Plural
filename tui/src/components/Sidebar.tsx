@@ -40,7 +40,7 @@ function ParticipantRow({ participant, name, me, typing }: { participant: Partic
 
 const STATUS_MARK = { running: "●", waiting: "◆", idle: "○" } as const;
 
-function SpacesSection({ rows, name, error, onOpen, onShare }: { rows: SpaceRow[]; name: string; error: string | null; onOpen?: (id: string) => void; onShare?: () => void }) {
+function SpacesSection({ rows, name, error, onOpen, onShare, onLeave }: { rows: SpaceRow[]; name: string; error: string | null; onOpen?: (id: string) => void; onShare?: () => void; onLeave?: { label: string; press: () => void } }) {
   return (
     <Section title={`spaces · ${truncate(name, 12)}`} count={rows.length}>
       {rows.slice(0, 8).map((row) => {
@@ -75,6 +75,7 @@ function SpacesSection({ rows, name, error, onOpen, onShare }: { rows: SpaceRow[
           team offline: {error}
         </text>
       ) : null}
+      {onLeave ? <PanelButton onPress={onLeave.press}>{(hover) => (hover ? `▸ ${onLeave.label}` : `× ${onLeave.label}`)}</PanelButton> : null}
     </Section>
   );
 }
@@ -87,6 +88,7 @@ interface SidebarProps {
   onSettings: () => void;
   onInvite?: () => void;
   onShare?: () => void;
+  onLeaveTeam?: { label: string; press: () => void };
   update?: UpdateState | null;
   projection: Projection;
   room: string;
@@ -132,7 +134,7 @@ function ActionRow({ onInvite, onSettings, update }: { onInvite?: () => void; on
   );
 }
 
-export function Sidebar({ projection, room: _room, inbox, running, status, spaces, teamName, teamError, onOpenSpace, onSettings, onInvite, onShare, update }: SidebarProps) {
+export function Sidebar({ projection, room: _room, inbox, running, status, spaces, teamName, teamError, onOpenSpace, onSettings, onInvite, onShare, onLeaveTeam, update }: SidebarProps) {
   const state = projection.state;
   const elapsed = useElapsed(running);
   const rank = (participant: Participant): number =>
@@ -234,7 +236,7 @@ export function Sidebar({ projection, room: _room, inbox, running, status, space
         <>
           <Divider />
           <box flexGrow={1} flexBasis={0} flexDirection="column" paddingX={2} paddingY={1}>
-            <SpacesSection rows={spaces ?? []} name={teamName ?? ""} error={teamError ?? null} onOpen={onOpenSpace} onShare={onShare} />
+            <SpacesSection rows={spaces ?? []} name={teamName ?? ""} error={teamError ?? null} onOpen={onOpenSpace} onShare={onShare} onLeave={onLeaveTeam} />
           </box>
         </>
       ) : null}
