@@ -1,5 +1,6 @@
 import asyncio
 import json
+import threading
 import webbrowser
 from typing import Annotated
 
@@ -11,6 +12,8 @@ from plural.host.account import AccountError, AccountStore, claim, device_login
 from plural.host.config import DEFAULT_ACCOUNTS_URL, HostSettings
 
 console = Console()
+# How long the address waits for the system to say the browser opened.
+BROWSER_WAIT_S = 3.0
 
 
 def _store() -> AccountStore:
@@ -33,10 +36,13 @@ def login(
     """Link this computer to your Plural account."""
 
     def show(url: str, user_code: str) -> None:
-        opened = not no_browser and webbrowser.open(url)
-        console.print(
-            "Opening your browser to sign in." if opened else "Open this address to sign in:"
-        )
+        opened = None if no_browser else _open_browser(url)
+        if no_browser or opened is False:
+            console.print("Open this address to sign in:")
+        elif opened is None:
+            console.print("Opening your browser is slow. If nothing opens, use this address:")
+        else:
+            console.print("Opening your browser to sign in.")
         console.print(f"  {url}")
         console.print(
             f"Check that the page shows the code [bold]{user_code}[/bold]. Waiting for you…"
@@ -54,6 +60,21 @@ def login(
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(1) from error
     console.print(f"Linked to {escape(entitlement.email)}.")
+
+
+def _open_browser(url: str) -> bool | None:
+    """Asks the system to open `url`. True: done; False: it could not; None: still waiting.
+
+    On macOS this goes through AppleScript, which waits until the browser answers, so a browser
+    that is starting or stuck would hold the whole command. The address is shown either way.
+    """
+    outcome: list[bool] = []
+    attempt = threading.Thread(
+        target=lambda: outcome.append(webbrowser.open(url)), daemon=True, name="open-browser"
+    )
+    attempt.start()
+    attempt.join(BROWSER_WAIT_S)
+    return outcome[0] if outcome else None
 
 
 def logout() -> None:
