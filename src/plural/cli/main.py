@@ -318,6 +318,15 @@ def relay(
             envvar="PLURAL_RELAY_WEB_ORIGINS",
         ),
     ] = "",
+    accounts_url: Annotated[
+        str,
+        typer.Option(
+            "--accounts-url",
+            help="Accounts service whose certificates hosts may open rooms with. The relay "
+            "logs what it finds and refuses no one.",
+            envvar="PLURAL_RELAY_ACCOUNTS_URL",
+        ),
+    ] = "",
 ) -> None:
     import uvicorn
 
@@ -336,6 +345,7 @@ def relay(
             team_limits=TeamLimits(max_teams_per_owner=teams_per_owner),
             clients_only=clients_only,
             web_origins=[item.strip() for item in web_origins.split(",") if item.strip()],
+            accounts_url=accounts_url.strip() or None,
         ),
         host=bind,
         port=port,

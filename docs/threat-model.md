@@ -8,6 +8,7 @@
 | prompt injection via guest | provenance taint forces `ask` for write/exec (`core/policy/engine.py`) |
 | compound shell bypass (`ls; rm`) | allow rules ignored for compound commands → `ask` |
 | session `always` overriding deny | base deny rules are evaluated first and cannot be overridden |
+| a host passes as signed in with a certificate meant for another computer | a certificate names the host key it was issued for, and the relay counts one for another key as `other_key`, not `valid` (`relay/entitlements.py`) |
 | compromised relay | host signs tokens and checks permissions; relay only routes (`relay/`) |
 | token theft | 24h TTL, room binding, token bound to connection, revoked participants removed from state |
 | api key typed in the client reaches the wrong party | keys go only through the local stdin pipe between a client and the host it started, never over the protocol or a relay; the host registers them with the redactor (`host/control.py`) |
