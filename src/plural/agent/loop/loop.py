@@ -1,4 +1,5 @@
 import asyncio
+import re
 from collections import deque
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field, replace
@@ -33,6 +34,7 @@ from plural.agent.loop.events import (
 )
 from plural.agent.loop.gate import PolicyGate
 from plural.agent.loop.messages import (
+    HARNESS_SOURCE,
     PLUGIN_SOURCE,
     AssistantTurn,
     Message,
@@ -83,6 +85,28 @@ from plural.protocol.models import (
 )
 
 log = structlog.get_logger(__name__)
+
+
+# How often a run reminds the model that it stopped at a promise.
+MAX_NUDGES = 2
+NUDGE = (
+    "You said what you will do but called no tool, so nothing ran and your turn ended there. "
+    "Call the tools now in this answer. If the work is already done, give your final answer "
+    "instead."
+)
+# A short reply that ends on what the model is about to do: "I'll read pages.py next."
+_PROMISE = re.compile(
+    r"(?:^|[.!?:\n]\s*)(?:I['’]ll|I will|I am going to|I['’]m going to|Let me|Next,? I|"
+    r"Now I['’]ll|I['’]m waiting|I am waiting)\b",
+    re.IGNORECASE,
+)
+
+
+def promises(text: str) -> bool:
+    """A reply that announces work instead of reporting it. A long reply is a report even when
+    it says what comes next, so only short ones count."""
+    reply = text.strip()
+    return 0 < len(reply) <= 600 and _PROMISE.search(reply[-300:]) is not None
 
 
 class BriefingFailed(Exception):
@@ -380,6 +404,7 @@ class AgentLoop:
         self._compaction_failed = False
         self._verify_compaction = False
         recovering = False
+        nudges = 0
         recent: deque[str] = deque(maxlen=self._limits.repeat_limit)
         try:
             for _ in range(self._limits.max_turns):
@@ -456,6 +481,19 @@ class AgentLoop:
                     yield RunEnd(RunEndReason.LIMIT, self._usage, limit)
                     return
                 queued = self._next_input(has_tool_calls=has_tool_calls)
+                if (
+                    not has_tool_calls
+                    and not queued
+                    and nudges < MAX_NUDGES
+                    and promises(assistant.text)
+                ):
+                    # The model said what it would do and called nothing: a small model behind a
+                    # JSON answer does this, thinking the tools run on their own. One reminder
+                    # instead of ending the run on a promise.
+                    nudges += 1
+                    log.info("agent.nudged", text=assistant.text[:200])
+                    self._conversation.append(NotesTurn(source=HARNESS_SOURCE, text=NUDGE))
+                    continue
                 if not has_tool_calls and not queued:
                     yield RunEnd(RunEndReason.STOP, self._usage)
                     return
