@@ -91,7 +91,7 @@ A chat service can hand its own conversation to your session. In the session typ
 
 You are asked first, with a card that shows who sent it, how long it is and its beginning. Accepting puts it in your agent's notes as background, never as instructions, and removes secrets from it. Declining tells the chat so. Everyone in the room then works on top of it.
 
-The address stays the same when you resume the session, so a service is connected once. Anyone who has the address can ask to add something, so keep it private; nothing reaches the agent without your answer. It works only through a relay: start the session with `--relay <url>` (or in a team, which has one). Without a relay, `/import` says so. Whether you can add a custom connector, and whether it may write, depends on the service and your plan.
+The address belongs to your machine, so it stays the same for every session and a service is connected once. Anyone who has the address can ask to add something, so keep it private; nothing reaches the agent without your answer. The chat does not go through your session's relay: it goes through the MCP gateway ([plural-mcp](https://github.com/Plural-Organization/mcp)), which your host connects to and which keeps nothing. Name the gateway with `--mcp-url <url>` or `PLURAL_MCP_URL`; without one, `/import` says there is no address. Whether you can add a custom connector, and whether it may write, depends on the service and your plan.
 
 ## Share a session
 

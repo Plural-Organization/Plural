@@ -45,6 +45,7 @@ const HOST_VALUES: Record<string, string> = {
   "--public-url": "--public-url",
   "--room": "--room",
   "--import": "--import",
+  "--mcp-url": "--mcp-url",
   "--title": "--title",
   "-n": "--title",
 };

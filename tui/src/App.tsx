@@ -1102,7 +1102,7 @@ export function App({
         if (!isHost) {
           warn("import", "only the host can connect a chat service to this session");
         } else if (importUrl === null) {
-          warn("import", "this session runs without a relay, so it has no import link. Start it with --relay <url> (a relay of your own, or your team's)");
+          warn("import", "no import address: start with --mcp-url <gateway>");
         } else {
           show("import a chat", [
             [{ text: "Add this address as a custom connector (MCP) in Claude, ChatGPT or Grok:", bold: true }],

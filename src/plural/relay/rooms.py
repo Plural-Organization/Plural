@@ -9,7 +9,7 @@ import structlog
 from pydantic import ValidationError
 from starlette.websockets import WebSocket, WebSocketDisconnect
 
-from plural.protocol.relay import CALL_PREFIX, RELAY_MESSAGES, RelayClosed, RelayFrame, RelayOpen
+from plural.protocol.relay import RELAY_MESSAGES, RelayClosed, RelayFrame, RelayOpen
 from plural.relay.limits import PeerGate, RelayLimits, TokenBucket, peer_of
 from plural.security.tokens import TokenVerifier
 
@@ -53,28 +53,12 @@ class Outbox:
                 await self._socket.close(code)
 
 
-class CallFailed(Exception):
-    """A request for a room's host that got no answer. `status` is what to tell the caller."""
-
-    def __init__(self, status: int, reason: str) -> None:
-        super().__init__(reason)
-        self.status = status
-        self.reason = reason
-
-
-MAX_CALLS_PER_ROOM = 4
-
-
 @dataclass(slots=True)
 class Room:
     public_key: str
     host: Outbox | None = None
     guests: dict[str, Outbox] = field(default_factory=dict[str, Outbox])
     vacated_at: float | None = None
-    calls: dict[str, "asyncio.Future[str]"] = field(
-        default_factory=dict[str, "asyncio.Future[str]"]
-    )
-    call_bucket: TokenBucket | None = None
 
     def current_host(self) -> Outbox | None:
         return self.host
@@ -120,31 +104,6 @@ class Rooms:
             socket.client.host if socket.client else None,
             self._proxy_hops,
         )
-
-    async def call(self, room_id: str, data: str, *, timeout_s: float) -> str:
-        """Hand one request to the room's host and wait for its answer."""
-        self._sweep()
-        room = self._rooms.get(room_id)
-        host = room.current_host() if room is not None else None
-        if room is None or host is None:
-            raise CallFailed(404, "no host for this room")
-        if room.call_bucket is None:
-            room.call_bucket = TokenBucket(
-                self._limits.messages_per_second, self._limits.burst, self._clock
-            )
-        if not room.call_bucket.take() or len(room.calls) >= MAX_CALLS_PER_ROOM:
-            raise CallFailed(429, "too many requests")
-        call_id = f"{CALL_PREFIX}{secrets.token_hex(8)}"
-        future: asyncio.Future[str] = asyncio.get_running_loop().create_future()
-        room.calls[call_id] = future
-        try:
-            if not host.push(RelayFrame(conn=call_id, data=data).model_dump_json()):
-                raise CallFailed(503, "the host is busy")
-            return await asyncio.wait_for(future, timeout_s)
-        except TimeoutError:
-            raise CallFailed(504, "the host did not answer in time") from None
-        finally:
-            room.calls.pop(call_id, None)
 
     async def serve_host(self, socket: WebSocket, room_id: str) -> None:
         await socket.accept()
@@ -197,10 +156,6 @@ class Rooms:
             while True:
                 message = RELAY_MESSAGES.validate_json(await socket.receive_text())
                 match message:
-                    case RelayFrame(conn=connection_id, data=data) if connection_id in room.calls:
-                        waiting = room.calls[connection_id]
-                        if not waiting.done():
-                            waiting.set_result(data)
                     case RelayFrame(conn=connection_id, data=data):
                         guest = room.guests.get(connection_id)
                         if guest is not None and not guest.push(data):
@@ -216,9 +171,6 @@ class Rooms:
             if room.host is outbox:
                 room.host = None
                 room.vacated_at = self._clock()
-                for waiting in room.calls.values():
-                    if not waiting.done():
-                        waiting.set_exception(CallFailed(502, "the host went away"))
                 for connection_id in list(room.guests):
                     await self._drop(room, connection_id, CLOSE_NO_HOST)
 

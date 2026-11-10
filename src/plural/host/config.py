@@ -30,6 +30,8 @@ class HostSettings(BaseSettings):
     port: int = 7777
     public_url: str | None = None
     relay_url: str | None = None
+    # The MCP gateway a chat service sends chats through. Off until one is named.
+    mcp_url: str | None = None
     team: bool = False
     team_roster_ttl_s: float = Field(default=30, gt=0)
     preset: str | None = None

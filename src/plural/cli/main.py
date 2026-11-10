@@ -53,6 +53,10 @@ def host(
         bool, typer.Option("--local", help="Stay on this machine: no relay, direct mode.")
     ] = False,
     public_url: Annotated[str | None, typer.Option(help="Public ws(s) URL for links.")] = None,
+    mcp_url: Annotated[
+        str | None,
+        typer.Option(help="MCP gateway that lets Claude, ChatGPT or Grok send chats here."),
+    ] = None,
     room: Annotated[str | None, typer.Option(help="Resume an existing room.")] = None,
     title: Annotated[str | None, typer.Option(help="Name of this session.")] = None,
     import_from: Annotated[
@@ -92,6 +96,7 @@ def host(
         "port": port,
         "relay_url": relay,
         "public_url": public_url,
+        "mcp_url": mcp_url,
         "room": room,
         "title": title,
         "import_from": import_from,

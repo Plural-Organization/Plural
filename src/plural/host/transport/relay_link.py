@@ -1,5 +1,4 @@
 import asyncio
-from collections.abc import Awaitable, Callable
 from contextlib import suppress
 
 import structlog
@@ -10,10 +9,8 @@ from websockets.exceptions import ConnectionClosed, WebSocketException
 from plural.host.inbox import Disconnected, Inbox, Incoming
 from plural.protocol.envelope import Envelope
 from plural.protocol.relay import (
-    CALL_PREFIX,
     RELAY_MESSAGES,
     USER_AGENT,
-    CallReply,
     RelayClosed,
     RelayFrame,
     RelayOpen,
@@ -53,9 +50,7 @@ class RelayLink:
         signer: TokenSigner,
         queue_size: int = 4096,
         max_delay_s: float = 5,
-        on_call: Callable[[str], Awaitable[str]] | None = None,
     ) -> None:
-        self._on_call = on_call
         self._url = url.rstrip("/")
         self._room = room
         self._signer = signer
@@ -85,7 +80,6 @@ class RelayLink:
         await socket.send(opening.model_dump_json())
         outbox: asyncio.Queue[str] = asyncio.Queue(maxsize=self._queue_size)
         links: dict[str, RelayConnection] = {}
-        calls: set[asyncio.Task[None]] = set()
         writer = asyncio.create_task(_pump(socket, outbox))
         try:
             async for raw in socket:
@@ -94,12 +88,6 @@ class RelayLink:
                 except ValidationError:
                     continue
                 match message:
-                    case RelayFrame(conn=connection_id, data=data) if connection_id.startswith(
-                        CALL_PREFIX
-                    ):
-                        task = asyncio.create_task(self._answer(connection_id, data, outbox))
-                        calls.add(task)
-                        task.add_done_callback(calls.discard)
                     case RelayFrame(conn=connection_id, data=data):
                         link = links.get(connection_id)
                         if link is None:
@@ -118,22 +106,8 @@ class RelayLink:
                         pass
         finally:
             writer.cancel()
-            for task in calls:
-                task.cancel()
             for link in links.values():
                 await inbox.put_external(Disconnected(link))
-
-    async def _answer(self, connection_id: str, data: str, outbox: asyncio.Queue[str]) -> None:
-        """A plain request through the relay: the import link, never a participant."""
-        reply = CallReply(status=404).model_dump_json()
-        if self._on_call is not None:
-            try:
-                reply = await self._on_call(data)
-            except Exception:
-                log.exception("relay.call_failed")
-                reply = CallReply(status=500).model_dump_json()
-        with suppress(asyncio.QueueFull):
-            outbox.put_nowait(RelayFrame(conn=connection_id, data=reply).model_dump_json())
 
 
 async def _pump(socket: ClientConnection, outbox: asyncio.Queue[str]) -> None:

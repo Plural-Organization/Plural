@@ -3,7 +3,7 @@ from collections.abc import Collection
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
-from plural.protocol.relay import AGENT_PREFIXES, MCP_PATH
+from plural.protocol.relay import AGENT_PREFIXES
 
 OPEN_PATHS = frozenset({"/healthz"})
 
@@ -26,10 +26,7 @@ class ClientGate:
         return agent.startswith(AGENT_PREFIXES) or (origin != "" and origin in self._origins)
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        # The import link is called by a chat service's servers, which are not Plural clients. Its
-        # secret is in the path, and the host checks it.
-        open_path = scope["path"] in OPEN_PATHS or scope["path"].startswith(MCP_PATH)
-        guarded = scope["type"] in ("http", "websocket") and not open_path
+        guarded = scope["type"] in ("http", "websocket") and scope["path"] not in OPEN_PATHS
         if not guarded or self._allowed(scope):
             await self._app(scope, receive, send)
         elif scope["type"] == "websocket":

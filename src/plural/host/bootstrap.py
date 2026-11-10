@@ -33,7 +33,7 @@ from plural.host.approval_registry import ApprovalRegistry
 from plural.host.attachments import AttachmentVault
 from plural.host.board_desk import InboxDesk
 from plural.host.briefing import BriefingService
-from plural.host.chat_import import ChatDesk, ChatImport
+from plural.host.chat_import import ChatDesk
 from plural.host.config import HostSettings
 from plural.host.conflicts import ConflictBoard
 from plural.host.extras import extra_for
@@ -41,6 +41,7 @@ from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook, RoomLink
 from plural.host.ledger import ChangeLedger
+from plural.host.mcp_link import McpLink, import_address, load_or_create_secret
 from plural.host.plugins import PluginHost
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.providers import (
@@ -62,7 +63,6 @@ from plural.host.transport.relay_link import RelayLink
 from plural.importers import Imported, ImportNotFound, bring_in
 from plural.protocol.commands import BriefingImport
 from plural.protocol.models import HOST_PARTICIPANT_ID, Participant, Role
-from plural.protocol.relay import MCP_PATH
 from plural.security.keys import load_or_create_host_key
 from plural.security.secrets import Redactor
 from plural.security.tokens import TokenSigner
@@ -87,11 +87,14 @@ class Host:
     web_search: WebSearchSlot | None = None
     conflicts: ConflictBoard | None = None
     import_url: str | None = None
+    chat_link: McpLink | None = None
 
     async def serve(self) -> None:
         async with asyncio.TaskGroup() as group:
             group.create_task(self.actor.run(), name="actor")
             group.create_task(self.transport.serve(self.inbox), name="transport")
+            if self.chat_link is not None:
+                group.create_task(self.chat_link.serve(), name="mcp_link")
 
     async def close(self) -> None:
         if self.mcp is not None:
@@ -372,9 +375,9 @@ async def _assemble(
     )
     desk.attach(actor.board)
     await actor.start()
-    chat_import = await _chat_import(store, inbox, registry, ids, clock, settings)
+    chat_link, import_url = await _chat_link(inbox, registry, ids, clock, settings)
     transport: HostTransport = (
-        RelayLink(url=settings.relay_url, room=room, signer=signer, on_call=chat_import.handle)
+        RelayLink(url=settings.relay_url, room=room, signer=signer)
         if settings.relay_url
         else DirectTransport(host=settings.bind_host, port=settings.port)
     )
@@ -393,37 +396,27 @@ async def _assemble(
         mcp=mcp,
         web_search=web_search,
         conflicts=board,
-        import_url=import_link(settings.relay_url, room, chat_import.token),
+        import_url=import_url,
+        chat_link=chat_link,
     )
 
 
-async def _chat_import(
-    store: SqliteEventStore,
+async def _chat_link(
     inbox: Inbox,
     registry: ApprovalRegistry,
     ids: UlidGenerator,
     clock: SystemClock,
     settings: HostSettings,
-) -> ChatImport:
-    """The import link's server. Its secret is kept with the session, so the link survives a
-    restart and a chat service needs connecting only once."""
+) -> tuple[McpLink | None, str | None]:
+    """The link to the MCP gateway and the address a chat service is connected to. The secret
+    belongs to the machine, so the address survives restarts and new sessions."""
+    if not settings.mcp_url:
+        return None, None
     desk = ChatDesk(
         inbox=inbox, registry=registry, ids=ids, clock=clock, timeout_s=settings.approval_timeout_s
     )
-    token = await store.meta("import_token")
-    if token is None:
-        token = secrets.token_urlsafe(24)
-        await store.set_meta("import_token", token)
-    return ChatImport(desk.offer, token=token)
-
-
-def import_link(relay_url: str | None, room: str, token: str) -> str | None:
-    """Where a chat service posts, through the relay. Direct mode has no such address."""
-    if not relay_url:
-        return None
-    base = relay_url.rstrip("/")
-    base = base.replace("wss://", "https://", 1).replace("ws://", "http://", 1)
-    return f"{base}{MCP_PATH}{room}/{token}"
+    secret = await asyncio.to_thread(load_or_create_secret, settings.state_dir)
+    return McpLink(settings.mcp_url, secret, desk.offer), import_address(settings.mcp_url, secret)
 
 
 async def _team_profile(settings: HostSettings) -> TeamProfile:

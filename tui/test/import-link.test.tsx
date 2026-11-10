@@ -34,16 +34,16 @@ async function run(importUrl: string | null): Promise<string> {
   await setup.renderOnce();
   await setup.mockInput.typeText("/import");
   await setup.mockInput.pressEnter();
-  return frame(setup, importUrl ?? "--relay");
+  return frame(setup, importUrl ?? "--mcp-url");
 }
 
 test("/import shows the address a chat service sends to", async () => {
-  const text = await run("https://relay.example/mcp/r_1/abc123");
-  expect(text).toContain("https://relay.example/mcp/r_1/abc123");
+  const text = await run("https://mcp.example/i/abc123");
+  expect(text).toContain("https://mcp.example/i/abc123");
   expect(text).toContain("custom connector");
 });
 
-test("/import says why there is no address without a relay", async () => {
+test("/import says why there is no address without a gateway", async () => {
   const text = await run(null);
-  expect(text).toContain("--relay");
+  expect(text).toContain("--mcp-url");
 });
