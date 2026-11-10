@@ -8,6 +8,9 @@ import structlog
 from plural.agent.context.briefing import BRIEFING_TAG
 from plural.agent.context.compaction import (
     SUMMARY_SYSTEM,
+    CompactionFailed,
+    compacted,
+    cut,
     extract_tagged,
     summary_request,
     with_files,
@@ -78,10 +81,6 @@ from plural.protocol.models import (
 )
 
 log = structlog.get_logger(__name__)
-
-
-class CompactionFailed(Exception):
-    pass
 
 
 class BriefingFailed(Exception):
@@ -579,7 +578,9 @@ class AgentLoop:
         first = self._conversation[0] if self._conversation else None
         previous = first.text if isinstance(first, SummaryTurn) else None
         start = 1 if previous is not None else 0
-        end = self._cut(start) or len(self._conversation)
+        threshold = self._threshold()
+        budget = min(self._limits.keep_recent, threshold // 2 if threshold else 1 << 62)
+        end = cut(self._conversation, start, budget) or len(self._conversation)
         history = self._conversation[start:end]
         request = LlmRequest(
             system=SUMMARY_SYSTEM,
@@ -600,23 +601,9 @@ class AgentLoop:
                     raise
                 log.warning("agent.helper_compaction_failed", error=str(error))
         summary = with_files(summary, history, previous)
-        # Thinking blocks are bound to the history they were written after, which the summary
-        # replaces; the kept turns go on with their text and tool calls only.
-        tail = [
-            message.model_copy(update={"native": None})
-            if isinstance(message, AssistantTurn)
-            else message
-            for message in self._conversation[end:]
-        ]
-        kept_prompt = prompt is not None and any(
-            isinstance(message, UserTurn) and message.id == prompt.id for message in tail
-        )
+        tail = self._conversation[end:]
         before = self._tokens()
-        self._conversation = [
-            SummaryTurn(text=summary),
-            *([prompt] if prompt is not None and not kept_prompt else []),
-            *tail,
-        ]
+        self._conversation = compacted(summary, tail, prompt)
         self._context_tokens = 0
         self._measured = 0
         self._verify_compaction = True
@@ -631,23 +618,6 @@ class AgentLoop:
             summary_chars=len(summary),
         )
         return Compacted(summary, before, kept_from=kept_from(tail[0]) if tail else None)
-
-    def _cut(self, start: int) -> int | None:
-        """Where the kept part begins: about `keep_recent` tokens from the end, at a prompt or at
-        a turn that calls tools, so a tool result never loses its call. None keeps nothing."""
-        threshold = self._threshold()
-        budget = min(self._limits.keep_recent, threshold // 2 if threshold else 1 << 62)
-        points = [
-            index
-            for index in range(start + 1, len(self._conversation))
-            if kept_from(self._conversation[index]) is not None
-        ]
-        size = 0
-        for index in range(len(self._conversation) - 1, start, -1):
-            size += estimate_tokens(self._conversation[index])
-            if size >= budget:
-                return next((point for point in points if point >= index), None)
-        return None
 
     async def brief(self, instruction: str, *, cancel: asyncio.Event) -> str:
         """Write a briefing of the conversation, outside any run, without changing it."""

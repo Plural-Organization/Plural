@@ -11,6 +11,7 @@ import re
 from collections.abc import Iterable, Sequence
 from typing import Final
 
+from plural.agent.context.meter import estimate_tokens
 from plural.agent.loop.messages import (
     AssistantTurn,
     Message,
@@ -19,6 +20,7 @@ from plural.agent.loop.messages import (
     ToolResultTurn,
     UserTurn,
     attribute,
+    kept_from,
     notes_message,
 )
 from plural.agent.prompts import prompt, tag
@@ -122,3 +124,46 @@ def with_files(summary: str, history: Iterable[Message], previous: str | None) -
         if paths
     ]
     return "\n\n".join([_without_files(summary), *sections])
+
+
+class CompactionFailed(Exception):
+    pass
+
+
+def cut(conversation: Sequence[Message], start: int, budget: int) -> int | None:
+    """Where the kept part begins: about `budget` tokens from the end, at a prompt or at a turn
+    that calls tools, so a tool result never loses its call. None keeps nothing."""
+    points = [
+        index
+        for index in range(start + 1, len(conversation))
+        if kept_from(conversation[index]) is not None
+    ]
+    size = 0
+    for index in range(len(conversation) - 1, start, -1):
+        size += estimate_tokens(conversation[index])
+        if size >= budget:
+            return next((point for point in points if point >= index), None)
+    return None
+
+
+def compacted(summary: str, tail: Sequence[Message], prompt: UserTurn | None) -> list[Message]:
+    """The conversation after a compaction: the summary, the run's prompt, the kept turns.
+
+    Thinking blocks are bound to the history they were written after, which the summary
+    replaces; the kept turns go on with their text and tool calls only. The prompt is put back
+    after the summary unless it is among the kept turns already.
+    """
+    kept = [
+        message.model_copy(update={"native": None})
+        if isinstance(message, AssistantTurn)
+        else message
+        for message in tail
+    ]
+    kept_prompt = prompt is not None and any(
+        isinstance(message, UserTurn) and message.id == prompt.id for message in kept
+    )
+    return [
+        SummaryTurn(text=summary),
+        *([prompt] if prompt is not None and not kept_prompt else []),
+        *kept,
+    ]
