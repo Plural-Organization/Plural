@@ -11,13 +11,12 @@ from plural.agent.context.compaction import (
     CompactionFailed,
     compacted,
     cut,
-    extract_tagged,
     summary_request,
     with_files,
 )
 from plural.agent.context.context import ContextBuilder, system_text
 from plural.agent.context.meter import Sections, context_parts, estimate_tokens, signature
-from plural.agent.context.telemetry import RequestDump, hit_rate, observed
+from plural.agent.context.telemetry import RequestDump, hit_rate
 from plural.agent.loop.events import (
     AgentEvent,
     Compacted,
@@ -45,11 +44,11 @@ from plural.agent.loop.messages import (
     settled,
     to_llm,
 )
+from plural.agent.loop.models import Models
 from plural.agent.loop.tool_runner import ToolRunner
 from plural.agent.prompts import prompt
 from plural.agent.providers.base import (
     ContextOverflow,
-    LlmEvent,
     LlmMessage,
     LLMProvider,
     LlmRequest,
@@ -84,10 +83,6 @@ log = structlog.get_logger(__name__)
 
 
 class BriefingFailed(Exception):
-    pass
-
-
-class AskFailed(Exception):
     pass
 
 
@@ -147,16 +142,13 @@ class AgentLoop:
         helper: LLMProvider | None = None,
         dump: RequestDump | None = None,
     ) -> None:
-        self._dump = dump
-        self._spending: dict[tuple[str, str], Spend] = {}
         self._tools = tools
         self._gate = gate
         self._context = context
         self._tool_ctx = tool_ctx
         self._ids = ids
         self._limits = limits or LoopLimits()
-        self._provider = self._resilient(provider)
-        self._helper = self._resilient(helper) if helper is not None else None
+        self._models = Models(provider, helper, wrap=self._resilient, dump=dump)
         self._prompt: tuple[Sections, tuple[ToolSchema, ...]] | None = None
         self._conversation: list[Message] = []
         self._notes: list[NotesTurn] = []
@@ -173,7 +165,6 @@ class AgentLoop:
         self._compact_requested = False
         self._compaction_failed = False
         self._verify_compaction = False
-        self._provider_close_tasks: set[asyncio.Task[None]] = set()
         self._runner = ToolRunner(
             tools=tools, gate=gate, tool_ctx=tool_ctx, timeout_s=self._limits.tool_timeout_s
         )
@@ -181,30 +172,22 @@ class AgentLoop:
         self._revision = tools.revision
 
     def spend(self, role: str, who: str, usage: Usage, *, uses: int = 0) -> None:
-        key = (role, who)
-        previous = self._spending.get(key, Spend(role, who, Usage(), 0))
-        self._spending[key] = Spend(role, who, previous.usage + usage, previous.uses + uses)
+        self._models.spend(role, who, usage, uses=uses)
 
     def take_spending(self) -> tuple[Spend, ...]:
-        spending = tuple(
-            spend
-            for spend in self._spending.values()
-            if spend.uses or spend.usage.prompt_tokens or spend.usage.output_tokens
-        )
-        self._spending = {}
-        return spending
+        return self._models.take_spending()
 
     @property
     def provider(self) -> LLMProvider:
-        return self._provider.inner
+        return self._models.main.inner
 
     @property
     def helper(self) -> LLMProvider | None:
-        return self._helper.inner if self._helper is not None else None
+        return self._models.helper.inner if self._models.helper is not None else None
 
     @property
     def dump(self) -> RequestDump | None:
-        return self._dump
+        return self._models.dump
 
     @property
     def limits(self) -> LoopLimits:
@@ -231,15 +214,7 @@ class AgentLoop:
         context_window: int | None = None,
         helper: LLMProvider | None = None,
     ) -> None:
-        retired = [wrapper.inner for wrapper in (self._provider, self._helper) if wrapper]
-        self._provider = self._resilient(provider)
-        self._helper = self._resilient(helper) if helper is not None else None
-        for previous in retired:
-            close = getattr(previous, "close", None)
-            if close is not None and previous not in (provider, helper):
-                task = asyncio.create_task(close())
-                self._provider_close_tasks.add(task)
-                task.add_done_callback(self._provider_close_tasks.discard)
+        self._models.swap(provider, helper)
         self._limits = replace(self._limits, context_window=context_window)
         self._window = context_window
         self._conversation = [
@@ -253,11 +228,7 @@ class AgentLoop:
         self._compaction_failed = False
 
     async def close(self) -> None:
-        close = getattr(self._provider, "close", None)
-        if close is not None:
-            await close()
-        if self._provider_close_tasks:
-            await asyncio.gather(*self._provider_close_tasks, return_exceptions=True)
+        await self._models.close()
 
     def request_compaction(self) -> None:
         self._compact_requested = True
@@ -457,7 +428,7 @@ class AgentLoop:
     async def _model_turn(self, turn: _Turn, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         """One model call: its text and thinking go out as deltas, the rest is kept in `turn`."""
         measured = len(self._conversation)
-        async for event in self._events(self._request(), cancel):
+        async for event in self._models.stream(self._request(), cancel):
             match event:
                 case TextDelta(text=text):
                     turn.text.append(text)
@@ -541,7 +512,7 @@ class AgentLoop:
     async def _learn_window(self) -> None:
         if self._limits.context_window is not None:
             return
-        ask = getattr(self._provider.inner, "context_window", None)
+        ask = getattr(self._models.main.inner, "context_window", None)
         learned = await ask() if ask is not None else None
         if learned:
             self._window = learned
@@ -586,20 +557,9 @@ class AgentLoop:
             system=SUMMARY_SYSTEM,
             messages=(LlmMessage(role="user", content=summary_request(history, previous)),),
         )
-        summary = ""
-        role = "main"
-        for provider in (self._helper, self._provider):
-            if provider is None:
-                continue
-            try:
-                summary = await self._summarize(request, provider, cancel)
-                role = "fast" if provider is self._helper else "main"
-                self.spend(role, "compact", Usage(), uses=1)
-                break
-            except CompactionFailed as error:
-                if cancel.is_set() or provider is self._provider:
-                    raise
-                log.warning("agent.helper_compaction_failed", error=str(error))
+        summary, role = await self._models.tagged(
+            request, cancel, tag="summary", purpose="compact", counted=self._count
+        )
         summary = with_files(summary, history, previous)
         tail = self._conversation[end:]
         before = self._tokens()
@@ -629,21 +589,13 @@ class AgentLoop:
             messages=(*to_llm(history), LlmMessage(role="user", content=instruction)),
             tools=self._tools.schemas(),
         )
-        for provider in (self._helper, self._provider):
-            if provider is None:
-                continue
-            try:
-                text = await self._summarize(
-                    request, provider, cancel, tag=BRIEFING_TAG, purpose="briefing"
-                )
-            except CompactionFailed as error:
-                if cancel.is_set() or provider is self._provider:
-                    raise BriefingFailed(str(error)) from error
-                log.warning("agent.helper_briefing_failed", error=str(error))
-                continue
-            self.spend("fast" if provider is self._helper else "main", "briefing", Usage(), uses=1)
-            return text
-        raise BriefingFailed("no model is available")
+        try:
+            text, _ = await self._models.tagged(
+                request, cancel, tag=BRIEFING_TAG, purpose="briefing"
+            )
+        except CompactionFailed as error:
+            raise BriefingFailed(str(error)) from error
+        return text
 
     async def ask(self, question: str, *, history: bool, main: bool, cancel: asyncio.Event) -> str:
         """Answer one question outside any run, without changing the conversation."""
@@ -653,85 +605,10 @@ class AgentLoop:
             messages=(*past, LlmMessage(role="user", content=question + ASIDE)),
             tools=self._tools.schemas(),
         )
-        providers = [self._provider] if main else [p for p in (self._helper, self._provider) if p]
-        for provider in providers:
-            role = "fast" if provider is self._helper else "main"
-            text: list[str] = []
-            try:
-                async for event in self._events(request, cancel, provider, purpose="ask"):
-                    match event:
-                        case TextDelta(text=chunk):
-                            text.append(chunk)
-                        case UsageReport(usage=delta):
-                            self.spend(role, "plugin", delta)
-                        case _:
-                            pass
-            except ProviderError as error:
-                if cancel.is_set() or provider is self._provider:
-                    raise AskFailed(str(error)) from error
-                log.warning("agent.helper_ask_failed", error=str(error))
-                continue
-            self.spend(role, "plugin", Usage(), uses=1)
-            answer = "".join(text).strip()
-            if not answer:
-                raise AskFailed("the model gave no answer")
-            return answer
-        raise AskFailed("no model is available")
+        return await self._models.answer(request, cancel, main=main)
 
-    async def _summarize(
-        self,
-        request: LlmRequest,
-        provider: LLMProvider,
-        cancel: asyncio.Event,
-        *,
-        tag: str = "summary",
-        purpose: str = "compact",
-    ) -> str:
-        text: list[str] = []
-        called = False
-        cut_off = False
-        role = "fast" if provider is self._helper else "main"
-        try:
-            async for event in self._events(request, cancel, provider, purpose=purpose):
-                match event:
-                    case TextDelta(text=chunk):
-                        text.append(chunk)
-                    case ToolCallReady():
-                        called = True
-                    case Stop(reason="max_tokens"):
-                        cut_off = True
-                    case UsageReport(usage=delta):
-                        if purpose == "compact":
-                            self._usage = self._usage + delta
-                        self.spend(role, purpose, delta)
-                    case _:
-                        pass
-        except ProviderError as error:
-            raise CompactionFailed(str(error)) from error
-        summary = extract_tagged("".join(text), tag)
-        if cut_off:
-            raise CompactionFailed("the summary was cut off at the output limit")
-        if cancel.is_set() or called or not summary:
-            raise CompactionFailed("the model did not produce a summary")
-        return summary
-
-    def _events(
-        self,
-        request: LlmRequest,
-        cancel: asyncio.Event,
-        provider: LLMProvider | None = None,
-        *,
-        purpose: str = "turn",
-    ) -> AsyncIterator[LlmEvent]:
-        chosen = provider or self._provider
-        dumped = self._dump.write(request, purpose) if self._dump is not None else None
-        return observed(
-            chosen.stream(request, cancel=cancel),
-            request,
-            purpose=purpose,
-            role="fast" if chosen is self._helper else "main",
-            dumped=dumped,
-        )
+    def _count(self, usage: Usage) -> None:
+        self._usage = self._usage + usage
 
     def _next_input(self, *, has_tool_calls: bool) -> list[UserTurn]:
         if self._steer:

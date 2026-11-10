@@ -13,8 +13,9 @@ import structlog
 from pydantic import ValidationError
 
 from plural.agent.loop import events as agent
-from plural.agent.loop.loop import AskFailed, BriefingFailed
+from plural.agent.loop.loop import BriefingFailed
 from plural.agent.loop.messages import Message, NotesTurn, UserTurn
+from plural.agent.loop.models import AskFailed
 from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.prompts import prompt
 from plural.agent.providers.base import LlmImage
