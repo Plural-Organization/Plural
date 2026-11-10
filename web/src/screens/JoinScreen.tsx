@@ -1,12 +1,10 @@
-import { Description, Header, Label, ListBox, type Key } from "@heroui/react";
 import { useState } from "react";
 import type { JoinLink } from "@plural/client";
 import { JoinFlow } from "../components/JoinFlow";
 import { LogoMark } from "../components/LogoMark";
-import { PersonAvatar } from "../components/PersonAvatar";
+import { RecentRooms } from "../components/RecentRooms";
 import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
-import { hostOf } from "../lib/links";
 import { forgetRoom, linkOf, savedRooms, type SavedRoom } from "../lib/saved";
 
 interface JoinScreenProps {
@@ -20,12 +18,6 @@ interface JoinScreenProps {
 // The page for someone with no room open and no team yet.
 export function JoinScreen({ notice, team, account, onJoin, onTeamJoined }: JoinScreenProps) {
   const [rooms, setRooms] = useState<SavedRoom[]>(savedRooms);
-  const reopen = (key: Key) => {
-    const room = rooms.find((item) => item.room === key);
-    if (room !== undefined) {
-      onJoin(linkOf(room), room.name);
-    }
-  };
   return (
     <main className="relative isolate flex min-h-full flex-col items-center justify-center overflow-hidden px-4 py-12">
       <div className="pixel-grid" aria-hidden="true" />
@@ -47,34 +39,14 @@ export function JoinScreen({ notice, team, account, onJoin, onTeamJoined }: Join
             <JoinFlow team={team} account={account} onJoin={onJoin} onTeamJoined={onTeamJoined} />
           </div>
         </div>
-        {rooms.length > 0 ? (
-          <div className="mt-6">
-            <ListBox aria-label="Rooms you were in" selectionMode="none" onAction={reopen}>
-              <ListBox.Section>
-                <Header>Rooms you were in</Header>
-                {rooms.map((room) => (
-                  <ListBox.Item key={room.room} id={room.room} textValue={room.room}>
-                    <PersonAvatar seed={room.room} />
-                    <div className="flex min-w-0 flex-col">
-                      <Label className="truncate font-mono text-[13px]">{room.room}</Label>
-                      <Description className="truncate">as {room.name} on {hostOf(room.url)}</Description>
-                    </div>
-                  </ListBox.Item>
-                ))}
-              </ListBox.Section>
-            </ListBox>
-            <button
-              type="button"
-              className="link-button mt-1 ml-3"
-              onClick={() => {
-                rooms.forEach((room) => forgetRoom(room.room));
-                setRooms([]);
-              }}
-            >
-              Forget these rooms
-            </button>
-          </div>
-        ) : null}
+        <RecentRooms
+          rooms={rooms}
+          onReopen={(room) => onJoin(linkOf(room), room.name)}
+          onForget={() => {
+            rooms.forEach((room) => forgetRoom(room.room));
+            setRooms([]);
+          }}
+        />
         <p className="mt-8 text-center text-sm text-muted">
           <a href="https://plrl.host" className="text-muted underline-offset-4 hover:text-foreground hover:underline">What is Plural?</a>
         </p>

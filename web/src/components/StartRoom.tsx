@@ -1,5 +1,6 @@
-import { Button, Description, Input, Label, Spinner, TextField } from "@heroui/react";
+import { Alert, Button, Card, Chip, Description, Input, Label, Spinner, TextField } from "@heroui/react";
 import { ArrowLeft, Folder, FolderOpen } from "@phosphor-icons/react";
+import type { ReactNode } from "react";
 import { useState } from "react";
 import { parseLink, type JoinLink } from "@plural/client";
 import { useDaemon } from "../hooks/useDaemon";
@@ -14,34 +15,46 @@ interface StartRoomProps {
   onOpen: (link: JoinLink, name: string) => void;
 }
 
+function Step({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <Card variant="secondary">
+      <Card.Header>
+        <Card.Title className="text-[15px]">{title}</Card.Title>
+      </Card.Header>
+      <Card.Content className="gap-2.5">{children}</Card.Content>
+    </Card>
+  );
+}
+
+// Shown while no Plural answers on this computer: what to run, and that the page notices on its own.
 function Steps({ unlinked }: { unlinked: boolean }) {
   return (
-    <div className="flex flex-col gap-4">
-      <div className="rounded-2xl border border-border bg-background p-4">
-        <p className="text-[15px] font-medium">{unlinked ? "Plural is running, but not signed in" : "Plural is not running on this computer"}</p>
-        <p className="mt-1 text-sm leading-relaxed text-muted text-pretty">
-          {unlinked ? "Link it to your account, then this page picks it up on its own." : "Start it once and this page picks it up on its own."}
-        </p>
-      </div>
+    <div className="flex flex-col gap-3">
+      <Alert status="warning">
+        <Alert.Indicator />
+        <Alert.Content>
+          <Alert.Title>{unlinked ? "Plural is running, but not signed in" : "Plural is not running on this computer"}</Alert.Title>
+          <Alert.Description>
+            {unlinked ? "Link it to your account and this page picks it up on its own." : "Start it once and this page picks it up on its own."}
+          </Alert.Description>
+        </Alert.Content>
+      </Alert>
       {unlinked ? null : (
-        <section className="flex flex-col gap-2">
-          <h3 className="text-[15px] font-medium">1. Install Plural</h3>
+        <Step title="1. Install Plural">
           <CopyBox text={INSTALL} label="Copy the install command" />
-        </section>
+        </Step>
       )}
-      <section className="flex flex-col gap-2">
-        <h3 className="text-[15px] font-medium">{unlinked ? "1" : "2"}. Sign in from the terminal</h3>
+      <Step title={`${unlinked ? "1" : "2"}. Sign in from the terminal`}>
         <CopyBox text="plural login" label="Copy the login command" />
-        <p className="text-sm text-muted">It opens your browser to approve this computer.</p>
-      </section>
+        <Description>It opens your browser to approve this computer.</Description>
+      </Step>
       {unlinked ? null : (
-        <section className="flex flex-col gap-2">
-          <h3 className="text-[15px] font-medium">3. Let this page start rooms</h3>
+        <Step title="3. Let this page start rooms">
           <CopyBox text="plural daemon" label="Copy the daemon command" />
-          <p className="text-sm leading-relaxed text-muted text-pretty">
+          <Description>
             Your browser will ask to access your local network. Choose <strong className="font-medium text-foreground">Allow</strong>: that is how this page talks to Plural on your own computer, and to nothing else.
-          </p>
-        </section>
+          </Description>
+        </Step>
       )}
       <p className="flex items-center gap-2 text-sm text-muted">
         <Spinner size="sm" color="current" />
@@ -82,7 +95,7 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
     setProblem(null);
     setBusy("room");
     startRoom(folder.folder, title)
-      .then((room) => onOpen(parseLink(room.host_link), account.name !== "" ? account.name : account.email.split("@")[0] ?? "host"))
+      .then((room) => onOpen(parseLink(room.host_link), account.name !== "" ? account.name : (account.email.split("@")[0] ?? "host")))
       .catch((error: unknown) => {
         fail(error);
         setBusy(null);
@@ -91,9 +104,10 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
 
   return (
     <div className="enter flex flex-col gap-4">
-      <button type="button" className="link-button -ml-1 self-start" onClick={onBack}>
-        <ArrowLeft size={14} /> Back
-      </button>
+      <Button variant="ghost" size="sm" className="-ml-2 self-start" onPress={onBack}>
+        <ArrowLeft size={15} />
+        Back
+      </Button>
       <div>
         <h2 className="text-2xl font-medium tracking-[-0.02em]">Start a room</h2>
         <p className="mt-1.5 text-[15px] leading-relaxed text-muted text-pretty">
@@ -103,27 +117,35 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
 
       {phase === "ready" ? (
         <div className="flex flex-col gap-4">
-          <p className="flex items-center gap-2 text-sm text-success">
-            <span className="size-2 rounded-full bg-success" aria-hidden="true" />
-            Plural is running on this computer
-          </p>
-          <div className="flex items-center gap-3 rounded-2xl border border-border bg-background px-3.5 py-3">
-            {folder === null ? <Folder size={20} className="flex-none text-muted" /> : <FolderOpen size={20} weight="fill" className="flex-none" />}
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[15px] font-medium">{folder === null ? "No folder chosen" : folder.name}</p>
-              <p className="text-sm text-muted">{folder === null ? "The agent works only inside it." : "The agent works only inside this folder."}</p>
-            </div>
-            <Button size="sm" variant="secondary" onPress={choose} isDisabled={busy !== null}>
-              {busy === "folder" ? <Spinner size="sm" color="current" /> : null}
-              {folder === null ? "Choose folder" : "Change"}
-            </Button>
-          </div>
+          <Chip color="success" variant="soft" className="self-start">
+            <Chip.Label>Plural is running on this computer</Chip.Label>
+          </Chip>
+          <Card variant="secondary">
+            <Card.Content className="flex-row items-center gap-3">
+              {folder === null ? <Folder size={20} className="flex-none text-muted" /> : <FolderOpen size={20} weight="fill" className="flex-none" />}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[15px] font-medium">{folder === null ? "No folder chosen" : folder.name}</p>
+                <Description>The agent works only inside {folder === null ? "the folder you choose" : "this folder"}.</Description>
+              </div>
+              <Button size="sm" variant="secondary" onPress={choose} isDisabled={busy !== null}>
+                {busy === "folder" ? <Spinner size="sm" color="current" /> : null}
+                {folder === null ? "Choose folder" : "Change"}
+              </Button>
+            </Card.Content>
+          </Card>
           <TextField value={title} onChange={setTitle} name="title">
             <Label>Room name</Label>
             <Input placeholder="Optional" maxLength={80} autoComplete="off" />
             <Description>Shown to the people you invite.</Description>
           </TextField>
-          {problem === null ? null : <p className="text-sm text-danger">{problem}</p>}
+          {problem === null ? null : (
+            <Alert status="danger">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Description>{problem}</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          )}
           <Button fullWidth size="lg" onPress={start} isDisabled={folder === null || busy !== null}>
             {busy === "room" ? "Starting…" : "Start room"}
           </Button>
