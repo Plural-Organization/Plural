@@ -2,6 +2,11 @@
 
 import json
 from typing import cast
+from uuid import uuid4
+
+from pydantic import JsonValue
+
+from plural.agent.providers.base import ToolCallRequest
 
 
 def _string_end(raw: str, start: int) -> int | None:
@@ -188,3 +193,30 @@ def parse_answer(raw: str) -> tuple[str, list[tuple[str, dict[str, object]]]] | 
                 calls.append((name, cast("dict[str, object]", args)))
         return (text if isinstance(text, str) else ""), calls
     return None
+
+
+def tool_call(raw: object, prefix: str = "toolu") -> ToolCallRequest:
+    """One tool call of a structured answer, as Plural runs it.
+
+    A call it cannot use still goes on, with a parse error the run sends back to the model as
+    the call's result: one bad call should cost the model a retry, not end the run. `args` may be
+    an object, or a JSON-encoded one as a strict schema has it.
+    """
+    call_id = f"{prefix}_{uuid4().hex}"
+    if not isinstance(raw, dict):
+        return ToolCallRequest(id=call_id, name="unknown", parse_error="a tool call is an object")
+    call = cast("dict[str, object]", raw)
+    name = call.get("name")
+    if not isinstance(name, str) or not name:
+        return ToolCallRequest(id=call_id, name="unknown", parse_error="a tool call needs a name")
+    args: object = call.get("args", call.get("arguments", {}))
+    if isinstance(args, str):
+        try:
+            args = cast("object", json.loads(args)) if args.strip() else {}
+        except ValueError as error:
+            return ToolCallRequest(
+                id=call_id, name=name, parse_error=f"args are not valid JSON: {error}"
+            )
+    if not isinstance(args, dict):
+        return ToolCallRequest(id=call_id, name=name, parse_error="args must be a JSON object")
+    return ToolCallRequest(id=call_id, name=name, args=cast("dict[str, JsonValue]", args))

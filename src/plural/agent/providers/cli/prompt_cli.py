@@ -14,26 +14,24 @@ import json
 import os
 import tempfile
 from abc import abstractmethod
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
+from hashlib import sha256
 from pathlib import Path
 from typing import Final, cast
-from uuid import uuid4
-
-from pydantic import JsonValue
 
 from plural.agent.providers.base import (
     LlmEvent,
+    LlmMessage,
     LlmRequest,
     ProviderActivity,
     ProviderError,
     Stop,
     TextDelta,
     ToolCallReady,
-    ToolCallRequest,
     UsageReport,
 )
-from plural.agent.providers.cli.answer import TextFieldStream, parse_answer
+from plural.agent.providers.cli.answer import TextFieldStream, parse_answer, tool_call
 from plural.agent.providers.cli.base import CliProvider
 from plural.protocol.models import Usage
 
@@ -60,6 +58,10 @@ class Event:
     # A whole message, which replaces what streamed before it.
     message: str | None = None
     usage: Usage | None = None
+    # One request's usage, added to the others' instead of standing for the whole answer.
+    request: Usage | None = None
+    # What streamed so far was the model thinking aloud before a call of its own: start again.
+    restart: bool = False
     error: str | None = None
 
 
@@ -73,6 +75,31 @@ class Call:
 ASK: Final = "Answer the request above as instructed."
 
 
+def conversation_key(request: LlmRequest) -> str:
+    """A conversation's identity: its system prompt, its tools and its first message. Requests
+    with the same key continue one another; a compaction, a sub-agent or a side question has a
+    key of its own."""
+    first = request.messages[0].model_dump_json(exclude={"images"}) if request.messages else ""
+    tools = json.dumps([tool.model_dump(mode="json") for tool in request.tools])
+    return sha256(f"{request.system}\0{tools}\0{first}".encode()).hexdigest()
+
+
+def continuation_text(messages: Sequence[LlmMessage]) -> str:
+    """The messages that came since the model's last answer, for a CLI that kept the rest."""
+    parts = ["<conversation_continues>"]
+    parts += [_message(message) for message in messages]
+    parts.append("</conversation_continues>")
+    parts.append("Reply with one JSON object as before: text and tool_calls.")
+    return "\n".join(parts)
+
+
+def _message(message: LlmMessage) -> str:
+    dumped = message.model_dump(mode="json", exclude_none=True, exclude={"images"})
+    if message.images:
+        dumped["images"] = f"{len(message.images)} image(s) not shown to this model"
+    return json.dumps(dumped, ensure_ascii=False)
+
+
 def prompt_text(request: LlmRequest) -> str:
     """The whole request as one prompt: instructions, system prompt, tools, then each message."""
     tools = [tool.model_dump(mode="json") for tool in request.tools]
@@ -82,11 +109,7 @@ def prompt_text(request: LlmRequest) -> str:
         "<tools>\n" + json.dumps(tools, ensure_ascii=False) + "\n</tools>",
         "<conversation>",
     ]
-    for message in request.messages:
-        dumped = message.model_dump(mode="json", exclude_none=True, exclude={"images"})
-        if message.images:
-            dumped["images"] = f"{len(message.images)} image(s) not shown to this model"
-        parts.append(json.dumps(dumped, ensure_ascii=False))
+    parts += [_message(message) for message in request.messages]
     parts.append("</conversation>")
     return "\n".join(parts)
 
@@ -117,6 +140,10 @@ class PromptCliProvider(CliProvider):
     def model_flag(self, flag: str) -> list[str]:
         return [flag, self._model] if self._model else []
 
+    def environment(self) -> dict[str, str]:
+        """Variables the CLI gets on top of the host's own."""
+        return {}
+
     async def stream(
         self, request: LlmRequest, *, cancel: asyncio.Event
     ) -> AsyncIterator[LlmEvent]:
@@ -140,7 +167,7 @@ class PromptCliProvider(CliProvider):
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 limit=16 * 1024 * 1024,
-                env={**os.environ, "NO_COLOR": "1", "CI": "1"},
+                env={**os.environ, "NO_COLOR": "1", "CI": "1", **self.environment()},
             )
         except OSError as failure:
             raise ProviderError(f"Could not start {self.label}: {failure}") from failure
@@ -159,6 +186,9 @@ class PromptCliProvider(CliProvider):
         message: str | None = None
         loose: list[str] = []
         usage: Usage | None = None
+        # Requests reported one by one: their sum, and the last one, whose prompt is the context.
+        spent: Usage | None = None
+        last: Usage | None = None
         error: str | None = None
         try:
             while True:
@@ -192,6 +222,9 @@ class PromptCliProvider(CliProvider):
                 )
                 if event is None:
                     continue
+                if event.restart:
+                    deltas = ""
+                    text_stream = TextFieldStream()
                 if event.delta:
                     deltas += event.delta
                     text = text_stream.feed(event.delta)
@@ -201,6 +234,9 @@ class PromptCliProvider(CliProvider):
                 if event.message is not None:
                     message = event.message
                 usage = event.usage or usage
+                if event.request is not None:
+                    spent = event.request if spent is None else spent + event.request
+                    last = event.request
                 error = event.error or error
             await process.wait()
         finally:
@@ -216,6 +252,10 @@ class PromptCliProvider(CliProvider):
         if error or (process.returncode != 0 and not raw.strip()):
             detail = error or stderr[-300:] or f"exit code {process.returncode}"
             raise ProviderError(f"{self.label}: {detail}. If signed out: {self.login}.")
+        if not raw.strip():
+            # An empty answer is a CLI whose output Plural could not read, not a model with
+            # nothing to say: passing it on would end the run as if the work were done.
+            raise ProviderError(f"{self.label} gave no answer Plural could read.")
         answer = parse_answer(raw)
         text, calls = answer if answer is not None else (raw.strip(), [])
         remaining = (
@@ -223,17 +263,11 @@ class PromptCliProvider(CliProvider):
         )
         if remaining:
             yield TextDelta(text=remaining)
-        names = {tool.name for tool in request.tools}
         for name, args in calls:
-            if name not in names:
-                raise ProviderError(f"{self.label} requested an unavailable tool: {name}")
-            yield ToolCallReady(
-                call=ToolCallRequest(
-                    id=f"toolu_{uuid4().hex}",
-                    name=name,
-                    args=cast("dict[str, JsonValue]", args),
-                )
-            )
-        if usage is not None:
+            # A tool Plural lacks comes back to the model as the call's error.
+            yield ToolCallReady(call=tool_call({"name": name, "args": args}))
+        if spent is not None:
+            yield UsageReport(usage=spent, last=last)
+        elif usage is not None:
             yield UsageReport(usage=usage)
         yield Stop(reason="tool_use" if calls else "end_turn")
