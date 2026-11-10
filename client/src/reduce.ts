@@ -9,6 +9,7 @@ export const BOARD_TOTAL_POINTS = 200_000;
 
 export function emptyState(): SessionState {
   return {
+    preview: null,
     last_seq: 0,
     prompt_mode: "open",
     permission_mode: "default",
@@ -119,6 +120,8 @@ function apply(state: SessionState, record: EventRecord): SessionState {
           },
         ].slice(-CHAT_LIMIT),
       };
+    case "preview.changed":
+      return { ...state, preview: event.preview };
     case "board.opened":
       return { ...state, board: { ...state.board, open: event.open } };
     case "board.stroked":

@@ -1,7 +1,7 @@
 {
   "name": "plural-web",
   "private": true,
-  "version": "0.2.18",
+  "version": "0.2.22",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,10 +10,16 @@
     "build": "tsc --noEmit && vite build"
   },
   "dependencies": {
+    "@heroui/react": "^3.2.7",
+    "@heroui/styles": "^3.2.7",
+    "@phosphor-icons/react": "^2.1.10",
     "@plural/client": "*",
+    "@tailwindcss/postcss": "^4.3.5",
+    "postcss": "^8.5.32",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "sucrase": "^3.35.1"
+    "sucrase": "^3.35.1",
+    "tailwindcss": "^4.3.5"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",

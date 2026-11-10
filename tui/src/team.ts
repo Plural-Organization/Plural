@@ -1,9 +1,12 @@
 import { createHash, createPrivateKey, sign, type KeyObject } from "node:crypto";
 import {
   createTeamInvite as inviteOnRelay,
+  disbandTeamOnRelay,
   fetchSessions as sessionsOnRelay,
   httpBase,
   isTunnelHost,
+  leaveTeamOnRelay,
+  RelayError,
   teamProof as proveJoin,
   USER_AGENT,
   type SessionCard,
@@ -85,4 +88,19 @@ export async function leaveClosedTunnel(directory: string = dataDir(), fetcher: 
   }
   clearTeam(directory);
   return `you left ${team.profile.team_name}: its tunnel is closed, and a team on a tunnel ends with it`;
+}
+
+// Leaves the team, or deletes it for everyone when this is its owner (the relay refuses an owner who only leaves).
+// A relay that no longer knows this member (401, 404: the team is gone, the member was removed, the certificate
+// ran out) leaves nothing to undo there, so the profile is cleared all the same.
+export async function leaveTeam(team: Team, directory: string = dataDir(), fetcher: typeof fetch = fetch): Promise<void> {
+  const platform = platformOf(team, fetcher);
+  try {
+    await (team.profile.member.role === "owner" ? disbandTeamOnRelay(team.profile, platform) : leaveTeamOnRelay(team.profile, platform));
+  } catch (error) {
+    if (!(error instanceof RelayError && (error.status === 401 || error.status === 404))) {
+      throw error;
+    }
+  }
+  clearTeam(directory);
 }

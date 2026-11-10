@@ -1,3 +1,4 @@
+import { Spinner } from "@heroui/react";
 import type { Activity as Current } from "../../lib/activity";
 import { cx } from "../../lib/cx";
 import styles from "./Activity.module.css";
@@ -8,7 +9,7 @@ export function Activity({ activity }: { activity: Current | null }) {
   }
   return (
     <div className={cx(styles.activity, styles[activity.kind])} role="status" aria-live="polite">
-      <span className={styles.pulse} aria-hidden="true" />
+      <Spinner size="sm" color="current" />
       <span className={styles.text}>
         {activity.text}
         <span className={styles.dots} aria-hidden="true" />

@@ -1,7 +1,8 @@
 import { useRenderer } from "@opentui/react";
-import { teamJoinCommand, type Session, type SessionCard, type TeamView, type TeamWatcher } from "@plural/client";
+import { askTeammate, pickTeamSession, teamJoinCommand, type Session, type SessionCard, type TeamView, type TeamWatcher } from "@plural/client";
 import { useEffect, useMemo, useState } from "react";
 import { App, type AppProps } from "./App";
+import type { AskTarget } from "./commands";
 import { buildSpaces, OWN, ownConflicts, type Phase, type Summary, type Visit } from "./spaces";
 import { DEFAULT_SETTINGS, type Settings } from "./settings";
 import { createTeamInvite, type Team } from "./team";
@@ -12,6 +13,8 @@ export interface ShellProps {
   watcher?: TeamWatcher;
   home: string;
   shareHost?: (folder: string) => Promise<void>;
+  // Leaves the team on the relay and forgets it here; without it the panel has no leave button.
+  leave?: (team: Team) => Promise<void>;
   connect: (card: SessionCard, team: Team) => Session;
 }
 
@@ -26,9 +29,12 @@ const TITLES: Record<Phase, string> = {
   idle: "plural",
 };
 
-export function Shell({ app, team, watcher, home, shareHost, connect }: ShellProps) {
+export function Shell({ app, team: joined, watcher, home, shareHost, leave: leaveOnRelay, connect }: ShellProps) {
   const renderer = useRenderer();
   const [settings, setSettings] = useState<Settings>(app.settings ?? DEFAULT_SETTINGS);
+  // Leaving takes effect at once: the panel, the visits and the host's share go, whatever the relay is doing.
+  const [left, setLeft] = useState(false);
+  const team = left ? null : joined;
   const [view, setView] = useState<TeamView | null>(watcher?.view ?? null);
   const [visits, setVisits] = useState<Open[]>([]);
   const [active, setActive] = useState(OWN);
@@ -36,7 +42,7 @@ export function Shell({ app, team, watcher, home, shareHost, connect }: ShellPro
 
   useEffect(() => watcher?.subscribe(setView), [watcher]);
 
-  const rows = useMemo(() => buildSpaces({ home, team: view, visits, active, summaries }), [home, view, visits, active, summaries]);
+  const rows = useMemo(() => buildSpaces({ home, team: left ? null : view, visits, active, summaries }), [home, left, view, visits, active, summaries]);
 
   const own = summaries[OWN]?.phase ?? "idle";
   useEffect(() => {
@@ -67,12 +73,43 @@ export function Shell({ app, team, watcher, home, shareHost, connect }: ShellPro
 
   const summary = (id: string) => (next: Summary) => setSummaries((current) => (current[id]?.phase === next.phase ? current : { ...current, [id]: next }));
 
-  const conflicts = useMemo(() => ownConflicts(view), [view]);
+  const conflicts = useMemo(() => ownConflicts(left ? null : view), [left, view]);
+  const leave =
+    team === null || leaveOnRelay === undefined
+      ? undefined
+      : {
+          owner: team.profile.member.role === "owner",
+          run: async (): Promise<void> => {
+            await leaveOnRelay(team);
+            watcher?.stop();
+            setVisits([]);
+            setActive(OWN);
+            setLeft(true);
+          },
+        };
+  // Everyone else who shares a session; a name that has several says which one after a colon.
+  const askTargets = useMemo<AskTarget[]>(() => {
+    const others = team === null || left ? [] : (view?.sessions ?? []).filter((card) => card.owner_id !== team.profile.member.id);
+    return others.map((card) => ({
+      name: others.filter((other) => other.owner === card.owner).length > 1 ? `${card.owner}:${card.repo}` : card.owner,
+      detail: `${card.repo}${card.branch === null ? "" : ` · ${card.branch}`} · ${card.status}`,
+    }));
+  }, [team, left, view]);
+  const ask =
+    team === null
+      ? undefined
+      : async (target: string, request: { focus: string | null; update: boolean }, progress: (text: string) => void) => {
+          const card = pickTeamSession(view?.sessions ?? [], team.profile.member.id, target);
+          return askTeammate(connect(card, team), request, { from: card.owner, onProgress: progress });
+        };
   const shared = {
+    onAsk: ask,
+    askTargets,
     spaces: rows,
-    teamName: view?.name ?? null,
-    teamError: view?.error ?? null,
+    teamName: team === null ? null : (view?.name ?? null),
+    teamError: team === null ? null : (view?.error ?? null),
     onOpenSpace: open,
+    onLeaveTeam: leave,
   };
   const inviteTeam =
     team !== null && team.profile.member.role === "owner"

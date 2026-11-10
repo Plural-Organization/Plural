@@ -1,18 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { label, mentionable, status, type JoinLink, type ProposalView, type SessionCard } from "@plural/client";
+import { Alert, Button, Spinner } from "@heroui/react";
+import { ArrowDown } from "@phosphor-icons/react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { label, mentionable, status, type JoinLink, type ProposalView } from "@plural/client";
 import { Board, type Pointer } from "../components/Board";
 import { Canvas } from "../components/Canvas";
 import { Composer } from "../components/Composer";
 import { QuoteButton } from "../components/QuoteButton";
 import { SelectionLayer, type Selector } from "../components/SelectionLayer";
 import { SitePreview } from "../components/SitePreview";
-import { Spaces } from "../components/Spaces";
 import { Feed } from "../components/feed/Feed";
 import { Inbox } from "../components/inbox/Inbox";
 import { askItems, inboxItems } from "../components/inbox/items";
 import { InviteDialog } from "../components/InviteDialog";
 import { Sidebar } from "../components/side/Sidebar";
-import { TeamPanel } from "../components/TeamPanel";
 import { TopBar } from "../components/TopBar";
 import { useAttachments } from "../hooks/useAttachments";
 import { useHotkeys } from "../hooks/useHotkeys";
@@ -22,9 +22,7 @@ import { useStickToBottom } from "../hooks/useStickToBottom";
 import { useSubmit } from "../hooks/useSubmit";
 import { useToast } from "../hooks/useToast";
 import { useTyping } from "../hooks/useTyping";
-import type { TeamState } from "../hooks/useTeam";
 import type { Team } from "../lib/team";
-import type { Space } from "../App";
 import { activity } from "../lib/activity";
 import { canvasDocs } from "../lib/canvas";
 import { siteFiles } from "../lib/site";
@@ -33,24 +31,28 @@ import { upload } from "../lib/upload";
 import { cx } from "../lib/cx";
 import { pluginHints, skillHints } from "../lib/commands";
 import styles from "./RoomScreen.module.css";
+import { isNarrow, SIDE_WIDTH } from "../lib/panels";
+import { ResizeHandle } from "../components/ResizeHandle";
 
 interface RoomScreenProps {
   link: JoinLink;
   name: string;
   // The team this room was opened through, if it was.
   member: Team | null;
-  team: TeamState;
   // Shown now; the others stay connected in the background.
   active: boolean;
   // Why another space closed, said here when this one takes its place.
   notice?: string | null;
-  spaces: Space[];
-  onSwitch: (room: string) => void;
-  onClose: (room: string) => void;
-  onWatch: (card: SessionCard, url: string) => void;
+  // Brings back the list of sessions on a narrow screen.
+  railTucked: boolean;
+  // The room panel, the same in every open room.
+  side: { tucked: boolean; width: number; setTucked: (tucked: boolean) => void; setWidth: (width: number) => void };
+  onToggleRail: () => void;
+  // Says whose session this is, once the room knows.
+  onHost: (name: string) => void;
   onLeave: (reason: string | null) => void;
 }
-export function RoomScreen({ link, name, member, team, active, notice = null, spaces, onSwitch, onClose, onWatch, onLeave }: RoomScreenProps) {
+export function RoomScreen({ link, name, member, active, notice = null, railTucked, side, onToggleRail, onHost, onLeave }: RoomScreenProps) {
   // The session keeps the callback it started with, so it calls the latest one through a ref.
   const leaving = useRef(onLeave);
   leaving.current = onLeave;
@@ -60,12 +62,19 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
   const me = projection.me;
   const pluginCommands = useMemo(() => [...pluginHints(state.commands), ...skillHints(state.skills)], [state.commands, state.skills]);
   const isHost = me?.role === "host";
+  const hostName = Object.values(state.participants).find((person) => person.role === "host")?.name;
+  useEffect(() => {
+    if (hostName !== undefined) {
+      onHost(hostName);
+    }
+  }, [hostName]);
   const items = useMemo(
     () => [...askItems(session.asks), ...(isHost ? inboxItems(state) : [])],
     [session.asks, isHost, state.approvals, state.proposals, state.join_requests],
   );
   const [editing, setEditing] = useState<ProposalView | null>(null);
   const [panel, setPanel] = useState(false);
+  const { tucked: sideTucked, width: sideWidth, setTucked: setSideTucked, setWidth: setSideWidth } = side;
   const { toast, flash } = useToast();
   useEffect(() => {
     if (notice) {
@@ -73,7 +82,11 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
     }
   }, [notice]);
   const site = useMemo(() => siteFiles(feed.items), [feed.items]);
-  const docs = useMemo(() => canvasDocs(feed.items, site), [feed.items, site]);
+  const docs = useMemo(() => {
+    const documents = canvasDocs(feed.items, site);
+    if (state.preview) documents.push({ id: `dev:${state.preview.id}`, title: state.preview.title, kind: "site", lang: "html", text: "/", live: false, auto: true, previewId: state.preview.id });
+    return documents;
+  }, [feed.items, site, state.preview]);
   const [canvasId, setCanvasId] = useState<string | null>(null);
   const [quote, setQuote] = useState<{ text: string; key: number } | null>(null);
   const seen = useRef<Set<string> | null>(null);
@@ -220,26 +233,31 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
   const placeholder =
     me?.role === "viewer"
       ? me.id in state.access_requests
-        ? "You asked to write, waiting for the host…"
-        : "You are watching · /access asks the host for the right to write"
+        ? "Waiting for the host. Type / for commands"
+        : "Type / for commands"
       : me?.role === "participant" && state.prompt_mode === "review"
         ? "Propose a prompt, the host approves it"
         : "Message the agent, / for commands";
 
   return (
-    <div ref={root} className={cx(styles.room, (doc || boardShown) && styles.withCanvas)}>
+    <div ref={root} className={cx(styles.room, (doc || boardShown) && styles.withCanvas, !doc && !boardShown && sideTucked && styles.tucked)} style={{ "--side": `${sideWidth}px` } as CSSProperties}>
       <TopBar
         room={link.room}
         projection={projection}
         connection={connection}
-        panelOpen={panel && doc === null}
+        panelOpen={!sideTucked || doc !== null || boardShown}
+        panelShown={panel && doc === null}
+        railOpen={!railTucked}
         onCopyRoom={() => void copyText(link.room).then((ok) => ok && flash("room id copied"))}
         onTogglePanel={() => {
           setCanvasId(null);
           setBoardShown(false);
-          setPanel((open) => !open || doc !== null || boardShown);
+          if (isNarrow()) setPanel((open) => !open || doc !== null || boardShown);
+          // On a wide screen an open canvas gives way to the panel; otherwise the panel comes and goes.
+          else setSideTucked(doc === null && !boardShown && !sideTucked);
         }}
         onLeave={leave}
+        onToggleRail={onToggleRail}
       />
 
       <main className={styles.stage}>
@@ -247,14 +265,25 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
           <div className={styles.content} data-quotable>
             <SelectionLayer selectors={selectors} version={feed.items} />
             <div className={styles.welcome}>
-              You joined room {link.room} as {me ? `${me.name}, ${me.role}` : name}
+              You joined as {me ? `${me.name}, ${me.role}` : name}
             </div>
             {!projection.ready ? (
-              <div className="muted mono">
+              <div className="flex items-center justify-center gap-2.5 py-10 text-sm text-muted">
+                <Spinner size="sm" color="current" />
                 {projection.waiting ? "waiting for the host to let you in…" : connection === "online" ? "loading the session…" : "connecting to the host…"}
               </div>
             ) : null}
-            <Feed items={feed.items} meId={projection.meId} activity={current} onOpenBoard={state.board.open ? showBoard : undefined} onOpenDoc={(id) => {
+            {projection.ready && !feed.items.some((item) => item.kind === "user" || item.kind === "chat" || item.kind === "assistant") ? (
+              <div className={styles.empty}>
+                <h2 className="font-display">
+                  One agent, the whole team.
+                  <br />
+                  <span className="tone-2">Ask it anything.</span>
+                </h2>
+                <p>Everyone here sees the same conversation. Type <kbd>/</kbd> for commands or <kbd>@</kbd> to tag someone.</p>
+              </div>
+            ) : null}
+            <Feed items={feed.items} people={mentionable(state, null)} meId={projection.meId} activity={current} onOpenBoard={state.board.open ? showBoard : undefined} onOpenDoc={(id) => {
                 setBoardShown(false);
                 setCanvasId(id);
               }} />
@@ -263,11 +292,19 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
 
         <div className={styles.dock}>
           {scroll.behind ? (
-            <button className={styles.jump} type="button" onClick={scroll.jump}>
-              ↓ latest
-            </button>
+            <Button size="sm" variant="tertiary" className={styles.jump} onPress={scroll.jump}>
+              <ArrowDown size={14} />
+              Latest
+            </Button>
           ) : null}
-          {connection === "offline" ? <div className="banner warn">The connection dropped. Reconnecting…</div> : null}
+          {connection === "offline" ? (
+            <Alert status="warning">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Description>The connection dropped. Reconnecting…</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          ) : null}
           <Inbox items={items} state={state} send={send} onEdit={setEditing} answer={session.answer} />
           <div className={styles.presence}>
             {typers.length > 0 ? (
@@ -277,6 +314,14 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
             ) : null}
             {toast ? <span className={styles.toast}>{toast}</span> : null}
           </div>
+          {me?.role === "viewer" ? (
+            <div className={styles.watching}>
+              <span>You are watching this session.</span>
+              <Button size="sm" variant="tertiary" isDisabled={me.id in state.access_requests} onPress={() => submit("/access")}>
+                {me.id in state.access_requests ? "Waiting for the host" : "Ask to write"}
+              </Button>
+            </div>
+          ) : null}
           <Composer
             role={me?.role}
             people={mentionable(state, projection.meId)}
@@ -333,7 +378,9 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
           onClose={() => setCanvasId(null)}
           site={(page) => (
             <SitePreview
+              key={page.id}
               entry={page.text}
+              remote={page.previewId ? { id: page.previewId, open: session.openPreview } : undefined}
               site={site}
               pointers={previewPointers}
               echo={projection.meId === null ? undefined : projection.cursors.get(projection.meId)}
@@ -353,21 +400,15 @@ export function RoomScreen({ link, name, member, team, active, notice = null, sp
           status={runStatus}
           waiting={items.length}
           open={panel}
+          tucked={sideTucked}
+          onHide={() => (isNarrow() ? setPanel(false) : setSideTucked(true))}
           send={send}
           onInvite={(role) => send({ type: "invite.create", role, ttl_s: 3600, reusable: role === "participant" })}
-          spaces={spaces.length > 1 ? <Spaces spaces={spaces} current={link.room} onSwitch={onSwitch} onClose={onClose} /> : null}
-          team={
-            team.team === null ? null : (
-              <TeamPanel
-                state={team}
-                current={link.room}
-                onOpen={onWatch}
-                onNotice={flash}
-              />
-            )
-          }
         />
       )}
+      {!doc && !boardShown && !sideTucked ? (
+        <ResizeHandle label="Width of the room panel" width={sideWidth} bounds={SIDE_WIDTH} direction={-1} onResize={setSideWidth} style={{ right: sideWidth, top: 56 }} />
+      ) : null}
 
       <QuoteButton enabled={active && me !== undefined && me.role !== "viewer"} onQuote={(text) => setQuote((current) => ({ text, key: (current?.key ?? 0) + 1 }))} />
       {invite && active ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}

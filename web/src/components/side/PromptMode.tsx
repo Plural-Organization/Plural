@@ -1,28 +1,29 @@
+import { ToggleButton, ToggleButtonGroup, type Key } from "@heroui/react";
 import type { Command, PromptMode as Mode } from "@plural/client";
 import { Section } from "./Section";
-import styles from "./Sidebar.module.css";
-
-const MODES: Mode[] = ["open", "review"];
 
 export function PromptMode({ mode, isHost, send }: { mode: Mode; isHost: boolean; send: (command: Command) => void }) {
   return (
     <Section title="prompts">
       {isHost ? (
-        <div className={styles.segmented} role="radiogroup" aria-label="Who may prompt">
-          {MODES.map((option) => (
-            <button
-              key={option}
-              type="button"
-              role="radio"
-              aria-checked={mode === option}
-              onClick={() => mode !== option && send({ type: "session.set_prompt_mode", mode: option })}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
+        <ToggleButtonGroup
+          size="sm"
+          selectionMode="single"
+          disallowEmptySelection
+          aria-label="Who may prompt"
+          selectedKeys={new Set<Key>([mode])}
+          onSelectionChange={(keys) => {
+            const next = [...keys][0] as Mode | undefined;
+            if (next !== undefined && next !== mode) {
+              send({ type: "session.set_prompt_mode", mode: next });
+            }
+          }}
+        >
+          <ToggleButton id="open">Open</ToggleButton>
+          <ToggleButton id="review"><ToggleButtonGroup.Separator />Review</ToggleButton>
+        </ToggleButtonGroup>
       ) : null}
-      <p className="muted">{mode === "open" ? "everyone talks to the agent directly" : "the host approves each prompt first"}</p>
+      <p className="muted"><span className="cap">{mode === "open" ? "everyone talks to the agent directly" : "the host approves each prompt first"}</span></p>
     </Section>
   );
 }

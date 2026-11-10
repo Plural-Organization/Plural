@@ -5,6 +5,7 @@ import {
   certificateWindow,
   closedTunnel,
   createTeamInvite,
+  disbandTeamOnRelay,
   fetchSessions,
   firstSession,
   httpBase,
@@ -14,6 +15,7 @@ import {
   pickTeamSession,
   reachable,
   renewCertificate,
+  RelayError,
   renewalDue,
   teamJoinCommand,
   teamJoinLink,
@@ -208,6 +210,50 @@ describe("the directory calls", () => {
       "POST https://relay.example.com/teams/t_1/renew",
       "DELETE https://relay.example.com/teams/t_1/members/m_vlad",
     ]);
+  });
+
+  test("a request that never reached the relay is made once more, signed again", async () => {
+    const nonces: string[] = [];
+    let calls = 0;
+    const flaky: TeamPlatform = {
+      ...platform(() => json({ sessions: [] })),
+      fetch: async (_url, init) => {
+        nonces.push((init.headers as Record<string, string>)["authorization"] ?? "");
+        calls += 1;
+        if (calls === 1) {
+          throw new TypeError("fetch failed");
+        }
+        return json({ sessions: [] });
+      },
+    };
+    expect(await fetchSessions(PROFILE, flaky)).toEqual([]);
+    expect(calls).toBe(2);
+    expect(new Set(nonces).size).toBe(2);
+  });
+
+  test("a relay that does not answer is named, and a timeout is not repeated", async () => {
+    let calls = 0;
+    const silent: TeamPlatform = {
+      ...platform(() => json({})),
+      fetch: async () => {
+        calls += 1;
+        throw new DOMException("timed out", "TimeoutError");
+      },
+    };
+    await expect(fetchSessions(PROFILE, silent)).rejects.toThrow("the relay at relay.example.com did not answer, try again in a moment");
+    expect(calls).toBe(1);
+  });
+
+  test("disbanding is a signed DELETE of the team, answered with no body", async () => {
+    const seen: Seen[] = [];
+    await disbandTeamOnRelay(PROFILE, platform(() => new Response(null, { status: 204 }), seen));
+    expect(`${seen[0]?.method} ${seen[0]?.url}`).toBe("DELETE https://relay.example.com/teams/t_1");
+  });
+
+  test("a refusal keeps the status the relay answered", async () => {
+    const refused = createTeamInvite(PROFILE, platform(() => json({ error: "you are not a member of this team" }, 401)));
+    await expect(refused).rejects.toBeInstanceOf(RelayError);
+    await expect(refused).rejects.toMatchObject({ status: 401 });
   });
 
   test("a refusal carries the relay's reason", async () => {

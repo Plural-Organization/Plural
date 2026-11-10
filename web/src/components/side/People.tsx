@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { Button, Chip, Dropdown, Label } from "@heroui/react";
+import { DotsThree, Link as LinkIcon, UserPlus } from "@phosphor-icons/react";
 import { label, type Command, type Participant, type Projection } from "@plural/client";
-import { colorFor } from "../../lib/colors";
 import { cx } from "../../lib/cx";
+import { PersonAvatar } from "../PersonAvatar";
 import { Section } from "./Section";
 import styles from "./Sidebar.module.css";
 
@@ -18,12 +19,6 @@ function order(a: Participant, b: Participant): number {
 
 export function People({ projection, isHost, send, onInvite }: PeopleProps) {
   const state = projection.state;
-  const [menu, setMenu] = useState<string | null>(null);
-  const act = (command: Command) => {
-    send(command);
-    setMenu(null);
-  };
-
   return (
     <Section title="in the room">
       <ul className={styles.people}>
@@ -33,37 +28,44 @@ export function People({ projection, isHost, send, onInvite }: PeopleProps) {
             const typing = projection.typing.has(person.id) && person.id !== projection.meId;
             return (
               <li key={person.id} className={cx(styles.person, !person.connected && styles.away)}>
-                <span className={styles.dot} style={{ background: person.connected ? colorFor(person.id) : undefined }} />
+                <PersonAvatar seed={person.name} />
                 <span className={styles.name}>
                   {label(state, person)}
-                  {person.id === projection.meId ? <span className="muted"> · you</span> : null}
+                  {person.id === projection.meId ? <span className="muted"> (you)</span> : null}
                 </span>
-                <span className={styles.role}>{typing ? <span className={styles.typing}>typing…</span> : person.role}</span>
+                {typing ? (
+                  <span className={styles.typing}>typing…</span>
+                ) : person.role === "host" ? (
+                  <Chip size="sm" variant="soft" color="accent">
+                    <Chip.Label>Host</Chip.Label>
+                  </Chip>
+                ) : (
+                  <span className={cx(styles.role, "cap")}>{person.role}</span>
+                )}
                 {isHost && person.role !== "host" ? (
-                  <button
-                    type="button"
-                    className="link-button"
-                    aria-expanded={menu === person.id}
-                    aria-label={`Manage ${person.name}`}
-                    onClick={() => setMenu(menu === person.id ? null : person.id)}
-                  >
-                    ⋯
-                  </button>
-                ) : null}
-                {menu === person.id ? (
-                  <div className={styles.menu}>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        act({ type: "participant.set_role", participant_id: person.id, role: person.role === "viewer" ? "participant" : "viewer" })
-                      }
-                    >
-                      {person.role === "viewer" ? "let them prompt" : "make a viewer"}
-                    </button>
-                    <button type="button" className={styles.remove} onClick={() => act({ type: "participant.revoke", participant_id: person.id })}>
-                      remove from the room
-                    </button>
-                  </div>
+                  <Dropdown>
+                    <Button isIconOnly size="sm" variant="ghost" aria-label={`Manage ${person.name}`}>
+                      <DotsThree size={18} weight="bold" />
+                    </Button>
+                    <Dropdown.Popover>
+                      <Dropdown.Menu
+                        onAction={(key) =>
+                          send(
+                            key === "remove"
+                              ? { type: "participant.revoke", participant_id: person.id }
+                              : { type: "participant.set_role", participant_id: person.id, role: person.role === "viewer" ? "participant" : "viewer" },
+                          )
+                        }
+                      >
+                        <Dropdown.Item id="role" textValue="Change role">
+                          <Label>{person.role === "viewer" ? "Let them prompt" : "Make a viewer"}</Label>
+                        </Dropdown.Item>
+                        <Dropdown.Item id="remove" textValue="Remove" variant="danger">
+                          <Label>Remove from the room</Label>
+                        </Dropdown.Item>
+                      </Dropdown.Menu>
+                    </Dropdown.Popover>
+                  </Dropdown>
                 ) : null}
               </li>
             );
@@ -71,12 +73,14 @@ export function People({ projection, isHost, send, onInvite }: PeopleProps) {
       </ul>
       {isHost ? (
         <div className={styles.actions}>
-          <button className="button small" type="button" onClick={() => onInvite("participant")}>
-            room link
-          </button>
-          <button className="button small ghost" type="button" onClick={() => onInvite("viewer")}>
-            one-time viewer invite
-          </button>
+          <Button size="sm" variant="tertiary" onPress={() => onInvite("participant")}>
+            <LinkIcon size={15} />
+            Room link
+          </Button>
+          <Button size="sm" variant="ghost" onPress={() => onInvite("viewer")}>
+            <UserPlus size={15} />
+            Viewer invite
+          </Button>
         </div>
       ) : null}
     </Section>

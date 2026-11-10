@@ -63,6 +63,12 @@ export function withNotice(feed: Feed, tone: Tone, text: string, action?: "done"
   return { ...feed, counter, items: [...feed.items, { kind: "notice", id: `n${counter}`, tone, text, ...(action ? { action } : {}), ...(code ? { code } : {}) }] };
 }
 
+// A briefing a teammate's agent wrote for this person, fetched from outside the session the feed belongs to.
+export function withBriefing(feed: Feed, briefing: { from: string; text: string; asOf: number; update: boolean }): Feed {
+  const counter = feed.counter + 1;
+  return { ...feed, counter, items: [...feed.items, { kind: "briefing", id: `b${counter}`, ...briefing }] };
+}
+
 export function lastReply(feed: Feed): string {
   const parts: string[] = [];
   for (let index = feed.items.length - 1; index >= 0; index -= 1) {
@@ -400,6 +406,11 @@ function loadHistory(
   }
   for (const entry of state.chat) {
     items.push(chatItem(entry, state, meId));
+  }
+  // The agent's notes were filled before this client came in, so the feed would never say so.
+  for (const entry of state.briefings_imported) {
+    counter += 1;
+    items.unshift({ kind: "notice", id: `n${counter}`, tone: "ok", text: `${entry.source} is in the agent's notes (${entry.chars.toLocaleString("en")} characters)` });
   }
   const approvals = Object.fromEntries(Object.values(state.approvals).map((approval) => [approval.id, approval.call]));
   return { ...feed, items, counter, approvals, history: true };

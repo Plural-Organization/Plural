@@ -27,12 +27,14 @@ from plural.agent.tools.extra.search import Searcher, WebSearchSlot
 from plural.agent.tools.extra.skills import skill_tools
 from plural.agent.tools.registry import Exposure, builtin_tools
 from plural.core.policy.engine import Policy
+from plural.host.account import AccountStore
 from plural.host.actor import SessionActor
 from plural.host.agent_run import AgentRun
 from plural.host.approval_registry import ApprovalRegistry
 from plural.host.attachments import AttachmentVault
 from plural.host.board_desk import InboxDesk
 from plural.host.briefing import BriefingService
+from plural.host.chat_import import ChatDesk
 from plural.host.config import HostSettings
 from plural.host.conflicts import ConflictBoard
 from plural.host.extras import extra_for
@@ -40,6 +42,7 @@ from plural.host.gateway import Gateway
 from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook, RoomLink
 from plural.host.ledger import ChangeLedger
+from plural.host.mcp_link import McpLink, import_address, load_or_create_secret
 from plural.host.plugins import PluginHost
 from plural.host.policy_gate import HostPolicyGate
 from plural.host.providers import (
@@ -58,6 +61,8 @@ from plural.host.team_admission import TeamAdmission
 from plural.host.transport.base import HostTransport
 from plural.host.transport.direct import DirectTransport
 from plural.host.transport.relay_link import RelayLink
+from plural.importers import Imported, ImportNotFound, bring_in
+from plural.protocol.commands import BriefingImport
 from plural.protocol.models import HOST_PARTICIPANT_ID, Participant, Role
 from plural.security.keys import load_or_create_host_key
 from plural.security.secrets import Redactor
@@ -82,11 +87,15 @@ class Host:
     mcp: McpHub | None = None
     web_search: WebSearchSlot | None = None
     conflicts: ConflictBoard | None = None
+    import_url: str | None = None
+    chat_link: McpLink | None = None
 
     async def serve(self) -> None:
         async with asyncio.TaskGroup() as group:
             group.create_task(self.actor.run(), name="actor")
             group.create_task(self.transport.serve(self.inbox), name="transport")
+            if self.chat_link is not None:
+                group.create_task(self.chat_link.serve(), name="mcp_link")
 
     async def close(self) -> None:
         if self.mcp is not None:
@@ -169,13 +178,27 @@ async def build_host(settings: HostSettings, *, provider: LLMProvider | None = N
         workspace = await asyncio.to_thread(Workspace.at, settings.workspace)
     except FileNotFoundError as error:
         raise ConfigError(f"the workspace {settings.workspace} does not exist") from error
+    imported = await _foreign(settings)
     store = await SqliteEventStore.open(settings.state_dir / "sessions" / f"{room}.db")
     try:
-        return await _assemble(settings, provider, room, workspace, store)
+        return await _assemble(settings, provider, room, workspace, store, imported)
     except BaseException:
         # The store's thread would keep a host that failed to start from exiting.
         await store.close()
         raise
+
+
+async def _foreign(settings: HostSettings) -> BriefingImport | None:
+    """The session of another agent this one starts from, when --import asked for one."""
+    if settings.import_from is None:
+        return None
+    try:
+        found: Imported = await asyncio.to_thread(
+            bring_in, settings.import_from, settings.workspace
+        )
+    except ImportNotFound as error:
+        raise ConfigError(str(error)) from error
+    return BriefingImport(source=found.source, as_of_seq=found.as_of, text=found.text)
 
 
 async def _assemble(
@@ -184,6 +207,7 @@ async def _assemble(
     room: str,
     workspace: Workspace,
     store: SqliteEventStore,
+    imported: BriefingImport | None = None,
 ) -> Host:
     api_key = resolve_api_key(settings, os.environ)
     ids, clock = UlidGenerator(), SystemClock()
@@ -348,11 +372,19 @@ async def _assemble(
         briefing=briefing,
         ledger=ledger,
         team_sweep_s=settings.team_roster_ttl_s,
+        imported=imported,
     )
     desk.attach(actor.board)
     await actor.start()
+    chat_link, import_url = await _chat_link(inbox, registry, ids, clock, settings)
     transport: HostTransport = (
-        RelayLink(url=settings.relay_url, room=room, signer=signer)
+        RelayLink(
+            url=settings.relay_url,
+            room=room,
+            signer=signer,
+            preview=actor.preview,
+            entitlement=AccountStore(state_dir).certificate,
+        )
         if settings.relay_url
         else DirectTransport(host=settings.bind_host, port=settings.port)
     )
@@ -371,7 +403,27 @@ async def _assemble(
         mcp=mcp,
         web_search=web_search,
         conflicts=board,
+        import_url=import_url,
+        chat_link=chat_link,
     )
+
+
+async def _chat_link(
+    inbox: Inbox,
+    registry: ApprovalRegistry,
+    ids: UlidGenerator,
+    clock: SystemClock,
+    settings: HostSettings,
+) -> tuple[McpLink | None, str | None]:
+    """The link to the MCP gateway and the address a chat service is connected to. The secret
+    belongs to the machine, so the address survives restarts and new sessions."""
+    if not settings.mcp_url:
+        return None, None
+    desk = ChatDesk(
+        inbox=inbox, registry=registry, ids=ids, clock=clock, timeout_s=settings.approval_timeout_s
+    )
+    secret = await asyncio.to_thread(load_or_create_secret, settings.state_dir)
+    return McpLink(settings.mcp_url, secret, desk.offer), import_address(settings.mcp_url, secret)
 
 
 async def _team_profile(settings: HostSettings) -> TeamProfile:

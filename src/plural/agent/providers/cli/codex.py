@@ -257,6 +257,41 @@ class _Cancelled(Exception):
     pass
 
 
+# Plural owns the prompt, tools and history, so what Codex would add of its own each turn is
+# turned off: on its own Codex sent ~21.8k tokens for "say ok", with these ~8.2k. `-c` is used
+# throughout because an unknown `--disable` feature stops the server, and an unknown key does not.
+CODEX_TRIM = (
+    # Codex's own shell and web search; user hooks would run on every turn; plugins, apps, goals,
+    # image viewing and sleeping each add tools or instructions.
+    *(
+        f"features.{feature}=false"
+        for feature in (
+            "shell_tool",
+            "unified_exec",
+            "web_search_request",
+            "hooks",
+            "plugins",
+            "apps",
+            "goals",
+            "view_image",
+            "sleep_tool",
+        )
+    ),
+    # The list of skills, Codex's collaboration mode and sandbox rules, and its cwd and shell.
+    "skills.include_instructions=false",
+    "include_collaboration_mode_instructions=false",
+    "include_permissions_instructions=false",
+    "include_environment_context=false",
+)
+
+# Codex's own system prompt, a coding agent's, replaced by this one.
+BASE_INSTRUCTIONS = (
+    "You are the model backend for Plural. Do not run commands, inspect files, or invoke Codex "
+    "tools. Return only the structured response requested for each turn. Plural owns "
+    "conversation history, tools, and approvals."
+)
+
+
 class CodexCliProvider(CliProvider):
     adapter = "codex_cli"
     label = "Codex CLI"
@@ -339,14 +374,9 @@ class CodexCliProvider(CliProvider):
                 "app-server",
                 "--listen",
                 "stdio://",
-                "--disable",
-                "shell_tool",
-                "--disable",
-                "unified_exec",
-                "--disable",
-                "web_search_request",
                 "-c",
                 "mcp_servers={}",
+                *(arg for setting in CODEX_TRIM for arg in ("-c", setting)),
                 cwd=self._workspace,
                 stdin=asyncio.subprocess.PIPE,
                 stdout=asyncio.subprocess.PIPE,
@@ -460,11 +490,7 @@ class CodexCliProvider(CliProvider):
                     "approvalPolicy": "never",
                     "sandbox": "read-only",
                     "ephemeral": True,
-                    "developerInstructions": (
-                        "You are the model backend for Plural. Do not run commands, inspect files, "
-                        "or invoke Codex tools. Return only the structured response requested "
-                        "for each turn. Plural owns conversation history, tools, and approvals."
-                    ),
+                    "baseInstructions": BASE_INSTRUCTIONS,
                 },
                 cancel=cancel,
             )

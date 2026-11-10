@@ -3,6 +3,7 @@ export {
   emptyFeed,
   lastReply,
   withBanner,
+  withBriefing,
   withNotice,
   type Feed,
   type FeedItem,

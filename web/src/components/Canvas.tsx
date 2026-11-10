@@ -1,3 +1,5 @@
+import { Button, ListBox, Select, type Key } from "@heroui/react";
+import { Check, Copy, DownloadSimple, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { copyText } from "../lib/clipboard";
 import { fileName, lineCount, type CanvasDoc } from "../lib/canvas";
@@ -69,13 +71,22 @@ export function Canvas({ doc, docs, selectors, full, onToggleFull, onPick, onClo
     >
       <header className={styles.bar}>
         {docs.length > 1 ? (
-          <select className={styles.pick} value={doc.id} onChange={(event) => onPick(event.target.value)} aria-label="Documents in this session">
-            {docs.map((item, index) => (
-              <option key={item.id} value={item.id}>
-                {index + 1}. {item.title}
-              </option>
-            ))}
-          </select>
+          <Select aria-label="Documents in this session" className="w-56 max-w-[50%]" value={doc.id} onChange={(value) => onPick(String(value as Key))}>
+            <Select.Trigger>
+              <Select.Value />
+              <Select.Indicator />
+            </Select.Trigger>
+            <Select.Popover>
+              <ListBox>
+                {docs.map((item, index) => (
+                  <ListBox.Item key={item.id} id={item.id} textValue={`${index + 1}. ${item.title}`}>
+                    {index + 1}. {item.title}
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                ))}
+              </ListBox>
+            </Select.Popover>
+          </Select>
         ) : (
           <span className={styles.title}>{doc.title}</span>
         )}
@@ -85,26 +96,21 @@ export function Canvas({ doc, docs, selectors, full, onToggleFull, onPick, onClo
         <span className="grow" />
         {doc.kind === "site" ? null : (
           <>
-            <button className="button small" type="button" onClick={copy}>
-              {copied ? "copied" : "copy"}
-            </button>
-            <button className="button small ghost" type="button" onClick={download}>
-              download
-            </button>
+            <Button size="sm" variant="tertiary" onPress={copy}>
+              {copied ? <Check size={15} /> : <Copy size={15} />}
+              {copied ? "Copied" : "Copy"}
+            </Button>
+            <Button isIconOnly size="sm" variant="ghost" aria-label="Download" onPress={download}>
+              <DownloadSimple size={16} />
+            </Button>
           </>
         )}
-        <button
-          className="button small ghost"
-          type="button"
-          onClick={onToggleFull}
-          aria-label={full ? "Back to half the screen" : "Full screen"}
-          title={full ? "Back to half the screen" : "Full screen"}
-        >
+        <Button isIconOnly size="sm" variant="ghost" onPress={onToggleFull} aria-label={full ? "Back to half the screen" : "Full screen"}>
           <FullIcon full={full} />
-        </button>
-        <button className="button small ghost" type="button" onClick={onClose} aria-label="Close the canvas">
-          ✕
-        </button>
+        </Button>
+        <Button isIconOnly size="sm" variant="ghost" onPress={onClose} aria-label="Close the canvas">
+          <X size={16} />
+        </Button>
       </header>
       {doc.kind === "site" ? (
         <div className={styles.site}>{site ? site(doc) : <span className={styles.meta}>{doc.text}</span>}</div>

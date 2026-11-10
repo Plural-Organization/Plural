@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from plural.agent.events import AgentEvent
 from plural.agent.providers.base import LLMProvider
 from plural.host.transport.base import Connection
-from plural.protocol.commands import BoardDraw, BoardErase, BoardMove, BoardOpen
+from plural.protocol.commands import BoardDraw, BoardErase, BoardMove, BoardOpen, BriefingImport
 from plural.protocol.envelope import Envelope
 from plural.protocol.events import SkillsFound
 from plural.protocol.models import ApprovalView, BriefingRequestView
@@ -80,6 +80,13 @@ class BriefingReady:
     text: str
     as_of_seq: int
     error: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ChatAccepted:
+    """The host accepted what a chat service sent through the import link."""
+
+    command: BriefingImport
 
 
 @dataclass(frozen=True, slots=True)
@@ -167,6 +174,7 @@ InboxMessage = (
     | SkillsUpdated
     | McpUpdated
     | BriefingReady
+    | ChatAccepted
     | TeamSweep
     | SkillsReply
     | BoardRequest

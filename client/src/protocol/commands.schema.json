@@ -1061,6 +1061,55 @@
       ],
       "type": "object"
     },
+    "PreviewOpen": {
+      "description": "Asks for this participant's own link to the shared server, answered with `preview.opened`.",
+      "properties": {
+        "preview_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "preview.open",
+          "default": "preview.open",
+          "type": "string"
+        }
+      },
+      "required": [
+        "preview_id"
+      ],
+      "type": "object"
+    },
+    "PreviewSet": {
+      "description": "The host explicitly shares one loopback HTTP server; None disables it.",
+      "properties": {
+        "port": {
+          "anyOf": [
+            {
+              "maximum": 65535,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "title": {
+          "default": "Local preview",
+          "maxLength": 80,
+          "minLength": 1,
+          "type": "string"
+        },
+        "type": {
+          "const": "preview.set",
+          "default": "preview.set",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "PromptMode": {
       "enum": [
         "open",
@@ -1482,6 +1531,8 @@
           "presence.cursor": "#/$defs/CursorSet",
           "presence.select": "#/$defs/SelectionSet",
           "presence.typing": "#/$defs/TypingSet",
+          "preview.open": "#/$defs/PreviewOpen",
+          "preview.set": "#/$defs/PreviewSet",
           "prompt.submit": "#/$defs/PromptSubmit",
           "proposal.decide": "#/$defs/ProposalDecide",
           "queue.cancel": "#/$defs/QueueCancel",
@@ -1628,6 +1679,12 @@
         },
         {
           "$ref": "#/$defs/AttachmentFetch"
+        },
+        {
+          "$ref": "#/$defs/PreviewSet"
+        },
+        {
+          "$ref": "#/$defs/PreviewOpen"
         },
         {
           "$ref": "#/$defs/BoardErase"

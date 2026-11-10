@@ -34,7 +34,7 @@ export type Parsed =
 // A script or a help request wants the host command alone, not a session after it.
 const SCRIPT_FLAGS = new Set(["--json", "--help", "-h"]);
 
-const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm", "team", "ls"]);
+const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm", "team", "ls", "login", "logout", "whoami"]);
 
 const HOST_VALUES: Record<string, string> = {
   "--workspace": "--workspace",
@@ -44,6 +44,8 @@ const HOST_VALUES: Record<string, string> = {
   "--relay": "--relay",
   "--public-url": "--public-url",
   "--room": "--room",
+  "--import": "--import",
+  "--mcp-url": "--mcp-url",
   "--title": "--title",
   "-n": "--title",
 };
@@ -123,7 +125,19 @@ export function parseArgs(input: string[]): Parsed {
   if (first !== undefined && PASSTHROUGH.has(first)) return { kind: "passthrough", args: argv };
   if (first === "update") return update(rest);
   if (first === "join") return join(rest);
+  if (first === "import") return importing(rest);
   return { kind: "session", options: session(first === "host" ? rest : argv) };
+}
+
+/** plural import claude[:id] [options]: a new session that starts from another agent's. */
+function importing(args: string[]): Parsed {
+  const [spec, ...rest] = args;
+  if (spec === undefined || spec.startsWith("-")) {
+    throw new UsageError("plural import needs a source: plural import claude, or claude:<start of the session id>");
+  }
+  const options = session(rest);
+  options.hostArgs.push("--import", spec);
+  return { kind: "session", options };
 }
 
 function update(args: string[]): Parsed {

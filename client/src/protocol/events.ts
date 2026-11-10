@@ -187,6 +187,8 @@ export interface EventsSchema {
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PreviewChanged
+    | PreviewOpened
     | PluginShown
     | PluginAsked
     | PluginNotified
@@ -641,6 +643,34 @@ export interface AttachmentData {
   content_b64: string;
   media_type: string;
   type: "attachment.data";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PreviewChanged".
+ */
+export interface PreviewChanged {
+  preview: PreviewView | null;
+  type: "preview.changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PreviewView".
+ */
+export interface PreviewView {
+  id: string;
+  port: number;
+  title: string;
+}
+/**
+ * The requester's own link to the shared server, relative to the relay the session runs on.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "PreviewOpened".
+ */
+export interface PreviewOpened {
+  path: string;
+  preview_id: string;
+  type: "preview.opened";
 }
 /**
  * What a plugin command shows the person who ran it, and nobody else. It is not logged.
@@ -1221,6 +1251,7 @@ export interface SessionState {
   plugin_lines: PluginLine[];
   plugins: PluginView[];
   policy: PolicyRuleView[];
+  preview: PreviewView | null;
   prompt_mode: "open" | "review";
   proposals: {
     [k: string]: ProposalView;
@@ -1353,6 +1384,8 @@ export interface EventRecord {
     | BoardStroked
     | BoardMoved
     | AttachmentData
+    | PreviewChanged
+    | PreviewOpened
     | PluginShown
     | PluginAsked
     | PluginNotified

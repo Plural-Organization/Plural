@@ -17,8 +17,17 @@ describe("commands", () => {
     expect(parseArgs(["--selftest"]).kind).toBe("selftest");
   });
 
+  test("import starts a session from another agent's", () => {
+    expect(session("import", "claude").hostArgs).toEqual(["--import", "claude"]);
+    const options = session("import", "claude:ab12", "--workspace", "/w", "-n", "moved");
+    expect(options.hostArgs).toEqual(["--workspace", "/w", "--title", "moved", "--import", "claude:ab12"]);
+    expect(session("--import", "claude").hostArgs).toEqual(["--import", "claude"]);
+    expect(() => parseArgs(["import"])).toThrow(UsageError);
+    expect(() => parseArgs(["import", "--workspace", "/w"])).toThrow(UsageError);
+  });
+
   test("the host's own commands go straight through", () => {
-    for (const name of ["relay", "doctor", "export", "sessions", "rm", "team", "ls"]) {
+    for (const name of ["relay", "doctor", "export", "sessions", "rm", "team", "ls", "login", "logout", "whoami"]) {
       expect(parseArgs([name, "--json"])).toEqual({ kind: "passthrough", args: [name, "--json"] });
     }
   });

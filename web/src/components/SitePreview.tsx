@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import type { BoardCursor, Command } from "@plural/client";
-import { bridgeScript, readFrame, TO_FRAME, type PickedComponent, type ToFrame } from "../lib/bridge";
+import { BRIDGE_CODE, bridgeScript, readFrame, TO_FRAME, type PickedComponent, type ToFrame } from "../lib/bridge";
 import { colorFor } from "../lib/colors";
 import { componentPrompt } from "../lib/quote";
 import { buildSite, localTarget, siteEntries, type Site } from "../lib/site";
@@ -16,6 +16,8 @@ const NOTE_HEIGHT = 120;
 
 interface SitePreviewProps {
   entry: string;
+  // A server the host shares: it runs as itself in the frame, from the address the host hands out.
+  remote?: { id: string; open: (previewId: string) => Promise<string> };
   site: Site;
   pointers: Pointer[];
   // My own pointer as the host sent it back.
@@ -26,11 +28,12 @@ interface SitePreviewProps {
   onNotice: (text: string) => void;
 }
 
-export function SitePreview({ entry, site, pointers, echo, canPick, sendPresence, onAsk, onNotice }: SitePreviewProps) {
+export function SitePreview({ entry, remote, site, pointers, echo, canPick, sendPresence, onAsk, onNotice }: SitePreviewProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const [page, setPage] = useState(entry);
   const [built, setBuilt] = useState<{ html: string; problems: string[] } | null>(null);
+  const [address, setAddress] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
@@ -44,8 +47,21 @@ export function SitePreview({ entry, site, pointers, echo, canPick, sendPresence
     scrolled.current = 0;
   }, [entry]);
 
+  useEffect(() => {
+    if (!remote) return;
+    let alive = true;
+    setError(null);
+    remote.open(remote.id).then((url) => alive && setAddress(url)).catch((reason: unknown) => {
+      if (alive) setError(reason instanceof Error ? reason.message : String(reason));
+    });
+    return () => {
+      alive = false;
+    };
+  }, [remote?.id, remote?.open]);
+
   // The page is rebuilt from the files whenever the agent changes one, keeping the scroll.
   useEffect(() => {
+    if (remote) return;
     let alive = true;
     const timer = setTimeout(() => {
       void buildSite(site.files, page, bridgeScript(scrolled.current), root).then((next) => {
@@ -53,15 +69,24 @@ export function SitePreview({ entry, site, pointers, echo, canPick, sendPresence
           setBuilt(next);
           setError(null);
         }
+      }).catch((reason: unknown) => {
+        if (alive) setError(reason instanceof Error ? reason.message : String(reason));
       });
     }, built === null ? 0 : REBUILD_MS);
     return () => {
       alive = false;
       clearTimeout(timer);
     };
-  }, [site.version, page, reload]);
+  }, [site.version, page, reload, remote?.id]);
 
-  const tell = (message: ToFrame) => frame.current?.contentWindow?.postMessage({ from: TO_FRAME, ...message }, "*");
+  // The host's loader in the page runs this once per page load; the app's scripts run as they are.
+  const bridge = () => {
+    if (address !== null) frame.current?.contentWindow?.postMessage({ from: BRIDGE_CODE, code: bridgeScript(0, true) }, new URL(address).origin);
+    resend();
+  };
+
+  // A live page can go to other sites, which must not get the names on the pointers.
+  const tell = (message: ToFrame) => frame.current?.contentWindow?.postMessage({ from: TO_FRAME, ...message }, address === null ? "*" : new URL(address).origin);
 
   const cursors = JSON.stringify(pointers.map(({ id, name, cursor }) => ({ id, name, color: colorFor(id), x: cursor.x, y: cursor.y })));
   const resend = () => {
@@ -165,7 +190,7 @@ export function SitePreview({ entry, site, pointers, echo, canPick, sendPresence
     };
     window.addEventListener("message", listen);
     return () => window.removeEventListener("message", listen);
-  }, [page, site, canPick]);
+  }, [page, site, canPick, remote?.id]);
 
   const send = () => {
     if (picked === null || note.trim() === "") {
@@ -189,7 +214,21 @@ export function SitePreview({ entry, site, pointers, echo, canPick, sendPresence
 
   return (
     <div className={styles.preview} ref={box} onPointerLeave={() => share(null)}>
-      {built !== null ? (
+      {remote ? (
+        address !== null ? (
+          <iframe
+            key={reload}
+            ref={frame}
+            className={cx(styles.frame, picking && styles.picking)}
+            title="Shared server preview"
+            sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-downloads"
+            src={address}
+            onLoad={bridge}
+          />
+        ) : (
+          <div className={styles.loading}>opening the shared server…</div>
+        )
+      ) : built !== null ? (
         <iframe
           ref={frame}
           className={cx(styles.frame, picking && styles.picking)}
@@ -203,16 +242,16 @@ export function SitePreview({ entry, site, pointers, echo, canPick, sendPresence
       )}
       <div className={styles.tools}>
         {page !== entry ? (
-          <button className="button small ghost" type="button" onClick={() => setPage(entry)} title={`Back to ${entry}`}>
+          <button className="btn small ghost" type="button" onClick={() => setPage(entry)} title={`Back to ${entry}`}>
             ← {entry.split("/").pop()}
           </button>
         ) : null}
-        <button className="button small ghost" type="button" onClick={() => setReload((value) => value + 1)} aria-label="Reload the page" title="Reload the page">
+        <button className="btn small ghost" type="button" onClick={() => setReload((value) => value + 1)} aria-label="Reload the page" title="Reload the page">
           ↻
         </button>
         {canPick ? (
           <button
-            className={cx("button small", !picking && "ghost", picking && styles.on)}
+            className={cx("btn small", !picking && "ghost", picking && styles.on)}
             type="button"
             aria-pressed={picking}
             onClick={() => {
@@ -255,10 +294,10 @@ export function SitePreview({ entry, site, pointers, echo, canPick, sendPresence
             }}
           />
           <div className={styles.noteBar}>
-            <button className="button small ghost" type="button" onClick={closeNote}>
+            <button className="btn small ghost" type="button" onClick={closeNote}>
               cancel
             </button>
-            <button className="button small" type="submit" disabled={note.trim() === ""}>
+            <button className="btn small" type="submit" disabled={note.trim() === ""}>
               send to agent
             </button>
           </div>

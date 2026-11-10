@@ -38,21 +38,50 @@ export async function teamProof(profile: TeamProfile, platform: TeamPlatform, ur
   return { certificate: profile.certificate, url, ts: timestamp, nonce, proof: await platform.sign(joinMessage(url, room, timestamp, nonce)) };
 }
 
+// The relay refused, with the status it answered: a caller may treat 401 or 404 as "already gone".
+export class RelayError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "RelayError";
+  }
+}
+
 export async function answer<T>(response: Response, relay: string): Promise<T> {
+  if (response.status === 204) {
+    return undefined as T;
+  }
   if (response.ok) {
     return (await response.json()) as T;
   }
   const detail = (await response.json().catch(() => null)) as { error?: string } | null;
   const host = new URL(httpBase(relay)).host;
   if (detail?.error === undefined && isTunnelHost(host) && TUNNEL_GONE.has(response.status)) {
-    throw new Error(closedTunnel(host));
+    throw new RelayError(closedTunnel(host), response.status);
   }
-  throw new Error(detail?.error ?? `the relay answered ${response.status}`);
+  throw new RelayError(detail?.error ?? `the relay answered ${response.status}`, response.status);
 }
 
+const isTimeout = (error: unknown): boolean => error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+
+// A request that never reached the relay is made once more, with a fresh signature: the relay refuses a nonce it has
+// seen. A timeout is not repeated, it may have arrived.
 async function signed<T>(profile: TeamProfile, platform: TeamPlatform, method: string, path: string): Promise<T> {
-  const response = await platform.fetch(`${httpBase(profile.relay)}${path}`, { method, headers: { authorization: await authorization(profile, platform, method, path) } });
-  return answer<T>(response, profile.relay);
+  for (let attempt = 0; ; attempt += 1) {
+    const headers = { authorization: await authorization(profile, platform, method, path) };
+    let response: Response;
+    try {
+      response = await platform.fetch(`${httpBase(profile.relay)}${path}`, { method, headers });
+    } catch (error) {
+      if (attempt === 0 && !isTimeout(error)) {
+        continue;
+      }
+      throw new Error(`the relay at ${new URL(httpBase(profile.relay)).host} did not answer, try again in a moment`, { cause: error });
+    }
+    return answer<T>(response, profile.relay);
+  }
 }
 
 export async function fetchSessions(profile: TeamProfile, platform: TeamPlatform): Promise<SessionCard[]> {
@@ -69,4 +98,9 @@ export async function renewCertificate(profile: TeamProfile, platform: TeamPlatf
 
 export async function leaveTeamOnRelay(profile: TeamProfile, platform: TeamPlatform): Promise<void> {
   await signed(profile, platform, "DELETE", `/teams/${profile.team_id}/members/${profile.member.id}`);
+}
+
+// Owner only: deletes the team for everyone.
+export async function disbandTeamOnRelay(profile: TeamProfile, platform: TeamPlatform): Promise<void> {
+  await signed(profile, platform, "DELETE", `/teams/${profile.team_id}`);
 }
