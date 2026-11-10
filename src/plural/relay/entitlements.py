@@ -1,9 +1,5 @@
-import asyncio
-import json
-import urllib.request
 from collections import Counter
 from collections.abc import Callable
-from contextlib import suppress
 from datetime import UTC, datetime
 from enum import StrEnum
 
@@ -11,14 +7,10 @@ import structlog
 
 from plural.protocol.entitlement import EntitlementClaims
 from plural.protocol.relay import RelayOpen
-from plural.security.entitlement import EntitlementVerifier, InvalidEntitlement
+from plural.security.accounts_key import REFRESH_S, RETRY_S, AccountsKey
+from plural.security.entitlement import EntitlementVerifier, InvalidEntitlement, fetch_verifier
 
 log = structlog.get_logger(__name__)
-
-KEY_PATH = "/.well-known/entitlement-key"
-REFRESH_S = 3600.0
-RETRY_S = 30.0
-FETCH_TIMEOUT_S = 5.0
 
 
 class Outcome(StrEnum):
@@ -29,18 +21,6 @@ class Outcome(StrEnum):
     MALFORMED = "malformed"
     OTHER_KEY = "other_key"  # a genuine certificate for a different host key
     UNVERIFIED = "unverified"  # the accounts key is not known yet
-
-
-def fetch_key(base_url: str) -> EntitlementVerifier:
-    """Reads the accounts service's public key, blocking: run it off the event loop."""
-    request = urllib.request.Request(
-        base_url.rstrip("/") + KEY_PATH, headers={"user-agent": "plural-relay"}
-    )
-    with urllib.request.urlopen(request, timeout=FETCH_TIMEOUT_S) as response:
-        body = json.load(response)
-    if body.get("version") != 1:
-        raise ValueError("unsupported entitlement key version")
-    return EntitlementVerifier.from_b64(str(body["key"]))
 
 
 def utcnow() -> datetime:
@@ -59,49 +39,25 @@ class EntitlementWatch:
         self,
         accounts_url: str,
         *,
-        fetch: Callable[[str], EntitlementVerifier] = fetch_key,
+        fetch: Callable[[str], EntitlementVerifier] = fetch_verifier,
         now: Callable[[], datetime] = utcnow,
         refresh_s: float = REFRESH_S,
         retry_s: float = RETRY_S,
     ) -> None:
-        self._url = accounts_url
-        self._fetch = fetch
+        self._key = AccountsKey(accounts_url, fetch=fetch, refresh_s=refresh_s, retry_s=retry_s)
         self._now = now
-        self._refresh_s = refresh_s
-        self._retry_s = retry_s
-        self._verifier: EntitlementVerifier | None = None
-        self._recheck = asyncio.Event()
-        self._task: asyncio.Task[None] | None = None
         self.counts: Counter[str] = Counter()
 
     @property
     def ready(self) -> bool:
         """Whether the accounts key is known, so a certificate can be judged."""
-        return self._verifier is not None
+        return self._key.ready
 
     def start(self) -> None:
-        self._task = asyncio.create_task(self._keep_key())
+        self._key.start()
 
     async def stop(self) -> None:
-        if self._task is not None:
-            self._task.cancel()
-            with suppress(asyncio.CancelledError):
-                await self._task
-            self._task = None
-
-    async def _keep_key(self) -> None:
-        while True:
-            try:
-                self._verifier = await asyncio.to_thread(self._fetch, self._url)
-                wait = self._refresh_s
-            except Exception as error:
-                log.warning("relay.entitlement_key_unavailable", error=str(error))
-                wait = self._retry_s
-            self._recheck.clear()
-            with suppress(TimeoutError):
-                # A certificate nobody can verify is a sign the key rotated: read it sooner.
-                await asyncio.wait_for(self._recheck.wait(), wait)
-                await asyncio.sleep(self._retry_s)
+        await self._key.stop()
 
     def check(self, opening: RelayOpen) -> tuple[Outcome, EntitlementClaims | None]:
         outcome, claims = self._classify(opening)
@@ -111,13 +67,15 @@ class EntitlementWatch:
     def _classify(self, opening: RelayOpen) -> tuple[Outcome, EntitlementClaims | None]:
         if opening.entitlement is None:
             return Outcome.NONE, None
-        if self._verifier is None:
+        verifier = self._key.verifier
+        if verifier is None:
             return Outcome.UNVERIFIED, None
         try:
-            claims = self._verifier.verify(opening.entitlement, now=self._now())
+            claims = verifier.verify(opening.entitlement, now=self._now())
         except InvalidEntitlement as error:
             if error.reason == "forged":
-                self._recheck.set()
+                # A rotated key looks like a forgery: read the key again, soon.
+                self._key.suspect()
             return Outcome(error.reason), None
         if claims.key != opening.public_key:
             return Outcome.OTHER_KEY, claims

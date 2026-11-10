@@ -1,6 +1,6 @@
 # ADR 0014: a local daemon starts rooms for the web client
 
-Status: proposed. Slice 0 (a browser experiment) must confirm the transport before the rest is built.
+Status: accepted for Chromium; Safari, Firefox and Google Chrome itself are still to be tried (see Slice 0).
 
 ## Context
 
@@ -80,3 +80,24 @@ the person starts the host in a terminal. Nothing else in this ADR depends on th
 | 5 | web client: find the daemon, "Start a room", folder choice, open the room; fallback when it is absent | `web/` |
 | 6 | docs, threat model, `plural daemon` in the TUI passthrough, install notes | `docs/`, `tui/` |
 | 7 | later: keep it running at login, relay refusing hosts without a certificate | separate decisions |
+
+## Slice 0 result
+
+A page on a public HTTPS origin called `http://127.0.0.1:47831` and `http://localhost:47831` in a
+Chromium browser (Arc, macOS) with an `Authorization` header:
+
+- The browser first asked the person to allow access to their loopback network. After Allow it sent
+  the CORS preflight and then the request; both addresses answered 200.
+- It showed that prompt without sending `Access-Control-Request-Private-Network`, so the daemon
+  never requires the header. It answers `Access-Control-Allow-Private-Network: true` for browsers
+  that ask.
+- The web client has to say why the person should press Allow before the first call.
+
+Not tried yet: Google Chrome itself, Safari and Firefox. A browser that cannot call loopback keeps
+the terminal flow described above.
+
+## Built
+
+Slices 2 to 4: `plural daemon` (`src/plural/daemon/`), with the three checks in `guard.py`, tickets
+in `app.py`, the folder dialog in `folders.py` and the host children in `rooms.py`. The accounts
+side of slice 1 is `POST /tickets` in the accounts service.

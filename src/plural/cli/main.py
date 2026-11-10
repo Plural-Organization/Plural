@@ -356,6 +356,52 @@ def relay(
 
 
 @app.command()
+def daemon(
+    port: Annotated[
+        int, typer.Option(min=1, max=65535, help="Loopback port.", envvar="PLURAL_DAEMON_PORT")
+    ] = 47831,
+    origins: Annotated[
+        str,
+        typer.Option(
+            "--origin",
+            help="Comma-separated web client origins that may use the daemon.",
+            envvar="PLURAL_DAEMON_ORIGINS",
+        ),
+    ] = "https://plrl.host,https://www.plrl.host",
+) -> None:
+    """Let the Plural web client start rooms on this computer, in folders you choose."""
+    import uvicorn
+
+    from plural.daemon.app import create_app
+    from plural.host.account import AccountError, AccountStore
+    from plural.security.accounts_key import AccountsKey
+
+    settings = HostSettings()
+    store = AccountStore(settings.state_dir)
+    try:
+        linked = store.load()
+    except AccountError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(1) from error
+    if linked is None:
+        console.print("[red]This computer is not linked to an account. Run `plural login`.[/red]")
+        raise typer.Exit(1)
+    console.print(f"Plural daemon for {linked.email} on http://127.0.0.1:{port}. Ctrl+C stops it.")
+    uvicorn.run(
+        create_app(
+            store,
+            AccountsKey(linked.accounts),
+            port=port,
+            origins=tuple(item.strip() for item in origins.split(",") if item.strip()),
+        ),
+        host="127.0.0.1",
+        port=port,
+        log_level="warning",
+        proxy_headers=False,
+    )
+
+
+@app.command()
 def sessions(
     workspace: Annotated[
         Path | None, typer.Option(help="Only sessions that worked in this folder.")
