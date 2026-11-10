@@ -1471,6 +1471,33 @@
       ],
       "type": "object"
     },
+    "TraceGet": {
+      "description": "Ask for what a run did, as spans. Without a run, the latest one; `everything` asks for\nthe spans of every run instead, for a picture of the whole session.",
+      "properties": {
+        "everything": {
+          "default": false,
+          "type": "boolean"
+        },
+        "run_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "trace.get",
+          "default": "trace.get",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "TypingSet": {
       "properties": {
         "type": {
@@ -1543,7 +1570,8 @@
           "session.set_prompt_mode": "#/$defs/PromptModeSet",
           "skills.install": "#/$defs/SkillsInstall",
           "skills.remove": "#/$defs/SkillsRemove",
-          "skills.search": "#/$defs/SkillsSearch"
+          "skills.search": "#/$defs/SkillsSearch",
+          "trace.get": "#/$defs/TraceGet"
         },
         "propertyName": "type"
       },
@@ -1616,6 +1644,9 @@
         },
         {
           "$ref": "#/$defs/SkillsSearch"
+        },
+        {
+          "$ref": "#/$defs/TraceGet"
         },
         {
           "$ref": "#/$defs/SkillsInstall"

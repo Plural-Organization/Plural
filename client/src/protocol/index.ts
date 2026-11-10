@@ -44,6 +44,8 @@ export type {
   RunView,
   SessionState,
   SkillHit,
+  Span,
+  SpanKind,
   SkillScope,
   SkillView,
   TextSelection,

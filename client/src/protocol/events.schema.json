@@ -1487,6 +1487,7 @@
               "tool.output": "#/$defs/ToolOutput",
               "tool.started": "#/$defs/ToolStarted",
               "tools.loaded": "#/$defs/ToolsLoaded",
+              "trace.found": "#/$defs/TraceFound",
               "usage.recorded": "#/$defs/UsageRecorded"
             },
             "propertyName": "type"
@@ -1515,6 +1516,9 @@
             },
             {
               "$ref": "#/$defs/SkillsFound"
+            },
+            {
+              "$ref": "#/$defs/TraceFound"
             },
             {
               "$ref": "#/$defs/AgentChanged"
@@ -3451,6 +3455,143 @@
       ],
       "type": "object"
     },
+    "Span": {
+      "description": "One thing a run did: a model call, a tool call, a wait for approval, a sub-agent.\n\nSpans of a run form a tree through `parent_id`. `usage` is what the span itself spent, not\nits children; a client adds the children up.",
+      "properties": {
+        "actor_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "chars": {
+          "default": 0,
+          "type": "integer"
+        },
+        "context_tokens": {
+          "default": 0,
+          "type": "integer"
+        },
+        "detail": {
+          "default": "",
+          "type": "string"
+        },
+        "ended_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "error": {
+          "default": "",
+          "type": "string"
+        },
+        "first_ms": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/SpanKind"
+        },
+        "model": {
+          "default": "",
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "run_id": {
+          "default": "",
+          "type": "string"
+        },
+        "started_ms": {
+          "type": "integer"
+        },
+        "status": {
+          "$ref": "#/$defs/SpanStatus",
+          "default": "running"
+        },
+        "usage": {
+          "$ref": "#/$defs/Usage",
+          "default": {
+            "cache_read_tokens": 0,
+            "cache_write_tokens": 0,
+            "input_tokens": 0,
+            "output_tokens": 0
+          }
+        }
+      },
+      "required": [
+        "id",
+        "parent_id",
+        "run_id",
+        "kind",
+        "name",
+        "detail",
+        "model",
+        "actor_id",
+        "started_ms",
+        "ended_ms",
+        "status",
+        "usage",
+        "context_tokens",
+        "first_ms",
+        "chars",
+        "error"
+      ],
+      "type": "object"
+    },
+    "SpanKind": {
+      "enum": [
+        "run",
+        "llm",
+        "tool",
+        "approval",
+        "agent"
+      ],
+      "type": "string"
+    },
+    "SpanStatus": {
+      "enum": [
+        "running",
+        "ok",
+        "error",
+        "denied",
+        "cancelled"
+      ],
+      "type": "string"
+    },
     "TextSelection": {
       "description": "Text someone has selected, as offsets into the text of one item on screen.\n\nThe anchor names the item (a feed entry or a canvas document); every client lays\nout the same items, so the offsets point at the same words for everyone.",
       "properties": {
@@ -3616,6 +3757,46 @@
       "required": [
         "type",
         "tools"
+      ],
+      "type": "object"
+    },
+    "TraceFound": {
+      "description": "The answer to `trace.get`: the spans asked for, and the newest runs to choose from.",
+      "properties": {
+        "run_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runs": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/Span"
+          },
+          "type": "array"
+        },
+        "spans": {
+          "items": {
+            "$ref": "#/$defs/Span"
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "trace.found",
+          "default": "trace.found",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "run_id",
+        "spans",
+        "runs"
       ],
       "type": "object"
     },
@@ -3863,6 +4044,7 @@
           "tool.output": "#/$defs/ToolOutput",
           "tool.started": "#/$defs/ToolStarted",
           "tools.loaded": "#/$defs/ToolsLoaded",
+          "trace.found": "#/$defs/TraceFound",
           "usage.recorded": "#/$defs/UsageRecorded"
         },
         "propertyName": "type"
@@ -3891,6 +4073,9 @@
         },
         {
           "$ref": "#/$defs/SkillsFound"
+        },
+        {
+          "$ref": "#/$defs/TraceFound"
         },
         {
           "$ref": "#/$defs/AgentChanged"

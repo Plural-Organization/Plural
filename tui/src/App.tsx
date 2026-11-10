@@ -48,7 +48,7 @@ import { InviteDialog } from "./components/InviteDialog";
 import { LeaveDialog } from "./components/LeaveDialog";
 import { ShareDialog } from "./components/ShareDialog";
 import { candidateFolders } from "./folders";
-import { contextRows, helpRows, pluginRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
+import { callGraphRows, contextRows, helpRows, pluginRows, policyRows, skillRows, traceRows, usageRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
 import { describeConflict, type SpaceRow, type Summary } from "./spaces";
@@ -186,6 +186,9 @@ export function App({
       return next;
     });
   const { width, height } = useTerminalDimensions();
+  // The room a trace has in the tray, read when one arrives: beside the side panel when it shows.
+  const traceWidth = useRef(width);
+  traceWidth.current = width - (settings.panel && width >= MIN_WIDTH_FOR_PANEL ? SIDEBAR_WIDTH : 0) - 10;
   const initial = useMemo(() => withBanner(emptyFeed(), { kind: "banner", id: "banner", room, version, guestLink, teamLink }), []);
   const [feed, setFeed] = useState<Feed>(initial);
   const feedRef = useRef(initial);
@@ -340,6 +343,11 @@ export function App({
               tone: "accent",
               rows: event.text.split("\n").map((line): Row => [line]),
             });
+          }
+          if (event.type === "trace.found") {
+            const shown =
+              event.run_id === null ? callGraphRows(client.projection, event.spans) : traceRows(client.projection, event.spans, traceWidth.current);
+            setTray({ kind: "text", title: shown.title, tone: "accent", rows: shown.rows });
           }
           if (event.type === "skills.found") {
             const host = client.projection.me?.role === "host";
