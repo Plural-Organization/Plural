@@ -71,6 +71,12 @@ describe("asking the daemon", () => {
     expect(error).toBeInstanceOf(DaemonError);
     expect((error as DaemonError).linkedEmail).toBe("alia@example.com");
   });
+  test("a ticket the computer cannot verify is not called an expired sign-in", async () => {
+    wire(() => json({ error: { code: "bad_ticket", message: "the ticket is forged", reason: "forged" } }, 401));
+    const forged = (await startRoom("f_1", "", undefined, DAEMON).catch((caught: unknown) => caught)) as DaemonError;
+    expect(daemonMessage(forged)).toContain("different Plural accounts service");
+    expect(daemonMessage(new DaemonError(401, "bad_ticket", "x", null, "expired"))).toBe("Your sign-in expired. Try again.");
+  });
   test("an unreachable daemon is an error, not a crash", async () => {
     vi.stubGlobal("fetch", async (url: string) => {
       if (url === TICKETS) {

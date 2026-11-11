@@ -29,6 +29,7 @@ export class DaemonError extends Error {
     readonly code: string,
     message: string,
     readonly linkedEmail: string | null = null,
+    readonly reason: string | null = null,
   ) {
     super(message);
   }
@@ -51,7 +52,6 @@ export async function daemonStatus(base: string = DAEMON_URL): Promise<DaemonSta
 
 const REASONS: Record<string, string> = {
   no_ticket: "Sign in again, then retry.",
-  bad_ticket: "Your sign-in expired. Try again.",
   ticket_used: "Try again.",
   not_linked: "Plural on this computer is not signed in. Run plural login.",
   no_folder_dialog: "This computer cannot show a folder dialog. Start the room from the terminal instead.",
@@ -61,6 +61,11 @@ const REASONS: Record<string, string> = {
 };
 
 export function daemonMessage(error: DaemonError, signedInAs: string | null = null): string {
+  if (error.code === "bad_ticket") {
+    // A ticket the computer cannot verify was signed by another accounts service than the one it is
+    // linked to; that is not an expired sign-in and signing in again does not help.
+    return error.reason === "expired" ? "Your sign-in expired. Try again." : "Plural on this computer is linked through a different Plural accounts service than this page uses. Run plural login again against the same one.";
+  }
   if (error.code === "wrong_account") {
     const linked = error.linkedEmail ?? "another account";
     return signedInAs === null ? `Plural on this computer belongs to ${linked}.` : `Plural on this computer belongs to ${linked}, and you are signed in as ${signedInAs}.`;
@@ -83,9 +88,9 @@ export async function ask<T>(path: string, init: RequestInit = {}, base: string 
   if (response.status === 204) {
     return undefined as T;
   }
-  const body = (await response.json().catch(() => ({}))) as { error?: { code?: string; message?: string; linked_email?: string } } & Record<string, unknown>;
+  const body = (await response.json().catch(() => ({}))) as { error?: { code?: string; message?: string; linked_email?: string; reason?: string } } & Record<string, unknown>;
   if (!response.ok) {
-    throw new DaemonError(response.status, body.error?.code ?? "failed", body.error?.message ?? "Something went wrong.", body.error?.linked_email ?? null);
+    throw new DaemonError(response.status, body.error?.code ?? "failed", body.error?.message ?? "Something went wrong.", body.error?.linked_email ?? null, body.error?.reason ?? null);
   }
   return body as T;
 }

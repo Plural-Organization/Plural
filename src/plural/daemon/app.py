@@ -118,7 +118,9 @@ class Daemon:
         except InvalidEntitlement as error:
             if error.reason == "forged":
                 self._key.suspect()
-            raise Problem(401, "bad_ticket", f"the ticket is {error.reason}") from error
+            raise Problem(
+                401, "bad_ticket", f"the ticket is {error.reason}", reason=error.reason
+            ) from error
         linked = linked_account(self._accounts)
         if linked is None:
             raise Problem(409, "not_linked", "run `plural login` on this computer")

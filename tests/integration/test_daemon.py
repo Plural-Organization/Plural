@@ -255,7 +255,11 @@ async def test_only_a_fresh_ticket_for_this_computers_account_gets_in(tmp_path: 
         status, body, _ = await daemon.call("GET", "/v1/account")
         assert (status, body["error"]["code"]) == (401, "no_ticket")
         status, body, _ = await daemon.call("GET", "/v1/account", ticket=daemon.ticket(expires=-1))
-        assert (status, body["error"]["code"]) == (401, "bad_ticket")
+        assert (status, body["error"]["code"], body["error"]["reason"]) == (
+            401,
+            "bad_ticket",
+            "expired",
+        )
         forged = sign(
             Ed25519PrivateKey.generate(),
             TicketClaims(
@@ -263,7 +267,11 @@ async def test_only_a_fresh_ticket_for_this_computers_account_gets_in(tmp_path: 
             ),
         )
         status, body, _ = await daemon.call("GET", "/v1/account", ticket=forged)
-        assert (status, body["error"]["code"]) == (401, "bad_ticket")
+        assert (status, body["error"]["code"], body["error"]["reason"]) == (
+            401,
+            "bad_ticket",
+            "forged",
+        )
         status, body, _ = await daemon.call("GET", "/v1/account", ticket=daemon.ticket("a_other"))
         assert (status, body["error"]["code"], body["error"]["linked_email"]) == (
             403,
