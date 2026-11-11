@@ -7,6 +7,8 @@ export interface AgentSetupState {
   catalog: AgentCatalog | null;
   /** Why the catalog could not be read. */
   error: string | null;
+  /** The program on this computer is older than agent setup: rooms start with its own agent. */
+  outdated: boolean;
   provider: Provider | null;
   choice: AgentChoice | null;
   typedKey: string;
@@ -35,6 +37,7 @@ export function useAgentSetup(active: boolean): AgentSetupState {
   const [error, setError] = useState<string | null>(null);
   const [choice, setChoice] = useState<AgentChoice | null>(null);
   const [typedKey, setTypedKey] = useState("");
+  const [outdated, setOutdated] = useState(false);
 
   const refresh = useCallback(() => {
     agentCatalog()
@@ -47,7 +50,15 @@ export function useAgentSetup(active: boolean): AgentSetupState {
           return first === undefined ? found.current : choiceFor(first, found.current);
         });
       })
-      .catch((failure: unknown) => setError(failure instanceof DaemonError ? daemonMessage(failure) : "Could not read the agents on this computer."));
+      .catch((failure: unknown) => {
+        // A daemon from before agent setup has no /v1/agent: it answers 404.
+        if (failure instanceof DaemonError && failure.status === 404) {
+          setOutdated(true);
+          setError("Update Plural on this computer to choose the agent here: run plural update, then start plural daemon again.");
+          return;
+        }
+        setError(failure instanceof DaemonError ? daemonMessage(failure) : "Could not read the agents on this computer.");
+      });
   }, []);
 
   useEffect(() => {
@@ -82,5 +93,5 @@ export function useAgentSetup(active: boolean): AgentSetupState {
     return clean(choice);
   }, [provider, choice, typedKey, refresh]);
 
-  return { catalog, error, provider, choice, typedKey, blocker, pick, edit, setTypedKey, refresh, commit };
+  return { catalog, error, outdated, provider, choice, typedKey, blocker, pick, edit, setTypedKey, refresh, commit };
 }
