@@ -31,7 +31,9 @@ class SystemTerminal:
     """
 
     async def run(self, command: str) -> None:
-        if sys.platform == "darwin":
+        # A plain bool, so a type checker on another platform does not prune the macOS branch.
+        on_mac: bool = sys.platform == "darwin"
+        if on_mac:
             arguments = [
                 "osascript",
                 "-e",
@@ -55,5 +57,5 @@ class SystemTerminal:
             )
         except OSError as error:
             raise TerminalUnavailable(f"could not open a terminal: {error}") from error
-        if sys.platform == "darwin" and await process.wait() != 0:
+        if on_mac and await process.wait() != 0:
             raise TerminalUnavailable("the Terminal app did not open")
