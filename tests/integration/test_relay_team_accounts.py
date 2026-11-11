@@ -12,6 +12,8 @@ import uvicorn
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from tests.e2e.support import free_port
 
+from plural.host.team import account_teams
+from plural.protocol.entitlement import EntitlementClaims
 from plural.protocol.ticket import TicketClaims
 from plural.relay.app import create_app
 from plural.relay.entitlements import EntitlementWatch
@@ -94,6 +96,20 @@ async def test_an_account_creates_a_team_and_a_new_device_finds_it(tmp_path: Pat
         )
         assert status == 401
         assert "wrong_audience" in refused["error"]
+
+        # A computer of the same account proves it with its certificate and finds the team too.
+        computer, host_key = Identity(Ed25519PrivateKey.generate()), Ed25519PrivateKey.generate()
+        host = Identity(host_key)
+        now = datetime.now(UTC)
+        claims = EntitlementClaims(
+            account="a_vlad", key=host.public_b64, iat=now, exp=now + timedelta(days=7)
+        )
+        body = claims.model_dump_json().encode()
+        certificate = f"{b64encode(body)}.{b64encode(accounts.sign(body))}"
+        found = await account_teams(f"ws://127.0.0.1:{port}", computer, certificate, host.sign)
+        assert [(team.team_id, team.member.role.value) for team in found] == [
+            (created["team_id"], "owner")
+        ]
     finally:
         server.should_exit = True
         await task

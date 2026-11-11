@@ -1,8 +1,10 @@
 import asyncio
 import json
 import os
+import re
 import secrets
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -16,14 +18,18 @@ from plural.host.relay_http import ConnectFailed, urlopen
 from plural.protocol.models import Model
 from plural.protocol.relay import USER_AGENT
 from plural.protocol.team import (
+    AccountProof,
     Invite,
     MemberList,
     MemberView,
+    MyTeams,
     Renewed,
     SessionList,
     TeamCreate,
     TeamGrant,
+    TeamGrants,
     TeamJoin,
+    account_proof_message,
 )
 from plural.security.identity import CertVerifier, Identity, InvalidCertificate, authorization
 
@@ -52,36 +58,86 @@ def http_base(relay: str) -> str:
     return f"{scheme}://{parts.netloc}"
 
 
+TEAM_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
 class TeamStore:
-    def __init__(self, data_dir: Path) -> None:
+    """The teams this computer is in (ADR 0016).
+
+    `team.json` is the one `plural team` works with; `teams/<id>.json` holds one file per team. A
+    store bound to a team id reads and writes that team's file.
+    """
+
+    def __init__(self, data_dir: Path, team_id: str | None = None) -> None:
         self._dir = data_dir.expanduser()
+        if team_id is not None and not TEAM_ID.match(team_id):
+            raise TeamError("that is not a team id")
+        self._team_id = team_id
 
     @property
     def identity_path(self) -> Path:
         return self._dir / "identity.pem"
 
     @property
+    def teams_dir(self) -> Path:
+        return self._dir / "teams"
+
+    @property
     def profile_path(self) -> Path:
+        if self._team_id is not None:
+            return self.teams_dir / f"{self._team_id}.json"
         return self._dir / "team.json"
 
     def identity(self) -> Identity:
         return Identity.load_or_create(self.identity_path)
 
-    def load(self) -> TeamProfile | None:
+    @staticmethod
+    def _read(path: Path) -> TeamProfile | None:
         try:
-            return TeamProfile.model_validate_json(self.profile_path.read_text())
+            return TeamProfile.model_validate_json(path.read_text())
         except FileNotFoundError:
             return None
         except (ValidationError, OSError) as error:
-            raise TeamError(f"{self.profile_path} is damaged, remove it and join again") from error
+            raise TeamError(f"{path} is damaged, remove it and join again") from error
 
-    def save(self, profile: TeamProfile) -> None:
-        self._dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        temporary = self.profile_path.with_suffix(".tmp")
+    def load(self) -> TeamProfile | None:
+        found = self._read(self.profile_path)
+        if found is None and self._team_id is not None:
+            # A team joined with `plural team join` lives in team.json only.
+            legacy = self._read(self._dir / "team.json")
+            if legacy is not None and legacy.team_id == self._team_id:
+                return legacy
+        return found
+
+    def _write(self, path: Path, profile: TeamProfile) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        temporary = path.with_suffix(".tmp")
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(descriptor, "w") as handle:
             handle.write(profile.model_dump_json())
-        temporary.replace(self.profile_path)
+        temporary.replace(path)
+
+    def save(self, profile: TeamProfile) -> None:
+        self._write(self.profile_path, profile)
+
+    def keep(self, profile: TeamProfile) -> None:
+        """Remember one more team, in its own file, whatever this store is bound to."""
+        if not TEAM_ID.match(profile.team_id):
+            raise TeamError("the relay sent a team id this computer cannot keep")
+        self._write(self.teams_dir / f"{profile.team_id}.json", profile)
+
+    def profiles(self) -> list[TeamProfile]:
+        """Every team on this computer, each once, by name."""
+        found: dict[str, TeamProfile] = {}
+        legacy = self._read(self._dir / "team.json")
+        if legacy is not None:
+            found[legacy.team_id] = legacy
+        if self.teams_dir.is_dir():
+            for path in sorted(self.teams_dir.glob("*.json")):
+                profile = self._read(path)
+                if profile is not None:
+                    found[profile.team_id] = profile
+        return sorted(found.values(), key=lambda profile: profile.team_name.lower())
 
     def clear(self) -> None:
         self.profile_path.unlink(missing_ok=True)
@@ -204,6 +260,33 @@ async def join_team(relay: str, identity: Identity, *, code: str, member: str) -
         {"content-type": "application/json"},
     )
     return profile_from(relay, TeamGrant.model_validate(answer))
+
+
+async def account_teams(
+    relay: str, identity: Identity, certificate: str, prove: Callable[[bytes], str]
+) -> list[TeamProfile]:
+    """Every team of this computer's account on `relay`, with certificates for its team key.
+
+    The computer proves its account with its entitlement certificate and a signature by the
+    certificate's key (`prove`) over a fresh time and nonce (ADR 0016).
+    """
+    ts = int(time.time())
+    nonce = secrets.token_hex(8)
+    proof = AccountProof(
+        certificate=certificate,
+        ts=ts,
+        nonce=nonce,
+        signature=prove(account_proof_message(ts, nonce)),
+    )
+    body = MyTeams(key=identity.public_b64, proof=proof)
+    answer = await asyncio.to_thread(
+        _call,
+        "POST",
+        f"{http_base(relay)}/teams/mine",
+        body.model_dump_json().encode(),
+        {"content-type": "application/json"},
+    )
+    return [profile_from(relay, grant) for grant in TeamGrants.model_validate(answer).teams]
 
 
 class DirectoryClient:

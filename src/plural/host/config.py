@@ -36,6 +36,8 @@ class HostSettings(BaseSettings):
     # The MCP gateway a chat service sends chats through. Off until one is named.
     mcp_url: str | None = None
     team: bool = False
+    # Which of this computer's teams a team session shows to; None is the one in team.json.
+    team_id: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_-]{1,64}$")
     team_roster_ttl_s: float = Field(default=30, gt=0)
     preset: str | None = None
     provider: Adapter | None = None
