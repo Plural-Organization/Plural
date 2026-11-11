@@ -19,17 +19,17 @@ interface ChoiceProps<T extends string> {
 // One setting: its name and the choices, each saying what it does. A change reaches the room at once.
 function Choice<T extends string>({ title, options, value, onChange }: ChoiceProps<T>) {
   return (
-    <RadioGroup aria-label={title} value={value} onChange={(next) => onChange(next as T)}>
+    <RadioGroup aria-label={title} value={value} onChange={(next) => onChange(next as T)} className="gap-3">
       <Label className="text-[15px] font-medium">{title}</Label>
       {options.map((option) => (
         <Radio key={option.id} value={option.id}>
-          <Radio.Control>
-            <Radio.Indicator />
-          </Radio.Control>
           <Radio.Content>
+            <Radio.Control>
+              <Radio.Indicator />
+            </Radio.Control>
             <Label>{option.label}</Label>
-            <Description>{option.says}</Description>
           </Radio.Content>
+          <Description>{option.says}</Description>
         </Radio>
       ))}
     </RadioGroup>
