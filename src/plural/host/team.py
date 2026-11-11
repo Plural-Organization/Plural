@@ -1,8 +1,10 @@
 import asyncio
 import json
 import os
+import re
 import secrets
 import time
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
@@ -16,14 +18,20 @@ from plural.host.relay_http import ConnectFailed, urlopen
 from plural.protocol.models import Model
 from plural.protocol.relay import USER_AGENT
 from plural.protocol.team import (
+    AccountProof,
     Invite,
     MemberList,
     MemberView,
+    MyTeams,
     Renewed,
     SessionList,
     TeamCreate,
     TeamGrant,
+    TeamGrants,
     TeamJoin,
+    account_proof_message,
+    key_proof_message,
+    normalize_code,
 )
 from plural.security.identity import CertVerifier, Identity, InvalidCertificate, authorization
 
@@ -52,39 +60,144 @@ def http_base(relay: str) -> str:
     return f"{scheme}://{parts.netloc}"
 
 
+TEAM_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
 class TeamStore:
-    def __init__(self, data_dir: Path) -> None:
+    """The teams this computer is in (ADR 0016).
+
+    Each team has a file under `teams/`, and `current-team` names the one `plural team` and the
+    terminal client work with. `team.json` is where the single team of older versions lived; it is
+    moved under `teams/` the first time a second team comes along. A store bound to a team id reads
+    and writes that team's file.
+    """
+
+    def __init__(self, data_dir: Path, team_id: str | None = None) -> None:
         self._dir = data_dir.expanduser()
+        if team_id is not None and not TEAM_ID.match(team_id):
+            raise TeamError("that is not a team id")
+        self._team_id = team_id
 
     @property
     def identity_path(self) -> Path:
         return self._dir / "identity.pem"
 
     @property
-    def profile_path(self) -> Path:
+    def teams_dir(self) -> Path:
+        return self._dir / "teams"
+
+    @property
+    def _legacy_path(self) -> Path:
         return self._dir / "team.json"
+
+    @property
+    def _current_path(self) -> Path:
+        return self._dir / "current-team"
+
+    def current_id(self) -> str | None:
+        try:
+            chosen = self._current_path.read_text().strip()
+        except OSError:
+            return None
+        return chosen if TEAM_ID.match(chosen) else None
+
+    @property
+    def profile_path(self) -> Path:
+        if self._team_id is not None:
+            return self.teams_dir / f"{self._team_id}.json"
+        chosen = self.current_id()
+        if chosen is not None and (self.teams_dir / f"{chosen}.json").exists():
+            return self.teams_dir / f"{chosen}.json"
+        return self._legacy_path
 
     def identity(self) -> Identity:
         return Identity.load_or_create(self.identity_path)
 
-    def load(self) -> TeamProfile | None:
+    @staticmethod
+    def _read(path: Path) -> TeamProfile | None:
         try:
-            return TeamProfile.model_validate_json(self.profile_path.read_text())
+            return TeamProfile.model_validate_json(path.read_text())
         except FileNotFoundError:
             return None
         except (ValidationError, OSError) as error:
-            raise TeamError(f"{self.profile_path} is damaged, remove it and join again") from error
+            raise TeamError(f"{path} is damaged, remove it and join again") from error
 
-    def save(self, profile: TeamProfile) -> None:
-        self._dir.mkdir(parents=True, exist_ok=True, mode=0o700)
-        temporary = self.profile_path.with_suffix(".tmp")
+    def load(self) -> TeamProfile | None:
+        found = self._read(self.profile_path)
+        if found is None and self._team_id is not None:
+            # A team joined with `plural team join` lives in team.json only.
+            legacy = self._read(self._dir / "team.json")
+            if legacy is not None and legacy.team_id == self._team_id:
+                return legacy
+        return found
+
+    def _write(self, path: Path, profile: TeamProfile) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        temporary = path.with_suffix(".tmp")
         descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
         with os.fdopen(descriptor, "w") as handle:
             handle.write(profile.model_dump_json())
-        temporary.replace(self.profile_path)
+        temporary.replace(path)
+
+    def save(self, profile: TeamProfile) -> None:
+        self._write(self.profile_path, profile)
+
+    def _move_legacy(self) -> None:
+        """team.json becomes a team like the others, and stays the current one."""
+        legacy = self._read(self._legacy_path)
+        if legacy is None:
+            return
+        if not (self.teams_dir / f"{legacy.team_id}.json").exists():
+            self.keep(legacy)
+        if self.current_id() is None:
+            self._point(legacy.team_id)
+        self._legacy_path.unlink(missing_ok=True)
+
+    def _point(self, team_id: str) -> None:
+        self._dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        self._current_path.write_text(team_id)
+
+    def add(self, profile: TeamProfile) -> None:
+        """A team just created or joined: kept, and made the current one."""
+        self._move_legacy()
+        self.keep(profile)
+        self._point(profile.team_id)
+
+    def use(self, team_id: str) -> TeamProfile:
+        """Make one of this computer's teams the current one."""
+        self._move_legacy()
+        profile = self._read(self.teams_dir / f"{team_id}.json") if TEAM_ID.match(team_id) else None
+        if profile is None:
+            raise TeamError("this computer is not in that team")
+        self._point(team_id)
+        return profile
+
+    def keep(self, profile: TeamProfile) -> None:
+        """Remember one more team, in its own file, whatever this store is bound to."""
+        if not TEAM_ID.match(profile.team_id):
+            raise TeamError("the relay sent a team id this computer cannot keep")
+        self._write(self.teams_dir / f"{profile.team_id}.json", profile)
+
+    def profiles(self) -> list[TeamProfile]:
+        """Every team on this computer, each once, by name."""
+        found: dict[str, TeamProfile] = {}
+        legacy = self._read(self._dir / "team.json")
+        if legacy is not None:
+            found[legacy.team_id] = legacy
+        if self.teams_dir.is_dir():
+            for path in sorted(self.teams_dir.glob("*.json")):
+                profile = self._read(path)
+                if profile is not None:
+                    found[profile.team_id] = profile
+        return sorted(found.values(), key=lambda profile: profile.team_name.lower())
 
     def clear(self) -> None:
-        self.profile_path.unlink(missing_ok=True)
+        """Forget this store's team; the current one is then none."""
+        path = self.profile_path
+        gone = self._read(path)
+        path.unlink(missing_ok=True)
+        if gone is not None and self.current_id() == gone.team_id:
+            self._current_path.unlink(missing_ok=True)
 
 
 def profile_from(relay: str, grant: TeamGrant) -> TeamProfile:
@@ -182,8 +295,27 @@ def _call(method: str, url: str, body: bytes | None, headers: dict[str, str]) ->
     return json.loads(payload) if payload else None
 
 
-async def create_team(relay: str, identity: Identity, *, team: str, member: str) -> TeamProfile:
-    body = TeamCreate(name=team, member_name=member, key=identity.public_b64)
+def account_proof(certificate: str, prove: Callable[[bytes], str]) -> AccountProof:
+    """That this computer belongs to its account: its certificate, freshly signed by its key."""
+    ts = int(time.time())
+    nonce = secrets.token_hex(8)
+    return AccountProof(
+        certificate=certificate,
+        ts=ts,
+        nonce=nonce,
+        signature=prove(account_proof_message(ts, nonce)),
+    )
+
+
+async def create_team(
+    relay: str,
+    identity: Identity,
+    *,
+    team: str,
+    member: str,
+    proof: AccountProof | None = None,
+) -> TeamProfile:
+    body = TeamCreate(name=team, member_name=member, key=identity.public_b64, proof=proof)
     answer = await asyncio.to_thread(
         _call,
         "POST",
@@ -194,8 +326,21 @@ async def create_team(relay: str, identity: Identity, *, team: str, member: str)
     return profile_from(relay, TeamGrant.model_validate(answer))
 
 
-async def join_team(relay: str, identity: Identity, *, code: str, member: str) -> TeamProfile:
-    body = TeamJoin(code=code, name=member, key=identity.public_b64)
+async def join_team(
+    relay: str,
+    identity: Identity,
+    *,
+    code: str,
+    member: str,
+    proof: AccountProof | None = None,
+) -> TeamProfile:
+    # With an account, the key signs the code too, so a key-only member it already is gets claimed.
+    key_proof = (
+        identity.sign(key_proof_message(normalize_code(code))) if proof is not None else None
+    )
+    body = TeamJoin(
+        code=code, name=member, key=identity.public_b64, proof=proof, key_proof=key_proof
+    )
     answer = await asyncio.to_thread(
         _call,
         "POST",
@@ -204,6 +349,25 @@ async def join_team(relay: str, identity: Identity, *, code: str, member: str) -
         {"content-type": "application/json"},
     )
     return profile_from(relay, TeamGrant.model_validate(answer))
+
+
+async def account_teams(
+    relay: str, identity: Identity, certificate: str, prove: Callable[[bytes], str]
+) -> list[TeamProfile]:
+    """Every team of this computer's account on `relay`, with certificates for its team key.
+
+    The computer proves its account with its entitlement certificate and a signature by the
+    certificate's key (`prove`) over a fresh time and nonce (ADR 0016).
+    """
+    body = MyTeams(key=identity.public_b64, proof=account_proof(certificate, prove))
+    answer = await asyncio.to_thread(
+        _call,
+        "POST",
+        f"{http_base(relay)}/teams/mine",
+        body.model_dump_json().encode(),
+        {"content-type": "application/json"},
+    )
+    return [profile_from(relay, grant) for grant in TeamGrants.model_validate(answer).teams]
 
 
 class DirectoryClient:

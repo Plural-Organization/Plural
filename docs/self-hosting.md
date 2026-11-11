@@ -90,6 +90,8 @@ plural-host relay --teams /data/teams.db      # or PLURAL_RELAY_TEAMS=/data/team
 
 Without it the relay serves no teams. The file holds each team's signing key, so keep it private (plural creates it readable by its owner only) and back it up; losing it means the teams have to be created again. Prompts, replies and files never go to the directory. Anyone who can reach the relay can create a team, at most 3 per address per 10 minutes, 3 owned by one key and 500 in all, so put the relay behind a network rule if it should serve only you. In a container, mount a volume for the file.
 
+A relay started with `--accounts-url` (see the entitlement gate above) also lets people use their Plural account in teams (ADR 0016): a member is then an account, not a key, so every browser and computer signed in to it is the same member, and `POST /teams/mine` gives a signed-in device all its teams. The relay checks the account offline with the accounts service's public key and learns only the account id. Without `--accounts-url`, teams work with keys as before.
+
 For a team that lives only as long as your laptop, `plural team create <name> --tunnel ngrok` starts this relay and a tunnel to it for you, see [usage](usage.md#a-team-on-your-own-machine-behind-a-tunnel).
 
 ### Railway

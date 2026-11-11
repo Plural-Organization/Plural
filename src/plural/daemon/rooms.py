@@ -133,12 +133,13 @@ class Rooms:
         name: str | None = None,
         agent: AgentConfig | None = None,
         relay: str | None = None,
+        team: str | None = None,
     ) -> Room:
         if len(self._rooms) + self._starting >= self._limit:
             raise RoomError("too_many_rooms", f"at most {self._limit} rooms at once")
         self._starting += 1
         try:
-            return await self._launch(folder, title, name, agent, relay)
+            return await self._launch(folder, title, name, agent, relay, team)
         finally:
             self._starting -= 1
 
@@ -149,6 +150,7 @@ class Rooms:
         name: str | None,
         agent: AgentConfig | None,
         relay: str | None,
+        team: str | None = None,
     ) -> Room:
         arguments = [*self._command, "host", "--json", "--workspace", str(folder)]
         if title:
@@ -157,6 +159,8 @@ class Rooms:
             arguments += ["--name", name]
         if relay:
             arguments += ["--relay", relay]
+        if team:
+            arguments += ["--team-id", team]
         try:
             process = await asyncio.create_subprocess_exec(
                 *arguments,

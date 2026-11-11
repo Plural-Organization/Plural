@@ -1,7 +1,7 @@
 import type { TeamProof } from "../protocol";
-import { authorizationHeader, freshNonce, httpBase, joinMessage, nowSeconds, requestMessage } from "./protocol";
+import { authorizationHeader, freshNonce, httpBase, joinMessage, keyProofMessage, nowSeconds, requestMessage } from "./protocol";
 import { closedTunnel, isTunnelHost, TUNNEL_GONE } from "./tunnel";
-import type { SessionCard, TeamProfile } from "./types";
+import type { AccountProof, MemberView, SessionCard, TeamGrant, TeamProfile } from "./types";
 
 // What differs between the terminal (node:crypto, node's fetch) and the browser (WebCrypto, the page's
 // fetch). Everything else a team client does is written once, here.
@@ -68,12 +68,16 @@ const isTimeout = (error: unknown): boolean => error instanceof Error && (error.
 
 // A request that never reached the relay is made once more, with a fresh signature: the relay refuses a nonce it has
 // seen. A timeout is not repeated, it may have arrived.
-async function signed<T>(profile: TeamProfile, platform: TeamPlatform, method: string, path: string): Promise<T> {
+async function signed<T>(profile: TeamProfile, platform: TeamPlatform, method: string, path: string, json?: unknown): Promise<T> {
+  const body = json === undefined ? undefined : new TextEncoder().encode(JSON.stringify(json));
   for (let attempt = 0; ; attempt += 1) {
-    const headers = { authorization: await authorization(profile, platform, method, path) };
+    const headers: Record<string, string> = { authorization: await authorization(profile, platform, method, path, body) };
+    if (body !== undefined) {
+      headers["content-type"] = "application/json";
+    }
     let response: Response;
     try {
-      response = await platform.fetch(`${httpBase(profile.relay)}${path}`, { method, headers });
+      response = await platform.fetch(`${httpBase(profile.relay)}${path}`, { method, headers, ...(body === undefined ? {} : { body }) });
     } catch (error) {
       if (attempt === 0 && !isTimeout(error)) {
         continue;
@@ -82,6 +86,85 @@ async function signed<T>(profile: TeamProfile, platform: TeamPlatform, method: s
     }
     return answer<T>(response, profile.relay);
   }
+}
+
+// A request anyone may make: creating or joining a team, or asking for an account's teams.
+async function open<T>(relay: string, platform: TeamPlatform, path: string, json: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await platform.fetch(`${httpBase(relay)}${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(json) });
+  } catch (error) {
+    throw new Error(`could not reach the team's relay at ${new URL(httpBase(relay)).host}`, { cause: error });
+  }
+  return answer<T>(response, relay);
+}
+
+// The profile a device keeps for a team, from what the relay granted it.
+export function profileFrom(relay: string, grant: TeamGrant): TeamProfile {
+  return {
+    relay,
+    team_id: grant.team_id,
+    team_name: grant.team_name,
+    team_key: grant.team_key,
+    certificate: grant.certificate,
+    member: { id: grant.member.id, name: grant.member.name, role: grant.member.role },
+  };
+}
+
+export interface NewTeam {
+  name: string;
+  memberName: string;
+  // This device's public key, base64url.
+  key: string;
+  // Given, the creator is an account and not only this key (ADR 0016).
+  proof?: AccountProof;
+}
+
+// Creates a team; the creator owns it. The invite code comes back once, to share.
+export async function createTeamOnRelay(relay: string, platform: TeamPlatform, team: NewTeam): Promise<{ profile: TeamProfile; invite: string | null }> {
+  const body = { name: team.name, member_name: team.memberName, key: team.key, ...(team.proof === undefined ? {} : { proof: team.proof }) };
+  const grant = await open<TeamGrant>(relay, platform, "/teams", body);
+  return { profile: profileFrom(relay, grant), invite: grant.invite ?? null };
+}
+
+export interface Joining {
+  code: string;
+  name: string;
+  key: string;
+  proof?: AccountProof;
+  // With an account, sign the code with this device's key, so a key-only member it already is gets claimed.
+  claim?: boolean;
+}
+
+export async function joinTeamOnRelay(relay: string, platform: TeamPlatform, joining: Joining): Promise<TeamProfile> {
+  const body = {
+    code: joining.code,
+    name: joining.name,
+    key: joining.key,
+    ...(joining.proof === undefined ? {} : { proof: joining.proof }),
+    ...(joining.proof !== undefined && joining.claim === true ? { key_proof: await platform.sign(keyProofMessage(joining.code)) } : {}),
+  };
+  return profileFrom(relay, await open<TeamGrant>(relay, platform, "/teams/join", body));
+}
+
+// Every team of the signed-in account on this relay, each with a certificate for this device's key.
+export async function myTeamsOnRelay(relay: string, platform: TeamPlatform, key: string, proof: AccountProof): Promise<TeamProfile[]> {
+  const found = await open<{ teams: TeamGrant[] }>(relay, platform, "/teams/mine", { key, proof });
+  return found.teams.map((grant) => profileFrom(relay, grant));
+}
+
+export async function fetchMembers(profile: TeamProfile, platform: TeamPlatform): Promise<MemberView[]> {
+  return (await signed<{ members: MemberView[] }>(profile, platform, "GET", `/teams/${profile.team_id}/members`)).members;
+}
+
+// Owner only, except for oneself (that is leaving).
+export async function removeMemberOnRelay(profile: TeamProfile, platform: TeamPlatform, member: string): Promise<void> {
+  await signed(profile, platform, "DELETE", `/teams/${profile.team_id}/members/${encodeURIComponent(member)}`);
+}
+
+// Owner only: another member owns the team from now on, and the old owner may leave.
+export function handOverTeam(profile: TeamProfile, platform: TeamPlatform, member: string): Promise<MemberView> {
+  return signed<MemberView>(profile, platform, "POST", `/teams/${profile.team_id}/owner`, { member });
 }
 
 export async function fetchSessions(profile: TeamProfile, platform: TeamPlatform): Promise<SessionCard[]> {

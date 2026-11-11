@@ -10,6 +10,8 @@ from starlette.websockets import WebSocket, WebSocketDisconnect
 
 from plural.protocol.team import (
     MemberClaims,
+    MyTeams,
+    OwnerHandover,
     PresenceCard,
     PresencePeers,
     SessionList,
@@ -105,6 +107,22 @@ def team_routes(
             raise DirectoryError(400, _invalid(error)) from error
         return _json(await directory.join(body), 201)
 
+    async def mine(request: Request) -> Response:
+        if not joins.allow(peer(request)):
+            raise DirectoryError(429, "too many tries from this address, wait a minute")
+        try:
+            body = MyTeams.model_validate_json(await read_body(request))
+        except ValidationError as error:
+            raise DirectoryError(400, _invalid(error)) from error
+        return _json(await directory.mine(body))
+
+    async def hand_over(_: Request, claims: MemberClaims, body: bytes) -> Response:
+        try:
+            asked = OwnerHandover.model_validate_json(body)
+        except ValidationError as error:
+            raise DirectoryError(400, _invalid(error)) from error
+        return _json(await directory.hand_over(claims, asked.member))
+
     async def members(_: Request, claims: MemberClaims, __: bytes) -> Response:
         return _json(await directory.members(claims))
 
@@ -172,6 +190,8 @@ def team_routes(
     return [
         Route("/teams", guarded(create), methods=["POST"]),
         Route("/teams/join", guarded(join), methods=["POST"]),
+        Route("/teams/mine", guarded(mine), methods=["POST"]),
+        Route("/teams/{team}/owner", signed(hand_over), methods=["POST"]),
         Route("/teams/{team}/members", signed(members), methods=["GET"]),
         Route("/teams/{team}/invites", signed(invite), methods=["POST"]),
         Route("/teams/{team}/renew", signed(renew), methods=["POST"]),

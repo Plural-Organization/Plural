@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Chip, Description, Disclosure, Input, Label, Spinner, Tabs, TextField } from "@heroui/react";
+import { Alert, Button, Card, Chip, Description, Disclosure, Input, Label, ListBox, Select, Spinner, Tabs, TextField, type Key } from "@heroui/react";
 import { ArrowLeft, Folder, FolderOpen } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 import { parseLink, type JoinLink } from "@plural/client";
@@ -7,7 +7,7 @@ import { useDaemon } from "../hooks/useDaemon";
 import type { Account } from "../lib/accounts";
 import { saveAgent } from "../lib/agent";
 import { daemonPrompt, manualSteps } from "../lib/agentPrompt";
-import { DaemonError, daemonMessage, type PickedFolder, pickFolder, relayProblem, roomDefaults, startRoom } from "../lib/daemon";
+import { type ComputerTeam, computerTeams, DaemonError, daemonMessage, type PickedFolder, pickFolder, relayProblem, roomDefaults, startRoom } from "../lib/daemon";
 import { AgentCard } from "./AgentCard";
 import { CopyBox } from "./CopyBox";
 
@@ -59,6 +59,20 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
   const agent = useAgentSetup(phase === "ready");
   const [relay, setRelay] = useState<string | null>(null);
   const relayWrong = relay === null ? null : relayProblem(relay);
+  // Who sees the room: only the people invited (null), or one of this computer's teams.
+  const [teams, setTeams] = useState<ComputerTeam[]>([]);
+  const [showTo, setShowTo] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (phase !== "ready") return;
+    let alive = true;
+    computerTeams()
+      .then((found) => alive && setTeams(found ?? []))
+      .catch(() => alive && setTeams([]));
+    return () => {
+      alive = false;
+    };
+  }, [phase]);
 
   // The relay this computer already uses, so a self-hosted relay is kept without typing it again.
   useEffect(() => {
@@ -99,7 +113,7 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
       await saveAgent(choice);
       return choice;
     }))
-      .then((choice) => startRoom(folder.folder, title, { ...(choice === undefined ? {} : { agent: choice }), ...(relay === null || agent.outdated ? {} : { relay }) }))
+      .then((choice) => startRoom(folder.folder, title, { ...(choice === undefined ? {} : { agent: choice }), ...(relay === null || agent.outdated ? {} : { relay }), ...(showTo === null || agent.outdated ? {} : { team: showTo }) }))
       .then((room) => onOpen(parseLink(room.host_link), account.name !== "" ? account.name : (account.email.split("@")[0] ?? "host")))
       .catch((error: unknown) => {
         if (error instanceof Error && !(error instanceof DaemonError)) {
@@ -148,7 +162,31 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
             <Input placeholder="Optional" maxLength={80} autoComplete="off" />
             <Description>Shown to the people you invite.</Description>
           </TextField>
-          {agent.outdated ? null : (
+          {teams.length === 0 ? null : (
+            <Select value={showTo ?? "invited"} onChange={(value) => setShowTo(String(value as Key) === "invited" ? null : String(value as Key))}>
+              <Label>Show to</Label>
+              <Select.Trigger>
+                <Select.Value />
+                <Select.Indicator />
+              </Select.Trigger>
+              <Select.Popover>
+                <ListBox>
+                  <ListBox.Item id="invited" textValue="Only people I invite">
+                    Only people I invite
+                    <ListBox.ItemIndicator />
+                  </ListBox.Item>
+                  {teams.map((item) => (
+                    <ListBox.Item key={item.id} id={item.id} textValue={item.name}>
+                      {item.name}
+                      <ListBox.ItemIndicator />
+                    </ListBox.Item>
+                  ))}
+                </ListBox>
+              </Select.Popover>
+              <Description>{showTo === null ? "People join with the room link, and you let them in." : "Your team sees the room in its list and can open it to read along."}</Description>
+            </Select>
+          )}
+          {agent.outdated || showTo !== null ? null : (
           <Disclosure>
             <Disclosure.Heading>
               <Disclosure.Trigger className="flex w-full items-center justify-between gap-3 text-sm text-muted">

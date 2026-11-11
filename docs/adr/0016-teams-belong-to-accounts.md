@@ -107,3 +107,32 @@ should be one member whatever device they use.
 | 7 | later: show a running room to a team, owner-signed certificates | separate decisions |
 
 Slices 1 to 4 give the web client full team management; slice 5 connects rooms to it.
+
+## Built
+
+Slice 2: `relay/directory.py` (account members, `member_keys` with a migration of existing members,
+`mine`, claiming a key-only member with a signature by its key, `hand_over`, owner checks read the
+role from the directory), `relay/account_proofs.py`, routes `POST /teams/mine` and
+`POST /teams/{id}/owner`. A ticket's audience is checked by `EntitlementVerifier.ticket`.
+
+Slice 3: `client/src/team/api.ts` (`createTeamOnRelay`, `joinTeamOnRelay`, `myTeamsOnRelay`,
+`fetchMembers`, `removeMemberOnRelay`, `handOverTeam`; signed requests can carry a body).
+
+Slice 4: the web client keeps one profile per team in IndexedDB (`team:<id>`, the old `team`
+profile is moved on first load), signed in it asks `/teams/mine` on the Plural relay and on every
+relay it already has a team on, and the rail has a team switcher (`TeamSwitcher`), a create window
+(`CreateTeam`) and a team window with members, invite and leave or disband (`TeamWindow`).
+
+Slice 5: `TeamStore` keeps one file per team under `teams/` beside `team.json`, and a store bound
+to a team id reads and renews that team's file; `plural-host host --team-id <id>` shows a session to
+that team. The daemon's `GET /v1/teams` asks the Plural relay and the relays of the computer's teams
+for the account's teams (proved with the computer's certificate) and lists them; `POST /v1/rooms`
+takes `team`, and the room then uses the team's relay. Start a room offers "Show to".
+
+Slice 6: `current-team` names the team `plural team` and the terminal client work with, and
+`team.json` moves under `teams/` the first time a second team comes along. `plural team list`
+(with the account's teams once `plural login` linked the computer) and `plural team use <name>`;
+`create` and `join` send the account proof and no longer ask to leave the team you are in.
+
+A claim needs more than the ADR first said: a signature by the member's key over the invite code
+(`key_proof`), since a public key alone proves nothing.
