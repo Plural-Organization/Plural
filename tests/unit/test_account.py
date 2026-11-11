@@ -1,5 +1,7 @@
 import io
 import json
+import threading
+import time
 from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -343,6 +345,40 @@ def test_login_with_no_code_opens_the_browser_and_links(
     assert opened == ["https://plrl.host/app?device=K7QF-29XD"]
     assert "K7QF-29XD" in result.output
     assert "Linked to alia@example.com" in result.output
+
+
+def test_a_browser_that_is_slow_to_open_does_not_hold_the_address_back(
+    home: Path, script: Script, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release = threading.Event()
+
+    def stuck(url: str) -> bool:
+        release.wait(5)
+        return True
+
+    monkeypatch.setattr("plural.cli.account.webbrowser.open", stuck)
+    monkeypatch.setattr("plural.cli.account.BROWSER_WAIT_S", 0.05)
+    script.replies = {"/device/code": [STARTED], "/device/token": [reply()]}
+    started = time.monotonic()
+    result = CliRunner().invoke(app, ["login", "--accounts", ACCOUNTS])
+    release.set()
+    assert result.exit_code == 0, result.output
+    assert time.monotonic() - started < 2
+    assert "https://plrl.host/app?device=K7QF-29XD" in result.output
+    assert "slow" in result.output
+
+
+def test_a_browser_that_cannot_open_says_to_use_the_address(
+    home: Path, script: Script, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def cannot(url: str) -> bool:
+        return False
+
+    monkeypatch.setattr("plural.cli.account.webbrowser.open", cannot)
+    script.replies = {"/device/code": [STARTED], "/device/token": [reply()]}
+    result = CliRunner().invoke(app, ["login", "--accounts", ACCOUNTS])
+    assert result.exit_code == 0, result.output
+    assert "Open this address to sign in" in result.output
 
 
 def test_login_with_no_browser_prints_the_address_only(
