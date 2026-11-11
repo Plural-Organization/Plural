@@ -58,3 +58,26 @@ host and the daemon). The terminal client and the web client are clients of it.
 | 2 | daemon: `/v1/agent/*` (catalog, status, key, install, test, use) and the agent of a room |
 | 3 | web client: provider picker and agent settings (HeroUI), in Start a room and Room settings |
 | 4 | terminal client moves onto the layer and drops its copy |
+
+## The daemon's agent API
+
+All of it sits behind the three checks of ADR 0014 (host, origin, ticket); the preflight now also
+allows `PUT`.
+
+| call | what |
+|---|---|
+| `GET /v1/agent` | the catalog: every provider with what it needs, key facts, the saved choice, the local servers found |
+| `PUT /v1/agent` `{agent}` | make a complete choice this computer's agent |
+| `PUT /v1/agent/key` `{preset, key}` · `DELETE /v1/agent/key/{preset}` | save or forget a key. Nothing returns it |
+| `POST /v1/agent/test` `{choice, key?}` | one short request to the provider |
+| `POST /v1/agent/install` `{tool}` or `{extra}` | install a CLI or an SDK, from the same fixed lists as the host |
+| `POST /v1/agent/sign-in` `{tool}` | open a terminal window that runs `claude auth login` or `codex login` |
+| `POST /v1/rooms` `{folder, title?, agent?, relay?}` | the room runs `agent`, or this computer's agent when it is left out. `relay` names the relay (empty: the Plural relay) and becomes this computer's relay; left out, the saved one is used |
+| `GET /v1/settings` | the relay this computer's rooms go through, as the terminal client saved it |
+| `PUT /v1/rooms/{room}/agent` `{agent}` | switch a running room's agent, the conversation is kept |
+
+A page names a provider and a model; the daemon adds the key it holds and sends the host a
+`configure` request on its control channel (stdin), the same request the terminal client sends. A
+host that refuses the agent is stopped and the room is not listed, so a room never runs an agent
+the person did not choose. The command a sign-in opens is picked by the daemon from a list of two;
+no text from the page reaches a shell.

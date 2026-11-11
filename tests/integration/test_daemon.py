@@ -15,9 +15,11 @@ import uvicorn
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from tests.e2e.support import free_port
 
+from plural.agent_setup import AgentSetup
 from plural.daemon.app import create_app
 from plural.daemon.folders import FolderPickerUnavailable, Folders
 from plural.daemon.rooms import Rooms
+from plural.daemon.terminal import TerminalUnavailable
 from plural.host.account import AccountStore, Entitlement
 from plural.protocol.entitlement import EntitlementClaims
 from plural.protocol.ticket import TicketClaims
@@ -28,7 +30,7 @@ from plural.security.tokens import b64encode
 WEB = "https://web.example.com"
 
 FAKE_HOST = """
-import json, sys
+import json, os, sys
 if "break_it" in " ".join(sys.argv):
     sys.stderr.write("no provider configured")
     sys.exit(3)
@@ -38,7 +40,21 @@ print(json.dumps({
     "host_link": "wss://relay.example/r_x?token=t", "import_url": None,
     "version": "0", "protocol": 1,
 }), flush=True)
-sys.stdin.read()
+here = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(here, "argv.jsonl"), "a") as file:
+    file.write(json.dumps(sys.argv[1:]) + "\\n")
+log = os.path.join(here, "received.jsonl")
+for line in sys.stdin:
+    request = json.loads(line)
+    with open(log, "a") as file:
+        file.write(line)
+    config = request.get("config", {})
+    if config.get("model") == "refuse":
+        reply = {"type": "result", "id": request["id"], "ok": False, "error": "not installed"}
+    else:
+        label = f"{config.get('provider_name')} · {config.get('model') or 'default'}"
+        reply = {"type": "result", "id": request["id"], "ok": True, "agent": label}
+    print(json.dumps(reply), flush=True)
 """
 
 
@@ -58,6 +74,17 @@ class Picker:
         return self.answer
 
 
+class Terminal:
+    def __init__(self) -> None:
+        self.ran: list[str] = []
+        self.unavailable = False
+
+    async def run(self, command: str) -> None:
+        if self.unavailable:
+            raise TerminalUnavailable("no terminal here")
+        self.ran.append(command)
+
+
 @dataclass(slots=True)
 class Daemon:
     url: str
@@ -65,6 +92,20 @@ class Daemon:
     accounts: Ed25519PrivateKey
     picker: Picker
     now: datetime
+    agent: AgentSetup
+    terminal: Terminal
+    received: Path
+
+    def host_arguments(self) -> list[list[str]]:
+        """The arguments each host was started with, oldest first."""
+        argv = self.received.parent / "argv.jsonl"
+        return [json.loads(line) for line in argv.read_text().splitlines()] if argv.exists() else []
+
+    def sent_to_host(self) -> list[dict[str, Any]]:
+        """What the daemon wrote down the host's control channel, oldest first."""
+        if not self.received.exists():
+            return []
+        return [json.loads(line) for line in self.received.read_text().splitlines()]
 
     def ticket(self, account: str = "a_me", *, nonce: str | None = None, expires: int = 60) -> str:
         nonce = nonce or f"n{len(str(id(object())))}{asyncio.get_event_loop().time()}"
@@ -138,6 +179,8 @@ async def running_daemon(
     script = tmp_path / "fake_host.py"
     script.write_text(FAKE_HOST)
     picker = Picker()
+    agent = AgentSetup(tmp_path / "state", environ={})
+    terminal = Terminal()
     key = AccountsKey(
         "https://accounts.example", fetch=lambda _: EntitlementVerifier(accounts.public_key())
     )
@@ -149,6 +192,8 @@ async def running_daemon(
         origins=(WEB + "/",),
         folders=Folders(picker),
         rooms=Rooms([sys.executable, str(script)], limit=limit),
+        agent=agent,
+        terminal=terminal,
         clock=lambda: now,
     )
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
@@ -157,7 +202,16 @@ async def running_daemon(
         while not (server.started and key.ready):
             await asyncio.sleep(0.01)
     try:
-        yield Daemon(f"http://127.0.0.1:{port}", port, accounts, picker, now)
+        yield Daemon(
+            f"http://127.0.0.1:{port}",
+            port,
+            accounts,
+            picker,
+            now,
+            agent,
+            terminal,
+            tmp_path / "received.jsonl",
+        )
     finally:
         server.should_exit = True
         await task
@@ -209,7 +263,11 @@ async def test_only_a_fresh_ticket_for_this_computers_account_gets_in(tmp_path: 
         status, body, _ = await daemon.call("GET", "/v1/account")
         assert (status, body["error"]["code"]) == (401, "no_ticket")
         status, body, _ = await daemon.call("GET", "/v1/account", ticket=daemon.ticket(expires=-1))
-        assert (status, body["error"]["code"]) == (401, "bad_ticket")
+        assert (status, body["error"]["code"], body["error"]["reason"]) == (
+            401,
+            "bad_ticket",
+            "expired",
+        )
         forged = sign(
             Ed25519PrivateKey.generate(),
             TicketClaims(
@@ -217,7 +275,11 @@ async def test_only_a_fresh_ticket_for_this_computers_account_gets_in(tmp_path: 
             ),
         )
         status, body, _ = await daemon.call("GET", "/v1/account", ticket=forged)
-        assert (status, body["error"]["code"]) == (401, "bad_ticket")
+        assert (status, body["error"]["code"], body["error"]["reason"]) == (
+            401,
+            "bad_ticket",
+            "forged",
+        )
         status, body, _ = await daemon.call("GET", "/v1/account", ticket=daemon.ticket("a_other"))
         assert (status, body["error"]["code"], body["error"]["linked_email"]) == (
             403,
@@ -343,3 +405,296 @@ async def test_every_action_needs_a_ticket(tmp_path: Path, path: str) -> None:
     async with running_daemon(tmp_path) as daemon:
         status, body, _ = await daemon.call("POST", path, body={"folder": "x"})
         assert (status, body["error"]["code"]) == (401, "no_ticket")
+
+
+# --- the agent ---------------------------------------------------------------------------------
+
+KEY = "sk-ant-api03-0123456789abcdefghijklmnop"
+
+
+async def picked(daemon: Daemon, folder: Path, nonce: str) -> str:
+    await asyncio.to_thread(folder.mkdir, exist_ok=True)
+    daemon.picker.answer = folder
+    _, body, _ = await daemon.call("POST", "/v1/folders/pick", ticket=daemon.ticket(nonce=nonce))
+    return str(body["folder"])
+
+
+async def test_every_agent_call_needs_a_ticket(tmp_path: Path) -> None:
+    calls = [
+        ("GET", "/v1/agent", None),
+        ("PUT", "/v1/agent", {"agent": {"preset": "demo"}}),
+        ("PUT", "/v1/agent/key", {"preset": "anthropic", "key": KEY}),
+        ("DELETE", "/v1/agent/key/anthropic", None),
+        ("POST", "/v1/agent/test", {"choice": {"preset": "demo"}}),
+        ("POST", "/v1/agent/install", {"tool": "claude"}),
+        ("POST", "/v1/agent/sign-in", {"tool": "claude"}),
+        ("PUT", "/v1/rooms/r_x/agent", {"agent": {"preset": "demo"}}),
+    ]
+    async with running_daemon(tmp_path) as daemon:
+        for method, path, body in calls:
+            status, answer, _ = await daemon.call(method, path, body=body)
+            assert (status, answer["error"]["code"]) == (401, "no_ticket"), (method, path)
+            status, answer, _ = await daemon.call(method, path, body=body, origin=None)
+            assert (status, answer["error"]["code"]) == (403, "no_origin"), (method, path)
+    assert daemon.terminal.ran == []
+
+
+async def test_the_preflight_allows_the_methods_the_agent_screen_uses(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        _, _, headers = await daemon.call(
+            "OPTIONS",
+            "/v1/agent",
+            headers={"Access-Control-Request-Method": "PUT"},
+        )
+        assert "PUT" in headers["access-control-allow-methods"]
+
+
+async def test_a_key_goes_in_and_the_catalog_only_says_it_is_there(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        status, answer, _ = await daemon.call(
+            "PUT",
+            "/v1/agent/key",
+            ticket=daemon.ticket(nonce="k"),
+            body={"preset": "anthropic", "key": KEY},
+        )
+        assert (status, answer) == (204, {})
+        status, catalog, _ = await daemon.call("GET", "/v1/agent", ticket=daemon.ticket(nonce="c"))
+        assert status == 200
+        assert KEY not in json.dumps(catalog)
+        anthropic = next(entry for entry in catalog["presets"] if entry["id"] == "anthropic")
+        assert (anthropic["key"]["set"], anthropic["key"]["source"]) == (True, "saved")
+        assert {entry["id"] for entry in catalog["presets"]} >= {
+            "claude_code",
+            "codex_cli",
+            "ollama",
+        }
+        status, answer, _ = await daemon.call(
+            "PUT",
+            "/v1/agent/key",
+            ticket=daemon.ticket(nonce="bad"),
+            body={"preset": "anthropic", "key": "two words"},
+        )
+        assert (status, answer["error"]["code"]) == (400, "bad_key")
+        status, _, _ = await daemon.call(
+            "DELETE", "/v1/agent/key/anthropic", ticket=daemon.ticket(nonce="d")
+        )
+        assert status == 204
+        assert daemon.agent.store.key("anthropic") is None
+
+
+async def test_a_room_runs_the_agent_the_page_chose_with_a_key_the_page_never_sent(
+    tmp_path: Path,
+) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        daemon.agent.set_key("anthropic", KEY)
+        folder = await picked(daemon, tmp_path / "project", "a")
+        status, room, _ = await daemon.call(
+            "POST",
+            "/v1/rooms",
+            ticket=daemon.ticket(nonce="b"),
+            body={
+                "folder": folder,
+                "agent": {"preset": "anthropic", "model": "claude-opus-5-5"},
+            },
+        )
+        assert status == 201, room
+        assert room["agent"] == "Anthropic · claude-opus-5-5"
+        (configure,) = daemon.sent_to_host()
+        assert configure["type"] == "configure"
+        assert configure["config"]["preset"] == "anthropic"
+        assert configure["config"]["api_key"] == KEY
+        assert KEY not in json.dumps(room)
+
+
+async def test_a_room_without_a_choice_uses_the_computers_agent(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        folder = await picked(daemon, tmp_path / "project", "a")
+        status, room, _ = await daemon.call(
+            "POST", "/v1/rooms", ticket=daemon.ticket(nonce="b"), body={"folder": folder}
+        )
+        assert status == 201, room
+        assert room["agent"].startswith("Demo")
+
+
+async def test_an_agent_that_is_not_ready_starts_no_host(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        folder = await picked(daemon, tmp_path / "project", "a")
+        status, body, _ = await daemon.call(
+            "POST",
+            "/v1/rooms",
+            ticket=daemon.ticket(nonce="b"),
+            body={"folder": folder, "agent": {"preset": "anthropic"}},
+        )
+        assert (status, body["error"]["code"]) == (409, "agent_not_ready")
+        assert "API key" in body["error"]["message"]
+        assert daemon.sent_to_host() == []
+        _, listing, _ = await daemon.call("GET", "/v1/rooms", ticket=daemon.ticket(nonce="c"))
+        assert listing["rooms"] == []
+
+
+async def test_a_host_that_refuses_the_agent_is_stopped_and_says_why(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        folder = await picked(daemon, tmp_path / "project", "a")
+        status, body, _ = await daemon.call(
+            "POST",
+            "/v1/rooms",
+            ticket=daemon.ticket(nonce="b"),
+            body={"folder": folder, "agent": {"preset": "codex_cli", "model": "refuse"}},
+        )
+        assert (status, body["error"]["code"]) == (409, "agent_failed")
+        assert body["error"]["message"] == "not installed"
+        _, listing, _ = await daemon.call("GET", "/v1/rooms", ticket=daemon.ticket(nonce="c"))
+        assert listing["rooms"] == []
+
+
+async def test_a_running_rooms_agent_can_be_switched(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        folder = await picked(daemon, tmp_path / "project", "a")
+        _, room, _ = await daemon.call(
+            "POST", "/v1/rooms", ticket=daemon.ticket(nonce="b"), body={"folder": folder}
+        )
+        status, switched, _ = await daemon.call(
+            "PUT",
+            f"/v1/rooms/{room['room']}/agent",
+            ticket=daemon.ticket(nonce="c"),
+            body={"agent": {"preset": "ollama", "model": "qwen3:4b"}},
+        )
+        assert (status, switched["agent"]) == (200, "Ollama (local) · qwen3:4b")
+        status, body, _ = await daemon.call(
+            "PUT",
+            "/v1/rooms/r_none/agent",
+            ticket=daemon.ticket(nonce="d"),
+            body={"agent": {"preset": "demo"}},
+        )
+        assert (status, body["error"]["code"]) == (404, "no_room")
+        _, listing, _ = await daemon.call("GET", "/v1/rooms", ticket=daemon.ticket(nonce="e"))
+        assert listing["rooms"][0]["agent"] == "Ollama (local) · qwen3:4b"
+
+
+async def test_the_computers_agent_is_saved_and_tested_from_the_page(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        status, body, _ = await daemon.call(
+            "POST",
+            "/v1/agent/test",
+            ticket=daemon.ticket(nonce="t"),
+            body={"choice": {"preset": "demo"}},
+        )
+        assert status == 200
+        assert body["message"].startswith("answered in")
+        status, body, _ = await daemon.call(
+            "POST",
+            "/v1/agent/test",
+            ticket=daemon.ticket(nonce="u"),
+            body={"choice": {"preset": "anthropic"}},
+        )
+        assert (status, body["error"]["code"]) == (409, "agent_failed")
+        status, body, _ = await daemon.call(
+            "PUT",
+            "/v1/agent",
+            ticket=daemon.ticket(nonce="v"),
+            body={"agent": {"preset": "anthropic"}},
+        )
+        assert (status, body["error"]["code"]) == (409, "agent_not_ready")
+        status, _, _ = await daemon.call(
+            "PUT",
+            "/v1/agent",
+            ticket=daemon.ticket(nonce="w"),
+            body={"agent": {"preset": "ollama", "model": "qwen3:4b"}},
+        )
+        assert status == 204
+        assert daemon.agent.store.current().preset == "ollama"
+
+
+async def test_signing_in_opens_a_terminal_with_a_command_the_daemon_chose(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        status, body, _ = await daemon.call(
+            "POST", "/v1/agent/sign-in", ticket=daemon.ticket(nonce="a"), body={"tool": "claude"}
+        )
+        assert (status, body["command"]) == (200, "claude auth login")
+        await daemon.call(
+            "POST", "/v1/agent/sign-in", ticket=daemon.ticket(nonce="b"), body={"tool": "codex"}
+        )
+        assert daemon.terminal.ran == ["claude auth login", "codex login"]
+        status, body, _ = await daemon.call(
+            "POST", "/v1/agent/sign-in", ticket=daemon.ticket(nonce="c"), body={"tool": "rm -rf"}
+        )
+        assert (status, body["error"]["code"]) == (400, "bad_request")
+        daemon.terminal.unavailable = True
+        status, body, _ = await daemon.call(
+            "POST", "/v1/agent/sign-in", ticket=daemon.ticket(nonce="d"), body={"tool": "claude"}
+        )
+        assert (status, body["error"]["code"], body["error"]["command"]) == (
+            409,
+            "no_terminal",
+            "claude auth login",
+        )
+
+
+async def test_installing_needs_a_known_tool_or_extra(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        for nonce, body in (("a", {}), ("b", {"tool": "bash"}), ("c", {"extra": "evil"})):
+            status, answer, _ = await daemon.call(
+                "POST", "/v1/agent/install", ticket=daemon.ticket(nonce=nonce), body=body
+            )
+            assert (status, answer["error"]["code"]) == (400, "bad_request")
+
+
+# --- the relay a room goes through -----------------------------------------------------------
+
+
+def relay_of(arguments: list[str]) -> str | None:
+    return arguments[arguments.index("--relay") + 1] if "--relay" in arguments else None
+
+
+async def test_a_room_goes_through_the_relay_the_page_names_and_it_is_remembered(
+    tmp_path: Path,
+) -> None:
+    own = "wss://relay.example.org"
+    async with running_daemon(tmp_path) as daemon:
+        status, settings, _ = await daemon.call(
+            "GET", "/v1/settings", ticket=daemon.ticket(nonce="s")
+        )
+        assert (status, settings) == (200, {"relay": None})
+        folder = await picked(daemon, tmp_path / "one", "a")
+        status, _, _ = await daemon.call(
+            "POST",
+            "/v1/rooms",
+            ticket=daemon.ticket(nonce="b"),
+            body={"folder": folder, "relay": own},
+        )
+        assert status == 201
+        folder = await picked(daemon, tmp_path / "two", "c")
+        await daemon.call(
+            "POST", "/v1/rooms", ticket=daemon.ticket(nonce="d"), body={"folder": folder}
+        )
+        assert [relay_of(arguments) for arguments in daemon.host_arguments()] == [own, own]
+        _, settings, _ = await daemon.call("GET", "/v1/settings", ticket=daemon.ticket(nonce="e"))
+        assert settings == {"relay": own}
+        assert daemon.agent.store.relay() == own
+        folder = await picked(daemon, tmp_path / "three", "f")
+        await daemon.call(
+            "POST",
+            "/v1/rooms",
+            ticket=daemon.ticket(nonce="g"),
+            body={"folder": folder, "relay": ""},
+        )
+        assert relay_of(daemon.host_arguments()[-1]) is None
+        assert daemon.agent.store.relay() == ""
+
+
+async def test_a_relay_that_is_not_one_is_refused_and_starts_nothing(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        for nonce, bad in (
+            ("a", "https://relay.example.org"),
+            ("b", "wss://user:pw@relay.example"),
+            ("c", "wss://"),
+        ):
+            folder = await picked(daemon, tmp_path / f"p{nonce}", f"pick{nonce}")
+            status, body, _ = await daemon.call(
+                "POST",
+                "/v1/rooms",
+                ticket=daemon.ticket(nonce=nonce),
+                body={"folder": folder, "relay": bad},
+            )
+            assert (status, body["error"]["code"]) == (400, "bad_relay"), bad
+        assert daemon.host_arguments() == []

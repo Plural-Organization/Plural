@@ -12,10 +12,14 @@ from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from plural import __version__
+from plural.agent_setup import AgentSetup, AgentSetupError, Choice
 from plural.daemon.folders import FolderPickerUnavailable, Folders
 from plural.daemon.guard import LoopbackGuard
 from plural.daemon.rooms import RoomError, Rooms
+from plural.daemon.terminal import SystemTerminal, Terminal, TerminalUnavailable
+from plural.host import extras, tools
 from plural.host.account import AccountError, AccountStore
+from plural.host.config import HostSettings
 from plural.protocol.entitlement import EntitlementClaims
 from plural.security.accounts_key import AccountsKey
 from plural.security.entitlement import InvalidEntitlement
@@ -38,6 +42,32 @@ class Problem(Exception):
 class StartRoom(BaseModel):
     folder: str
     title: str | None = None
+    agent: Choice | None = None  # the provider and model; a key is never sent, the daemon has it
+    # None: the relay this computer uses. "": the Plural relay. An address: that relay, from now on.
+    relay: str | None = None
+
+
+class SetAgent(BaseModel):
+    agent: Choice
+
+
+class AgentKey(BaseModel):
+    preset: str
+    key: str
+
+
+class AgentTest(BaseModel):
+    choice: Choice
+    key: str | None = None  # a key typed but not saved yet
+
+
+class AgentInstall(BaseModel):
+    tool: tools.Tool | None = None
+    extra: extras.Extra | None = None
+
+
+class AgentSignIn(BaseModel):
+    tool: tools.Tool
 
 
 def linked_account(store: AccountStore) -> tuple[str, str] | None:
@@ -62,9 +92,13 @@ class Daemon:
         key: AccountsKey,
         folders: Folders,
         rooms: Rooms,
+        agent: AgentSetup,
+        terminal: Terminal,
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
+        self._agent = agent
+        self._terminal = terminal
         self._accounts = accounts
         self._key = key
         self._folders = folders
@@ -86,7 +120,9 @@ class Daemon:
         except InvalidEntitlement as error:
             if error.reason == "forged":
                 self._key.suspect()
-            raise Problem(401, "bad_ticket", f"the ticket is {error.reason}") from error
+            raise Problem(
+                401, "bad_ticket", f"the ticket is {error.reason}", reason=error.reason
+            ) from error
         linked = linked_account(self._accounts)
         if linked is None:
             raise Problem(409, "not_linked", "run `plural login` on this computer")
@@ -125,10 +161,112 @@ class Daemon:
             raise Problem(400, "unknown_folder", "choose the folder again")
         title = (body.title or "").strip()[:80] or None
         try:
-            room = await self._rooms.start(folder, title, name=email.split("@")[0])
+            config = self._agent.config(body.agent or self._agent.store.current())
+        except AgentSetupError as error:
+            raise Problem(409, "agent_not_ready", str(error)) from error
+        relay = self._relay(body.relay)
+        try:
+            room = await self._rooms.start(
+                folder, title, name=email.split("@")[0], agent=config, relay=relay or None
+            )
         except RoomError as error:
             raise Problem(409, error.code, str(error)) from error
         return JSONResponse(room.public(), 201)
+
+    def _relay(self, asked: str | None) -> str:
+        """The relay for a new room. One the page names becomes this computer's relay."""
+        store = self._agent.store
+        if asked is None:
+            return store.relay()
+        try:
+            if asked.strip() != store.relay():
+                store.set_relay(asked)
+        except AgentSetupError as error:
+            raise Problem(400, "bad_relay", str(error)) from error
+        return store.relay()
+
+    async def settings(self, request: Request) -> Response:
+        self.authorize(request)
+        return JSONResponse({"relay": self._agent.store.relay() or None})
+
+    async def set_room_agent(self, request: Request) -> Response:
+        self.authorize(request)
+        body = await _body(request, SetAgent)
+        try:
+            config = self._agent.config(body.agent)
+        except AgentSetupError as error:
+            raise Problem(409, "agent_not_ready", str(error)) from error
+        try:
+            label = await self._rooms.set_agent(str(request.path_params["room"]), config)
+        except RoomError as error:
+            raise Problem(409, error.code, str(error)) from error
+        if label is None:
+            raise Problem(404, "no_room", "no such room")
+        return JSONResponse({"agent": label})
+
+    async def agent_catalog(self, request: Request) -> Response:
+        self.authorize(request)
+        catalog = await self._agent.catalog()
+        return Response(catalog.model_dump_json(by_alias=True), media_type="application/json")
+
+    async def save_agent(self, request: Request) -> Response:
+        self.authorize(request)
+        body = await _body(request, SetAgent)
+        try:
+            self._agent.use(body.agent)
+        except AgentSetupError as error:
+            raise Problem(409, "agent_not_ready", str(error)) from error
+        return Response(status_code=204)
+
+    async def save_agent_key(self, request: Request) -> Response:
+        self.authorize(request)
+        body = await _body(request, AgentKey)
+        try:
+            self._agent.set_key(body.preset, body.key)
+        except AgentSetupError as error:
+            raise Problem(400, "bad_key", str(error)) from error
+        return Response(status_code=204)
+
+    async def forget_agent_key(self, request: Request) -> Response:
+        self.authorize(request)
+        try:
+            self._agent.clear_key(str(request.path_params["preset"]))
+        except AgentSetupError as error:
+            raise Problem(404, "no_provider", str(error)) from error
+        return Response(status_code=204)
+
+    async def test_agent(self, request: Request) -> Response:
+        self.authorize(request)
+        body = await _body(request, AgentTest)
+        try:
+            message = await self._agent.test(body.choice, body.key)
+        except AgentSetupError as error:
+            raise Problem(409, "agent_failed", str(error)) from error
+        return JSONResponse({"message": message})
+
+    async def install_agent_part(self, request: Request) -> Response:
+        self.authorize(request)
+        body = await _body(request, AgentInstall)
+        try:
+            if body.tool is not None:
+                await tools.install(body.tool)
+            elif body.extra is not None:
+                await extras.install(body.extra)
+            else:
+                raise Problem(400, "bad_request", "say which tool or extra to install")
+        except (tools.ToolInstallError, extras.InstallError) as error:
+            raise Problem(502, "install_failed", str(error)) from error
+        return Response(status_code=204)
+
+    async def sign_in_agent(self, request: Request) -> Response:
+        self.authorize(request)
+        body = await _body(request, AgentSignIn)
+        spec = next(spec for spec in tools.SPECS if spec.id == body.tool)
+        try:
+            await self._terminal.run(spec.login)
+        except TerminalUnavailable as error:
+            raise Problem(409, "no_terminal", str(error), command=spec.login) from error
+        return JSONResponse({"command": spec.login})
 
     async def list_rooms(self, request: Request) -> Response:
         self.authorize(request)
@@ -169,10 +307,15 @@ def create_app(
     origins: tuple[str, ...] = DEFAULT_ORIGINS,
     folders: Folders | None = None,
     rooms: Rooms | None = None,
+    agent: AgentSetup | None = None,
+    terminal: Terminal | None = None,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> Starlette:
     rooms = rooms or Rooms()
-    daemon = Daemon(accounts, key, folders or Folders(), rooms, clock=clock)
+    agent = agent or AgentSetup(HostSettings().state_dir)
+    daemon = Daemon(
+        accounts, key, folders or Folders(), rooms, agent, terminal or SystemTerminal(), clock=clock
+    )
 
     @asynccontextmanager
     async def lifespan(_: Starlette) -> AsyncGenerator[None]:
@@ -192,6 +335,15 @@ def create_app(
             Route("/v1/rooms", _guarded(daemon.list_rooms)),
             Route("/v1/rooms", _guarded(daemon.start_room), methods=["POST"]),
             Route("/v1/rooms/{room}", _guarded(daemon.stop_room), methods=["DELETE"]),
+            Route("/v1/rooms/{room}/agent", _guarded(daemon.set_room_agent), methods=["PUT"]),
+            Route("/v1/settings", _guarded(daemon.settings)),
+            Route("/v1/agent", _guarded(daemon.agent_catalog)),
+            Route("/v1/agent", _guarded(daemon.save_agent), methods=["PUT"]),
+            Route("/v1/agent/key", _guarded(daemon.save_agent_key), methods=["PUT"]),
+            Route("/v1/agent/key/{preset}", _guarded(daemon.forget_agent_key), methods=["DELETE"]),
+            Route("/v1/agent/test", _guarded(daemon.test_agent), methods=["POST"]),
+            Route("/v1/agent/install", _guarded(daemon.install_agent_part), methods=["POST"]),
+            Route("/v1/agent/sign-in", _guarded(daemon.sign_in_agent), methods=["POST"]),
         ],
         lifespan=lifespan,
     )

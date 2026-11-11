@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { DaemonError, daemonMessage, daemonStatus, pickFolder, startRoom } from "./daemon";
+import { DaemonError, daemonMessage, daemonStatus, pickFolder, relayProblem, startRoom } from "./daemon";
 
 // The build under test has no accounts address, so the accounts service is reached at a bare path.
 const TICKETS = "/tickets";
@@ -46,9 +46,21 @@ describe("asking the daemon", () => {
   test("every call carries a ticket of its own", async () => {
     const sent = wire((path) => (path === "/v1/folders/pick" ? json({ folder: "f_1", name: "app" }) : json({ room: "r_1", guest_link: "g", host_link: "h", folder: "app", title: null }, 201)));
     expect(await pickFolder(DAEMON)).toEqual({ folder: "f_1", name: "app" });
-    await startRoom("f_1", "  Spike  ", DAEMON);
+    await startRoom("f_1", "  Spike  ", {}, DAEMON);
     expect(sent.map((call) => call.auth)).toEqual(["Bearer ticket-1", "Bearer ticket-2"]);
     expect(JSON.parse(sent[1]!.body ?? "{}")).toEqual({ folder: "f_1", title: "Spike" });
+  });
+  test("the agent the person chose goes with the room, and no key with it", async () => {
+    const sent = wire(() => json({ room: "r", guest_link: "g", host_link: "h", folder: "x", title: null, agent: "Ollama (local) · qwen3:4b" }, 201));
+    const agent = { preset: "ollama", model: "qwen3:4b", baseUrl: "", contextWindow: "", fastModel: "" };
+    expect((await startRoom("f_1", "", { agent }, DAEMON)).agent).toBe("Ollama (local) · qwen3:4b");
+    expect(JSON.parse(sent[0]!.body ?? "{}")).toEqual({ folder: "f_1", title: null, agent });
+  });
+  test("a relay goes with the room when the page names one", async () => {
+    const sent = wire(() => json({ room: "r", guest_link: "g", host_link: "h", folder: "x", title: null, agent: "" }, 201));
+    await startRoom("f_1", "", { relay: "  wss://relay.example.org " }, DAEMON);
+    await startRoom("f_1", "", { relay: "" }, DAEMON);
+    expect(sent.map((call) => JSON.parse(call.body ?? "{}").relay)).toEqual(["wss://relay.example.org", ""]);
   });
   test("a closed dialog is no folder", async () => {
     wire(() => json({ folder: null }));
@@ -56,14 +68,20 @@ describe("asking the daemon", () => {
   });
   test("an empty title is sent as none", async () => {
     const sent = wire(() => json({ room: "r", guest_link: "g", host_link: "h", folder: "x", title: null }, 201));
-    await startRoom("f_1", "   ", DAEMON);
+    await startRoom("f_1", "   ", {}, DAEMON);
     expect(JSON.parse(sent[0]!.body ?? "{}")).toEqual({ folder: "f_1", title: null });
   });
   test("the daemon's refusal becomes an error that keeps its code", async () => {
     wire(() => json({ error: { code: "wrong_account", message: "x", linked_email: "alia@example.com" } }, 403));
-    const error = await startRoom("f_1", "", DAEMON).catch((caught: unknown) => caught);
+    const error = await startRoom("f_1", "", {}, DAEMON).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(DaemonError);
     expect((error as DaemonError).linkedEmail).toBe("alia@example.com");
+  });
+  test("a ticket the computer cannot verify is not called an expired sign-in", async () => {
+    wire(() => json({ error: { code: "bad_ticket", message: "the ticket is forged", reason: "forged" } }, 401));
+    const forged = (await startRoom("f_1", "", {}, DAEMON).catch((caught: unknown) => caught)) as DaemonError;
+    expect(daemonMessage(forged)).toContain("different Plural accounts service");
+    expect(daemonMessage(new DaemonError(401, "bad_ticket", "x", null, "expired"))).toBe("Your sign-in expired. Try again.");
   });
   test("an unreachable daemon is an error, not a crash", async () => {
     vi.stubGlobal("fetch", async (url: string) => {
@@ -86,4 +104,13 @@ describe("daemonMessage", () => {
     expect(daemonMessage(new DaemonError(409, "not_linked", "x"))).toContain("plural login");
     expect(daemonMessage(new DaemonError(409, "host_failed", "no provider configured"))).toBe("no provider configured");
   });
+});
+
+test("a relay address is checked the way the computer checks it", () => {
+  expect(relayProblem("")).toBeNull();
+  expect(relayProblem("wss://relay.example.org")).toBeNull();
+  expect(relayProblem("ws://192.168.1.4:8787")).toBeNull();
+  expect(relayProblem("https://relay.example.org")).toContain("wss://");
+  expect(relayProblem("relay.example.org")).toContain("not an address");
+  expect(relayProblem("wss://u:p@relay.example.org")).toContain("no password");
 });
