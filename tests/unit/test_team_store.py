@@ -1,3 +1,4 @@
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -49,3 +50,49 @@ def test_a_team_id_cannot_name_a_path(tmp_path: Path, bad: str) -> None:
         TeamStore(tmp_path, bad)
     with pytest.raises(TeamError):
         TeamStore(tmp_path).keep(team(bad, "Evil"))
+
+
+def test_the_first_second_team_moves_team_json_and_keeps_it_current(tmp_path: Path) -> None:
+    store = TeamStore(tmp_path)
+    store.save(team("t_old", "Backend"))
+    store.add(team("t_new", "Infra"))
+    assert not (tmp_path / "team.json").exists()
+    assert store.load() == team("t_new", "Infra")
+    assert [profile.team_id for profile in store.profiles()] == ["t_old", "t_new"]
+    assert store.use("t_old") == team("t_old", "Backend")
+    assert store.load() == team("t_old", "Backend")
+    with pytest.raises(TeamError):
+        store.use("t_gone")
+
+
+def test_leaving_the_current_team_leaves_no_current_one(tmp_path: Path) -> None:
+    store = TeamStore(tmp_path)
+    store.add(team("t_a", "Alpha"))
+    store.add(team("t_b", "Beta"))
+    store.clear()
+    assert store.load() is None
+    assert [profile.team_id for profile in store.profiles()] == ["t_a"]
+    assert TeamStore(tmp_path, "t_a").load() == team("t_a", "Alpha")
+
+
+def test_the_command_line_lists_teams_and_switches_between_them(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from typer.testing import CliRunner
+
+    from plural.cli.main import app
+
+    monkeypatch.setenv("PLURAL_DATA_DIR", str(tmp_path))
+    store = TeamStore(tmp_path)
+    store.add(team("t_a", "Alpha"))
+    store.add(team("t_b", "Beta"))
+    runner = CliRunner()
+    listed = runner.invoke(app, ["team", "list", "--json"])
+    assert listed.exit_code == 0, listed.output
+    rows = json.loads(listed.output)
+    assert [(row["name"], row["current"]) for row in rows] == [("Alpha", False), ("Beta", True)]
+    switched = runner.invoke(app, ["team", "use", "alpha"])
+    assert switched.exit_code == 0, switched.output
+    assert TeamStore(tmp_path).load() == team("t_a", "Alpha")
+    missing = runner.invoke(app, ["team", "use", "gamma"])
+    assert missing.exit_code == 1
