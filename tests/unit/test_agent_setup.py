@@ -358,3 +358,39 @@ def test_the_list_is_readable_by_people(data_dir: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "Claude Code" in result.output
     assert "needs key" in result.output
+
+
+# --- the relay rooms go through --------------------------------------------------------------
+
+
+def test_the_relay_the_terminal_client_saved_is_the_computers_relay(tmp_path: Path) -> None:
+    (tmp_path / "tui.json").write_text(
+        json.dumps({"share": "relay", "relayUrl": "wss://relay.example.org", "theme": "tokyo"}),
+        encoding="utf-8",
+    )
+    store = AgentStore(tmp_path)
+    assert store.relay() == "wss://relay.example.org"
+    store.set_relay("  wss://other.example.org/  ")
+    saved = json.loads((tmp_path / "tui.json").read_text(encoding="utf-8"))
+    assert (saved["relayUrl"], saved["share"], saved["theme"]) == (
+        "wss://other.example.org/",
+        "relay",
+        "tokyo",
+    )
+    store.set_relay("")
+    assert store.relay() == ""
+
+
+def test_a_computer_that_shares_another_way_has_no_relay_of_its_own(tmp_path: Path) -> None:
+    (tmp_path / "tui.json").write_text(
+        json.dumps({"share": "network", "relayUrl": "wss://relay.example.org"}), encoding="utf-8"
+    )
+    assert AgentStore(tmp_path).relay() == ""
+
+
+@pytest.mark.parametrize(
+    "bad", ["https://relay.example.org", "relay.example.org", "wss://", "wss://u:p@relay.example"]
+)
+def test_an_address_that_is_not_a_relay_is_refused(tmp_path: Path, bad: str) -> None:
+    with pytest.raises(AgentSetupError):
+        AgentStore(tmp_path).set_relay(bad)

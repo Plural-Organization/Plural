@@ -40,7 +40,10 @@ print(json.dumps({
     "host_link": "wss://relay.example/r_x?token=t", "import_url": None,
     "version": "0", "protocol": 1,
 }), flush=True)
-log = os.path.join(os.path.dirname(os.path.abspath(__file__)), "received.jsonl")
+here = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(here, "argv.jsonl"), "a") as file:
+    file.write(json.dumps(sys.argv[1:]) + "\\n")
+log = os.path.join(here, "received.jsonl")
 for line in sys.stdin:
     request = json.loads(line)
     with open(log, "a") as file:
@@ -92,6 +95,11 @@ class Daemon:
     agent: AgentSetup
     terminal: Terminal
     received: Path
+
+    def host_arguments(self) -> list[list[str]]:
+        """The arguments each host was started with, oldest first."""
+        argv = self.received.parent / "argv.jsonl"
+        return [json.loads(line) for line in argv.read_text().splitlines()] if argv.exists() else []
 
     def sent_to_host(self) -> list[dict[str, Any]]:
         """What the daemon wrote down the host's control channel, oldest first."""
@@ -255,7 +263,11 @@ async def test_only_a_fresh_ticket_for_this_computers_account_gets_in(tmp_path: 
         status, body, _ = await daemon.call("GET", "/v1/account")
         assert (status, body["error"]["code"]) == (401, "no_ticket")
         status, body, _ = await daemon.call("GET", "/v1/account", ticket=daemon.ticket(expires=-1))
-        assert (status, body["error"]["code"]) == (401, "bad_ticket")
+        assert (status, body["error"]["code"], body["error"]["reason"]) == (
+            401,
+            "bad_ticket",
+            "expired",
+        )
         forged = sign(
             Ed25519PrivateKey.generate(),
             TicketClaims(
@@ -263,7 +275,11 @@ async def test_only_a_fresh_ticket_for_this_computers_account_gets_in(tmp_path: 
             ),
         )
         status, body, _ = await daemon.call("GET", "/v1/account", ticket=forged)
-        assert (status, body["error"]["code"]) == (401, "bad_ticket")
+        assert (status, body["error"]["code"], body["error"]["reason"]) == (
+            401,
+            "bad_ticket",
+            "forged",
+        )
         status, body, _ = await daemon.call("GET", "/v1/account", ticket=daemon.ticket("a_other"))
         assert (status, body["error"]["code"], body["error"]["linked_email"]) == (
             403,
@@ -621,3 +637,64 @@ async def test_installing_needs_a_known_tool_or_extra(tmp_path: Path) -> None:
                 "POST", "/v1/agent/install", ticket=daemon.ticket(nonce=nonce), body=body
             )
             assert (status, answer["error"]["code"]) == (400, "bad_request")
+
+
+# --- the relay a room goes through -----------------------------------------------------------
+
+
+def relay_of(arguments: list[str]) -> str | None:
+    return arguments[arguments.index("--relay") + 1] if "--relay" in arguments else None
+
+
+async def test_a_room_goes_through_the_relay_the_page_names_and_it_is_remembered(
+    tmp_path: Path,
+) -> None:
+    own = "wss://relay.example.org"
+    async with running_daemon(tmp_path) as daemon:
+        status, settings, _ = await daemon.call(
+            "GET", "/v1/settings", ticket=daemon.ticket(nonce="s")
+        )
+        assert (status, settings) == (200, {"relay": None})
+        folder = await picked(daemon, tmp_path / "one", "a")
+        status, _, _ = await daemon.call(
+            "POST",
+            "/v1/rooms",
+            ticket=daemon.ticket(nonce="b"),
+            body={"folder": folder, "relay": own},
+        )
+        assert status == 201
+        folder = await picked(daemon, tmp_path / "two", "c")
+        await daemon.call(
+            "POST", "/v1/rooms", ticket=daemon.ticket(nonce="d"), body={"folder": folder}
+        )
+        assert [relay_of(arguments) for arguments in daemon.host_arguments()] == [own, own]
+        _, settings, _ = await daemon.call("GET", "/v1/settings", ticket=daemon.ticket(nonce="e"))
+        assert settings == {"relay": own}
+        assert daemon.agent.store.relay() == own
+        folder = await picked(daemon, tmp_path / "three", "f")
+        await daemon.call(
+            "POST",
+            "/v1/rooms",
+            ticket=daemon.ticket(nonce="g"),
+            body={"folder": folder, "relay": ""},
+        )
+        assert relay_of(daemon.host_arguments()[-1]) is None
+        assert daemon.agent.store.relay() == ""
+
+
+async def test_a_relay_that_is_not_one_is_refused_and_starts_nothing(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        for nonce, bad in (
+            ("a", "https://relay.example.org"),
+            ("b", "wss://user:pw@relay.example"),
+            ("c", "wss://"),
+        ):
+            folder = await picked(daemon, tmp_path / f"p{nonce}", f"pick{nonce}")
+            status, body, _ = await daemon.call(
+                "POST",
+                "/v1/rooms",
+                ticket=daemon.ticket(nonce=nonce),
+                body={"folder": folder, "relay": bad},
+            )
+            assert (status, body["error"]["code"]) == (400, "bad_relay"), bad
+        assert daemon.host_arguments() == []

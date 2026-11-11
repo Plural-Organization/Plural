@@ -72,7 +72,8 @@ allows `PUT`.
 | `POST /v1/agent/test` `{choice, key?}` | one short request to the provider |
 | `POST /v1/agent/install` `{tool}` or `{extra}` | install a CLI or an SDK, from the same fixed lists as the host |
 | `POST /v1/agent/sign-in` `{tool}` | open a terminal window that runs `claude auth login` or `codex login` |
-| `POST /v1/rooms` `{folder, title?, agent?}` | the room runs `agent`, or this computer's agent when it is left out |
+| `POST /v1/rooms` `{folder, title?, agent?, relay?}` | the room runs `agent`, or this computer's agent when it is left out. `relay` names the relay (empty: the Plural relay) and becomes this computer's relay; left out, the saved one is used |
+| `GET /v1/settings` | the relay this computer's rooms go through, as the terminal client saved it |
 | `PUT /v1/rooms/{room}/agent` `{agent}` | switch a running room's agent, the conversation is kept |
 
 A page names a provider and a model; the daemon adds the key it holds and sends the host a
