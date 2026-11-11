@@ -18,25 +18,29 @@ interface JoinScreenProps {
 // The page for someone with no room open and no team yet.
 export function JoinScreen({ notice, team, account, onJoin, onTeamJoined }: JoinScreenProps) {
   const [rooms, setRooms] = useState<SavedRoom[]>(savedRooms);
+  // While someone sets up a room the big title steps aside, so the setup fits one screen.
+  const [compact, setCompact] = useState(false);
   return (
     <main className="relative isolate flex min-h-full flex-col items-center justify-center overflow-hidden px-4 py-12">
       <div className="pixel-grid" aria-hidden="true" />
       <div className="w-full max-w-[28rem]">
         <div className="text-center">
-          <LogoMark size={56} className="mx-auto text-foreground" />
-          <h1 className="mt-6 text-[2.6rem] font-medium leading-[1.05] tracking-[-0.022em] sm:text-5xl">
-            Join a room,
-            <br />
-            <span className="tone-2">or start your own.</span>
-          </h1>
+          <LogoMark size={compact ? 40 : 56} className="mx-auto text-foreground" />
+          {compact ? null : (
+            <h1 className="mt-6 text-[2.6rem] font-medium leading-[1.05] tracking-[-0.022em] sm:text-5xl">
+              Join a room,
+              <br />
+              <span className="tone-2">or start your own.</span>
+            </h1>
+          )}
         </div>
         {notice ?? account.loginError ? (
           <p className="mt-6 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">{notice ?? account.loginError}</p>
         ) : null}
         {/* Double bezel, as on the landing: a thin outer tray holding the form. */}
-        <div className="mt-8 rounded-[2rem] border border-white/[0.08] bg-white/[0.02] p-2">
+        <div className={`${compact ? "mt-5" : "mt-8"} rounded-[2rem] border border-white/[0.08] bg-white/[0.02] p-2`}>
           <div className="rounded-[calc(2rem-0.5rem)] bg-[#0b0b0d] p-5 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)] sm:p-6">
-            <JoinFlow team={team} account={account} onJoin={onJoin} onTeamJoined={onTeamJoined} />
+            <JoinFlow team={team} account={account} onJoin={onJoin} onTeamJoined={onTeamJoined} onStarting={setCompact} />
           </div>
         </div>
         <RecentRooms
