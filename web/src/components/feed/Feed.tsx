@@ -49,9 +49,11 @@ interface FeedProps {
   // Given, long code and documents show as cards that open in the canvas.
   onOpenDoc?: (id: string) => void;
   onOpenBoard?: () => void;
+  // Given (to the host), a failed run offers to pick another agent, say when a provider's tokens ran out.
+  onSwitchAgent?: () => void;
 }
 
-export function Feed({ items, people = [], meId = null, activity = null, onOpenDoc, onOpenBoard }: FeedProps) {
+export function Feed({ items, people = [], meId = null, activity = null, onOpenDoc, onOpenBoard, onSwitchAgent }: FeedProps) {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const toggle = (id: string) =>
     setOpened((current) => {
@@ -78,7 +80,7 @@ export function Feed({ items, people = [], meId = null, activity = null, onOpenD
             ))}
           </div>
         ) : (
-          <Entry key={block.id} item={block} meId={meId} onOpenDoc={onOpenDoc} onOpenBoard={onOpenBoard} />
+          <Entry key={block.id} item={block} meId={meId} onOpenDoc={onOpenDoc} onOpenBoard={onOpenBoard} onSwitchAgent={onSwitchAgent} />
         ),
       )}
       <Activity activity={activity} />
@@ -123,9 +125,10 @@ interface EntryProps {
   meId: string | null;
   onOpenDoc?: ((id: string) => void) | undefined;
   onOpenBoard?: (() => void) | undefined;
+  onSwitchAgent?: (() => void) | undefined;
 }
 
-function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
+function Entry({ item, meId, onOpenDoc, onOpenBoard, onSwitchAgent }: EntryProps) {
   switch (item.kind) {
     case "banner":
       return null;
@@ -237,12 +240,19 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard }: EntryProps) {
         );
       }
       if (item.tone === "warn" || item.tone === "danger") {
+        const switchable = item.action === "agent" && onSwitchAgent !== undefined;
         return (
           <Alert status={item.tone === "warn" ? "warning" : "danger"} className={styles.alert}>
             <Alert.Indicator />
             <Alert.Content>
               <Alert.Description className="whitespace-pre-wrap">{item.text}</Alert.Description>
+              {switchable ? <Alert.Description>Out of tokens or credit? Pick another agent and the conversation carries on.</Alert.Description> : null}
             </Alert.Content>
+            {switchable ? (
+              <Button size="sm" variant="secondary" className="flex-none self-center" onPress={onSwitchAgent}>
+                Switch agent
+              </Button>
+            ) : null}
           </Alert>
         );
       }
