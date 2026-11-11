@@ -47,3 +47,30 @@ export interface TeamView {
   sessions: SessionCard[];
   error: string | null;
 }
+
+// That a device belongs to an account (ADR 0016): a browser sends a ticket for "teams", a computer its
+// certificate with a signature over `accountProofMessage(ts, nonce)`.
+export interface AccountProof {
+  ticket?: string;
+  certificate?: string;
+  ts?: number;
+  nonce?: string;
+  signature?: string;
+}
+
+export interface MemberView {
+  id: string;
+  name: string;
+  key: string;
+  role: "owner" | "member";
+  joined_at: string;
+}
+
+export interface TeamGrant {
+  team_id: string;
+  team_name: string;
+  team_key: string;
+  certificate: string;
+  member: MemberView;
+  invite?: string | null;
+}
