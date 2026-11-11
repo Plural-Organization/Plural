@@ -108,12 +108,12 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
     }
     setProblem(null);
     setBusy("room");
-    agent
-      .commit()
-      .then(async (choice) => {
-        await saveAgent(choice);
-        return startRoom(folder.folder, title, { agent: choice, ...(relay === null ? {} : { relay }) });
-      })
+    // An outdated daemon starts the room with the agent it is set to, as before agent setup.
+    (agent.outdated ? Promise.resolve(undefined) : agent.commit().then(async (choice) => {
+      await saveAgent(choice);
+      return choice;
+    }))
+      .then((choice) => startRoom(folder.folder, title, { ...(choice === undefined ? {} : { agent: choice }), ...(relay === null || agent.outdated ? {} : { relay }) }))
       .then((room) => onOpen(parseLink(room.host_link), account.name !== "" ? account.name : (account.email.split("@")[0] ?? "host")))
       .catch((error: unknown) => {
         if (error instanceof Error && !(error instanceof DaemonError)) {
@@ -162,6 +162,7 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
             <Input placeholder="Optional" maxLength={80} autoComplete="off" />
             <Description>Shown to the people you invite.</Description>
           </TextField>
+          {agent.outdated ? null : (
           <Disclosure>
             <Disclosure.Heading>
               <Disclosure.Trigger className="flex w-full items-center justify-between gap-3 text-sm text-muted">
@@ -181,6 +182,7 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
               </Disclosure.Body>
             </Disclosure.Content>
           </Disclosure>
+          )}
           {problem === null ? null : (
             <Alert status="danger">
               <Alert.Indicator />
@@ -189,7 +191,7 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
               </Alert.Content>
             </Alert>
           )}
-          <Button fullWidth size="lg" onPress={start} isDisabled={folder === null || busy !== null || agent.blocker !== null || relayWrong !== null}>
+          <Button fullWidth size="lg" onPress={start} isDisabled={folder === null || busy !== null || (!agent.outdated && agent.blocker !== null) || relayWrong !== null}>
             {busy === "room" ? "Starting…" : "Start room"}
           </Button>
         </div>

@@ -89,7 +89,7 @@ function AgentSection({ room, label }: { room: string; label: string }) {
                 </Alert.Content>
               </Alert>
             )}
-            <Button className="self-start" onPress={apply} isDisabled={busy || setup.blocker !== null}>
+            <Button className="self-start" onPress={apply} isDisabled={busy || setup.provider === null || setup.blocker !== null}>
               {busy ? <Spinner size="sm" color="current" /> : null}
               {busy ? "Switching…" : "Switch agent"}
             </Button>
