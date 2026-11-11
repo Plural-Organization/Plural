@@ -1,5 +1,5 @@
 import { Button, Card, Chip, Description, Header, Label, ListBox, Modal, SearchField, type Key } from "@heroui/react";
-import { CaretUpDown } from "@phosphor-icons/react";
+import { CaretUpDown, Check } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { Provider } from "../lib/agent";
 import { groups, statusOf } from "../lib/agentSetup";
@@ -70,7 +70,7 @@ export function ProviderPicker({ providers, value, onPick }: ProviderPickerProps
               {shown.length === 0 ? (
                 <p className="py-6 text-center text-sm text-muted">No provider matches “{query.trim()}”.</p>
               ) : (
-                <ListBox aria-label="Providers" selectionMode="single" selectedKeys={[value.id]} onAction={pick}>
+                <ListBox aria-label="Providers" selectionMode="none" onAction={pick}>
                   {shown.map((group) => (
                     <ListBox.Section key={group.title}>
                       <Header className="px-2 pb-1 pt-3 text-xs font-medium uppercase tracking-wide text-muted">{group.title}</Header>
@@ -78,7 +78,10 @@ export function ProviderPicker({ providers, value, onPick }: ProviderPickerProps
                         <ListBox.Item key={provider.id} id={provider.id} textValue={provider.label}>
                           <AgentLogo label={provider.label} size={20} decorative />
                           <div className="flex min-w-0 flex-1 flex-col">
-                            <Label className="truncate">{provider.label}</Label>
+                            <Label className="flex items-center gap-1.5 truncate">
+                              {provider.label}
+                              {provider.id === value.id ? <Check size={13} weight="bold" aria-label="Chosen now" className="flex-none text-muted" /> : null}
+                            </Label>
                             <Description className="truncate">{provider.hint}</Description>
                           </div>
                           <Status provider={provider} />

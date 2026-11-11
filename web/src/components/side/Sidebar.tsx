@@ -49,7 +49,7 @@ export function Sidebar({ room, projection, status, waiting, open, tucked, onHid
         </Section>
       ) : null}
       <Queue projection={projection} isHost={isHost} send={send} />
-      <AgentStatus projection={projection} status={status} isHost={isHost} send={send} />
+      <AgentStatus projection={projection} status={status} isHost={isHost} send={send} onSwitch={isHost ? () => setSettingsOpen(true) : undefined} />
       <PromptMode mode={projection.state.prompt_mode} isHost={isHost} send={send} />
       {isHost ? <Rules projection={projection} send={send} /> : null}
       {isHost && settingsOpen ? <RoomSettings room={room} projection={projection} send={send} onClose={() => setSettingsOpen(false)} /> : null}

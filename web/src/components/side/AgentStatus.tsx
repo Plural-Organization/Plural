@@ -1,4 +1,5 @@
 import { Button, Kbd, Spinner } from "@heroui/react";
+import { ArrowsClockwise } from "@phosphor-icons/react";
 import type { Command, Projection } from "@plural/client";
 import { Section } from "./Section";
 import styles from "./Sidebar.module.css";
@@ -10,9 +11,11 @@ interface AgentStatusProps {
   status: string;
   isHost: boolean;
   send: (command: Command) => void;
+  /** Opens the room settings, where the host picks another agent. */
+  onSwitch?: () => void;
 }
 
-export function AgentStatus({ projection, status, isHost, send }: AgentStatusProps) {
+export function AgentStatus({ projection, status, isHost, send, onSwitch }: AgentStatusProps) {
   const running = projection.state.run !== null;
   return (
     <Section title="agent">
@@ -26,6 +29,12 @@ export function AgentStatus({ projection, status, isHost, send }: AgentStatusPro
           <span className="muted">{line.plugin}</span> {line.text}
         </p>
       ))}
+      {isHost && onSwitch !== undefined ? (
+        <Button size="sm" variant="secondary" onPress={onSwitch}>
+          <ArrowsClockwise size={14} />
+          Switch agent
+        </Button>
+      ) : null}
       {isHost && running ? (
         <Button size="sm" variant="danger" onPress={() => send({ type: "run.abort" })}>
           Stop the run
