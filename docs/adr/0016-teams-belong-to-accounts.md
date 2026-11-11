@@ -107,3 +107,13 @@ should be one member whatever device they use.
 | 7 | later: show a running room to a team, owner-signed certificates | separate decisions |
 
 Slices 1 to 4 give the web client full team management; slice 5 connects rooms to it.
+
+## Built
+
+Slice 2: `relay/directory.py` (account members, `member_keys` with a migration of existing members,
+`mine`, claiming a key-only member with a signature by its key, `hand_over`, owner checks read the
+role from the directory), `relay/account_proofs.py`, routes `POST /teams/mine` and
+`POST /teams/{id}/owner`. A ticket's audience is checked by `EntitlementVerifier.ticket`.
+
+A claim needs more than the ADR first said: a signature by the member's key over the invite code
+(`key_proof`), since a public key alone proves nothing.

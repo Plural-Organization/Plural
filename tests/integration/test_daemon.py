@@ -288,6 +288,27 @@ async def test_only_a_fresh_ticket_for_this_computers_account_gets_in(tmp_path: 
         )
 
 
+async def test_a_ticket_for_the_team_directory_does_not_open_the_daemon(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        claims = TicketClaims.model_validate(
+            {
+                "aud": "teams",
+                "account": "a_me",
+                "nonce": "teams-1",
+                "iat": daemon.now,
+                "exp": daemon.now + timedelta(seconds=60),
+            }
+        )
+        status, body, _ = await daemon.call(
+            "GET", "/v1/account", ticket=sign(daemon.accounts, claims)
+        )
+        assert (status, body["error"]["code"], body["error"]["reason"]) == (
+            401,
+            "bad_ticket",
+            "wrong_audience",
+        )
+
+
 async def test_a_certificate_is_not_a_ticket(tmp_path: Path) -> None:
     async with running_daemon(tmp_path) as daemon:
         certificate = sign(

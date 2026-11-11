@@ -35,16 +35,56 @@ class MemberView(Model):
     joined_at: datetime
 
 
+class AccountProof(Model):
+    """That the device asking belongs to an account (ADR 0016).
+
+    A browser sends a `ticket` from the accounts service with `aud: "teams"`. A computer sends its
+    entitlement `certificate` and a `signature` by the certificate's key over
+    `account_proof_message(ts, nonce)`.
+    """
+
+    ticket: str | None = Field(default=None, max_length=4096)
+    certificate: str | None = Field(default=None, max_length=4096)
+    ts: int | None = None
+    nonce: str | None = Field(default=None, min_length=8, max_length=64)
+    signature: str | None = Field(default=None, max_length=200)
+
+
+def account_proof_message(ts: int, nonce: str) -> bytes:
+    return f"plural-teams:{ts}:{nonce}".encode()
+
+
+def key_proof_message(code: str) -> bytes:
+    """What a key signs to show it is the joiner's own, so a key-only member can be claimed."""
+    return f"plural-team-key:{code}".encode()
+
+
 class TeamCreate(Model):
     name: TeamName
     member_name: MemberName
     key: str
+    proof: AccountProof | None = None
 
 
 class TeamJoin(Model):
     code: str = Field(min_length=4, max_length=64)
     name: MemberName
     key: str
+    proof: AccountProof | None = None
+    # A signature by `key` over key_proof_message(code): lets an account take over the key-only
+    # member that already has this key, instead of joining a second time.
+    key_proof: str | None = Field(default=None, max_length=200)
+
+
+class MyTeams(Model):
+    """A signed-in device asking for every team of its account, with certificates for `key`."""
+
+    key: str
+    proof: AccountProof
+
+
+class OwnerHandover(Model):
+    member: str = Field(min_length=1, max_length=64)
 
 
 class TeamGrant(Model):
@@ -55,6 +95,10 @@ class TeamGrant(Model):
     member: MemberView
     invite: str | None = None
     invite_expires_at: datetime | None = None
+
+
+class TeamGrants(Model):
+    teams: tuple[TeamGrant, ...]
 
 
 class Invite(Model):

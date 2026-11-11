@@ -116,7 +116,7 @@ class Daemon:
             raise Problem(503, "key_unavailable", "the accounts key has not been read yet")
         now = self._clock()
         try:
-            claims = verifier.ticket(ticket, now=now)
+            claims = verifier.ticket(ticket, now=now, audience="daemon")
         except InvalidEntitlement as error:
             if error.reason == "forged":
                 self._key.suspect()
