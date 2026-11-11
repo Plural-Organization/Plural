@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 import shutil
 import subprocess
 import sys
@@ -51,6 +52,8 @@ CODEX_EFFORT = "medium"
 CODEX_TOOLS = {"command_execution", "file_change", "mcp_tool_call", "web_search"}
 # Where a run's traces and raw logs are kept, set once the run starts.
 kept: Path | None = None
+# An OpenAI-compatible endpoint the run uses instead of the preset's own, for a local server.
+base_url: str | None = None
 MAX_LINE_BYTES = 16 * 1024 * 1024
 
 
@@ -247,6 +250,7 @@ def begin(task: Task, folder: str, preset: str, model: str) -> HostSettings:
         port=free_port(),
         preset=preset,
         model=model,
+        base_url=base_url,
         browser="off",
         web_search=False,
     )
@@ -351,20 +355,27 @@ async def stream_native(
         limit=MAX_LINE_BYTES,
     )
     assert process.stdout is not None
-    try:
-        async with asyncio.timeout(timeout_s):
-            with log.open("wb") as written:
-                async for raw in process.stdout:
-                    written.write(raw)
-                    with suppress(json.JSONDecodeError):
-                        decoded = json.loads(raw)
-                        if isinstance(decoded, dict):
-                            yield decoded
-            await process.wait()
-    except TimeoutError:
-        outcome.status = "timeout"
-        process.kill()
-        await process.wait()
+    # A deadline per line: a timeout around a generator that yields does not reach its reads.
+    deadline = time.monotonic() + timeout_s
+    with log.open("wb") as written:
+        while True:
+            left = deadline - time.monotonic()
+            try:
+                raw = await asyncio.wait_for(process.stdout.readline(), max(left, 0.01))
+            except TimeoutError:
+                outcome.status = "timeout"
+                process.kill()
+                await process.wait()
+                return
+            if not raw:
+                break
+            written.write(raw)
+            written.flush()
+            with suppress(json.JSONDecodeError):
+                decoded = json.loads(raw)
+                if isinstance(decoded, dict):
+                    yield decoded
+    await process.wait()
     if outcome.status == "ran" and process.returncode not in (0, None):
         outcome.detail = outcome.detail or f"exited with {process.returncode}"
 
@@ -452,7 +463,69 @@ async def drive_grok(task: Task, workspace: Path, model: str, outcome: Outcome) 
     return "".join(text)
 
 
-NATIVE.update(codex=drive_codex, claude=drive_claude, grok=drive_grok)
+async def drive_pi(task: Task, workspace: Path, model: str, outcome: Outcome) -> str:
+    """The task through `pi -p`, pi's own harness, on a local OpenAI-compatible server (--base-url,
+    Ollama's by default): pi gets a config folder of its own that knows only that endpoint, and no
+    extensions, skills, prompt templates or context files. Its tools run in the task's folder, as
+    Plural's do in auto mode."""
+    agent = workspace.parent / "pi-agent"
+    agent.mkdir(exist_ok=True)
+    name = model.removeprefix("ollama/")
+    (agent / "models.json").write_text(
+        json.dumps(
+            {
+                "providers": {
+                    "ollama": {
+                        "baseUrl": base_url or "http://localhost:11434/v1",
+                        "api": "openai-completions",
+                        "apiKey": "ollama",
+                        "models": [{"id": name, "contextWindow": 131072}],
+                    }
+                }
+            }
+        )
+    )
+    command = [
+        "pi", "-p", task.prompt, "--model", f"ollama/{name}", "--mode", "json",
+        "--no-session", "--no-extensions", "--no-skills", "--no-context-files",
+        "--no-prompt-templates", "--offline",
+    ]  # fmt: skip
+    os.environ["PI_CODING_AGENT_DIR"] = str(agent)
+    started = time.monotonic()
+    reply = ""
+    log = workspace.parent / "pi.jsonl"
+    try:
+        async for event in stream_native(command, workspace, task.timeout_s, log, outcome):
+            kind = event.get("type")
+            message: dict[str, Any] = event.get("message") or {}
+            if kind == "message_end" and message.get("role") == "assistant":
+                outcome.model_turns += 1
+                usage: dict[str, int] = message.get("usage") or {}
+                outcome.input_tokens += usage.get("input", 0)
+                outcome.cache_read_tokens += usage.get("cacheRead", 0)
+                outcome.cache_write_tokens += usage.get("cacheWrite", 0)
+                outcome.output_tokens += usage.get("output", 0)
+                prompt = usage.get("input", 0) + usage.get("cacheRead", 0)
+                outcome.context_peak = max(outcome.context_peak, prompt)
+                parts: list[dict[str, Any]] = message.get("content") or []
+                text = "".join(str(p.get("text", "")) for p in parts if p.get("type") == "text")
+                if text:
+                    reply = text
+            elif kind == "tool_execution_end":
+                outcome.tool_calls += 1
+                tool = str(event.get("toolName") or "tool")
+                outcome.tools[tool] = outcome.tools.get(tool, 0) + 1
+                if event.get("isError"):
+                    outcome.tool_errors += 1
+            elif kind == "agent_end" and outcome.status != "timeout":
+                outcome.status = "ran"
+    finally:
+        os.environ.pop("PI_CODING_AGENT_DIR", None)
+    outcome.seconds = round(time.monotonic() - started, 1)
+    return reply
+
+
+NATIVE.update(codex=drive_codex, claude=drive_claude, grok=drive_grok, pi=drive_pi)
 
 
 async def run_task(
@@ -549,7 +622,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--harness",
-        choices=["plural", "codex", "claude", "grok"],
+        choices=["plural", "codex", "claude", "grok", "pi"],
         default="plural",
         help="codex runs the same tasks through codex exec instead, with the same model",
     )
@@ -564,6 +637,10 @@ def main() -> int:
         help="let your own skills and agents into the runs; the numbers then are yours alone",
     )
     parser.add_argument("--compare", type=Path, help="an earlier results file")
+    parser.add_argument(
+        "--base-url",
+        help="an OpenAI-compatible endpoint in place of the preset's, for a local server",
+    )
     parser.add_argument("--list", action="store_true", help="print the tasks and stop")
     args = parser.parse_args()
     if args.list:
@@ -578,7 +655,8 @@ def main() -> int:
         preset = args.preset or fallback_preset
         model = args.model or fallback_model
     print(f"{args.harness} · {preset} · {model}", flush=True)
-    global kept
+    global kept, base_url
+    base_url = args.base_url
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
     kept = RESULTS / f"{stamp}-{args.harness}-{model.replace('/', '_')}"
     kept.mkdir(parents=True, exist_ok=True)
