@@ -16,6 +16,7 @@ from rich.table import Table
 
 from plural import __version__
 from plural.cli.account import login, logout, whoami
+from plural.cli.agent import agent_app
 from plural.cli.format import ago
 from plural.cli.team import ls, team_app
 from plural.host.config import DEFAULT_RELAY_URL, HostSettings
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
 app = typer.Typer(name="plural-host", no_args_is_help=True, add_completion=False)
 app.add_typer(team_app, name="team")
+app.add_typer(agent_app, name="agent")
 app.command(name="ls")(ls)
 app.command(name="login")(login)
 app.command(name="logout")(logout)
