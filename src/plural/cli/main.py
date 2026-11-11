@@ -88,6 +88,14 @@ def host(
             help="Show this session to your team. Needs --relay, --public-url or a tunnel.",
         ),
     ] = False,
+    team_id: Annotated[
+        str | None,
+        typer.Option(
+            "--team-id",
+            help="Show this session to this one of your teams (implies --team).",
+            envvar="PLURAL_TEAM_ID",
+        ),
+    ] = None,
     machine: Annotated[
         bool,
         typer.Option(
@@ -96,7 +104,8 @@ def host(
     ] = False,
 ) -> None:
     given: dict[str, Any] = {
-        "team": True if team else None,
+        "team": True if team or team_id else None,
+        "team_id": team_id,
         "workspace": workspace,
         "bind_host": bind,
         "port": port,
@@ -137,7 +146,7 @@ def _wants_relay(settings: HostSettings) -> bool:
 
 
 def _default_relay(settings: HostSettings) -> str:
-    profile = TeamStore(settings.state_dir).load() if settings.team else None
+    profile = TeamStore(settings.state_dir, settings.team_id).load() if settings.team else None
     return profile.relay if profile is not None else DEFAULT_RELAY_URL
 
 
@@ -196,7 +205,7 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
 
     _configure_logging(settings.state_dir / "logs" / "host.log" if machine else None)
     if settings.team:
-        ensure_ready(settings, TeamStore(settings.state_dir))
+        ensure_ready(settings, TeamStore(settings.state_dir, settings.team_id))
     plural_host = await build_host(settings)
     room_link = plural_host.room_link.link
     if machine:
@@ -216,7 +225,9 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
         print(plain_links(plural_host.room, room_link, plural_host.host_link), flush=True)
     presence = (
         asyncio.create_task(
-            TeamPresence(plural_host, settings, TeamStore(settings.state_dir)).run()
+            TeamPresence(
+                plural_host, settings, TeamStore(settings.state_dir, settings.team_id)
+            ).run()
         )
         if settings.team
         else None

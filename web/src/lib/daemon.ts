@@ -107,10 +107,30 @@ export interface RoomOptions {
   agent?: AgentChoice;
   /** The relay to go through: empty for the Plural relay. Left out: the one this computer uses. */
   relay?: string;
+  /** One of this computer's teams to show the room to; it then runs on that team's relay. */
+  team?: string;
+}
+
+export interface ComputerTeam {
+  id: string;
+  name: string;
+  role: "owner" | "member";
+  relay: string;
+}
+
+// The teams this computer is in, after it asked the relays for the account's. An older daemon
+// has none to offer: null.
+export async function computerTeams(base?: string): Promise<ComputerTeam[] | null> {
+  try {
+    return (await ask<{ teams: ComputerTeam[] }>("/v1/teams", {}, base)).teams;
+  } catch (error) {
+    if (error instanceof DaemonError && error.status === 404) return null;
+    throw error;
+  }
 }
 
 export function startRoom(folder: string, title: string, options: RoomOptions = {}, base?: string): Promise<StartedRoom> {
-  const body = { folder, title: title.trim() === "" ? null : title.trim(), ...(options.agent === undefined ? {} : { agent: options.agent }), ...(options.relay === undefined ? {} : { relay: options.relay.trim() }) };
+  const body = { folder, title: title.trim() === "" ? null : title.trim(), ...(options.agent === undefined ? {} : { agent: options.agent }), ...(options.relay === undefined ? {} : { relay: options.relay.trim() }), ...(options.team === undefined ? {} : { team: options.team }) };
   return ask<StartedRoom>("/v1/rooms", { method: "POST", body: JSON.stringify(body) }, base);
 }
 

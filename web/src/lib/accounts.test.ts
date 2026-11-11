@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { type Account, AccountError, activeMachines, decideDevice, fetchAccount, loginErrorMessage, signInUrl } from "./accounts";
+import { type Account, AccountError, activeMachines, createTicket, decideDevice, fetchAccount, loginErrorMessage, signInUrl } from "./accounts";
 import { agentPrompt, linkCommand } from "./agentPrompt";
 
 const BASE = "https://accounts.example";
@@ -92,3 +92,18 @@ describe("device approval", () => {
   });
 });
 
+
+describe("createTicket", () => {
+  test("asks for the daemon's ticket with no body, and a team directory's by name", async () => {
+    const sent: RequestInit[] = [];
+    vi.stubGlobal("fetch", async (_: string, init: RequestInit) => {
+      sent.push(init);
+      return new Response(JSON.stringify({ ticket: "t", expires_at: "2099-01-01T00:00:00Z" }), { status: 200 });
+    });
+    await createTicket();
+    await createTicket("teams");
+    expect(sent[0]?.body).toBeUndefined();
+    expect(JSON.parse(String(sent[1]?.body))).toEqual({ aud: "teams" });
+    expect(sent.every((init) => init.credentials === "include")).toBe(true);
+  });
+});

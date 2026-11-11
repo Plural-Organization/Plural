@@ -29,8 +29,9 @@ export function App() {
   const [spaces, setSpaces] = useState<Space[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const team = useTeam();
   const account = useAccount();
+  // Signed in, the browser is the account's member, and the account's teams come along (ADR 0016).
+  const team = useTeam(account.status === "in");
   // Whether the right side shows the form for joining another room.
   const [adding, setAdding] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
@@ -127,10 +128,10 @@ export function App() {
   if (team.loading) {
     return null;
   }
-  if (team.team === null && spaces.length === 0) {
+  if (team.teams.length === 0 && spaces.length === 0) {
     return <JoinScreen notice={notice} team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} />;
   }
-  const showForm = adding || (active === null && team.team === null);
+  const showForm = adding || (active === null && team.teams.length === 0);
   return (
     <div className="workspace" data-rail={railOpen ? "open" : "closed"} data-rail-tucked={railTucked} style={{ "--rail-w": `${railWidth}px` } as CSSProperties} data-room={active === null ? "none" : "open"}>
       <Rail

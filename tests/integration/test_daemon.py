@@ -3,7 +3,7 @@ import json
 import sys
 import urllib.error
 import urllib.request
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -21,10 +21,13 @@ from plural.daemon.folders import FolderPickerUnavailable, Folders
 from plural.daemon.rooms import Rooms
 from plural.daemon.terminal import TerminalUnavailable
 from plural.host.account import AccountStore, Entitlement
+from plural.host.team import TeamError, TeamProfile, TeamStore
 from plural.protocol.entitlement import EntitlementClaims
+from plural.protocol.team import MemberView, TeamRole
 from plural.protocol.ticket import TicketClaims
 from plural.security.accounts_key import AccountsKey
 from plural.security.entitlement import EntitlementVerifier
+from plural.security.identity import Identity
 from plural.security.tokens import b64encode
 
 WEB = "https://web.example.com"
@@ -74,6 +77,33 @@ class Picker:
         return self.answer
 
 
+def team(team_id: str, name: str, relay: str = "wss://relay.example") -> TeamProfile:
+    member = MemberView(
+        id="m_me", name="alia", key="k", role=TeamRole.MEMBER, joined_at=datetime.now(UTC)
+    )
+    return TeamProfile(
+        relay=relay, team_id=team_id, team_name=name, team_key="K", certificate="C", member=member
+    )
+
+
+class RelayTeams:
+    """Stands in for the relays' /teams/mine: what each relay answers for this computer."""
+
+    def __init__(self) -> None:
+        self.answers: dict[str, list[TeamProfile] | str] = {}
+        self.asked: list[tuple[str, str, str]] = []
+
+    async def __call__(
+        self, relay: str, identity: Identity, certificate: str, prove: Callable[[bytes], str]
+    ) -> list[TeamProfile]:
+        self.asked.append((relay, identity.public_b64, certificate))
+        prove(b"check that the computer can sign")
+        answer = self.answers.get(relay, [])
+        if isinstance(answer, str):
+            raise TeamError(answer)
+        return answer
+
+
 class Terminal:
     def __init__(self) -> None:
         self.ran: list[str] = []
@@ -95,6 +125,8 @@ class Daemon:
     agent: AgentSetup
     terminal: Terminal
     received: Path
+    teams: TeamStore
+    relays: "RelayTeams"
 
     def host_arguments(self) -> list[list[str]]:
         """The arguments each host was started with, oldest first."""
@@ -179,6 +211,8 @@ async def running_daemon(
     script = tmp_path / "fake_host.py"
     script.write_text(FAKE_HOST)
     picker = Picker()
+    teams = TeamStore(tmp_path / "state")
+    relays = RelayTeams()
     agent = AgentSetup(tmp_path / "state", environ={})
     terminal = Terminal()
     key = AccountsKey(
@@ -194,6 +228,8 @@ async def running_daemon(
         rooms=Rooms([sys.executable, str(script)], limit=limit),
         agent=agent,
         terminal=terminal,
+        teams=teams,
+        fetch_teams=relays,
         clock=lambda: now,
     )
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="warning"))
@@ -211,6 +247,8 @@ async def running_daemon(
             agent,
             terminal,
             tmp_path / "received.jsonl",
+            teams,
+            relays,
         )
     finally:
         server.should_exit = True
@@ -285,6 +323,27 @@ async def test_only_a_fresh_ticket_for_this_computers_account_gets_in(tmp_path: 
             403,
             "wrong_account",
             "alia@example.com",
+        )
+
+
+async def test_a_ticket_for_the_team_directory_does_not_open_the_daemon(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        claims = TicketClaims.model_validate(
+            {
+                "aud": "teams",
+                "account": "a_me",
+                "nonce": "teams-1",
+                "iat": daemon.now,
+                "exp": daemon.now + timedelta(seconds=60),
+            }
+        )
+        status, body, _ = await daemon.call(
+            "GET", "/v1/account", ticket=sign(daemon.accounts, claims)
+        )
+        assert (status, body["error"]["code"], body["error"]["reason"]) == (
+            401,
+            "bad_ticket",
+            "wrong_audience",
         )
 
 
@@ -698,3 +757,58 @@ async def test_a_relay_that_is_not_one_is_refused_and_starts_nothing(tmp_path: P
             )
             assert (status, body["error"]["code"]) == (400, "bad_relay"), bad
         assert daemon.host_arguments() == []
+
+
+# --- teams --------------------------------------------------------------------------------------
+
+
+async def test_the_computer_gets_its_account_teams_and_lists_them(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        daemon.teams.keep(team("t_old", "Zeta", relay="wss://own.example"))
+        daemon.relays.answers = {
+            "wss://relay.plrl.host": [team("t_new", "Backend", relay="wss://relay.plrl.host")],
+            "wss://own.example": "the relay answered 405",
+        }
+        status, body, _ = await daemon.call("GET", "/v1/teams", ticket=daemon.ticket(nonce="t"))
+        assert status == 200
+        assert [(item["id"], item["name"]) for item in body["teams"]] == [
+            ("t_new", "Backend"),
+            ("t_old", "Zeta"),
+        ]
+        assert body["errors"] == ["wss://own.example: the relay answered 405"]
+        relays = [relay for relay, _, _ in daemon.relays.asked]
+        assert relays == ["wss://relay.plrl.host", "wss://own.example"]
+        assert all(key == daemon.teams.identity().public_b64 for _, key, _ in daemon.relays.asked)
+        assert TeamStore(tmp_path / "state", "t_new").load() is not None
+
+
+async def test_an_unlinked_computer_lists_only_the_teams_it_has(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path, linked=False) as daemon:
+        daemon.teams.keep(team("t_1", "Backend"))
+        # Unlinked, the ticket check refuses first: nothing is asked of any relay.
+        status, body, _ = await daemon.call("GET", "/v1/teams", ticket=daemon.ticket(nonce="u"))
+        assert (status, body["error"]["code"]) == (409, "not_linked")
+        assert daemon.relays.asked == []
+
+
+async def test_a_team_room_starts_on_its_team_and_ignores_a_relay(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        daemon.teams.keep(team("t_1", "Backend"))
+        folder = await picked(daemon, tmp_path / "project", "a")
+        status, room, _ = await daemon.call(
+            "POST",
+            "/v1/rooms",
+            ticket=daemon.ticket(nonce="b"),
+            body={"folder": folder, "team": "t_1", "relay": "wss://elsewhere.example"},
+        )
+        assert status == 201, room
+        arguments = daemon.host_arguments()[-1]
+        assert arguments[arguments.index("--team-id") + 1] == "t_1"
+        assert "--relay" not in arguments
+        status, body, _ = await daemon.call(
+            "POST",
+            "/v1/rooms",
+            ticket=daemon.ticket(nonce="c"),
+            body={"folder": folder, "team": "t_unknown"},
+        )
+        assert (status, body["error"]["code"]) == (400, "unknown_team")

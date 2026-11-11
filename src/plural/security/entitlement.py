@@ -22,7 +22,7 @@ def b64decode(data: str) -> bytes:
 
 
 class InvalidEntitlement(Exception):
-    def __init__(self, reason: Literal["malformed", "forged", "expired"]) -> None:
+    def __init__(self, reason: Literal["malformed", "forged", "expired", "wrong_audience"]) -> None:
         super().__init__(reason)
         self.reason = reason
 
@@ -60,12 +60,17 @@ class EntitlementVerifier:
             raise InvalidEntitlement("expired")
         return claims
 
-    def ticket(self, ticket: str, *, now: datetime) -> TicketClaims:
+    def ticket(
+        self, ticket: str, *, now: datetime, audience: Literal["daemon", "teams"]
+    ) -> TicketClaims:
+        """A ticket for this receiver: one meant for another receiver is refused."""
         body = self._body(ticket)
         try:
             claims = TicketClaims.model_validate_json(body)
         except ValidationError as error:
             raise InvalidEntitlement("malformed") from error
+        if claims.aud != audience:
+            raise InvalidEntitlement("wrong_audience")
         if claims.exp <= now:
             raise InvalidEntitlement("expired")
         return claims

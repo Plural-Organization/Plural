@@ -53,6 +53,15 @@ class EntitlementWatch:
         """Whether the accounts key is known, so a certificate can be judged."""
         return self._key.ready
 
+    @property
+    def verifier(self) -> EntitlementVerifier | None:
+        """The accounts key, for other checks that trust the same service (team proofs)."""
+        return self._key.verifier
+
+    def suspect(self) -> None:
+        """Something signed looked forged: read the accounts key again soon."""
+        self._key.suspect()
+
     def start(self) -> None:
         self._key.start()
 
