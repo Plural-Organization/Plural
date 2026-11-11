@@ -167,7 +167,7 @@ function Advanced({ setup }: { setup: AgentSetupState }) {
   return (
     <Disclosure>
       <Disclosure.Heading>
-        <Disclosure.Trigger className="text-sm text-muted">
+        <Disclosure.Trigger className="flex w-full items-center justify-between text-sm text-muted">
           More options
           <Disclosure.Indicator />
         </Disclosure.Trigger>

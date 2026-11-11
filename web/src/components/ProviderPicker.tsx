@@ -35,9 +35,9 @@ export function ProviderPicker({ providers, value, onPick }: ProviderPickerProps
       <Card variant="secondary">
         <Card.Content className="flex-row items-center gap-3">
           <AgentLogo label={value.label} size={22} />
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <p className="truncate text-[15px] font-medium">{value.label}</p>
-            <Description className="truncate">{value.hint}</Description>
+            <Description className="block truncate">{value.hint}</Description>
           </div>
           <Status provider={value} />
           <Button size="sm" variant="secondary" onPress={() => setOpen(true)} aria-label="Choose another provider">
@@ -77,12 +77,12 @@ export function ProviderPicker({ providers, value, onPick }: ProviderPickerProps
                       {group.providers.map((provider) => (
                         <ListBox.Item key={provider.id} id={provider.id} textValue={provider.label}>
                           <AgentLogo label={provider.label} size={20} decorative />
-                          <div className="flex min-w-0 flex-1 flex-col">
+                          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                             <Label className="flex items-center gap-1.5 truncate">
                               {provider.label}
                               {provider.id === value.id ? <Check size={13} weight="bold" aria-label="Chosen now" className="flex-none text-muted" /> : null}
                             </Label>
-                            <Description className="truncate">{provider.hint}</Description>
+                            <Description className="block truncate">{provider.hint}</Description>
                           </div>
                           <Status provider={provider} />
                         </ListBox.Item>

@@ -15,9 +15,9 @@ export function AgentCard({ setup }: { setup: AgentSetupState }) {
       <Card variant="secondary">
         <Card.Content className="flex-row items-center gap-3">
           <AgentLogo label={provider?.label} size={22} />
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 overflow-hidden">
             <p className="truncate text-[15px] font-medium">{provider?.label ?? "Agent"}</p>
-            <Description className="truncate">{provider === null ? (setup.error ?? "Reading this computer…") : (blocker ?? (choice?.model || "Default model"))}</Description>
+            <Description className="block truncate">{provider === null ? (setup.error ?? "Reading this computer…") : (blocker ?? (choice?.model || "Default model"))}</Description>
           </div>
           {provider === null ? null : (
             <Chip size="sm" variant="soft" color={ready ? "success" : "warning"} className="flex-none">
