@@ -12,6 +12,7 @@ import { Feed } from "../components/feed/Feed";
 import { Inbox } from "../components/inbox/Inbox";
 import { askItems, inboxItems } from "../components/inbox/items";
 import { InviteDialog } from "../components/InviteDialog";
+import { RoomSettings } from "../components/RoomSettings";
 import { Sidebar } from "../components/side/Sidebar";
 import { TopBar } from "../components/TopBar";
 import { useAttachments } from "../hooks/useAttachments";
@@ -62,6 +63,7 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
   const me = projection.me;
   const pluginCommands = useMemo(() => [...pluginHints(state.commands), ...skillHints(state.skills)], [state.commands, state.skills]);
   const isHost = me?.role === "host";
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const hostName = Object.values(state.participants).find((person) => person.role === "host")?.name;
   useEffect(() => {
     if (hostName !== undefined) {
@@ -283,7 +285,7 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
                 <p>Everyone here sees the same conversation. Type <kbd>/</kbd> for commands or <kbd>@</kbd> to tag someone.</p>
               </div>
             ) : null}
-            <Feed items={feed.items} people={mentionable(state, null)} meId={projection.meId} activity={current} onOpenBoard={state.board.open ? showBoard : undefined} onOpenDoc={(id) => {
+            <Feed items={feed.items} people={mentionable(state, null)} meId={projection.meId} activity={current} onOpenBoard={state.board.open ? showBoard : undefined} onSwitchAgent={isHost ? () => setSettingsOpen(true) : undefined} onOpenDoc={(id) => {
                 setBoardShown(false);
                 setCanvasId(id);
               }} />
@@ -396,7 +398,6 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
         />
       ) : (
         <Sidebar
-          room={link.room}
           projection={projection}
           status={runStatus}
           waiting={items.length}
@@ -405,6 +406,7 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
           onHide={() => (isNarrow() ? setPanel(false) : setSideTucked(true))}
           send={send}
           onInvite={(role) => send({ type: "invite.create", role, ttl_s: 3600, reusable: role === "participant" })}
+          onSettings={() => setSettingsOpen(true)}
         />
       )}
       {!doc && !boardShown && !sideTucked ? (
@@ -413,6 +415,7 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
 
       <QuoteButton enabled={active && me !== undefined && me.role !== "viewer"} onQuote={(text) => setQuote((current) => ({ text, key: (current?.key ?? 0) + 1 }))} />
       {invite && active ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}
+      {isHost && settingsOpen ? <RoomSettings room={link.room} projection={projection} send={send} onClose={() => setSettingsOpen(false)} /> : null}
     </div>
   );
 }
