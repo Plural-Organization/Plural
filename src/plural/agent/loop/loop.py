@@ -122,7 +122,9 @@ SHARED = Provenance(initiator_id="shared-context", initiator_role=Role.VIEWER, o
 
 @dataclass(frozen=True, slots=True)
 class LoopLimits:
-    max_turns: int = 50
+    # Model calls in one run. A model that calls tools one at a time, as Codex does, needs one
+    # call per tool: a change across 40 files is 40 calls and more.
+    max_turns: int = 150
     repeat_limit: int = 3
     tool_timeout_s: float = 600.0
     first_token_timeout_s: float = 120.0
