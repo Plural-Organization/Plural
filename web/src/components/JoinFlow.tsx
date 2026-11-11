@@ -4,16 +4,14 @@ import { useEffect, useState, type FormEvent } from "react";
 import { parseLink, parseTeamInvite, type JoinLink, type TeamInvite } from "@plural/client";
 import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
+import { memberNameProblem } from "../lib/teamNames";
 import { signInUrl } from "../lib/accounts";
 import { StartRoom } from "./StartRoom";
 import { PersonAvatar } from "./PersonAvatar";
 import { copyText } from "../lib/clipboard";
 import { blockedByMixedContent, hostOf, unwrapLink } from "../lib/links";
 import { rememberName, savedName } from "../lib/saved";
-
 import { INSTALL } from "../lib/install";
-// A team member's name: what teammates see and @name uses.
-const MEMBER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$/;
 
 type Target = { kind: "room"; link: JoinLink } | { kind: "team"; invite: TeamInvite };
 type Read = { target: Target } | { problem: string };
@@ -87,10 +85,6 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined, onStarting }: Jo
       setProblem(read.problem);
       return;
     }
-    if (read.target.kind === "team" && team.team !== null) {
-      setProblem(`This browser is already in ${team.team.profile.team_name}. Leave it first to join another team.`);
-      return;
-    }
     setProblem(null);
     setTarget(read.target);
   };
@@ -111,8 +105,9 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined, onStarting }: Jo
       onJoin(target.link, chosen);
       return;
     }
-    if (!MEMBER_NAME.test(chosen)) {
-      setProblem("Use 1 to 32 letters, digits, dots, dashes or underscores, starting with a letter or digit.");
+    const wrongName = memberNameProblem(chosen);
+    if (wrongName !== null) {
+      setProblem(wrongName);
       return;
     }
     setBusy(true);

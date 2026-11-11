@@ -115,5 +115,13 @@ Slice 2: `relay/directory.py` (account members, `member_keys` with a migration o
 role from the directory), `relay/account_proofs.py`, routes `POST /teams/mine` and
 `POST /teams/{id}/owner`. A ticket's audience is checked by `EntitlementVerifier.ticket`.
 
+Slice 3: `client/src/team/api.ts` (`createTeamOnRelay`, `joinTeamOnRelay`, `myTeamsOnRelay`,
+`fetchMembers`, `removeMemberOnRelay`, `handOverTeam`; signed requests can carry a body).
+
+Slice 4: the web client keeps one profile per team in IndexedDB (`team:<id>`, the old `team`
+profile is moved on first load), signed in it asks `/teams/mine` on the Plural relay and on every
+relay it already has a team on, and the rail has a team switcher (`TeamSwitcher`), a create window
+(`CreateTeam`) and a team window with members, invite and leave or disband (`TeamWindow`).
+
 A claim needs more than the ADR first said: a signature by the member's key over the invite code
 (`key_proof`), since a public key alone proves nothing.
