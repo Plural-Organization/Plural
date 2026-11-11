@@ -396,6 +396,7 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
         />
       ) : (
         <Sidebar
+          room={link.room}
           projection={projection}
           status={runStatus}
           waiting={items.length}

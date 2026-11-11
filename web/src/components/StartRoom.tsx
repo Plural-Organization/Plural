@@ -3,10 +3,13 @@ import { ArrowLeft, Folder, FolderOpen } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { parseLink, type JoinLink } from "@plural/client";
+import { useAgentSetup } from "../hooks/useAgentSetup";
 import { useDaemon } from "../hooks/useDaemon";
 import type { Account } from "../lib/accounts";
+import { saveAgent } from "../lib/agent";
 import { DaemonError, daemonMessage, type PickedFolder, pickFolder, startRoom } from "../lib/daemon";
 import { INSTALL } from "../lib/install";
+import { AgentCard } from "./AgentCard";
 import { CopyBox } from "./CopyBox";
 
 interface StartRoomProps {
@@ -67,6 +70,7 @@ function Steps({ unlinked }: { unlinked: boolean }) {
 // Start a room on this computer from the page: the folder comes from the system's own dialog.
 export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
   const { phase, check } = useDaemon(true);
+  const agent = useAgentSetup(phase === "ready");
   const [folder, setFolder] = useState<PickedFolder | null>(null);
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState<"folder" | "room" | null>(null);
@@ -94,10 +98,19 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
     }
     setProblem(null);
     setBusy("room");
-    startRoom(folder.folder, title)
+    agent
+      .commit()
+      .then(async (choice) => {
+        await saveAgent(choice);
+        return startRoom(folder.folder, title, choice);
+      })
       .then((room) => onOpen(parseLink(room.host_link), account.name !== "" ? account.name : (account.email.split("@")[0] ?? "host")))
       .catch((error: unknown) => {
-        fail(error);
+        if (error instanceof Error && !(error instanceof DaemonError)) {
+          setProblem(error.message);
+        } else {
+          fail(error);
+        }
         setBusy(null);
       });
   };
@@ -133,6 +146,7 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
               </Button>
             </Card.Content>
           </Card>
+          <AgentCard setup={agent} />
           <TextField value={title} onChange={setTitle} name="title">
             <Label>Room name</Label>
             <Input placeholder="Optional" maxLength={80} autoComplete="off" />
@@ -146,7 +160,7 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
               </Alert.Content>
             </Alert>
           )}
-          <Button fullWidth size="lg" onPress={start} isDisabled={folder === null || busy !== null}>
+          <Button fullWidth size="lg" onPress={start} isDisabled={folder === null || busy !== null || agent.blocker !== null}>
             {busy === "room" ? "Starting…" : "Start room"}
           </Button>
         </div>

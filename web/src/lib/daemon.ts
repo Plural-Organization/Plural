@@ -1,4 +1,5 @@
 import { createTicket } from "./accounts";
+import type { AgentChoice } from "./agent";
 
 // The Plural program on this computer, which starts rooms for this page (`plural daemon`).
 export const DAEMON_URL: string = ((import.meta.env.VITE_DAEMON_URL as string | undefined) ?? "http://127.0.0.1:47831").replace(/\/+$/, "");
@@ -14,6 +15,7 @@ export interface StartedRoom {
   host_link: string;
   folder: string;
   title: string | null;
+  agent: string;
 }
 
 export interface PickedFolder {
@@ -55,6 +57,7 @@ const REASONS: Record<string, string> = {
   no_folder_dialog: "This computer cannot show a folder dialog. Start the room from the terminal instead.",
   too_many_rooms: "Too many rooms are open on this computer. Close one first.",
   unknown_folder: "Choose the folder again.",
+  agent_not_ready: "That agent is not ready yet. Finish its setup first.",
 };
 
 export function daemonMessage(error: DaemonError, signedInAs: string | null = null): string {
@@ -66,7 +69,7 @@ export function daemonMessage(error: DaemonError, signedInAs: string | null = nu
 }
 
 // Every call carries its own ticket: the daemon accepts each one once.
-async function ask<T>(path: string, init: RequestInit = {}, base: string = DAEMON_URL): Promise<T> {
+export async function ask<T>(path: string, init: RequestInit = {}, base: string = DAEMON_URL): Promise<T> {
   const { ticket } = await createTicket();
   let response: Response;
   try {
@@ -93,6 +96,7 @@ export async function pickFolder(base?: string): Promise<PickedFolder | null> {
   return picked.folder === null ? null : { folder: picked.folder, name: picked.name ?? "" };
 }
 
-export function startRoom(folder: string, title: string, base?: string): Promise<StartedRoom> {
-  return ask<StartedRoom>("/v1/rooms", { method: "POST", body: JSON.stringify({ folder, title: title.trim() === "" ? null : title.trim() }) }, base);
+// `agent` is the provider and model the person chose; the key is never sent, the daemon holds it.
+export function startRoom(folder: string, title: string, agent?: AgentChoice, base?: string): Promise<StartedRoom> {
+  return ask<StartedRoom>("/v1/rooms", { method: "POST", body: JSON.stringify({ folder, title: title.trim() === "" ? null : title.trim(), ...(agent === undefined ? {} : { agent }) }) }, base);
 }

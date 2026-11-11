@@ -46,9 +46,15 @@ describe("asking the daemon", () => {
   test("every call carries a ticket of its own", async () => {
     const sent = wire((path) => (path === "/v1/folders/pick" ? json({ folder: "f_1", name: "app" }) : json({ room: "r_1", guest_link: "g", host_link: "h", folder: "app", title: null }, 201)));
     expect(await pickFolder(DAEMON)).toEqual({ folder: "f_1", name: "app" });
-    await startRoom("f_1", "  Spike  ", DAEMON);
+    await startRoom("f_1", "  Spike  ", undefined, DAEMON);
     expect(sent.map((call) => call.auth)).toEqual(["Bearer ticket-1", "Bearer ticket-2"]);
     expect(JSON.parse(sent[1]!.body ?? "{}")).toEqual({ folder: "f_1", title: "Spike" });
+  });
+  test("the agent the person chose goes with the room, and no key with it", async () => {
+    const sent = wire(() => json({ room: "r", guest_link: "g", host_link: "h", folder: "x", title: null, agent: "Ollama (local) · qwen3:4b" }, 201));
+    const agent = { preset: "ollama", model: "qwen3:4b", baseUrl: "", contextWindow: "", fastModel: "" };
+    expect((await startRoom("f_1", "", agent, DAEMON)).agent).toBe("Ollama (local) · qwen3:4b");
+    expect(JSON.parse(sent[0]!.body ?? "{}")).toEqual({ folder: "f_1", title: null, agent });
   });
   test("a closed dialog is no folder", async () => {
     wire(() => json({ folder: null }));
@@ -56,12 +62,12 @@ describe("asking the daemon", () => {
   });
   test("an empty title is sent as none", async () => {
     const sent = wire(() => json({ room: "r", guest_link: "g", host_link: "h", folder: "x", title: null }, 201));
-    await startRoom("f_1", "   ", DAEMON);
+    await startRoom("f_1", "   ", undefined, DAEMON);
     expect(JSON.parse(sent[0]!.body ?? "{}")).toEqual({ folder: "f_1", title: null });
   });
   test("the daemon's refusal becomes an error that keeps its code", async () => {
     wire(() => json({ error: { code: "wrong_account", message: "x", linked_email: "alia@example.com" } }, 403));
-    const error = await startRoom("f_1", "", DAEMON).catch((caught: unknown) => caught);
+    const error = await startRoom("f_1", "", undefined, DAEMON).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(DaemonError);
     expect((error as DaemonError).linkedEmail).toBe("alia@example.com");
   });

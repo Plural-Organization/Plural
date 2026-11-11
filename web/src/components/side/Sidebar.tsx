@@ -13,6 +13,7 @@ import { useState } from "react";
 import { RoomSettings } from "../RoomSettings";
 
 interface SidebarProps {
+  room: string;
   projection: Projection;
   status: string;
   waiting: number;
@@ -23,7 +24,7 @@ interface SidebarProps {
   onInvite: (role: "participant" | "viewer") => void;
 }
 
-export function Sidebar({ projection, status, waiting, open, tucked, onHide, send, onInvite }: SidebarProps) {
+export function Sidebar({ room, projection, status, waiting, open, tucked, onHide, send, onInvite }: SidebarProps) {
   const isHost = projection.me?.role === "host";
   const [settingsOpen, setSettingsOpen] = useState(false);
   return (
@@ -51,7 +52,7 @@ export function Sidebar({ projection, status, waiting, open, tucked, onHide, sen
       <AgentStatus projection={projection} status={status} isHost={isHost} send={send} />
       <PromptMode mode={projection.state.prompt_mode} isHost={isHost} send={send} />
       {isHost ? <Rules projection={projection} send={send} /> : null}
-      {isHost && settingsOpen ? <RoomSettings projection={projection} send={send} onClose={() => setSettingsOpen(false)} /> : null}
+      {isHost && settingsOpen ? <RoomSettings room={room} projection={projection} send={send} onClose={() => setSettingsOpen(false)} /> : null}
     </aside>
   );
 }
