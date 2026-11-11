@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { createPrivateKey } from "node:crypto";
-import { existsSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { closedTunnel, type SessionCard } from "@plural/client";
-import { createTeamInvite, fetchSessions, leaveClosedTunnel, leaveTeam, loadTeam, platformOf, relayState, teamProof, type Team } from "../src/team";
+import { clearTeam, createTeamInvite, fetchSessions, leaveClosedTunnel, leaveTeam, loadTeam, platformOf, relayState, teamProof, type Team } from "../src/team";
 
 const PEM = "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIAABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4f\n-----END PRIVATE KEY-----\n";
 
@@ -63,6 +63,34 @@ describe("the team on this machine", () => {
     writeFileSync(join(directory, "identity.pem"), PEM);
     expect(loadTeam(directory)?.profile.team_name).toBe("Backend");
     writeFileSync(join(directory, "team.json"), "{not json");
+    expect(loadTeam(directory)).toBeNull();
+  });
+});
+
+describe("several teams on this machine", () => {
+  test("the current one is the team current-team names, and team.json without it", () => {
+    const directory = mkdtempSync(join(tmpdir(), "plural-teams-"));
+    writeFileSync(join(directory, "identity.pem"), PEM);
+    writeFileSync(join(directory, "team.json"), JSON.stringify(profile));
+    mkdirSync(join(directory, "teams"));
+    writeFileSync(join(directory, "teams", "t_2.json"), JSON.stringify({ ...profile, team_id: "t_2", team_name: "Infra" }));
+    expect(loadTeam(directory)?.profile.team_name).toBe("Backend");
+    writeFileSync(join(directory, "current-team"), "t_2\n");
+    expect(loadTeam(directory)?.profile.team_name).toBe("Infra");
+    // A name that is not a team here, or one that tries to leave the folder, falls back.
+    writeFileSync(join(directory, "current-team"), "../../etc/passwd");
+    expect(loadTeam(directory)?.profile.team_name).toBe("Backend");
+  });
+
+  test("leaving the current team forgets it and which team was current", () => {
+    const directory = mkdtempSync(join(tmpdir(), "plural-teams-"));
+    writeFileSync(join(directory, "identity.pem"), PEM);
+    mkdirSync(join(directory, "teams"));
+    writeFileSync(join(directory, "teams", "t_2.json"), JSON.stringify({ ...profile, team_id: "t_2" }));
+    writeFileSync(join(directory, "current-team"), "t_2");
+    clearTeam(directory);
+    expect(existsSync(join(directory, "teams", "t_2.json"))).toBe(false);
+    expect(existsSync(join(directory, "current-team"))).toBe(false);
     expect(loadTeam(directory)).toBeNull();
   });
 });

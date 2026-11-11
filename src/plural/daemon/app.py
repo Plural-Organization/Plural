@@ -19,16 +19,21 @@ from plural.daemon.rooms import RoomError, Rooms
 from plural.daemon.terminal import SystemTerminal, Terminal, TerminalUnavailable
 from plural.host import extras, tools
 from plural.host.account import AccountError, AccountStore
-from plural.host.config import HostSettings
+from plural.host.config import DEFAULT_RELAY_URL, HostSettings
+from plural.host.team import TeamError, TeamProfile, TeamStore, account_teams
 from plural.protocol.entitlement import EntitlementClaims
 from plural.security.accounts_key import AccountsKey
 from plural.security.entitlement import InvalidEntitlement
+from plural.security.identity import Identity
 from plural.security.replay import ReplayGuard
 from plural.security.tokens import b64decode
 
 DEFAULT_PORT = 47831
 DEFAULT_ORIGINS = ("https://plrl.host", "https://www.plrl.host")
 TICKET_WINDOW = timedelta(minutes=5)
+
+
+TeamFetch = Callable[[str, Identity, str, Callable[[bytes], str]], Awaitable[list[TeamProfile]]]
 
 
 class Problem(Exception):
@@ -45,6 +50,8 @@ class StartRoom(BaseModel):
     agent: Choice | None = None  # the provider and model; a key is never sent, the daemon has it
     # None: the relay this computer uses. "": the Plural relay. An address: that relay, from now on.
     relay: str | None = None
+    # One of this computer's teams to show the room to; the room then uses that team's relay.
+    team: str | None = None
 
 
 class SetAgent(BaseModel):
@@ -94,9 +101,15 @@ class Daemon:
         rooms: Rooms,
         agent: AgentSetup,
         terminal: Terminal,
+        teams: TeamStore,
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
+        fetch_teams: TeamFetch = account_teams,
+        team_relay: str = DEFAULT_RELAY_URL,
     ) -> None:
+        self._teams = teams
+        self._fetch_teams = fetch_teams
+        self._team_relay = team_relay
         self._agent = agent
         self._terminal = terminal
         self._accounts = accounts
@@ -164,10 +177,12 @@ class Daemon:
             config = self._agent.config(body.agent or self._agent.store.current())
         except AgentSetupError as error:
             raise Problem(409, "agent_not_ready", str(error)) from error
-        relay = self._relay(body.relay)
+        team = self._team(body.team)
+        # A team room goes through its team's relay, so a relay named here does not apply.
+        relay = None if team is not None else (self._relay(body.relay) or None)
         try:
             room = await self._rooms.start(
-                folder, title, name=email.split("@")[0], agent=config, relay=relay or None
+                folder, title, name=email.split("@")[0], agent=config, relay=relay, team=team
             )
         except RoomError as error:
             raise Problem(409, error.code, str(error)) from error
@@ -184,6 +199,51 @@ class Daemon:
         except AgentSetupError as error:
             raise Problem(400, "bad_relay", str(error)) from error
         return store.relay()
+
+    def _team(self, asked: str | None) -> str | None:
+        if asked is None:
+            return None
+        try:
+            known = {profile.team_id for profile in self._teams.profiles()}
+        except TeamError as error:
+            raise Problem(409, "teams_damaged", str(error)) from error
+        if asked not in known:
+            raise Problem(400, "unknown_team", "this computer is not in that team")
+        return asked
+
+    async def list_teams(self, request: Request) -> Response:
+        """This computer's teams, after asking the relays for the account's (ADR 0016)."""
+        self.authorize(request)
+        errors: list[str] = []
+        try:
+            linked = self._accounts.load()
+        except AccountError:
+            linked = None
+        if linked is not None:
+            identity = self._teams.identity()
+            prove = self._accounts.signer().prove
+            try:
+                relays = [self._team_relay, *(p.relay for p in self._teams.profiles())]
+            except TeamError as error:
+                raise Problem(409, "teams_damaged", str(error)) from error
+            for relay in dict.fromkeys(relays):
+                try:
+                    found = await self._fetch_teams(relay, identity, linked.certificate, prove)
+                except TeamError as error:
+                    errors.append(f"{relay}: {error}")
+                    continue
+                for profile in found:
+                    self._teams.keep(profile)
+        teams = [
+            {
+                "id": profile.team_id,
+                "name": profile.team_name,
+                "role": profile.member.role.value,
+                "relay": profile.relay,
+            }
+            for profile in self._teams.profiles()
+        ]
+        return JSONResponse({"teams": teams, "errors": errors})
 
     async def settings(self, request: Request) -> Response:
         self.authorize(request)
@@ -309,12 +369,23 @@ def create_app(
     rooms: Rooms | None = None,
     agent: AgentSetup | None = None,
     terminal: Terminal | None = None,
+    teams: TeamStore | None = None,
+    fetch_teams: TeamFetch = account_teams,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> Starlette:
     rooms = rooms or Rooms()
-    agent = agent or AgentSetup(HostSettings().state_dir)
+    state = HostSettings().state_dir
+    agent = agent or AgentSetup(state)
     daemon = Daemon(
-        accounts, key, folders or Folders(), rooms, agent, terminal or SystemTerminal(), clock=clock
+        accounts,
+        key,
+        folders or Folders(),
+        rooms,
+        agent,
+        terminal or SystemTerminal(),
+        teams or TeamStore(state),
+        clock=clock,
+        fetch_teams=fetch_teams,
     )
 
     @asynccontextmanager
@@ -337,6 +408,7 @@ def create_app(
             Route("/v1/rooms/{room}", _guarded(daemon.stop_room), methods=["DELETE"]),
             Route("/v1/rooms/{room}/agent", _guarded(daemon.set_room_agent), methods=["PUT"]),
             Route("/v1/settings", _guarded(daemon.settings)),
+            Route("/v1/teams", _guarded(daemon.list_teams)),
             Route("/v1/agent", _guarded(daemon.agent_catalog)),
             Route("/v1/agent", _guarded(daemon.save_agent), methods=["PUT"]),
             Route("/v1/agent/key", _guarded(daemon.save_agent_key), methods=["PUT"]),

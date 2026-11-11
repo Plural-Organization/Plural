@@ -30,3 +30,22 @@ export function freshNonce(): string {
 export function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
 }
+
+// An invite code as the relay compares it: lowercase letters and digits, without the "tm" prefix
+// (relay/directory.py `normalize_code`).
+export function normalizeTeamCode(code: string): string {
+  const plain = [...code.toLowerCase()].filter((character) => /[a-z0-9]/.test(character)).join("");
+  return plain.startsWith("tm") ? plain.slice(2) : plain;
+}
+
+// What a device's key signs to show a key-only member is its own, so an account can take it over
+// (protocol/team.py `key_proof_message`, ADR 0016).
+export function keyProofMessage(code: string): string {
+  return `plural-team-key:${normalizeTeamCode(code)}`;
+}
+
+// What a computer's certificate key signs to prove its account to a team directory
+// (protocol/team.py `account_proof_message`).
+export function accountProofMessage(timestamp: number, nonce: string): string {
+  return `plural-teams:${timestamp}:${nonce}`;
+}

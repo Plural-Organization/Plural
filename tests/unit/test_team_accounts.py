@@ -407,3 +407,11 @@ def test_a_proof_needs_a_ticket_or_a_signed_certificate() -> None:
     with pytest.raises(DirectoryError) as caught:
         proofs.account_of(AccountProof(certificate="a.b"), START)
     assert caught.value.status == 400
+
+
+def test_an_invite_code_is_signed_the_way_the_web_client_signs_it() -> None:
+    # client/test/team-accounts.test.ts checks the same strings.
+    assert normalize_code("TM-ABcde-12345") == "abcde12345"
+    assert normalize_code("abcde 12345") == "abcde12345"
+    assert key_proof_message(normalize_code("tm-abcde-12345")) == b"plural-team-key:abcde12345"
+    assert account_proof_message(1700000000, "n-1") == b"plural-teams:1700000000:n-1"

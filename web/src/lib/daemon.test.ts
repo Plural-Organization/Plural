@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { DaemonError, daemonMessage, daemonStatus, pickFolder, relayProblem, startRoom } from "./daemon";
+import { computerTeams, DaemonError, daemonMessage, daemonStatus, pickFolder, relayProblem, startRoom } from "./daemon";
 
 // The build under test has no accounts address, so the accounts service is reached at a bare path.
 const TICKETS = "/tickets";
@@ -61,6 +61,17 @@ describe("asking the daemon", () => {
     await startRoom("f_1", "", { relay: "  wss://relay.example.org " }, DAEMON);
     await startRoom("f_1", "", { relay: "" }, DAEMON);
     expect(sent.map((call) => JSON.parse(call.body ?? "{}").relay)).toEqual(["wss://relay.example.org", ""]);
+  });
+  test("a room goes to a team when the page names one", async () => {
+    const sent = wire(() => json({ room: "r", guest_link: "g", host_link: "h", folder: "x", title: null, agent: "" }, 201));
+    await startRoom("f_1", "", { team: "t_1" }, DAEMON);
+    expect(JSON.parse(sent[0]!.body ?? "{}").team).toBe("t_1");
+  });
+  test("the computer's teams are listed, and an older daemon has none to offer", async () => {
+    wire(() => json({ teams: [{ id: "t_1", name: "Backend", role: "owner", relay: "wss://r" }], errors: [] }));
+    expect((await computerTeams(DAEMON))?.map((item) => item.name)).toEqual(["Backend"]);
+    wire(() => json({ error: { code: "not_found", message: "Not Found" } }, 404));
+    expect(await computerTeams(DAEMON)).toBeNull();
   });
   test("a closed dialog is no folder", async () => {
     wire(() => json({ folder: null }));
