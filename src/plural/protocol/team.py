@@ -54,6 +54,16 @@ def account_proof_message(ts: int, nonce: str) -> bytes:
     return f"plural-teams:{ts}:{nonce}".encode()
 
 
+CODE_PREFIX = "tm"
+
+
+def normalize_code(code: str) -> str:
+    """An invite code as the directory compares it: letters and digits, without the prefix."""
+    return "".join(character for character in code.lower() if character.isalnum()).removeprefix(
+        CODE_PREFIX
+    )
+
+
 def key_proof_message(code: str) -> bytes:
     """What a key signs to show it is the joiner's own, so a key-only member can be claimed."""
     return f"plural-team-key:{code}".encode()

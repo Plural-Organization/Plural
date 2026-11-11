@@ -12,7 +12,7 @@ import uvicorn
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from tests.e2e.support import free_port
 
-from plural.host.team import account_teams
+from plural.host.team import account_proof, account_teams, join_team
 from plural.protocol.entitlement import EntitlementClaims
 from plural.protocol.ticket import TicketClaims
 from plural.relay.app import create_app
@@ -110,6 +110,26 @@ async def test_an_account_creates_a_team_and_a_new_device_finds_it(tmp_path: Pat
         assert [(team.team_id, team.member.role.value) for team in found] == [
             (created["team_id"], "owner")
         ]
+
+        # Someone who joined with a key alone, then logs in: joining again claims that member.
+        relay = f"ws://127.0.0.1:{port}"
+        code = str(created["invite"])
+        terminal = Identity(Ed25519PrivateKey.generate())
+        alone = await join_team(relay, terminal, code=code, member="alia")
+        their_host = Identity(Ed25519PrivateKey.generate())
+        theirs = EntitlementClaims(
+            account="a_alia", key=their_host.public_b64, iat=now, exp=now + timedelta(days=7)
+        )
+        signed_claims = theirs.model_dump_json().encode()
+        their_certificate = f"{b64encode(signed_claims)}.{b64encode(accounts.sign(signed_claims))}"
+        claimed = await join_team(
+            relay,
+            terminal,
+            code=code,
+            member="alia",
+            proof=account_proof(their_certificate, their_host.sign),
+        )
+        assert claimed.member.id == alone.member.id
     finally:
         server.should_exit = True
         await task

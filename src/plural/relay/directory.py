@@ -25,6 +25,7 @@ from plural.protocol.team import (
     TeamJoin,
     TeamRole,
     key_proof_message,
+    normalize_code,
 )
 from plural.security.identity import (
     CertSigner,
@@ -77,6 +78,7 @@ CREATE TABLE IF NOT EXISTS invites (
 CODE_ALPHABET = "23456789abcdefghjkmnpqrstuvwxyz"
 CODE_LENGTH = 10
 CODE_PREFIX = "tm"
+__all__ = ["DirectoryError", "TeamDirectory", "TeamLimits", "normalize_code"]
 
 
 class DirectoryError(Exception):
@@ -101,12 +103,6 @@ class AccountCheck(Protocol):
     """Says which account a proof stands for, or raises DirectoryError (relay/account_proofs.py)."""
 
     def account_of(self, proof: AccountProof, now: datetime) -> str: ...
-
-
-def normalize_code(code: str) -> str:
-    return "".join(character for character in code.lower() if character.isalnum()).removeprefix(
-        CODE_PREFIX
-    )
 
 
 def new_code() -> str:

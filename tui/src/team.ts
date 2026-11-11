@@ -26,8 +26,25 @@ export interface Team {
   key: KeyObject;
 }
 
+const TEAM_ID = /^[A-Za-z0-9_-]{1,64}$/;
+
+// The current team's file: `current-team` names one of the teams under `teams/` (ADR 0016); without it,
+// the single team of older versions in team.json. `plural team use` changes it.
+export function currentTeamPath(directory: string = dataDir()): string {
+  try {
+    const chosen = readFileSync(join(directory, "current-team"), "utf8").trim();
+    const path = join(directory, "teams", `${chosen}.json`);
+    if (TEAM_ID.test(chosen) && existsSync(path)) {
+      return path;
+    }
+  } catch {
+    // No current team named: the older single team, if any.
+  }
+  return join(directory, "team.json");
+}
+
 export function loadTeam(directory: string = dataDir()): Team | null {
-  const profilePath = join(directory, "team.json");
+  const profilePath = currentTeamPath(directory);
   const keyPath = join(directory, "identity.pem");
   if (!existsSync(profilePath) || !existsSync(keyPath)) {
     return null;
@@ -74,7 +91,11 @@ export async function relayState(relay: string, fetcher: typeof fetch = fetch): 
 }
 
 export function clearTeam(directory: string = dataDir()): void {
-  rmSync(join(directory, "team.json"), { force: true });
+  const path = currentTeamPath(directory);
+  rmSync(path, { force: true });
+  if (path !== join(directory, "team.json")) {
+    rmSync(join(directory, "current-team"), { force: true });
+  }
 }
 
 // A team made on a tunnel ends with it. Leaves it when the tunnel is closed, and says so.

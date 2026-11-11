@@ -129,5 +129,10 @@ that team. The daemon's `GET /v1/teams` asks the Plural relay and the relays of 
 for the account's teams (proved with the computer's certificate) and lists them; `POST /v1/rooms`
 takes `team`, and the room then uses the team's relay. Start a room offers "Show to".
 
+Slice 6: `current-team` names the team `plural team` and the terminal client work with, and
+`team.json` moves under `teams/` the first time a second team comes along. `plural team list`
+(with the account's teams once `plural login` linked the computer) and `plural team use <name>`;
+`create` and `join` send the account proof and no longer ask to leave the team you are in.
+
 A claim needs more than the ADR first said: a signature by the member's key over the invite code
 (`key_proof`), since a public key alone proves nothing.
