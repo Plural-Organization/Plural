@@ -8,14 +8,18 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import cast
+from uuid import uuid4
 
 import structlog
+
+from plural.host.control import AgentConfig
 
 log = structlog.get_logger(__name__)
 
 MAX_ROOMS = 5
 READY_TIMEOUT_S = 60.0
 STOP_TIMEOUT_S = 8.0
+CONTROL_TIMEOUT_S = 90.0
 
 
 class RoomError(Exception):
@@ -33,6 +37,59 @@ def host_command() -> list[str]:
     return [str(beside)] if beside.exists() else [shutil.which("plural-host") or "plural-host"]
 
 
+class HostControl:
+    """The control channel of a host child: requests on its stdin, answers on its stdout."""
+
+    def __init__(self, process: asyncio.subprocess.Process) -> None:
+        assert process.stdout is not None
+        self._process = process
+        self._pending: dict[str, asyncio.Future[dict[str, object]]] = {}
+        self.reading = asyncio.create_task(self._read(process.stdout))
+
+    async def _read(self, stream: asyncio.StreamReader) -> None:
+        try:
+            while line := await stream.readline():
+                text = line.decode(errors="replace").strip()
+                if not text.startswith("{"):
+                    continue
+                with suppress(json.JSONDecodeError):
+                    parsed: object = json.loads(text)
+                    if isinstance(parsed, dict):
+                        message = cast("dict[str, object]", parsed)
+                        waiting = self._pending.pop(str(message.get("id")), None)
+                        if waiting is not None and not waiting.done():
+                            waiting.set_result(message)
+        finally:
+            for waiting in self._pending.values():
+                if not waiting.done():
+                    waiting.set_exception(RoomError("host_failed", "the host stopped"))
+            self._pending.clear()
+
+    async def configure(self, config: AgentConfig) -> str:
+        """Switch the host's agent. The key goes down the pipe, never into a log or an answer."""
+        payload = config.model_dump(mode="json", exclude_none=True)
+        if config.api_key is not None:
+            payload["api_key"] = config.api_key.get_secret_value()
+        request_id = uuid4().hex
+        waiting: asyncio.Future[dict[str, object]] = asyncio.get_running_loop().create_future()
+        self._pending[request_id] = waiting
+        stdin = self._process.stdin
+        if stdin is None or stdin.is_closing():
+            self._pending.pop(request_id, None)
+            raise RoomError("host_failed", "the host stopped")
+        message = {"id": request_id, "type": "configure", "config": payload}
+        stdin.write(json.dumps(message).encode() + b"\n")
+        try:
+            await stdin.drain()
+            answer = await asyncio.wait_for(waiting, CONTROL_TIMEOUT_S)
+        except (OSError, TimeoutError) as error:
+            self._pending.pop(request_id, None)
+            raise RoomError("agent_failed", "the host did not answer in time") from error
+        if answer.get("ok") is not True:
+            raise RoomError("agent_failed", str(answer.get("error") or "the agent did not start"))
+        return str(answer.get("agent") or "")
+
+
 @dataclass(slots=True)
 class Room:
     room: str
@@ -41,7 +98,8 @@ class Room:
     folder: Path
     title: str | None
     process: asyncio.subprocess.Process
-    drain: asyncio.Task[None] = field(repr=False)
+    control: HostControl = field(repr=False)
+    agent: str = ""
     watcher: asyncio.Task[None] | None = field(default=None, repr=False)
 
     def public(self) -> dict[str, object]:
@@ -51,6 +109,7 @@ class Room:
             "host_link": self.host_link,
             "folder": self.folder.name,
             "title": self.title,
+            "agent": self.agent,
         }
 
 
@@ -66,21 +125,38 @@ class Rooms:
     def listing(self) -> list[dict[str, object]]:
         return [room.public() for room in self._rooms.values()]
 
-    async def start(self, folder: Path, title: str | None, *, name: str | None = None) -> Room:
+    async def start(
+        self,
+        folder: Path,
+        title: str | None,
+        *,
+        name: str | None = None,
+        agent: AgentConfig | None = None,
+        relay: str | None = None,
+    ) -> Room:
         if len(self._rooms) + self._starting >= self._limit:
             raise RoomError("too_many_rooms", f"at most {self._limit} rooms at once")
         self._starting += 1
         try:
-            return await self._launch(folder, title, name)
+            return await self._launch(folder, title, name, agent, relay)
         finally:
             self._starting -= 1
 
-    async def _launch(self, folder: Path, title: str | None, name: str | None) -> Room:
+    async def _launch(
+        self,
+        folder: Path,
+        title: str | None,
+        name: str | None,
+        agent: AgentConfig | None,
+        relay: str | None,
+    ) -> Room:
         arguments = [*self._command, "host", "--json", "--workspace", str(folder)]
         if title:
             arguments += ["--title", title]
         if name:
             arguments += ["--name", name]
+        if relay:
+            arguments += ["--relay", relay]
         try:
             process = await asyncio.create_subprocess_exec(
                 *arguments,
@@ -105,8 +181,14 @@ class Rooms:
             folder=folder,
             title=title,
             process=process,
-            drain=asyncio.create_task(self._drain(process.stdout)),
+            control=HostControl(process),
         )
+        if agent is not None:
+            try:
+                room.agent = await room.control.configure(agent)
+            except RoomError:
+                await self._stop(process)
+                raise
         self._rooms[room.room] = room
         room.watcher = asyncio.create_task(self._forget_when_done(room))
         return room
@@ -129,18 +211,19 @@ class Rooms:
                         if message.get("type") == "ready":
                             return message
 
-    @staticmethod
-    async def _drain(stream: asyncio.StreamReader) -> None:
-        # The host answers its control channel on stdout; nobody is listening, but a full pipe
-        # would stall it.
-        while await stream.read(65536):
-            pass
-
     async def _forget_when_done(self, room: Room) -> None:
         await room.process.wait()
-        room.drain.cancel()
+        room.control.reading.cancel()
         self._rooms.pop(room.room, None)
         log.info("daemon.room_ended", room=room.room)
+
+    async def set_agent(self, room_id: str, agent: AgentConfig) -> str | None:
+        """Switch a room's agent. None if there is no such room."""
+        room = self._rooms.get(room_id)
+        if room is None:
+            return None
+        room.agent = await room.control.configure(agent)
+        return room.agent
 
     async def stop(self, room_id: str) -> bool:
         room = self._rooms.get(room_id)
