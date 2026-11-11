@@ -43,6 +43,8 @@ class StartRoom(BaseModel):
     folder: str
     title: str | None = None
     agent: Choice | None = None  # the provider and model; a key is never sent, the daemon has it
+    # None: the relay this computer uses. "": the Plural relay. An address: that relay, from now on.
+    relay: str | None = None
 
 
 class SetAgent(BaseModel):
@@ -162,11 +164,30 @@ class Daemon:
             config = self._agent.config(body.agent or self._agent.store.current())
         except AgentSetupError as error:
             raise Problem(409, "agent_not_ready", str(error)) from error
+        relay = self._relay(body.relay)
         try:
-            room = await self._rooms.start(folder, title, name=email.split("@")[0], agent=config)
+            room = await self._rooms.start(
+                folder, title, name=email.split("@")[0], agent=config, relay=relay or None
+            )
         except RoomError as error:
             raise Problem(409, error.code, str(error)) from error
         return JSONResponse(room.public(), 201)
+
+    def _relay(self, asked: str | None) -> str:
+        """The relay for a new room. One the page names becomes this computer's relay."""
+        store = self._agent.store
+        if asked is None:
+            return store.relay()
+        try:
+            if asked.strip() != store.relay():
+                store.set_relay(asked)
+        except AgentSetupError as error:
+            raise Problem(400, "bad_relay", str(error)) from error
+        return store.relay()
+
+    async def settings(self, request: Request) -> Response:
+        self.authorize(request)
+        return JSONResponse({"relay": self._agent.store.relay() or None})
 
     async def set_room_agent(self, request: Request) -> Response:
         self.authorize(request)
@@ -315,6 +336,7 @@ def create_app(
             Route("/v1/rooms", _guarded(daemon.start_room), methods=["POST"]),
             Route("/v1/rooms/{room}", _guarded(daemon.stop_room), methods=["DELETE"]),
             Route("/v1/rooms/{room}/agent", _guarded(daemon.set_room_agent), methods=["PUT"]),
+            Route("/v1/settings", _guarded(daemon.settings)),
             Route("/v1/agent", _guarded(daemon.agent_catalog)),
             Route("/v1/agent", _guarded(daemon.save_agent), methods=["PUT"]),
             Route("/v1/agent/key", _guarded(daemon.save_agent_key), methods=["PUT"]),
