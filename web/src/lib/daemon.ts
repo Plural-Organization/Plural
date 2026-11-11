@@ -57,6 +57,7 @@ const REASONS: Record<string, string> = {
   no_folder_dialog: "This computer cannot show a folder dialog. Start the room from the terminal instead.",
   too_many_rooms: "Too many rooms are open on this computer. Close one first.",
   unknown_folder: "Choose the folder again.",
+  bad_relay: "That relay address is not valid.",
   agent_not_ready: "That agent is not ready yet. Finish its setup first.",
 };
 
@@ -101,7 +102,35 @@ export async function pickFolder(base?: string): Promise<PickedFolder | null> {
   return picked.folder === null ? null : { folder: picked.folder, name: picked.name ?? "" };
 }
 
-// `agent` is the provider and model the person chose; the key is never sent, the daemon holds it.
-export function startRoom(folder: string, title: string, agent?: AgentChoice, base?: string): Promise<StartedRoom> {
-  return ask<StartedRoom>("/v1/rooms", { method: "POST", body: JSON.stringify({ folder, title: title.trim() === "" ? null : title.trim(), ...(agent === undefined ? {} : { agent }) }) }, base);
+export interface RoomOptions {
+  /** The provider and model the person chose; the key is never sent, the daemon holds it. */
+  agent?: AgentChoice;
+  /** The relay to go through: empty for the Plural relay. Left out: the one this computer uses. */
+  relay?: string;
+}
+
+export function startRoom(folder: string, title: string, options: RoomOptions = {}, base?: string): Promise<StartedRoom> {
+  const body = { folder, title: title.trim() === "" ? null : title.trim(), ...(options.agent === undefined ? {} : { agent: options.agent }), ...(options.relay === undefined ? {} : { relay: options.relay.trim() }) };
+  return ask<StartedRoom>("/v1/rooms", { method: "POST", body: JSON.stringify(body) }, base);
+}
+
+// What this computer starts rooms with when the page says nothing.
+export async function roomDefaults(base?: string): Promise<{ relay: string }> {
+  const found = await ask<{ relay: string | null }>("/v1/settings", {}, base);
+  return { relay: found.relay ?? "" };
+}
+
+// Why an address cannot be a relay, or null. Empty means the Plural relay.
+export function relayProblem(value: string): string | null {
+  const text = value.trim();
+  if (text === "") return null;
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    return "That is not an address. Use wss://relay.example.com";
+  }
+  if (url.protocol !== "wss:" && url.protocol !== "ws:") return "A relay address starts with wss:// (or ws:// on a private network)";
+  if (url.hostname === "" || url.username !== "" || url.password !== "") return "A relay address needs a host and no password";
+  return null;
 }

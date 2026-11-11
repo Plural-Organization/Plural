@@ -1,13 +1,13 @@
-import { Alert, Button, Card, Chip, Description, Input, Label, Spinner, TextField } from "@heroui/react";
+import { Alert, Button, Card, Chip, Description, Disclosure, Input, Label, Spinner, TextField } from "@heroui/react";
 import { ArrowLeft, Folder, FolderOpen } from "@phosphor-icons/react";
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { parseLink, type JoinLink } from "@plural/client";
 import { useAgentSetup } from "../hooks/useAgentSetup";
 import { useDaemon } from "../hooks/useDaemon";
 import type { Account } from "../lib/accounts";
 import { saveAgent } from "../lib/agent";
-import { DaemonError, daemonMessage, type PickedFolder, pickFolder, startRoom } from "../lib/daemon";
+import { DaemonError, daemonMessage, type PickedFolder, pickFolder, relayProblem, roomDefaults, startRoom } from "../lib/daemon";
 import { INSTALL } from "../lib/install";
 import { AgentCard } from "./AgentCard";
 import { CopyBox } from "./CopyBox";
@@ -71,6 +71,16 @@ function Steps({ unlinked }: { unlinked: boolean }) {
 export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
   const { phase, check } = useDaemon(true);
   const agent = useAgentSetup(phase === "ready");
+  const [relay, setRelay] = useState<string | null>(null);
+  const relayWrong = relay === null ? null : relayProblem(relay);
+
+  // The relay this computer already uses, so a self-hosted relay is kept without typing it again.
+  useEffect(() => {
+    if (phase !== "ready" || relay !== null) return;
+    roomDefaults()
+      .then((found) => setRelay(found.relay))
+      .catch(() => setRelay(""));
+  }, [phase, relay]);
   const [folder, setFolder] = useState<PickedFolder | null>(null);
   const [title, setTitle] = useState("");
   const [busy, setBusy] = useState<"folder" | "room" | null>(null);
@@ -102,7 +112,7 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
       .commit()
       .then(async (choice) => {
         await saveAgent(choice);
-        return startRoom(folder.folder, title, choice);
+        return startRoom(folder.folder, title, { agent: choice, ...(relay === null ? {} : { relay }) });
       })
       .then((room) => onOpen(parseLink(room.host_link), account.name !== "" ? account.name : (account.email.split("@")[0] ?? "host")))
       .catch((error: unknown) => {
@@ -152,6 +162,25 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
             <Input placeholder="Optional" maxLength={80} autoComplete="off" />
             <Description>Shown to the people you invite.</Description>
           </TextField>
+          <Disclosure>
+            <Disclosure.Heading>
+              <Disclosure.Trigger className="flex w-full items-center justify-between gap-3 text-sm text-muted">
+                <span className="min-w-0 truncate">Relay: {relay === null || relay.trim() === "" ? "the Plural relay" : relay.trim()}</span>
+                <Disclosure.Indicator />
+              </Disclosure.Trigger>
+            </Disclosure.Heading>
+            <Disclosure.Content>
+              <Disclosure.Body className="pt-2">
+                <TextField value={relay ?? ""} onChange={setRelay} name="relay" isInvalid={relayWrong !== null}>
+                  <Label>Relay</Label>
+                  <Input placeholder="The Plural relay" autoComplete="off" spellCheck={false} />
+                  <Description className={relayWrong === null ? undefined : "text-danger"}>
+                    {relayWrong ?? "Empty for the Plural relay, or your own, like wss://relay.example.com. This computer remembers it."}
+                  </Description>
+                </TextField>
+              </Disclosure.Body>
+            </Disclosure.Content>
+          </Disclosure>
           {problem === null ? null : (
             <Alert status="danger">
               <Alert.Indicator />
@@ -160,7 +189,7 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
               </Alert.Content>
             </Alert>
           )}
-          <Button fullWidth size="lg" onPress={start} isDisabled={folder === null || busy !== null || agent.blocker !== null}>
+          <Button fullWidth size="lg" onPress={start} isDisabled={folder === null || busy !== null || agent.blocker !== null || relayWrong !== null}>
             {busy === "room" ? "Starting…" : "Start room"}
           </Button>
         </div>

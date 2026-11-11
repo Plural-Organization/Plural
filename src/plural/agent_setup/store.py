@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Final, cast
+from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from pydantic.alias_generators import to_camel
@@ -79,6 +80,22 @@ def _choice(raw: Any) -> Choice | None:
         return None
 
 
+MAX_RELAY_CHARS: Final = 2000
+
+
+def check_relay(url: str) -> str:
+    """A relay address a host can connect to: ws:// or wss://, with a host, without a password."""
+    url = url.strip()
+    parsed = urlsplit(url)
+    if len(url) > MAX_RELAY_CHARS or parsed.scheme not in ("ws", "wss"):
+        raise AgentSetupError(
+            "the relay address starts with wss:// (or ws:// on a private network)"
+        )
+    if not parsed.hostname or parsed.username or parsed.password:
+        raise AgentSetupError("the relay address needs a host and no password")
+    return url
+
+
 def check_preset(preset: str) -> str:
     if not _PRESET_ID.match(preset):
         raise AgentSetupError("not a provider id")
@@ -117,6 +134,22 @@ class AgentStore:
         data = _read(self._credentials)
         data["keys"] = {name: value for name, value in self.keys().items() if name != preset}
         _write(self._credentials, data)
+
+    def relay(self) -> str:
+        """The relay this computer's rooms use, as the terminal client saved it. Empty: default."""
+        data = _read(self._settings)
+        url = data.get("relayUrl")
+        if data.get("share", "relay") != "relay" or not isinstance(url, str):
+            return ""
+        return url
+
+    def set_relay(self, url: str) -> None:
+        """Rooms go through this relay from now on; an empty address means the Plural relay."""
+        url = check_relay(url) if url.strip() else ""
+        data = _read(self._settings)
+        data["share"] = "relay"
+        data["relayUrl"] = url
+        _write(self._settings, data)
 
     def current(self) -> Choice:
         return _choice(_read(self._settings).get("agent")) or Choice(preset=DEFAULT_PRESET)
