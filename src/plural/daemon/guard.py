@@ -62,7 +62,7 @@ def _cors(origin: str) -> list[tuple[bytes, bytes]]:
     return [
         (b"access-control-allow-origin", origin.encode()),
         (b"vary", b"Origin"),
-        (b"access-control-allow-methods", b"GET, POST, DELETE"),
+        (b"access-control-allow-methods", b"GET, POST, PUT, DELETE"),
         (b"access-control-allow-headers", b"authorization, content-type"),
         # Offered for browsers that ask; the check above never depends on the request saying so.
         (b"access-control-allow-private-network", b"true"),

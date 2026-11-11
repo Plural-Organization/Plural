@@ -272,7 +272,8 @@ class AgentSetup:
             tools=tuple(tools.inventory()),
         )
 
-    def _config(self, choice: Choice, key: str | None) -> AgentConfig:
+    def config(self, choice: Choice, key: str | None = None) -> AgentConfig:
+        """The host's `configure` request for a choice, with the key this computer holds for it."""
         entry = _known(choice.preset)
         found = key or (key_source(entry, self._store, self._environ) or ("", None))[1]
         return config_for(entry, choice, found)
@@ -285,12 +286,12 @@ class AgentSetup:
 
     def use(self, choice: Choice) -> None:
         """Make it this computer's agent. It must be complete: a key, a model, an address."""
-        self._config(choice, None)
+        self.config(choice, None)
         self._store.choose(choice)
 
     async def test(self, choice: Choice, key: str | None = None) -> str:
         """Ask the provider one short question. Returns how it went, or raises why it failed."""
-        config = self._config(choice, key)
+        config = self.config(choice, key)
         try:
             provider, _, _ = provider_for(HostSettings(data_dir=self._directory), config)
             return await probe(provider)
