@@ -6,7 +6,6 @@ import pytest
 from plural.host.team import TeamError, TeamProfile, TeamStore
 from plural.protocol.team import MemberView, TeamRole
 
-
 JOINED = datetime(2026, 11, 11, 12, 0, tzinfo=UTC)
 
 
