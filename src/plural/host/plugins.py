@@ -539,6 +539,8 @@ class SummaryInfo:
 Switcher = Callable[[str, str | None], Awaitable[str]]
 Handler = Callable[[CommandContext], Awaitable[None]]
 ToolHandler = Callable[[dict[str, JsonValue], ToolContext], Awaitable[object]]
+# A tool's own words for a call, from its arguments: "PLR-123" rather than {"key": "PLR-123"}.
+Subject = Callable[[dict[str, JsonValue]], object]
 HookHandler = Callable[[object, HookContext], Awaitable[object]]
 
 
@@ -563,8 +565,10 @@ class PluginTool:
         exposure: Exposure,
         handler: ToolHandler,
         workspace: Path,
+        subject: "Subject | None" = None,
     ) -> None:
         self.name = name
+        self._subject = subject
         self.plugin = plugin
         self.risk = risk
         self.exposure = exposure
@@ -582,9 +586,22 @@ class PluginTool:
         return PreparedCall(
             name=self.name,
             risk=self.risk,
-            subject=json.dumps(args, ensure_ascii=False, sort_keys=True)[:500],
+            subject=self._describe_call(args),
             execute=lambda ctx: self._call(args, ctx),
         )
+
+    def _describe_call(self, args: dict[str, JsonValue]) -> str:
+        """How the call reads in the room and to the policy: the plugin's words for it, or its
+        arguments as JSON."""
+        if self._subject is not None:
+            try:
+                text = self._subject(args)
+            except Exception as error:
+                log.warning("plugins.subject_failed", tool=self.name, error=str(error))
+            else:
+                if isinstance(text, str) and text.strip():
+                    return " ".join(text.split())[:200]
+        return json.dumps(args, ensure_ascii=False, sort_keys=True)[:500]
 
     async def _call(self, args: dict[str, JsonValue], ctx: ToolCtx) -> ToolResult:
         required = self._parameters.get("required")
@@ -908,6 +925,7 @@ class PluginApi:
         parameters: Mapping[str, JsonValue] | None = None,
         risk: str = "read",
         exposure: str = "deferred",
+        subject: Subject | None = None,
     ) -> Callable[[ToolHandler], ToolHandler]:
         if not TOOL_NAME.match(name) or name.startswith("mcp__"):
             raise PluginError(f"invalid tool name {name!r}: use a-z, 0-9 and _")
@@ -929,6 +947,7 @@ class PluginApi:
                 exposure=Exposure(exposure),
                 handler=handler,
                 workspace=self._workspace,
+                subject=subject,
             )
             self.tools.append(tool)
             return handler

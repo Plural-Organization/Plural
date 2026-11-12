@@ -148,6 +148,11 @@ def setup(plural):
 | `risk` | `read`, `write` or `exec`. Like every tool the call goes through the host's policy: a tool without a rule asks the host, and write and exec in a guest's run always do. Allow one for good with `/policy allow ticket *` |
 | `exposure` | `deferred` (default): the agent finds it with `tool_search`. `core`: declared on every request |
 
+`subject` is how a call reads in the room, in approval cards and to `/policy` rules: a function of the
+arguments, such as `subject=lambda args: f"ticket {args['key']}"`, in place of the arguments as JSON. It
+should name what the call acts on, since a rule like `/policy allow ticket PLR-*` matches it; if it
+fails or returns nothing, the JSON is used.
+
 The handler receives the arguments as a dict and a context with `ctx.workspace`, `ctx.log(text)`, which
 streams progress to the room, and `await ctx.run(*argv)`. A string result goes to the model as is, any
 other value as JSON. If the handler raises, the model gets the error as the tool's result.

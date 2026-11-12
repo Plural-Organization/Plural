@@ -758,3 +758,28 @@ def test_commands_take_a_free_shortcut(tmp_path: Path) -> None:
     assert "shortcut f5 is already taken" in errors["b_again"]
     assert "'ctrl+o' of /taken is taken" in errors["c_taken"]
     assert "'alt+x' of /bad" in errors["d_bad"]
+
+
+SUBJECT = """
+def setup(plural):
+    @plural.tool(
+        "ticket",
+        description="Read a ticket",
+        parameters={"key": "Ticket key"},
+        subject=lambda args: f"ticket {args['key']}",
+    )
+    async def ticket(args, ctx):
+        return "open"
+
+    @plural.tool("broken", description="x", parameters={"key": "k"}, subject=lambda args: 1 / 0)
+    async def broken(args, ctx):
+        return "ok"
+"""
+
+
+def test_a_plugin_tool_says_in_its_own_words_what_a_call_does(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, tickets=SUBJECT)
+    tools = {tool.name: tool for tool in plugins.tools()}
+    assert tools["ticket"].prepare({"key": "PLR-1"}).subject == "ticket PLR-1"
+    # When its words fail, the arguments say it.
+    assert tools["broken"].prepare({"key": "PLR-1"}).subject == '{"key": "PLR-1"}'

@@ -111,6 +111,9 @@ the room still see the built-in: its schema, risk, subject and approvals. Return
 nothing to let the built-in run; `await ctx.original()` runs it and returns its text. One plugin per
 tool. Use it to run commands in a container or on another machine, or to post-process a tool.
 
+A tool's `subject=lambda args: ...` sets how its calls read in the room, approval cards and `/policy`
+rules, such as `ticket PLR-1`; name what the call acts on.
+
 ## Keeping state
 
 `plural.store.get(key, default)`, `.set(key, value)`, `.delete(key)` and `.all()` keep JSON values in
