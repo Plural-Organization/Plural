@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from plural.agent.context.context import ContextBuilder
 from plural.agent.providers.base import LlmMessage, LlmRequest, ToolCallRequest
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
@@ -13,6 +14,7 @@ from plural.host import plugins as plugin_module
 from plural.host.inbox import Inbox, PluginPrompt, PluginReply
 from plural.host.plugins import CommandContext, PluginError, PluginHost
 from plural.protocol.models import (
+    ContextPartKind,
     Origin,
     PluginStatus,
     Provenance,
@@ -460,3 +462,30 @@ async def test_context_hooks_change_the_text_of_what_the_model_is_sent(tmp_path:
     none = tmp_path / "none"
     none.mkdir()
     assert await host_with(none).request(request) is request
+
+
+INSTRUCTIONS = """
+def setup(plural):
+    plural.instructions("Tickets look like PLR-123; use the ticket tool to read one.")
+
+    @plural.command("quiet")
+    async def quiet(ctx):
+        plural.instructions("")
+"""
+
+
+async def test_plugins_add_their_instructions_to_the_system_prompt(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, tickets=INSTRUCTIONS, hello=HELLO)
+    text = plugins.describe()
+    assert text == (
+        '<plugin name="tickets">\nTickets look like PLR-123; use the ticket tool to read one.\n'
+        "</plugin>"
+    )
+    builder = ContextBuilder(plugins=plugins)
+    assert (ContextPartKind.PLUGINS, text) in builder.sections()
+
+    command = plugins.get("quiet")
+    assert command is not None
+    await command.handler(context(tmp_path, Inbox()))
+    assert plugins.describe() is None
+    assert all(kind is not ContextPartKind.PLUGINS for kind, _ in builder.sections())

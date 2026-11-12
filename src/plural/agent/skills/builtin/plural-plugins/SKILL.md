@@ -115,6 +115,13 @@ module variables for anything that must survive `/plugins reload`.
 the side panel that the whole room sees, at most 80 characters and one change a second; `""` removes it.
 Use it for state that matters while people work, such as `tests 3/3 ✓` after a `run_end` hook.
 
+## Instructions for the agent
+
+`plural.instructions(text)` (on the `plural` object, in `setup` or later) puts the text in the agent's
+system prompt as `<plugin name="…">`, from its next run on; `""` removes it. All plugins together get
+4,000 characters. Use it for what the agent should always know while the plugin is loaded, such as how
+to use the plugin's tools; use a `before_run` hook for facts that change between runs.
+
 ## Hooks
 
 `@plural.on("tool_call")` runs before the policy on every tool call the agent makes. The handler gets

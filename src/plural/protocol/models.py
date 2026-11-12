@@ -301,6 +301,7 @@ class ContextPartKind(StrEnum):
     PROJECT_NOTES = "project_notes"
     SKILLS = "skills"
     AGENTS = "agents"
+    PLUGINS = "plugins"
     # The declared tools' schemas.
     TOOLS = "tools"
     # The conversation.

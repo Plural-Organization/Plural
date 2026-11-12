@@ -114,6 +114,7 @@ export type ContextPartKind =
   | "project_notes"
   | "skills"
   | "agents"
+  | "plugins"
   | "tools"
   | "messages"
   | "tool_results"

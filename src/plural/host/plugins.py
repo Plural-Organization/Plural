@@ -15,6 +15,7 @@ from typing import Final, Literal, cast
 import structlog
 from pydantic import JsonValue
 
+from plural.agent.prompts import tag
 from plural.agent.providers.base import LlmRequest, ToolCallRequest, ToolSchema
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
 from plural.agent.tools.registry import Exposure
@@ -69,6 +70,8 @@ HOOK_TIMEOUT_S: Final = 120.0
 MAX_OPTIONS: Final = 20
 MAX_STORE_BYTES: Final = 1_000_000
 MAX_CONTEXT_CHARS: Final = 8000
+# What all plugins together may add to the system prompt.
+MAX_INSTRUCTIONS_CHARS: Final = 4000
 # What a tool_result hook may hand the model in place of a result.
 MAX_RESULT_CHARS: Final = 200_000
 HOOK_EVENTS: Final = frozenset(
@@ -535,12 +538,21 @@ class PluginApi:
         store: PluginStore | None = None,
     ) -> None:
         self._plugin = plugin
+        self.name = plugin
         self._workspace = workspace
         self._inbox = inbox
         self.store = store
         self.commands: list[PluginCommand] = []
         self.tools: list[PluginTool] = []
         self.hooks: list[Hook] = []
+        self.instruction = ""
+
+    def instructions(self, text: str) -> None:
+        """Set what this plugin tells the agent in its system prompt; an empty text removes it.
+
+        The agent reads it from the start of its next run on, so a change mid-run waits for the
+        run to end."""
+        self.instruction = text.strip()
 
     def on(self, event: str) -> Callable[[HookHandler], HookHandler]:
         if event not in HOOK_EVENTS:
@@ -644,6 +656,7 @@ class PluginHost:
         self._commands: dict[str, PluginCommand] = {}
         self._tools: dict[str, PluginTool] = {}
         self._hooks: tuple[Hook, ...] = ()
+        self._apis: tuple[PluginApi, ...] = ()
         self._generation = count()
 
     def load(self) -> None:
@@ -651,6 +664,7 @@ class PluginHost:
         commands: dict[str, PluginCommand] = {}
         tools: dict[str, PluginTool] = {}
         hooks: list[Hook] = []
+        apis: list[PluginApi] = []
         reserved = set(self._reserved_tools())
         generation = next(self._generation)
         paths = sorted(self.directory.glob("*.py")) if self.directory.is_dir() else []
@@ -687,6 +701,7 @@ class PluginHost:
             commands.update((command.view.name, command) for command in api.commands)
             tools.update((tool.name, tool) for tool in api.tools)
             hooks.extend(api.hooks)
+            apis.append(api)
             views.append(
                 PluginView(
                     name=name,
@@ -700,6 +715,19 @@ class PluginHost:
         self._commands = commands
         self._tools = tools
         self._hooks = tuple(hooks)
+        self._apis = tuple(apis)
+
+    def describe(self) -> str | None:
+        """The plugins' instructions for the system prompt, 4,000 characters at most in all."""
+        room = MAX_INSTRUCTIONS_CHARS
+        parts: list[str] = []
+        for api in self._apis:
+            if not api.instruction or room <= 0:
+                continue
+            text = api.instruction[:room]
+            room -= len(text)
+            parts.append(tag("plugin", text, name=api.name))
+        return "\n".join(parts) or None
 
     def views(self) -> tuple[PluginView, ...]:
         return self._views

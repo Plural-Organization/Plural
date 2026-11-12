@@ -148,6 +148,23 @@ everyone in the room: `ci  tests 3/3 ✓`. Call it from a command, a tool or a h
 the line. It is one line of at most 80 characters, the host shows at most one change a second (the
 latest wins), and the line goes away when the plugin is removed or fails to load.
 
+## Instructions for the agent
+
+`plural.instructions(text)` puts text in the agent's system prompt, so it knows something for as long
+as the plugin is loaded: how to use the plugin's tools, a convention of the team, where things live:
+
+```python
+def setup(plural):
+    plural.instructions("Tickets look like PLR-123. Read one with the ticket tool before you work on it.")
+```
+
+The agent reads it as `<plugin name="tickets">…</plugin>` from the start of its next run; a run that is
+going keeps the prompt it started with, so the provider's cache holds. Call it again to change the
+text, or with `""` to remove it; a reload or `/plugins rm` takes it away too. All plugins together get
+4,000 characters, in the order they load, and `/context` shows them as `plugins`. For facts that change
+from run to run, such as the branch, a `before_run` hook is cheaper: the system prompt is cached, and
+changing it costs the next call the whole prompt.
+
 ## Hooks
 
 `plural.on(event)` runs a function when something happens instead of when someone calls it.

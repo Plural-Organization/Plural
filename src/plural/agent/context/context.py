@@ -54,6 +54,8 @@ class ContextBuilder:
     project_notes: str | None = None
     skills: SkillCatalog | None = None
     agents: SkillCatalog | None = None
+    # What the host's plugins tell the agent, read again at the start of each run.
+    plugins: SkillCatalog | None = None
     # The declared tools' own rules, as in pi.
     tool_rules: tuple[str, ...] = ()
 
@@ -71,6 +73,7 @@ class ContextBuilder:
         for kind, catalog in (
             (ContextPartKind.SKILLS, self.skills),
             (ContextPartKind.AGENTS, self.agents),
+            (ContextPartKind.PLUGINS, self.plugins),
         ):
             if catalog is not None and (text := catalog.describe()):
                 parts.append((kind, text))
