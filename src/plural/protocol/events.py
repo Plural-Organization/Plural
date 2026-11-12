@@ -511,6 +511,11 @@ class InviteCreated(TransientEvent):
     reusable: bool = False
 
 
+class ImportLinkShown(TransientEvent):
+    type: Literal["import.link"] = "import.link"
+    url: str | None = None
+
+
 class ErrorRaised(TransientEvent):
     type: Literal["error"] = "error"
     code: ErrorCode
@@ -587,6 +592,7 @@ Event = Annotated[
     | SessionWelcome
     | SessionSnapshot
     | InviteCreated
+    | ImportLinkShown
     | ErrorRaised,
     Field(discriminator="type"),
 ]

@@ -39,7 +39,8 @@ export type FeedItem =
   | { kind: "assistant"; id: string; text: string; streaming: boolean }
   | { kind: "tool"; id: string; call: ToolCallView; status: ToolStatus; output: string; diff: string | null; live: string }
   // `code`, when given, is the command or call the text starts with, for a client that sets it apart.
-  | { kind: "notice"; id: string; tone: Tone; text: string; action?: "board" | "done"; code?: string }
+  // `action: "agent"` marks a run the agent's provider failed, where a host may pick another agent.
+  | { kind: "notice"; id: string; tone: Tone; text: string; action?: "board" | "done" | "agent"; code?: string }
   | { kind: "briefing"; id: string; from: string; text: string; asOf: number; update: boolean }
   | { kind: "shown"; id: string; command: string; title: string; text: string };
 
@@ -58,7 +59,7 @@ export function withBanner(feed: Feed, banner: Extract<FeedItem, { kind: "banner
   return { ...feed, items: [banner, ...feed.items] };
 }
 
-export function withNotice(feed: Feed, tone: Tone, text: string, action?: "done", code?: string): Feed {
+export function withNotice(feed: Feed, tone: Tone, text: string, action?: "done" | "agent", code?: string): Feed {
   const counter = feed.counter + 1;
   return { ...feed, counter, items: [...feed.items, { kind: "notice", id: `n${counter}`, tone, text, ...(action ? { action } : {}), ...(code ? { code } : {}) }] };
 }
@@ -255,6 +256,7 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
           settled,
           "danger",
           `run ${event.reason === "limit" ? "stopped" : "failed"}${event.error ? `: ${event.error}` : ""}`,
+          event.reason === "error" ? "agent" : undefined,
         );
       }
       return settled;
@@ -354,6 +356,13 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
       return note("dim", `${nameOf(event.attachment.owner_id)} attached ${event.attachment.name}`);
     case "invite.created":
       return note("ok", `invite for a ${event.role}: ${event.link}`);
+    case "import.link":
+      return note(
+        event.url === null ? "warn" : "ok",
+        event.url === null
+          ? "no import address: this host is not connected to the MCP gateway (it runs with --local)"
+          : `connect this address in Claude, ChatGPT or Grok as a custom connector, then ask the chat to send its context to Plural:\n${event.url}`,
+      );
     case "error":
       return note("danger", event.message);
     default:

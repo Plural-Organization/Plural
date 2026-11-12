@@ -22,6 +22,7 @@ from plural.protocol.relay import (
     RelayHttpRequest,
     RelayOpen,
 )
+from plural.relay.entitlements import EntitlementWatch, Outcome
 from plural.relay.limits import PeerGate, RelayLimits, TokenBucket, peer_of
 from plural.security.tokens import TokenVerifier
 
@@ -108,7 +109,9 @@ class Rooms:
         *,
         clock: Callable[[], float] = time.monotonic,
         proxy_hops: int = 0,
+        entitlements: EntitlementWatch | None = None,
     ) -> None:
+        self._entitlements = entitlements
         self._limits = limits
         self._clock = clock
         self._proxy_hops = proxy_hops
@@ -175,6 +178,7 @@ class Rooms:
         if opening.room != room_id or not verifier.verify_proof(room_id.encode(), opening.proof):
             await socket.close(CLOSE_BAD_PROOF)
             return
+        self._note_entitlement(opening, room_id, peer)
         self._sweep()
         room = self._rooms.get(room_id)
         if room is None:
@@ -227,6 +231,22 @@ class Rooms:
                 room.requests.clear()
                 for connection_id in list(room.guests):
                     await self._drop(room, connection_id, CLOSE_NO_HOST)
+
+    def _note_entitlement(self, opening: RelayOpen, room_id: str, peer: str) -> None:
+        """Records what the host's certificate says. It never refuses and never raises."""
+        if self._entitlements is None:
+            return
+        try:
+            outcome, claims = self._entitlements.check(opening)
+            log.info(
+                "relay.entitlement",
+                room=room_id,
+                peer=peer,
+                outcome=outcome.value,
+                account=claims.account if outcome is Outcome.VALID and claims else None,
+            )
+        except Exception:
+            log.exception("relay.entitlement_check_failed", room=room_id)
 
     async def _serve_guest(self, socket: WebSocket, room_id: str) -> None:
         self._sweep()

@@ -6,7 +6,7 @@
 
 **the shared room for your coding agent.**
 
-[install](#install) · [quick start](#quick-start) · [docs](#docs) · [security](SECURITY.md) · [contributing](CONTRIBUTING.md)
+[web app](https://plrl.host/app) · [install](#install) · [quick start](#quick-start) · [docs](#docs) · [security](SECURITY.md) · [contributing](CONTRIBUTING.md)
 
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-666666?labelColor=333333)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Plural-Organization/Plural?label=release&labelColor=333333&color=666666)](https://github.com/Plural-Organization/Plural/releases/latest)
@@ -19,15 +19,16 @@
 
 **one agent. one host. everyone in the room.**
 
-- **a shared live session** — the host runs the agent on their machine with their own credentials. teammates join from a terminal and watch every reply, tool call and diff as it happens.
+- **a shared live session** — the host runs the agent on their machine with their own credentials. teammates join from a terminal or the [web app](https://plrl.host/app) and watch every reply, tool call and diff as it happens.
+- **teams on your account** — create a team in the web app or the terminal, invite people, and see its live sessions on every device you sign in on.
 - **two ways to prompt** — in `open` mode everyone talks to the agent directly. in `review` mode the host approves each prompt first. switch any time.
 - **you approve what matters** — write and exec actions always wait for the host, and a run started by a guest can never be waved through by a rule.
 - **see who is doing what** — participants, who is typing, a prompt queue, and an attribution on every turn.
 - **tools you can follow** — each call is one line. open it to see the live output of a command or a numbered diff.
 - **full screen, in your terminal** — a side panel, themes, mouse and keyboard, copy on select. one binary, no runtime to install.
-- **your model, your login** — anthropic by API key or Claude OAuth, any openai-compatible endpoint, or a local model through ollama.
+- **your model, your login** — Claude Code, Codex, an API key, any openai-compatible endpoint, or a local model (ollama, LM Studio). change it mid-session from the room settings when tokens run out.
 - **event-sourced** — an append-only log is the source of truth. reconnect, replay and audit come for free.
-- **direct or relayed** — connect over your network, or through a relay that never decides permissions and never stores content.
+- **direct or relayed** — connect over your network, or through a relay that never decides permissions and never stores content. run your own relay and nothing depends on ours.
 
 ---
 
@@ -41,14 +42,20 @@ macos and linux, arm64 and x64. windows through wsl. the script downloads two ch
 
 ## quick start
 
-start in the project you want the agent to work on:
+**from the web.** open [plrl.host/app](https://plrl.host/app), sign in, then on your computer:
+
+```bash
+plural login    # approves this computer, and starts the background daemon
+```
+
+the page finds the daemon, and you start a room in a folder you pick, with the agent you choose, for a team or for people you invite.
+
+**from the terminal.** start in the project you want the agent to work on:
 
 ```bash
 cd your-project
 plural
 ```
-
-come back to a session later with `plural -r` (or `plural -c` for the latest one of this folder), and ask once from a script with `plural -p "…"`. see [usage](docs/usage.md).
 
 the first line in the conversation is the room link. send it to a teammate, now or later: it does not expire, and you let each person in:
 
@@ -56,17 +63,9 @@ the first line in the conversation is the room link. send it to a teammate, now 
 plural join "ws://…"
 ```
 
-without a key the host runs a scripted demo agent. for a real model:
+come back to a session with `plural -r` (or `plural -c` for the latest of this folder), and ask once from a script with `plural -p "…"`. teams: `plural team list`, `plural team use <name>`. see [usage](docs/usage.md).
 
-```bash
-ANTHROPIC_API_KEY=sk-ant-… plural
-```
-
-or open `F2` → Model → Claude OAuth → Sign in with Claude, then paste the code shown in the browser. Anthropic may bill this third-party usage from usage credits rather than subscription limits. To use your actual Claude Code login, run `claude auth login` in a terminal and select `F2` → Model → Claude Code.
-
-To use your Codex sign-in, run `codex login` in a terminal and select `F2` → Model → Codex CLI. Choose a model available to your Codex account. Plural streams replies from one Codex session for the room while its host is running.
-
-Claude OAuth defaults to Haiku 4.5. Newer Claude models may reject third-party OAuth requests even when login succeeds; use an Anthropic API key for those models.
+without a key the host runs a scripted demo agent. pick a real one in `F2` → Model, or in the web app: Claude Code (`claude auth login`), Codex (`codex login`), `ANTHROPIC_API_KEY=… plural`, or a local model. details and the Claude OAuth caveats are in [configuration](docs/configuration.md).
 
 `/help` lists the commands, `F2` opens the settings, `ctrl+o` opens the tool details.
 

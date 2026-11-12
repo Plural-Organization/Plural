@@ -1148,7 +1148,7 @@ export function App({
         if (!isHost) {
           warn("import", "only the host can connect a chat service to this session");
         } else if (importUrl === null) {
-          warn("import", "no import address: start with --mcp-url <gateway>");
+          warn("import", "no import address: --local keeps this host off the MCP gateway");
         } else {
           show("import a chat", [
             [{ text: "Add this address as a custom connector (MCP) in Claude, ChatGPT or Grok:", bold: true }],

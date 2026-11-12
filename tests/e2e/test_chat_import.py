@@ -7,8 +7,9 @@ from typing import Any
 
 from websockets.asyncio.server import ServerConnection, serve
 
-from plural.protocol.commands import ApprovalRespond
-from plural.protocol.events import ApprovalRequested, BriefingImported
+from plural.agent.providers.fake import FakeProvider
+from plural.protocol.commands import ApprovalRespond, ImportLink
+from plural.protocol.events import ApprovalRequested, BriefingImported, ImportLinkShown
 from plural.protocol.models import ApprovalDecision
 from tests.doubles import FakeProvider
 from tests.e2e.support import Session, running_session
@@ -97,3 +98,18 @@ async def test_the_address_is_the_same_for_the_next_session(tmp_path: Path) -> N
 async def test_a_host_without_a_gateway_has_no_import_address(tmp_path: Path) -> None:
     async with running_session(tmp_path, relayed=False, provider=FakeProvider([])) as session:
         assert session.host.import_url is None
+
+
+async def test_the_host_can_ask_for_the_address_from_any_client(tmp_path: Path) -> None:
+    async with connected(tmp_path) as (session, _):
+        owner = await session.owner()
+        await owner.client.send(ImportLink())
+        shown = await owner.next(ImportLinkShown)
+        assert shown.url == session.host.import_url
+
+
+async def test_without_a_gateway_the_address_is_empty(tmp_path: Path) -> None:
+    async with running_session(tmp_path, relayed=False, provider=FakeProvider([])) as session:
+        owner = await session.owner()
+        await owner.client.send(ImportLink())
+        assert (await owner.next(ImportLinkShown)).url is None

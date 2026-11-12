@@ -1,19 +1,17 @@
 import { Button, Chip, Description, FieldError, Input, Label, Separator, TextField } from "@heroui/react";
 import { ArrowLeft, Copy, GithubLogo, GoogleLogo } from "@phosphor-icons/react";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { parseLink, parseTeamInvite, type JoinLink, type TeamInvite } from "@plural/client";
 import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
+import { memberNameProblem } from "../lib/teamNames";
 import { signInUrl } from "../lib/accounts";
-import { LinkComputer } from "./LinkComputer";
+import { StartRoom } from "./StartRoom";
 import { PersonAvatar } from "./PersonAvatar";
 import { copyText } from "../lib/clipboard";
 import { blockedByMixedContent, hostOf, unwrapLink } from "../lib/links";
 import { rememberName, savedName } from "../lib/saved";
-
-const INSTALL = "curl -fsSL https://raw.githubusercontent.com/Plural-Organization/Plural/main/install.sh | sh";
-// A team member's name: what teammates see and @name uses.
-const MEMBER_NAME = /^[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$/;
+import { INSTALL } from "../lib/install";
 
 type Target = { kind: "room"; link: JoinLink } | { kind: "team"; invite: TeamInvite };
 type Read = { target: Target } | { problem: string };
@@ -57,9 +55,11 @@ interface JoinFlowProps {
   account: AccountState;
   onJoin: (link: JoinLink, name: string) => void;
   onTeamJoined: () => void;
+  // Told when the person opens or closes Start a room, so the page around can make room for it.
+  onStarting?: (starting: boolean) => void;
 }
 
-export function JoinFlow({ team, account, onJoin, onTeamJoined }: JoinFlowProps) {
+export function JoinFlow({ team, account, onJoin, onTeamJoined, onStarting }: JoinFlowProps) {
   const [raw, setRaw] = useState(sharedOnLoad);
   const [target, setTarget] = useState<Target | null>(() => {
     const shared = sharedOnLoad();
@@ -70,6 +70,7 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined }: JoinFlowProps)
     return "target" in read ? read.target : null;
   });
   const [starting, setStarting] = useState(false);
+  useEffect(() => onStarting?.(starting), [starting, onStarting]);
   const [problem, setProblem] = useState<string | null>(null);
   const [name, setName] = useState(savedName);
   const [busy, setBusy] = useState(false);
@@ -82,10 +83,6 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined }: JoinFlowProps)
     const read = readShared(raw);
     if ("problem" in read) {
       setProblem(read.problem);
-      return;
-    }
-    if (read.target.kind === "team" && team.team !== null) {
-      setProblem(`This browser is already in ${team.team.profile.team_name}. Leave it first to join another team.`);
       return;
     }
     setProblem(null);
@@ -108,8 +105,9 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined }: JoinFlowProps)
       onJoin(target.link, chosen);
       return;
     }
-    if (!MEMBER_NAME.test(chosen)) {
-      setProblem("Use 1 to 32 letters, digits, dots, dashes or underscores, starting with a letter or digit.");
+    const wrongName = memberNameProblem(chosen);
+    if (wrongName !== null) {
+      setProblem(wrongName);
       return;
     }
     setBusy(true);
@@ -141,14 +139,9 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined }: JoinFlowProps)
     </Button>
   );
 
-  if (starting && account.status === "in") {
-    return (
-      <div className="enter flex flex-col gap-4">
-        {back}
-        <h2 className="text-2xl font-medium tracking-[-0.02em]">Start a room</h2>
-        <LinkComputer state={account} />
-      </div>
-    );
+
+  if (starting && account.status === "in" && account.account !== null) {
+    return <StartRoom account={account.account} onBack={() => setStarting(false)} onOpen={onJoin} />;
   }
 
   if (starting) {

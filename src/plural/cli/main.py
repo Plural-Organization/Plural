@@ -16,9 +16,10 @@ from rich.table import Table
 
 from plural import __version__
 from plural.cli.account import login, logout, whoami
+from plural.cli.agent import agent_app
 from plural.cli.format import ago
 from plural.cli.team import ls, team_app
-from plural.host.config import DEFAULT_RELAY_URL, HostSettings
+from plural.host.config import DEFAULT_MCP_URL, DEFAULT_RELAY_URL, HostSettings
 from plural.host.team import TeamStore
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import AdmissionMode, PromptMode
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
 
 app = typer.Typer(name="plural-host", no_args_is_help=True, add_completion=False)
 app.add_typer(team_app, name="team")
+app.add_typer(agent_app, name="agent")
 app.command(name="ls")(ls)
 app.command(name="login")(login)
 app.command(name="logout")(logout)
@@ -86,6 +88,14 @@ def host(
             help="Show this session to your team. Needs --relay, --public-url or a tunnel.",
         ),
     ] = False,
+    team_id: Annotated[
+        str | None,
+        typer.Option(
+            "--team-id",
+            help="Show this session to this one of your teams (implies --team).",
+            envvar="PLURAL_TEAM_ID",
+        ),
+    ] = None,
     machine: Annotated[
         bool,
         typer.Option(
@@ -94,7 +104,8 @@ def host(
     ] = False,
 ) -> None:
     given: dict[str, Any] = {
-        "team": True if team else None,
+        "team": True if team or team_id else None,
+        "team_id": team_id,
         "workspace": workspace,
         "bind_host": bind,
         "port": port,
@@ -115,9 +126,12 @@ def host(
         options["host_name"] = getpass.getuser()
     settings = HostSettings(**options)
     if local:
-        settings = settings.model_copy(update={"relay_url": None})
-    elif _wants_relay(settings):
-        settings = settings.model_copy(update={"relay_url": _default_relay(settings)})
+        settings = settings.model_copy(update={"relay_url": None, "mcp_url": None})
+    else:
+        if settings.mcp_url is None:
+            settings = settings.model_copy(update={"mcp_url": DEFAULT_MCP_URL})
+        if _wants_relay(settings):
+            settings = settings.model_copy(update={"relay_url": _default_relay(settings)})
     from plural.host.providers import ConfigError
     from plural.host.team_presence import PresenceUnavailable
 
@@ -135,7 +149,7 @@ def _wants_relay(settings: HostSettings) -> bool:
 
 
 def _default_relay(settings: HostSettings) -> str:
-    profile = TeamStore(settings.state_dir).load() if settings.team else None
+    profile = TeamStore(settings.state_dir, settings.team_id).load() if settings.team else None
     return profile.relay if profile is not None else DEFAULT_RELAY_URL
 
 
@@ -194,7 +208,7 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
 
     _configure_logging(settings.state_dir / "logs" / "host.log" if machine else None)
     if settings.team:
-        ensure_ready(settings, TeamStore(settings.state_dir))
+        ensure_ready(settings, TeamStore(settings.state_dir, settings.team_id))
     plural_host = await build_host(settings)
     room_link = plural_host.room_link.link
     if machine:
@@ -214,7 +228,9 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
         print(plain_links(plural_host.room, room_link, plural_host.host_link), flush=True)
     presence = (
         asyncio.create_task(
-            TeamPresence(plural_host, settings, TeamStore(settings.state_dir)).run()
+            TeamPresence(
+                plural_host, settings, TeamStore(settings.state_dir, settings.team_id)
+            ).run()
         )
         if settings.team
         else None
@@ -318,6 +334,15 @@ def relay(
             envvar="PLURAL_RELAY_WEB_ORIGINS",
         ),
     ] = "",
+    accounts_url: Annotated[
+        str,
+        typer.Option(
+            "--accounts-url",
+            help="Accounts service whose certificates hosts may open rooms with. The relay "
+            "logs what it finds and refuses no one.",
+            envvar="PLURAL_RELAY_ACCOUNTS_URL",
+        ),
+    ] = "",
 ) -> None:
     import uvicorn
 
@@ -336,11 +361,72 @@ def relay(
             team_limits=TeamLimits(max_teams_per_owner=teams_per_owner),
             clients_only=clients_only,
             web_origins=[item.strip() for item in web_origins.split(",") if item.strip()],
+            accounts_url=accounts_url.strip() or None,
         ),
         host=bind,
         port=port,
         log_level="info",
         ws_max_size=4 * 1024 * 1024,
+        proxy_headers=False,
+    )
+
+
+@app.command()
+def daemon(
+    port: Annotated[
+        int, typer.Option(min=1, max=65535, help="Loopback port.", envvar="PLURAL_DAEMON_PORT")
+    ] = 47831,
+    origins: Annotated[
+        str,
+        typer.Option(
+            "--origin",
+            help="Comma-separated web client origins that may use the daemon.",
+            envvar="PLURAL_DAEMON_ORIGINS",
+        ),
+    ] = "https://plrl.host,https://www.plrl.host",
+) -> None:
+    """Let the Plural web client start rooms on this computer, in folders you choose."""
+    import uvicorn
+
+    from plural.daemon.app import create_app
+    from plural.host.account import AccountError, AccountStore
+    from plural.security.accounts_key import AccountsKey
+
+    settings = HostSettings()
+    store = AccountStore(settings.state_dir)
+    try:
+        linked = store.load()
+    except AccountError as error:
+        console.print(f"[red]{error}[/red]")
+        raise typer.Exit(1) from error
+    if linked is None:
+        console.print("[red]This computer is not linked to an account. Run `plural login`.[/red]")
+        raise typer.Exit(1)
+    from plural.daemon.port import PortState, port_state
+
+    taken = port_state(port)
+    if taken is PortState.DAEMON:
+        console.print(
+            f"Plural daemon is already running on http://127.0.0.1:{port}. Nothing to do."
+        )
+        return
+    if taken is PortState.BUSY:
+        console.print(
+            f"[red]Port {port} is used by something else.[/red] "
+            "Stop it, or pick another port with `plural daemon --port`."
+        )
+        raise typer.Exit(1)
+    console.print(f"Plural daemon for {linked.email} on http://127.0.0.1:{port}. Ctrl+C stops it.")
+    uvicorn.run(
+        create_app(
+            store,
+            AccountsKey(linked.accounts),
+            port=port,
+            origins=tuple(item.strip() for item in origins.split(",") if item.strip()),
+        ),
+        host="127.0.0.1",
+        port=port,
+        log_level="warning",
         proxy_headers=False,
     )
 

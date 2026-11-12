@@ -21,3 +21,32 @@ export function agentPrompt(code: string): string {
     "Do not read my files, keys or environment variables, do not use sudo, and do not run anything that is not listed here. When you are done, reply with one line: PLURAL_OK, or what went wrong.",
   ].join("\n");
 }
+
+export const DAEMON_PORT = 47831;
+
+// What a person pastes into their AI agent to get a computer ready to start rooms from the page: install, sign in,
+// and keep the daemon running. The agent is told not to ask; the two things only the person can do are named.
+export function daemonPrompt(): string {
+  return [
+    "Set up Plural on this computer so I can start rooms from the Plural website. Run the steps yourself without asking me questions. Stop only if a step fails, or when a step needs me (marked below).",
+    "",
+    "1. Check the system with `uname -sm`. Plural runs on macOS and Linux; on Windows stop and tell me to use WSL.",
+    "2. Install it into my home folder, without sudo:",
+    `   curl -fsSL ${INSTALL_URL} -o /tmp/plural-install.sh`,
+    "   sh /tmp/plural-install.sh",
+    "3. Sign in. This opens my browser and I approve it there (needs me). It also starts the daemon in the background. Wait until it prints \"Linked to\" and \"daemon is running\":",
+    "   plural login",
+    `4. Check it answers: curl -s http://127.0.0.1:${DAEMON_PORT}/v1/status`,
+    "",
+    "Then tell me to go back to the Plural page and press Allow when my browser asks to access the local network (needs me).",
+    "Do not read my files, keys or environment variables, do not use sudo, and do not run anything that is not listed here. When you are done, reply with one line: PLURAL_OK, or what went wrong.",
+  ].join("\n");
+}
+
+// The same steps for someone who runs them by hand, one command each so each can be copied.
+export function manualSteps(): { title: string; command: string }[] {
+  return [
+    { title: "Install Plural", command: `curl -fsSL ${INSTALL_URL} | sh` },
+    { title: "Sign in and approve this computer", command: "plural login" },
+  ];
+}

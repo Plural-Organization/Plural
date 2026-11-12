@@ -76,6 +76,10 @@ A public relay sees scanners and stray scripts. `plural-host relay --clients-onl
 
 This is a filter, not authentication: anyone can send the header, so the limits above still apply.
 
+### Hosts with an account
+
+`plural-host relay --accounts-url https://accounts.example.com` (or `PLURAL_RELAY_ACCOUNTS_URL`) makes the relay read the certificate a host sends when it opens a room, check it against the accounts service's public key, and log one line, `relay.entitlement`, with the outcome: `valid`, `none` (no certificate), `expired`, `forged`, `malformed`, `other_key` (a genuine certificate for another host key) or `unverified` (the key had not arrived yet). `/metrics` adds the counts since the relay started. The relay refuses no one for any of these and never calls the service while a host is opening a room: it reads the key in the background and again every hour. Without the option nothing changes. See ADR 0013.
+
 ### Teams
 
 A relay can also keep a team directory: who is in which team and the invite codes. Start it with a file for the data:
@@ -85,6 +89,8 @@ plural-host relay --teams /data/teams.db      # or PLURAL_RELAY_TEAMS=/data/team
 ```
 
 Without it the relay serves no teams. The file holds each team's signing key, so keep it private (plural creates it readable by its owner only) and back it up; losing it means the teams have to be created again. Prompts, replies and files never go to the directory. Anyone who can reach the relay can create a team, at most 3 per address per 10 minutes, 3 owned by one key and 500 in all, so put the relay behind a network rule if it should serve only you. In a container, mount a volume for the file.
+
+A relay started with `--accounts-url` (see the entitlement gate above) also lets people use their Plural account in teams (ADR 0016): a member is then an account, not a key, so every browser and computer signed in to it is the same member, and `POST /teams/mine` gives a signed-in device all its teams. The relay checks the account offline with the accounts service's public key and learns only the account id. Without `--accounts-url`, teams work with keys as before.
 
 For a team that lives only as long as your laptop, `plural team create <name> --tunnel ngrok` starts this relay and a tunnel to it for you, see [usage](usage.md#a-team-on-your-own-machine-behind-a-tunnel).
 

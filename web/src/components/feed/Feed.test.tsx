@@ -53,3 +53,12 @@ test("a tag is flagged and the text is not rendered as html", () => {
   expect(html).not.toContain("<img");
   expect(html).toContain("&lt;img");
 });
+
+test("a failed run offers the host another agent, and nobody else", () => {
+  const failed = { kind: "notice", id: "n1", tone: "danger", text: "run failed: credit balance is too low", action: "agent" } as FeedItem;
+  const host = renderToStaticMarkup(<Feed items={[failed]} onSwitchAgent={() => undefined} />);
+  expect(host).toContain("Switch agent");
+  expect(host).toContain("credit balance is too low");
+  const guest = renderToStaticMarkup(<Feed items={[failed]} />);
+  expect(guest).not.toContain("Switch agent");
+});

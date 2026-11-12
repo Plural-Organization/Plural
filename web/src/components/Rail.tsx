@@ -1,12 +1,15 @@
-import { Button, Chip, Description, Header, Label, ListBox, Separator, type Selection } from "@heroui/react";
-import { Eye, Plus, UserPlus, Warning, SidebarSimple } from "@phosphor-icons/react";
+import { Button, Description, Header, Label, ListBox, Separator, type Selection } from "@heroui/react";
+import { Eye, GearSix, Plus, Warning, SidebarSimple } from "@phosphor-icons/react";
 import { useState } from "react";
-import { reachable, teamJoinLink, type SessionCard } from "@plural/client";
+import { reachable, type SessionCard } from "@plural/client";
 import type { Space } from "../App";
 import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
 import { AccountModal } from "./AccountModal";
-import { copyText } from "../lib/clipboard";
+import { ComputerStatus } from "./ComputerStatus";
+import { useDaemon } from "../hooks/useDaemon";
+import { TeamSwitcher } from "./TeamSwitcher";
+import { TeamWindow } from "./TeamWindow";
 import { LogoMark } from "./LogoMark";
 import { PersonAvatar } from "./PersonAvatar";
 import { AgentLogo } from "./AgentLogo";
@@ -22,14 +25,20 @@ interface RailProps {
   onSwitch: (room: string) => void;
   onWatch: (card: SessionCard, url: string) => void;
   onAdd: () => void;
+  onStart: () => void;
+  onCreateTeam: () => void;
   onHide: () => void;
 }
 
 // The left column: the team's live sessions and the rooms joined by link. Picking one opens it on the right, and
 // a room stays connected once opened, so moving back is instant.
-export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, onHide }: RailProps) {
+export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, onStart, onCreateTeam, onHide }: RailProps) {
   const [note, setNote] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
+  const [managing, setManaging] = useState(false);
+  const signedIn = account.status === "in" && account.account !== null;
+  // Only a signed-in page asks the computer: the browser may ask to allow the local network, and that should come with a reason.
+  const daemon = useDaemon(signedIn);
   const profile = team.team?.profile ?? null;
   const open = new Set(spaces.map((space) => space.link.room));
   const teamRooms = new Set(team.sessions.map((card) => card.room));
@@ -61,23 +70,6 @@ export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, 
     onWatch(card, url);
   };
 
-  const invite = () => {
-    if (profile === null) {
-      return;
-    }
-    team
-      .invite()
-      .then(({ code }) => copyText(teamJoinLink(profile, code, window.location)))
-      .then((ok) => setNote(ok ? "Invite link copied. It is reusable and does not expire." : "Could not copy the invite link."))
-      .catch((problem: unknown) => setNote(problem instanceof Error ? problem.message : String(problem)));
-  };
-
-  const leave = () => {
-    if (profile !== null && window.confirm(`Leave ${profile.team_name}? You need a new invite to come back.`)) {
-      void team.leave();
-    }
-  };
-
   return (
     <aside className="rail frame flex h-full min-h-0 flex-col" aria-label="Sessions">
       <div className="flex h-14 flex-none items-center gap-2.5 px-4">
@@ -87,16 +79,32 @@ export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, 
           <SidebarSimple size={18} />
         </Button>
       </div>
+      <div className="flex flex-none items-center gap-1 px-2 pb-2">
+        <div className="min-w-0 flex-1">
+          <TeamSwitcher team={team} onCreate={onCreateTeam} onJoin={onAdd} />
+        </div>
+        {profile !== null ? (
+          <Button isIconOnly variant="ghost" size="sm" aria-label={`Manage ${profile.team_name}`} onPress={() => setManaging(true)}>
+            <GearSix size={17} />
+          </Button>
+        ) : null}
+      </div>
       <Separator />
       <div className="min-h-0 flex-1 overflow-y-auto p-2">
         {profile !== null ? (
           <section aria-label={profile.team_name}>
-            <div className="flex items-center justify-between gap-2 px-2.5 pt-2 pb-1.5">
-              <span className="truncate text-sm font-medium text-foreground">{profile.team_name}</span>
-              <Chip size="sm" variant="soft"><Chip.Label>{team.sessions.length} live</Chip.Label></Chip>
-            </div>
             {team.sessions.length === 0 ? (
-              <p className="px-2.5 py-2 text-sm leading-relaxed text-muted">Nobody shares a session right now. Sessions show up here the moment someone starts one.</p>
+              <div className="flex flex-col items-start gap-3 px-2.5 py-2">
+                <p className="text-sm leading-relaxed text-muted">Nobody shares a session in {profile.team_name} right now. Start one, or wait: sessions show up here the moment someone does.</p>
+                {account.status === "in" && account.account !== null ? (
+                  <Button size="sm" onPress={onStart}>
+                    <Plus size={15} />
+                    Start a room in {profile.team_name}
+                  </Button>
+                ) : (
+                  <p className="text-sm leading-relaxed text-muted">Sign in to start a room from here.</p>
+                )}
+              </div>
             ) : (
               <ListBox aria-label={`${profile.team_name} sessions`} selectionMode="single" selectedKeys={selected} onSelectionChange={pick}>
                 {team.sessions.map((card) => (
@@ -134,7 +142,7 @@ export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, 
                   <PersonAvatar seed={space.link.room} />
                   <div className="flex min-w-0 flex-col">
                     <Label className="truncate">{space.owner ?? "Room"}</Label>
-                    <Description className="truncate font-mono">{space.link.room}</Description>
+                    <Description className="truncate" title={space.link.room}>{space.owner !== null && space.owner === space.name ? "Your room" : "Room link"}</Description>
                   </div>
                 </ListBox.Item>
               ))}
@@ -147,33 +155,26 @@ export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, 
       {team.error !== null ? <p className="px-4 pb-2 text-[13px] leading-snug text-warning">{team.error}</p> : null}
       <Separator />
       <div className="flex flex-none flex-col gap-2 p-3">
-        <div className="flex gap-2">
-          <Button variant="tertiary" size="sm" className="flex-1" onPress={onAdd}>
+        {signedIn ? <ComputerStatus phase={daemon.phase} stuck={daemon.stuck} onFix={onStart} /> : null}
+        {account.status === "in" && account.account !== null ? (
+          <Button size="sm" fullWidth onPress={onStart}>
             <Plus size={15} />
-            Join a room
+            {profile === null ? "Start a room" : `Start a room in ${profile.team_name}`}
           </Button>
-          {profile?.member.role === "owner" ? (
-            <Button variant="tertiary" size="sm" className="flex-1" onPress={invite}>
-              <UserPlus size={15} />
-              Invite
-            </Button>
-          ) : null}
-        </div>
+        ) : null}
+        <Button variant="tertiary" size="sm" fullWidth onPress={onAdd}>
+          <Plus size={15} />
+          Join a room
+        </Button>
         {account.status === "in" && account.account !== null ? (
           <Button variant="ghost" size="sm" fullWidth className="justify-start gap-2.5" onPress={() => setAccountOpen(true)}>
             <PersonAvatar seed={account.account.email} />
             <span className="min-w-0 flex-1 truncate text-left text-sm">{account.account.email}</span>
           </Button>
         ) : null}
-        {profile !== null ? (
-          <div className="flex items-center gap-2.5 px-1 pt-1">
-            <PersonAvatar seed={profile.member.name} />
-            <span className="min-w-0 flex-1 truncate text-sm">{profile.member.name}</span>
-            <button type="button" className="link-button" onClick={leave}>Leave team</button>
-          </div>
-        ) : null}
       </div>
       {accountOpen ? <AccountModal state={account} onClose={() => setAccountOpen(false)} /> : null}
+      {managing && profile !== null ? <TeamWindow team={team} onClose={() => setManaging(false)} /> : null}
     </aside>
   );
 }

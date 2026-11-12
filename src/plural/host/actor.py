@@ -113,6 +113,7 @@ from plural.protocol.commands import (
     CursorSet,
     FileAttach,
     HistoryGet,
+    ImportLink,
     InviteCreate,
     JoinDecide,
     LinkRevoke,
@@ -169,6 +170,7 @@ from plural.protocol.events import (
     ErrorRaised,
     Event,
     EventRecord,
+    ImportLinkShown,
     InviteCreated,
     JoinPending,
     JoinRefused,
@@ -311,8 +313,10 @@ class SessionActor:
         ledger: ChangeLedger | None = None,
         team_sweep_s: float = 30.0,
         imported: BriefingImport | None = None,
+        import_url: str | None = None,
     ) -> None:
         self._imported = imported
+        self._import_url = import_url
         self._team_sweep_s = team_sweep_s
         self._briefing = briefing
         self._ledger = ledger
@@ -756,6 +760,8 @@ class SessionActor:
                 await self._emit(
                     policies.remove(self._state, command.rule_id), actor_id=participant.id
                 )
+            case ImportLink():
+                self._publisher.deliver(connection, ImportLinkShown(url=self._import_url))
             case InviteCreate():
                 if command.role is Role.HOST:
                     raise Invalid("cannot invite another host")

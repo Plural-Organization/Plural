@@ -27,7 +27,7 @@ describe("commands", () => {
   });
 
   test("the host's own commands go straight through", () => {
-    for (const name of ["relay", "doctor", "export", "sessions", "rm", "team", "ls", "login", "logout", "whoami"]) {
+    for (const name of ["relay", "doctor", "export", "sessions", "rm", "team", "ls", "login", "logout", "whoami", "daemon"]) {
       expect(parseArgs([name, "--json"])).toEqual({ kind: "passthrough", args: [name, "--json"] });
     }
   });

@@ -85,6 +85,19 @@ export async function createClaim(): Promise<Claim> {
   return (await (await call("/claims", { method: "POST" })).json()) as Claim;
 }
 
+export interface Ticket {
+  ticket: string;
+  expires_at: string;
+}
+
+// A minute-long proof for the Plural program on this computer that this page is signed in.
+// A ticket names its receiver: the program on this computer ("daemon") or a team directory ("teams").
+// The daemon's goes with no body, as before audiences existed.
+export async function createTicket(aud: "daemon" | "teams" = "daemon"): Promise<Ticket> {
+  const init: RequestInit = aud === "daemon" ? { method: "POST" } : { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ aud }) };
+  return (await (await call("/tickets", init)).json()) as Ticket;
+}
+
 export async function revokeMachine(id: string): Promise<void> {
   await call(`/machines/${encodeURIComponent(id)}`, { method: "DELETE" });
 }

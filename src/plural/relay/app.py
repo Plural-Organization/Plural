@@ -13,7 +13,9 @@ from starlette.routing import Route, WebSocketRoute
 from starlette.types import ASGIApp, Receive, Scope, Send
 from starlette.websockets import WebSocket
 
+from plural.relay.account_proofs import AccountProofs
 from plural.relay.directory import TeamDirectory, TeamLimits
+from plural.relay.entitlements import EntitlementWatch
 from plural.relay.gate import ClientGate, preview_of
 from plural.relay.limits import RelayLimits
 from plural.relay.presence import Presence
@@ -45,14 +47,25 @@ def create_app(
     team_limits: TeamLimits | None = None,
     clients_only: bool = False,
     web_origins: Collection[str] = (),
+    accounts_url: str | None = None,
+    entitlements: EntitlementWatch | None = None,
 ) -> Starlette:
-    rooms = Rooms(limits or RelayLimits(), proxy_hops=proxy_hops, clock=clock)
+    # With an accounts service named, the relay reads each host's certificate and logs what it
+    # finds. It turns no one away.
+    if entitlements is None and accounts_url:
+        entitlements = EntitlementWatch(accounts_url)
+    rooms = Rooms(
+        limits or RelayLimits(), proxy_hops=proxy_hops, clock=clock, entitlements=entitlements
+    )
 
     async def healthz(_: Request) -> JSONResponse:
         return JSONResponse({"ok": True})
 
     async def metrics(_: Request) -> JSONResponse:
-        return JSONResponse({"rooms": rooms.room_count, "guests": rooms.guest_count})
+        counts: dict[str, Any] = {"rooms": rooms.room_count, "guests": rooms.guest_count}
+        if entitlements is not None:
+            counts["entitlements"] = dict(entitlements.counts)
+        return JSONResponse(counts)
 
     async def host_socket(socket: WebSocket) -> None:
         await rooms.serve_host(socket, str(socket.path_params["room"]))
@@ -78,12 +91,23 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: Starlette) -> AsyncGenerator[None]:
         if teams is not None:
-            opened = await TeamDirectory.open(teams, limits=team_limits)
+            # With an accounts service, a member can be an account rather than a key (ADR 0016).
+            watch = entitlements
+            proofs = (
+                None
+                if watch is None
+                else AccountProofs(lambda: watch.verifier, suspect=watch.suspect)
+            )
+            opened = await TeamDirectory.open(teams, limits=team_limits, accounts=proofs)
             directory.append(opened)
             app.router.routes[:0] = team_routes(opened, Presence(), proxy_hops=proxy_hops)
+        if entitlements is not None:
+            entitlements.start()
         try:
             yield
         finally:
+            if entitlements is not None:
+                await entitlements.stop()
             for opened in directory:
                 await opened.close()
 

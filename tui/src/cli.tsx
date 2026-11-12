@@ -43,8 +43,11 @@ usage
   plural team create <name> [--relay <url>]  create a team (on the Plural relay unless --relay) and open its rooms
   plural team create <name> --tunnel cloudflared|ngrok  create a team behind a tunnel and open a session in it
   plural team join <code> [--relay <url>]  join a team (the Plural relay unless --relay) and open its rooms
+  plural team list                    your teams (with plural login, the account's teams on other devices too)
+  plural team use <name>              make another of your teams the current one
   plural login [--no-browser]  link this computer to your account (opens the browser to approve it)
   plural whoami|logout        show the account this computer is linked to, or forget it
+  plural daemon               let the web client start rooms on this computer, in folders you choose
   plural relay|doctor|export  run the host's own commands
 
 options

@@ -338,6 +338,7 @@ async def _assemble(
         owner=settings.host_name,
         scrub=redactor.redact,
     )
+    chat_link, import_url = await _chat_link(inbox, registry, ids, clock, settings)
     actor = SessionActor(
         inbox=inbox,
         store=store,
@@ -373,10 +374,10 @@ async def _assemble(
         ledger=ledger,
         team_sweep_s=settings.team_roster_ttl_s,
         imported=imported,
+        import_url=import_url,
     )
     desk.attach(actor.board)
     await actor.start()
-    chat_link, import_url = await _chat_link(inbox, registry, ids, clock, settings)
     transport: HostTransport = (
         RelayLink(
             url=settings.relay_url,
@@ -427,7 +428,7 @@ async def _chat_link(
 
 
 async def _team_profile(settings: HostSettings) -> TeamProfile:
-    profile = await asyncio.to_thread(TeamStore(settings.state_dir).load)
+    profile = await asyncio.to_thread(TeamStore(settings.state_dir, settings.team_id).load)
     if profile is None:
         raise ConfigError("this session is for a team, but you are not in one")
     return profile
@@ -440,7 +441,7 @@ async def _team_admission(
     room: str,
     profile: TeamProfile,
 ) -> TeamAdmission:
-    directory = DirectoryClient(TeamStore(settings.state_dir), profile)
+    directory = DirectoryClient(TeamStore(settings.state_dir, settings.team_id), profile)
     banned: list[str] = []
     try:
         stored: object = json.loads(await store.meta("team_banned") or "[]")
