@@ -7,6 +7,7 @@ from tests.loop_support import turn
 
 from plural.agent.context.context import ContextBuilder
 from plural.agent.loop.events import MessageEnd, ToolEnd, ToolOutput, ToolStart
+from plural.agent.mcp import ServerSpec
 from plural.agent.providers.base import LlmMessage, LlmRequest, ToolCallRequest
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
@@ -690,3 +691,51 @@ async def test_only_the_host_switches_the_model_from_a_command(tmp_path: Path) -
         await made(Role.PARTICIPANT, switch).set_model("haiku")
     with pytest.raises(PluginError, match="cannot switch models"):
         await made(Role.HOST, None).set_model("haiku")
+
+
+class FakeHub:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def views(self) -> tuple[object, ...]:
+        return ()
+
+    def attach(self, name: str, spec: ServerSpec) -> None:
+        self.calls.append(("attach", f"{name}:{spec.where()}"))
+
+    async def detach(self, name: str) -> None:
+        self.calls.append(("detach", name))
+
+
+async def test_a_plugin_connects_mcp_servers_while_it_is_loaded(tmp_path: Path) -> None:
+    hub = FakeHub()
+    directory = tmp_path / "plugins"
+    directory.mkdir()
+    source = 'def setup(plural):\n    plural.mcp("tickets", command="tickets-mcp", args=["{}"])\n'
+    (directory / "tickets.py").write_text(source.format("--fast"))
+    plugins = PluginHost(directory, workspace=tmp_path, mcp=hub)  # pyright: ignore[reportArgumentType]
+    plugins.load()
+    await plugins.servers_ready()
+    assert hub.calls == [("attach", "tickets:tickets-mcp --fast")]
+
+    # A reload with the same server changes nothing; a changed one is connected again.
+    plugins.load()
+    await plugins.servers_ready()
+    assert len(hub.calls) == 1
+    (directory / "tickets.py").write_text(source.format("--slower"))
+    plugins.load()
+    await plugins.servers_ready()
+    assert hub.calls[1:] == [("detach", "tickets"), ("attach", "tickets:tickets-mcp --slower")]
+
+    (directory / "tickets.py").unlink()
+    plugins.load()
+    await plugins.servers_ready()
+    assert hub.calls[-1] == ("detach", "tickets")
+
+    (directory / "both.py").write_text(
+        'def setup(plural):\n    plural.mcp("x", command="a", url="http://b")\n'
+    )
+    plugins.load()
+    error = next(view.error for view in plugins.views() if view.name == "both")
+    assert error is not None
+    assert "needs a command or a url" in error

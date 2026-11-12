@@ -518,6 +518,10 @@ class SessionActor:
             case Reconfigure() as change:
                 await self._reconfigure(change)
             case McpUpdated():
+                # A server a plugin connected brings its own env and headers to mask.
+                if self._mcp is not None:
+                    for secret in self._mcp.secrets():
+                        self._redactor.add(secret)
                 await self._sync_mcp()
             case SkillsUpdated(connection=connection, error=error):
                 await self._sync_skills()

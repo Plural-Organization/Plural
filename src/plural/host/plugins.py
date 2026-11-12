@@ -18,6 +18,7 @@ from pydantic import JsonValue
 from plural.agent.context.compaction import serialize
 from plural.agent.loop.events import AgentEvent, Compacted, MessageEnd, ToolEnd, ToolStart
 from plural.agent.loop.messages import Message
+from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.prompts import tag
 from plural.agent.providers.base import LlmRequest, ToolCallRequest, ToolSchema
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
@@ -713,7 +714,30 @@ class PluginApi:
         self.hooks: list[Hook] = []
         self.instruction = ""
         self.hidden: frozenset[str] = frozenset()
+        self.servers: dict[str, ServerSpec] = {}
         self.on_hide: Callable[[], None] = lambda: None
+
+    def mcp(
+        self,
+        name: str,
+        *,
+        command: str | None = None,
+        args: Sequence[str] = (),
+        env: Mapping[str, str] | None = None,
+        url: str | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
+        """Connect an MCP server for as long as the plugin is loaded: a command to launch, or a
+        URL to reach. Its tools load on demand like those of any other MCP server."""
+        if (command is None) == (url is None):
+            raise PluginError(f"MCP server {name} needs a command or a url, not both")
+        self.servers[name] = ServerSpec(
+            command=command,
+            args=list(args),
+            env=dict(env or {}),
+            url=url,
+            headers=dict(headers or {}),
+        )
 
     def hide_tools(self, names: Iterable[str]) -> None:
         """Keep these tools from the agent, from its next model call on, such as `write`,
@@ -845,6 +869,7 @@ class PluginHost:
         reserved_tools: Callable[[], Iterable[str]] = lambda: (),
         builtin_tool: Callable[[str], Tool | None] = lambda name: None,
         hide_tools: Callable[[frozenset[str]], None] = lambda names: None,
+        mcp: McpHub | None = None,
     ) -> None:
         self.directory = directory
         self._inbox = inbox or Inbox()
@@ -852,6 +877,10 @@ class PluginHost:
         self._reserved_tools = reserved_tools
         self._builtin_tool = builtin_tool
         self._hide_tools = hide_tools
+        self._mcp = mcp
+        # The MCP servers plugins connected, as last applied.
+        self._servers: dict[str, ServerSpec] = {}
+        self._syncing: asyncio.Task[None] | None = None
         # Set by whoever configures the agent's model, for plugin commands to switch it.
         self.switch_model: Switcher | None = None
         self._overrides: dict[str, OverrideTool] = {}
@@ -870,6 +899,7 @@ class PluginHost:
         commands: dict[str, PluginCommand] = {}
         tools: dict[str, PluginTool] = {}
         overrides: dict[str, OverrideTool] = {}
+        servers: dict[str, ServerSpec] = {}
         hooks: list[Hook] = []
         apis: list[PluginApi] = []
         reserved = set(self._reserved_tools())
@@ -894,6 +924,10 @@ class PluginHost:
                     taken = tool.name in reserved or tool.name in tools
                     if taken or sum(t.name == tool.name for t in api.tools) > 1:
                         raise PluginError(f"tool {tool.name} is already taken")
+                configured = {view.name for view in self._mcp.views()} if self._mcp else set[str]()
+                for server in api.servers:
+                    if server in servers or (server in configured and server not in self._servers):
+                        raise PluginError(f"MCP server {server} is already connected")
                 for override in api.overrides:
                     if override.name in overrides or (
                         sum(o.name == override.name for o in api.overrides) > 1
@@ -916,6 +950,7 @@ class PluginHost:
             commands.update((command.view.name, command) for command in api.commands)
             tools.update((tool.name, tool) for tool in api.tools)
             overrides.update((override.name, override) for override in api.overrides)
+            servers.update(api.servers)
             hooks.extend(api.hooks)
             apis.append(api)
             views.append(
@@ -936,6 +971,36 @@ class PluginHost:
         for api in apis:
             api.on_hide = self._apply_hidden
         self._apply_hidden()
+        self._apply_servers(servers)
+
+    def _apply_servers(self, servers: dict[str, ServerSpec]) -> None:
+        """Connect the servers plugins added since the last load and disconnect the ones they
+        dropped or changed. It runs in the background, after the previous change finished."""
+        mcp = self._mcp
+        if mcp is None or servers == self._servers:
+            return
+        previous, self._servers = self._servers, dict(servers)
+        waiting = self._syncing
+
+        async def sync() -> None:
+            if waiting is not None:
+                await waiting
+            for name, spec in previous.items():
+                if servers.get(name) != spec:
+                    await mcp.detach(name)
+            for name, spec in servers.items():
+                if previous.get(name) != spec:
+                    try:
+                        mcp.attach(name, spec)
+                    except McpError as error:
+                        log.warning("plugins.mcp_failed", server=name, error=str(error))
+
+        self._syncing = asyncio.get_running_loop().create_task(sync(), name="plugins-mcp")
+
+    async def servers_ready(self) -> None:
+        """Wait until the last change to the plugins' MCP servers is applied."""
+        if self._syncing is not None:
+            await self._syncing
 
     def hidden_tools(self) -> frozenset[str]:
         """The tools the loaded plugins keep from the agent."""

@@ -123,6 +123,13 @@ module variables for anything that must survive `/plugins reload`.
 the side panel that the whole room sees, at most 80 characters and one change a second; `""` removes it.
 Use it for state that matters while people work, such as `tests 3/3 ✓` after a `run_end` hook.
 
+## MCP servers
+
+`plural.mcp(name, command=..., args=[...], env={...})` or `plural.mcp(name, url=..., headers={...})` in
+`setup` connects an MCP server for as long as the plugin is loaded, without writing it to the MCP
+config; its tools load on demand like any MCP server's. Read tokens from the environment, never
+hard-code them.
+
 ## Switching the model
 
 `await ctx.set_model(model, provider=None)` in a command switches the agent's model, as the host would in

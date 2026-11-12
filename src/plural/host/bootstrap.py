@@ -250,6 +250,7 @@ async def _assemble(
         reserved_tools=tools.registered,
         builtin_tool=tools.builtin,
         hide_tools=tools.hide,
+        mcp=mcp,
     )
     tools.add_source(plugins.tools_source(Exposure.CORE))
     tools.add_source(plugins.tools_source(Exposure.DEFERRED), exposure=Exposure.DEFERRED)

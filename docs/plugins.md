@@ -178,6 +178,28 @@ everyone in the room: `ci  tests 3/3 ✓`. Call it from a command, a tool or a h
 the line. It is one line of at most 80 characters, the host shows at most one change a second (the
 latest wins), and the line goes away when the plugin is removed or fails to load.
 
+## MCP servers
+
+A plugin can bring MCP servers with it. They connect when the plugin loads and disconnect when it is
+removed, and are never written to the MCP config files:
+
+```python
+import os
+
+
+def setup(plural):
+    plural.mcp("tracker", command="npx", args=["-y", "tracker-mcp"], env={"TOKEN": os.environ["TRACKER_TOKEN"]})
+    plural.mcp("docs", url="https://docs.example.com/mcp", headers={"Authorization": "Bearer …"})
+```
+
+`plural.mcp(name, command=None, args=(), env=None, url=None, headers=None)` takes a command to launch or
+a URL to reach, not both. The server's tools load on demand like those of any MCP server, through
+`tool_search` or by name, and the host's policy applies to them. `/mcp` lists it, but it is turned off
+or removed by changing the plugin. On a reload, a server whose settings did not change stays
+connected, and one that changed is connected again. A name already taken by a configured server, or by
+another plugin's, makes the plugin fail to load. Its env and header values are masked in what the room
+sees, like any MCP server's.
+
 ## Switching the model
 
 A command the host runs can switch the agent's model, as the host would in settings:
