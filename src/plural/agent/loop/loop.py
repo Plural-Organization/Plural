@@ -662,13 +662,17 @@ class AgentLoop:
         budget = min(self._limits.keep_recent, threshold // 2 if threshold else 1 << 62)
         end = cut(self._conversation, start, budget) or len(self._conversation)
         history = self._conversation[start:end]
-        request = LlmRequest(
-            system=SUMMARY_SYSTEM,
-            messages=(LlmMessage(role="user", content=summary_request(history, previous)),),
-        )
-        summary, role = await self._models.tagged(
-            request, cancel, tag="summary", purpose="compact", counted=self._count
-        )
+        written = await self._hooks.summary(history, previous)
+        if written is not None:
+            summary, role = written, "hook"
+        else:
+            request = LlmRequest(
+                system=SUMMARY_SYSTEM,
+                messages=(LlmMessage(role="user", content=summary_request(history, previous)),),
+            )
+            summary, role = await self._models.tagged(
+                request, cancel, tag="summary", purpose="compact", counted=self._count
+            )
         summary = with_files(summary, history, previous)
         tail = self._conversation[end:]
         before = self._tokens()

@@ -175,6 +175,13 @@ tests, ticket.
 the run a hook prompt starts does not fire `run_end` again. Good for running tests or a linter after the
 agent changed files.
 
+### Writing the compaction summary
+
+`@plural.on("summary")` runs when the conversation is compacted, with `(event, ctx)`:
+`event.conversation` (the part being summarized as text), `event.previous` (the last summary or
+`None`) and `event.messages`. Return the summary text to use it in place of the model's, or nothing.
+The first hook that answers wins; 120 seconds.
+
 ### Watching the agent work
 
 `tool_start` (`call.run_id`, `call.call_id`, `call.name`, `call.risk`, `call.subject`, `call.args`),

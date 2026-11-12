@@ -379,6 +379,26 @@ on their own. Such a prompt is the host's, so it is not reviewed and does not ta
 a guest's text into it. A hook has 120 seconds; if it fails the room sees why and the other hooks still
 run.
 
+### Writing the compaction summary
+
+When the conversation grows too long for the model, the host summarizes its older part and keeps the
+newest part as it is. A `summary` hook can write that summary instead of the model, for example by its
+own rules or with another model:
+
+```python
+def setup(plural):
+    @plural.on("summary")
+    async def notes(event, ctx):
+        text = await ctx.run("my-summarizer", "--max-words", "400", event.conversation[-100_000:])
+        return f"{event.previous or ''}\n{text}".strip()
+```
+
+It gets `event.conversation`, the part being summarized written out as text (who said what, which
+tools ran and what they gave), `event.previous`, the summary the last compaction left or `None`, and
+`event.messages`, how many messages are summarized. It returns the summary text, or nothing to let the
+model write it. The first hook that answers wins. The list of files read and changed is added to the
+summary either way. A hook gets 120 seconds; one that fails or is late is skipped.
+
 ### Watching the agent work
 
 Four events let a plugin follow a run as it goes, to log it, count things, mirror it to another tool or

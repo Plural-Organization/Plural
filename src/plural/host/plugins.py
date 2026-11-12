@@ -15,7 +15,9 @@ from typing import Final, Literal, cast
 import structlog
 from pydantic import JsonValue
 
+from plural.agent.context.compaction import serialize
 from plural.agent.loop.events import AgentEvent, Compacted, MessageEnd, ToolEnd, ToolStart
+from plural.agent.loop.messages import Message
 from plural.agent.prompts import tag
 from plural.agent.providers.base import LlmRequest, ToolCallRequest, ToolSchema
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
@@ -88,6 +90,7 @@ HOOK_EVENTS: Final = frozenset(
         "tool_args",
         "tool_call",
         "tool_result",
+        "summary",
         "run_end",
         *LIVE_EVENTS,
     }
@@ -476,6 +479,17 @@ class CompactionInfo:
     run_id: str
     summary: str
     tokens_before: int
+
+
+@dataclass(frozen=True, slots=True)
+class SummaryInfo:
+    """What a summary hook gets when the conversation is compacted."""
+
+    # The part being summarized, as text: who said what, which tools ran and what they gave.
+    conversation: str
+    # The summary the last compaction left, or None.
+    previous: str | None
+    messages: int
 
 
 Handler = Callable[[CommandContext], Awaitable[None]]
@@ -1141,6 +1155,26 @@ class PluginHost:
     async def drained(self) -> None:
         """Wait until every live event handed over so far has gone to the plugins."""
         await self._live.join()
+
+    async def summary(self, history: Sequence[Message], previous: str | None) -> str | None:
+        """The first summary a summary hook writes for a compaction, or None for the model's."""
+        hooks = self.hooks("summary")
+        if not hooks:
+            return None
+        seen = SummaryInfo(
+            conversation=serialize(history), previous=previous, messages=len(history)
+        )
+        for hook in hooks:
+            try:
+                answer = await asyncio.wait_for(
+                    hook.handler(seen, self._context(hook.plugin)), HOOK_TIMEOUT_S
+                )
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                continue
+            if isinstance(answer, str) and answer.strip():
+                return answer.strip()[:MAX_RESULT_CHARS]
+        return None
 
     async def guard_tool(self, call: ToolCallView, provenance: Provenance) -> Verdict | None:
         """Ask every tool_call hook about a call. Any deny wins; a hook that fails counts as ask."""

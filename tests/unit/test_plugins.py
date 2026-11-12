@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import pytest
+from tests.loop_support import turn
 
 from plural.agent.context.context import ContextBuilder
 from plural.agent.loop.events import MessageEnd, ToolEnd, ToolOutput, ToolStart
@@ -592,3 +593,28 @@ async def test_a_plugin_runs_a_built_in_tool_its_own_way(tmp_path: Path) -> None
     assert "hi" in (await echo.execute(ctx)).content
     read = registry.prepare(ToolCallRequest(id="c3", name="read", args={"path": "a.txt"}))
     assert "ALPHA" in (await read.execute(ctx)).content
+
+
+SUMMARY = """
+def setup(plural):
+    @plural.on("summary")
+    async def broken(event, ctx):
+        raise RuntimeError("boom")
+
+    @plural.on("summary")
+    async def short(event, ctx):
+        return f"{event.messages} messages; asked: {'fix it' in event.conversation}"
+
+    @plural.on("summary")
+    async def late(event, ctx):
+        return "never used"
+"""
+
+
+async def test_the_first_summary_hook_that_answers_writes_the_summary(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, summary=SUMMARY)
+    history = [turn("fix it")]
+    assert await plugins.summary(history, None) == "1 messages; asked: True"
+    none = tmp_path / "empty"
+    none.mkdir()
+    assert await host_with(none).summary(history, None) is None
