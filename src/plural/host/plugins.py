@@ -547,6 +547,91 @@ class PluginTool:
         return ToolResult(text[:MAX_OUTPUT_CHARS])
 
 
+# The built-in tools a plugin may run its own way.
+REPLACEABLE: Final = frozenset(
+    {"read", "write", "edit", "multi_edit", "bash", "grep", "glob", "ls", "web_fetch"}
+)
+
+
+class OverrideContext(ToolContext):
+    """What a plugin that runs a built-in tool its own way gets: `original()` runs the built-in."""
+
+    def __init__(
+        self,
+        *,
+        tool: str,
+        workspace: Path,
+        emit: Callable[[str], None],
+        original: Callable[[], Awaitable[ToolResult]],
+    ) -> None:
+        super().__init__(tool=tool, workspace=workspace, emit=emit)
+        self._original = original
+
+    async def original(self) -> str:
+        """Run the built-in tool with the call's arguments and return its result. A failure of
+        the built-in raises, so a plugin can tell it from an empty result."""
+        result = await self._original()
+        if result.is_error:
+            raise PluginError(result.content)
+        return result.content
+
+
+class OverrideTool:
+    """A built-in tool that a plugin runs its own way. The model, the policy and the room see the
+    built-in: its schema, risk, subject and folder checks. Only how the call runs changes."""
+
+    replaces = True
+    exposure = Exposure.CORE
+
+    def __init__(self, *, name: str, plugin: str, handler: ToolHandler, workspace: Path) -> None:
+        self.name = name
+        self.plugin = plugin
+        self._handler = handler
+        self._workspace = workspace
+        self.original: Tool | None = None
+
+    def _builtin(self) -> Tool:
+        if self.original is None:
+            raise PluginError(f"there is no built-in tool {self.name} to replace")
+        return self.original
+
+    def schema(self) -> ToolSchema:
+        return self._builtin().schema()
+
+    def prepare(self, raw: Mapping[str, JsonValue]) -> PreparedCall:
+        prepared = self._builtin().prepare(raw)
+        args = dict(raw)
+
+        def execute(ctx: ToolCtx) -> Awaitable[ToolResult]:
+            return self._call(args, ctx, prepared)
+
+        return replace(prepared, execute=execute)
+
+    async def _call(
+        self, args: dict[str, JsonValue], ctx: ToolCtx, prepared: PreparedCall
+    ) -> ToolResult:
+        context = OverrideContext(
+            tool=self.name,
+            workspace=self._workspace,
+            emit=ctx.emit,
+            original=lambda: prepared.execute(ctx),
+        )
+        try:
+            output = await self._handler(args, context)
+        except Exception as error:
+            log.warning("plugins.tool_failed", tool=self.name, error=str(error))
+            return ToolResult(f"{self.name} failed: {_describe(error)}", is_error=True)
+        if output is None:
+            # Nothing back: the built-in runs as usual.
+            return await prepared.execute(ctx)
+        text = (
+            output
+            if isinstance(output, str)
+            else json.dumps(output, ensure_ascii=False, default=str)
+        )
+        return ToolResult(text[:MAX_OUTPUT_CHARS])
+
+
 class PluginToolSource:
     """The loaded plugin tools of one exposure, as a registry source."""
 
@@ -555,7 +640,10 @@ class PluginToolSource:
         self._exposure = exposure
 
     def tools(self) -> Iterable[Tool]:
-        return [tool for tool in self._host.tools() if tool.exposure is self._exposure]
+        tools: list[Tool] = [tool for tool in self._host.tools() if tool.exposure is self._exposure]
+        if self._exposure is Exposure.CORE:
+            tools.extend(self._host.overrides())
+        return tools
 
 
 def _parameters(spec: Mapping[str, JsonValue] | None) -> dict[str, JsonValue]:
@@ -593,6 +681,7 @@ class PluginApi:
         self.store = store
         self.commands: list[PluginCommand] = []
         self.tools: list[PluginTool] = []
+        self.overrides: list[OverrideTool] = []
         self.hooks: list[Hook] = []
         self.instruction = ""
 
@@ -652,6 +741,27 @@ class PluginApi:
 
         return register
 
+    def override(self, name: str) -> Callable[[ToolHandler], ToolHandler]:
+        """Run a built-in tool, such as bash or read, with your own function. The model, the
+        policy and the room see the built-in; `ctx.original()` runs it, and returning nothing
+        lets it run as usual."""
+        if name not in REPLACEABLE:
+            raise PluginError(
+                f"{name} cannot be replaced: use one of {', '.join(sorted(REPLACEABLE))}"
+            )
+
+        def register(handler: ToolHandler) -> ToolHandler:
+            if not inspect.iscoroutinefunction(handler):
+                raise PluginError(f"the handler replacing {name} must be an async function")
+            self.overrides.append(
+                OverrideTool(
+                    name=name, plugin=self._plugin, handler=handler, workspace=self._workspace
+                )
+            )
+            return handler
+
+        return register
+
     def tool(
         self,
         name: str,
@@ -696,11 +806,14 @@ class PluginHost:
         workspace: Path,
         inbox: Inbox | None = None,
         reserved_tools: Callable[[], Iterable[str]] = lambda: (),
+        builtin_tool: Callable[[str], Tool | None] = lambda name: None,
     ) -> None:
         self.directory = directory
         self._inbox = inbox or Inbox()
         self.workspace = workspace
         self._reserved_tools = reserved_tools
+        self._builtin_tool = builtin_tool
+        self._overrides: dict[str, OverrideTool] = {}
         self._views: tuple[PluginView, ...] = ()
         self._commands: dict[str, PluginCommand] = {}
         self._tools: dict[str, PluginTool] = {}
@@ -715,6 +828,7 @@ class PluginHost:
         views: list[PluginView] = []
         commands: dict[str, PluginCommand] = {}
         tools: dict[str, PluginTool] = {}
+        overrides: dict[str, OverrideTool] = {}
         hooks: list[Hook] = []
         apis: list[PluginApi] = []
         reserved = set(self._reserved_tools())
@@ -739,6 +853,14 @@ class PluginHost:
                     taken = tool.name in reserved or tool.name in tools
                     if taken or sum(t.name == tool.name for t in api.tools) > 1:
                         raise PluginError(f"tool {tool.name} is already taken")
+                for override in api.overrides:
+                    if override.name in overrides or (
+                        sum(o.name == override.name for o in api.overrides) > 1
+                    ):
+                        raise PluginError(f"{override.name} is already replaced by a plugin")
+                    override.original = self._builtin_tool(override.name)
+                    if override.original is None:
+                        raise PluginError(f"there is no built-in tool {override.name} to replace")
             except Exception as error:
                 log.warning("plugins.load_failed", plugin=name, error=str(error))
                 views.append(
@@ -752,6 +874,7 @@ class PluginHost:
                 continue
             commands.update((command.view.name, command) for command in api.commands)
             tools.update((tool.name, tool) for tool in api.tools)
+            overrides.update((override.name, override) for override in api.overrides)
             hooks.extend(api.hooks)
             apis.append(api)
             views.append(
@@ -760,12 +883,13 @@ class PluginHost:
                     path=str(path),
                     status=PluginStatus.LOADED,
                     commands=tuple(command.view.name for command in api.commands),
-                    tools=tuple(tool.name for tool in api.tools),
+                    tools=(*(tool.name for tool in api.tools), *(o.name for o in api.overrides)),
                 )
             )
         self._views = tuple(views)
         self._commands = commands
         self._tools = tools
+        self._overrides = overrides
         self._hooks = tuple(hooks)
         self._apis = tuple(apis)
 
@@ -792,6 +916,10 @@ class PluginHost:
 
     def tools(self) -> tuple[PluginTool, ...]:
         return tuple(self._tools.values())
+
+    def overrides(self) -> tuple[OverrideTool, ...]:
+        """The built-in tools plugins run their own way."""
+        return tuple(self._overrides.values())
 
     def tools_source(self, exposure: Exposure) -> PluginToolSource:
         return PluginToolSource(self, exposure)

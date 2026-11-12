@@ -99,6 +99,11 @@ class ToolRegistry:
             self._revision += 1
         return fresh
 
+    def builtin(self, name: str) -> Tool | None:
+        """The tool registered under this name itself, even when a source replaces it."""
+        entry = self._tools.get(name)
+        return entry.tool if entry is not None else None
+
     def get(self, name: str) -> Tool:
         entry = self._entries().get(name)
         if entry is None or not self._allowed_name(name):
@@ -138,12 +143,15 @@ class ToolRegistry:
         return tool.prepare(call.args)
 
     def _entries(self) -> dict[str, Entry]:
-        dynamic = {
-            tool.name: Entry(tool, exposure)
-            for source, exposure in self._sources
-            for tool in source.tools()
-            if tool.name not in self._tools
-        }
+        dynamic: dict[str, Entry] = {}
+        for source, exposure in self._sources:
+            for tool in source.tools():
+                registered = self._tools.get(tool.name)
+                if registered is None:
+                    dynamic[tool.name] = Entry(tool, exposure)
+                elif getattr(tool, "replaces", False):
+                    # A tool that runs a registered one its own way keeps that one's exposure.
+                    dynamic[tool.name] = Entry(tool, registered.exposure)
         return {**self._tools, **dynamic}
 
     def _allowed_name(self, name: str) -> bool:

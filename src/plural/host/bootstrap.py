@@ -247,6 +247,7 @@ async def _assemble(
         workspace=workspace.root,
         inbox=inbox,
         reserved_tools=tools.registered,
+        builtin_tool=tools.builtin,
     )
     tools.add_source(plugins.tools_source(Exposure.CORE))
     tools.add_source(plugins.tools_source(Exposure.DEFERRED), exposure=Exposure.DEFERRED)

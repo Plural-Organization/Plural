@@ -103,6 +103,14 @@ exception becomes an error result the model reads, so raise with a clear message
 an error string. Every call goes through the host's policy: a tool without a rule asks the host, and
 the host can allow it for good with `/policy allow <tool> *`.
 
+## Running a built-in tool your own way
+
+`@plural.override("bash")` (also `read`, `write`, `edit`, `multi_edit`, `grep`, `glob`, `ls`,
+`web_fetch`) runs the built-in tool with your async function `(args, ctx)`. The model, the policy and
+the room still see the built-in: its schema, risk, subject and approvals. Return the result text, or
+nothing to let the built-in run; `await ctx.original()` runs it and returns its text. One plugin per
+tool. Use it to run commands in a container or on another machine, or to post-process a tool.
+
 ## Keeping state
 
 `plural.store.get(key, default)`, `.set(key, value)`, `.delete(key)` and `.all()` keep JSON values in

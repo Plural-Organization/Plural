@@ -10,7 +10,7 @@ from plural.agent.providers.base import LlmMessage, LlmRequest, ToolCallRequest
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import ToolCtx, ToolResult
-from plural.agent.tools.registry import Exposure
+from plural.agent.tools.registry import Exposure, builtin_tools
 from plural.host import plugins as plugin_module
 from plural.host.inbox import Inbox, PluginPrompt, PluginReply
 from plural.host.plugins import CommandContext, PluginError, PluginHost
@@ -536,3 +536,59 @@ async def test_plugins_watch_the_agent_work_in_order(tmp_path: Path) -> None:
     assert reply.text == repr(
         [("start", "bash", "rm -rf build"), ("end", "bash", "built"), ("said", "all done")]
     )
+
+
+OVERRIDES = """
+def setup(plural):
+    @plural.override("bash")
+    async def remote(args, ctx):
+        if args["command"].startswith("make"):
+            return f"ran remotely: {args['command']}"
+
+    @plural.override("read")
+    async def loud(args, ctx):
+        return (await ctx.original()).upper()
+"""
+
+
+async def test_a_plugin_runs_a_built_in_tool_its_own_way(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("alpha\n")
+    registry = builtin_tools()
+    directory = tmp_path / "plugins"
+    directory.mkdir()
+    (directory / "remote.py").write_text(OVERRIDES)
+    (directory / "second.py").write_text(
+        'def setup(plural):\n    @plural.override("bash")\n    async def h(a, c): ...\n'
+    )
+    (directory / "skill.py").write_text(
+        'def setup(plural):\n    @plural.override("skill")\n    async def h(a, c): ...\n'
+    )
+    plugins = PluginHost(
+        directory,
+        workspace=tmp_path,
+        reserved_tools=registry.registered,
+        builtin_tool=registry.builtin,
+    )
+    plugins.load()
+    registry.add_source(plugins.tools_source(Exposure.CORE))
+    errors = {view.name: view.error for view in plugins.views()}
+    assert errors["remote"] is None
+    assert errors["second"] is not None
+    assert "bash is already replaced by a plugin" in errors["second"]
+    assert errors["skill"] is not None
+    assert "skill cannot be replaced" in errors["skill"]
+
+    # The model and the policy see the built-in.
+    builtin = registry.builtin("bash")
+    assert builtin is not None
+    assert registry.get("bash") is not builtin
+    assert registry.get("bash").schema() == builtin.schema()
+    ctx = ToolCtx(workspace=Workspace.at(tmp_path), backend=LocalBackend())
+    make = registry.prepare(ToolCallRequest(id="c1", name="bash", args={"command": "make test"}))
+    assert (make.risk, make.subject) == (ToolRisk.EXEC, "make test")
+    assert (await make.execute(ctx)).content == "ran remotely: make test"
+    # Nothing back runs the built-in.
+    echo = registry.prepare(ToolCallRequest(id="c2", name="bash", args={"command": "echo hi"}))
+    assert "hi" in (await echo.execute(ctx)).content
+    read = registry.prepare(ToolCallRequest(id="c3", name="read", args={"path": "a.txt"}))
+    assert "ALPHA" in (await read.execute(ctx)).content

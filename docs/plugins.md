@@ -126,6 +126,36 @@ The handler receives the arguments as a dict and a context with `ctx.workspace`,
 streams progress to the room, and `await ctx.run(*argv)`. A string result goes to the model as is, any
 other value as JSON. If the handler raises, the model gets the error as the tool's result.
 
+## Running a built-in tool your own way
+
+`plural.override(name)` runs one of the agent's built-in tools with a plugin function: `read`, `write`,
+`edit`, `multi_edit`, `bash`, `grep`, `glob`, `ls` or `web_fetch`. Use it to run commands in a container
+or on another machine, or to change what a tool does without the agent learning a new one:
+
+```python
+def setup(plural):
+    @plural.override("bash")
+    async def in_container(args, ctx):
+        if args["command"].startswith(("make", "pytest")):
+            return await ctx.run("docker", "exec", "dev", "sh", "-c", args["command"])
+        # Nothing back: the built-in bash runs as usual.
+
+    @plural.override("read")
+    async def numbered(args, ctx):
+        text = await ctx.original()
+        return text.replace("\t", "    ")
+```
+
+The handler gets the call's arguments and a context with `ctx.workspace`, `ctx.log(text)`, `await
+ctx.run(*argv)` and `await ctx.original()`, which runs the built-in tool with the same arguments and
+returns its text, raising if it fails. Return the result text, any other value as JSON, or nothing to
+let the built-in run.
+
+Only how the call runs changes. The model sees the built-in's description and parameters, the arguments
+are checked against them, and the policy, folder access and approvals go by the built-in's risk and
+subject, so replacing `bash` cannot make a shell command need less approval. One plugin may replace a
+tool; a second that tries fails to load. `/plugins` lists the replaced tools with the plugin's own.
+
 ## Keeping state
 
 Module variables reset on `/plugins reload`. What must last goes in `plural.store`, a JSON file of the
