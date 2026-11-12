@@ -13,7 +13,7 @@ import time
 import tomllib
 from collections.abc import AsyncIterator, Callable, Coroutine
 from contextlib import suppress
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -611,6 +611,8 @@ def current_agent() -> tuple[str, str]:
 async def run(args: argparse.Namespace, preset: str, model: str) -> list[Outcome]:
     gate = asyncio.Semaphore(args.jobs)
     tasks = load_tasks(args.task) * args.repeat
+    if args.timeout:
+        tasks = [replace(task, timeout_s=args.timeout) for task in tasks]
     runs = (
         run_task(task, args.harness, preset, model, gate, number)
         for number, task in enumerate(tasks)
@@ -637,6 +639,9 @@ def main() -> int:
         help="let your own skills and agents into the runs; the numbers then are yours alone",
     )
     parser.add_argument("--compare", type=Path, help="an earlier results file")
+    parser.add_argument(
+        "--timeout", type=int, help="seconds each task may take, over the task's own"
+    )
     parser.add_argument(
         "--base-url",
         help="an OpenAI-compatible endpoint in place of the preset's, for a local server",
