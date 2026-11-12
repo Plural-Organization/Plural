@@ -134,8 +134,9 @@ class Control:
         self._reply = reply
         # The agent's configuration the client last applied, for a plugin to switch its model.
         self._config: AgentConfig | None = None
-        if host.plugins is not None:
-            host.plugins.switch_model = self._switch_model
+        plugins = getattr(host, "plugins", None)
+        if plugins is not None:
+            plugins.switch_model = self._switch_model
 
     async def handle(self, line: str) -> None:
         request = self._parse(line)
@@ -207,7 +208,7 @@ class Control:
             raise PluginError(str(error)) from error
 
     def _plugin_presets(self) -> tuple[Preset, ...]:
-        plugins = self._host.plugins
+        plugins = getattr(self._host, "plugins", None)
         return plugins.providers() if plugins is not None else ()
 
     def _resolve(self, config: AgentConfig) -> AgentConfig:
