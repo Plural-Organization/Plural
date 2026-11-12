@@ -15,6 +15,7 @@ from typing import Final, Literal, cast
 import structlog
 from pydantic import JsonValue
 
+from plural.agent.loop.events import AgentEvent, Compacted, MessageEnd, ToolEnd, ToolStart
 from plural.agent.prompts import tag
 from plural.agent.providers.base import LlmRequest, ToolCallRequest, ToolSchema
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
@@ -74,6 +75,10 @@ MAX_CONTEXT_CHARS: Final = 8000
 MAX_INSTRUCTIONS_CHARS: Final = 4000
 # What a tool_result hook may hand the model in place of a result.
 MAX_RESULT_CHARS: Final = 200_000
+# Events a plugin can watch as the agent works, delivered in order in the background.
+LIVE_EVENTS: Final = ("message_end", "tool_start", "tool_end", "compaction")
+# Live events waiting for plugins; past this, new ones are dropped.
+MAX_LIVE_QUEUE: Final = 1000
 HOOK_EVENTS: Final = frozenset(
     {
         "session_start",
@@ -83,6 +88,7 @@ HOOK_EVENTS: Final = frozenset(
         "tool_call",
         "tool_result",
         "run_end",
+        *LIVE_EVENTS,
     }
 )
 MAX_OUTPUT_CHARS: Final = 64_000
@@ -429,6 +435,48 @@ class ModelContext:
     messages: tuple[ContextMessage, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class MessageInfo:
+    """A message_end event: a reply of the agent, whole."""
+
+    run_id: str
+    message_id: str
+    text: str
+    thinking: str
+
+
+@dataclass(frozen=True, slots=True)
+class ToolStartInfo:
+    """A tool_start event: a call the agent made, before it is approved and run."""
+
+    run_id: str
+    call_id: str
+    name: str
+    risk: str
+    subject: str
+    args: Mapping[str, JsonValue]
+
+
+@dataclass(frozen=True, slots=True)
+class ToolEndInfo:
+    """A tool_end event: what a call gave back, as the model got it."""
+
+    run_id: str
+    call_id: str
+    name: str
+    content: str
+    is_error: bool
+
+
+@dataclass(frozen=True, slots=True)
+class CompactionInfo:
+    """A compaction event: the conversation was summarized to make room."""
+
+    run_id: str
+    summary: str
+    tokens_before: int
+
+
 Handler = Callable[[CommandContext], Awaitable[None]]
 ToolHandler = Callable[[dict[str, JsonValue], ToolContext], Awaitable[object]]
 HookHandler = Callable[[object, HookContext], Awaitable[object]]
@@ -657,6 +705,9 @@ class PluginHost:
         self._tools: dict[str, PluginTool] = {}
         self._hooks: tuple[Hook, ...] = ()
         self._apis: tuple[PluginApi, ...] = ()
+        self._live: asyncio.Queue[tuple[str, object]] = asyncio.Queue(MAX_LIVE_QUEUE)
+        self._live_worker: asyncio.Task[None] | None = None
+        self._call_names: dict[str, str] = {}
         self._generation = count()
 
     def load(self) -> None:
@@ -893,6 +944,58 @@ class PluginHost:
         if messages == request.messages:
             return request
         return request.model_copy(update={"messages": messages})
+
+    def observe(self, run_id: str, event: AgentEvent) -> None:
+        """Hand an event of the agent's run to the plugins that watch it. They get it in the
+        background, in order, so a slow plugin never holds up the room or the agent."""
+        match event:
+            case ToolStart(call=call):
+                self._call_names[call.id] = call.name
+                info: tuple[str, object] | None = (
+                    "tool_start",
+                    ToolStartInfo(
+                        run_id, call.id, call.name, call.risk.value, call.subject, call.args
+                    ),
+                )
+            case ToolEnd(call_id=call_id, result=result):
+                name = self._call_names.pop(call_id, "")
+                info = (
+                    "tool_end",
+                    ToolEndInfo(run_id, call_id, name, result.content, result.is_error),
+                )
+            case MessageEnd(message_id=message_id, text=text, thinking=thinking):
+                info = ("message_end", MessageInfo(run_id, message_id, text, thinking))
+            case Compacted(summary=summary, tokens_before=tokens_before):
+                info = ("compaction", CompactionInfo(run_id, summary, tokens_before))
+            case _:
+                info = None
+        if info is None or not self.hooks(info[0]):
+            return
+        try:
+            self._live.put_nowait(info)
+        except asyncio.QueueFull:
+            log.warning("plugins.live_dropped", event=info[0])
+            return
+        if self._live_worker is None or self._live_worker.done():
+            self._live_worker = asyncio.create_task(self._deliver(), name="plugins-live")
+
+    async def _deliver(self) -> None:
+        while True:
+            event, info = await self._live.get()
+            try:
+                for hook in self.hooks(event):
+                    try:
+                        await asyncio.wait_for(
+                            hook.handler(info, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                        )
+                    except Exception as error:
+                        log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+            finally:
+                self._live.task_done()
+
+    async def drained(self) -> None:
+        """Wait until every live event handed over so far has gone to the plugins."""
+        await self._live.join()
 
     async def guard_tool(self, call: ToolCallView, provenance: Provenance) -> Verdict | None:
         """Ask every tool_call hook about a call. Any deny wins; a hook that fails counts as ask."""

@@ -163,6 +163,15 @@ tests, ticket.
 the run a hook prompt starts does not fire `run_end` again. Good for running tests or a linter after the
 agent changed files.
 
+### Watching the agent work
+
+`tool_start` (`call.run_id`, `call.call_id`, `call.name`, `call.risk`, `call.subject`, `call.args`),
+`tool_end` (`result.run_id`, `result.call_id`, `result.name`, `result.content`, `result.is_error`),
+`message_end` (`message.run_id`, `message.message_id`, `message.text`, `message.thinking`) and
+`compaction` (`event.run_id`, `event.summary`, `event.tokens_before`) only watch: they get each event
+in order, in the background, and their return value is ignored. 5 seconds each. Use them to log, count,
+mirror the session elsewhere or update `plural.status`.
+
 ## Good plugins
 
 - Keep handlers `async`. Wrap blocking work in `await asyncio.to_thread(...)` so the room does not

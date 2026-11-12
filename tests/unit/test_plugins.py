@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from plural.agent.context.context import ContextBuilder
+from plural.agent.loop.events import MessageEnd, ToolEnd, ToolOutput, ToolStart
 from plural.agent.providers.base import LlmMessage, LlmRequest, ToolCallRequest
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
@@ -489,3 +490,49 @@ async def test_plugins_add_their_instructions_to_the_system_prompt(tmp_path: Pat
     await command.handler(context(tmp_path, Inbox()))
     assert plugins.describe() is None
     assert all(kind is not ContextPartKind.PLUGINS for kind, _ in builder.sections())
+
+
+LIVE = """
+seen = []
+
+
+def setup(plural):
+    @plural.on("tool_start")
+    async def started(call, ctx):
+        seen.append(("start", call.name, call.subject))
+
+    @plural.on("tool_end")
+    async def ended(result, ctx):
+        seen.append(("end", result.name, result.content))
+
+    @plural.on("message_end")
+    async def said(message, ctx):
+        seen.append(("said", message.text))
+
+    @plural.on("message_end")
+    async def broken(message, ctx):
+        raise RuntimeError("boom")
+
+    @plural.command("seen")
+    async def show(ctx):
+        await ctx.reply(repr(seen))
+"""
+
+
+async def test_plugins_watch_the_agent_work_in_order(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, live=LIVE)
+    plugins.observe("r1", ToolStart(BASH))
+    plugins.observe("r1", ToolOutput("c", "partial"))
+    plugins.observe("r1", ToolEnd("c", ToolResult("built")))
+    plugins.observe("r1", MessageEnd("m1", "all done", ""))
+    await plugins.drained()
+
+    inbox = Inbox()
+    command = plugins.get("seen")
+    assert command is not None
+    await command.handler(context(tmp_path, inbox))
+    reply = await inbox.get()
+    assert isinstance(reply, PluginReply)
+    assert reply.text == repr(
+        [("start", "bash", "rm -rf build"), ("end", "bash", "built"), ("said", "all done")]
+    )

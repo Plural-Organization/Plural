@@ -486,6 +486,8 @@ class SessionActor:
                 await self._on_disconnect(connection)
             case AgentOutput(run_id=run_id, event=event):
                 await self._on_agent(run_id, event)
+                if self._plugins is not None:
+                    self._plugins.observe(run_id, event)
             case ApprovalNeeded(approval=approval):
                 if self._conflicts is not None:
                     warnings = self._conflicts.warnings_for(approval.call, self._clock.now())

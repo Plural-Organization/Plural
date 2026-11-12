@@ -330,6 +330,33 @@ on their own. Such a prompt is the host's, so it is not reviewed and does not ta
 a guest's text into it. A hook has 120 seconds; if it fails the room sees why and the other hooks still
 run.
 
+### Watching the agent work
+
+Four events let a plugin follow a run as it goes, to log it, count things, mirror it to another tool or
+keep `plural.status` up to date:
+
+```python
+def setup(plural):
+    calls = {"n": 0}
+
+    @plural.on("tool_start")
+    async def count(call, ctx):
+        calls["n"] += 1
+        plural.status(f"{calls['n']} tool calls, last: {call.name}")
+```
+
+| event | gets |
+|---|---|
+| `tool_start` | `call.run_id`, `call.call_id`, `call.name`, `call.risk`, `call.subject`, `call.args`: a call the agent made, before it is approved and run |
+| `tool_end` | `result.run_id`, `result.call_id`, `result.name`, `result.content`, `result.is_error`: what the call gave back, as the model got it |
+| `message_end` | `message.run_id`, `message.message_id`, `message.text`, `message.thinking`: a reply of the agent, whole |
+| `compaction` | `event.run_id`, `event.summary`, `event.tokens_before`: the conversation was summarized |
+
+These hooks only watch: what they return is ignored, and they cannot change or stop the run. They get
+the events in order, in the background, so a slow one never holds up the agent or the room; each call
+has 5 seconds, and one that fails is logged and the next event still comes. If more than 1,000 events
+wait for the plugins, new ones are dropped.
+
 If a handler raises, the room sees `/name failed: …` and the host keeps running. A file that fails to
 import, has no `setup`, or registers a taken name is listed as failed by `/plugins` with the reason.
 
