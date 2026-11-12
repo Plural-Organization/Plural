@@ -2,8 +2,11 @@ import json
 import socket
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 
-from plural.daemon.port import PortState, port_state
+import pytest
+
+from plural.daemon.port import PortState, port_state, start_daemon
 
 
 def free_port() -> int:
@@ -45,3 +48,42 @@ def test_something_else_on_the_port_is_busy() -> None:
         assert port_state(server.server_port) is PortState.BUSY
     finally:
         server.shutdown()
+
+
+def test_start_daemon_runs_it_and_waits_until_it_answers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    server = serve(json.dumps({"daemon": True}).encode())
+    ran: list[list[str]] = []
+    states = iter([PortState.FREE, PortState.DAEMON])
+
+    def fake_state(_port: int) -> PortState:
+        return next(states)
+
+    class Fake:
+        def __init__(self, command: list[str], **_: object) -> None:
+            ran.append(command)
+
+    monkeypatch.setattr("plural.daemon.port.port_state", fake_state)
+    monkeypatch.setattr("plural.daemon.port.subprocess.Popen", Fake)
+    try:
+        assert (
+            start_daemon(server.server_port, tmp_path / "logs" / "daemon.log") is PortState.DAEMON
+        )
+    finally:
+        server.shutdown()
+    assert ran[0][-3:-1] == ["daemon", "--port"]
+
+
+def test_start_daemon_leaves_a_running_one_alone(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def running(_port: int) -> PortState:
+        return PortState.DAEMON
+
+    def never(*_: object, **__: object) -> None:
+        raise AssertionError("started a second daemon")
+
+    monkeypatch.setattr("plural.daemon.port.port_state", running)
+    monkeypatch.setattr("plural.daemon.port.subprocess.Popen", never)
+    assert start_daemon(1, tmp_path / "daemon.log") is PortState.DAEMON

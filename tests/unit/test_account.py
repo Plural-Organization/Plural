@@ -12,6 +12,7 @@ from urllib.request import Request
 import pytest
 from typer.testing import CliRunner
 
+from plural.cli import account as cli_account
 from plural.cli.main import app
 from plural.host import account
 from plural.host.account import (
@@ -402,3 +403,32 @@ def test_login_that_nobody_approved_exits_with_the_reason(
     result = CliRunner().invoke(app, ["login", "--accounts", ACCOUNTS])
     assert result.exit_code == 1
     assert "refused on the web" in result.output
+
+
+@pytest.fixture(autouse=True)
+def no_system_opener(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The tests drive `webbrowser`; none of them may open a real browser."""
+
+    def refuse(_url: str) -> bool:
+        return False
+
+    monkeypatch.setattr("plural.cli.account._system_open", refuse)
+
+    def skip(_port: int) -> None:
+        return None
+
+    monkeypatch.setattr("plural.cli.account._start_daemon", skip)
+
+
+def test_the_system_opener_is_not_waited_for(monkeypatch: pytest.MonkeyPatch) -> None:
+    started: list[list[str]] = []
+
+    class Fake:
+        def __init__(self, command: list[str], **_: object) -> None:
+            started.append(command)
+
+    monkeypatch.undo()
+    monkeypatch.setattr("plural.cli.account.sys.platform", "darwin")
+    monkeypatch.setattr("plural.cli.account.subprocess.Popen", Fake)
+    assert cli_account._system_open("https://example.test/x") is True  # pyright: ignore[reportPrivateUsage]
+    assert started == [["open", "https://example.test/x"]]
