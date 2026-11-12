@@ -205,6 +205,7 @@ from plural.protocol.events import (
     RunStarted,
     SessionForked,
     SessionSnapshot,
+    SessionSwitch,
     SessionWelcome,
     SkillsChanged,
     SkillsFound,
@@ -1434,6 +1435,7 @@ class SessionActor:
             inbox=self._inbox,
             asker=self._plugin_ask,
             switcher=self._require_plugins().switch_model,
+            sessions=_PluginSessions(self, participant.id),
         )
         self._background(self._invoke_plugin(found, context))
 
@@ -1602,7 +1604,12 @@ class SessionActor:
             self._agent.steer(turn)
 
     async def fork(
-        self, *, title: str | None, before_prompt_id: str | None, actor_id: str
+        self,
+        *,
+        title: str | None,
+        before_prompt_id: str | None,
+        actor_id: str,
+        switch: bool = False,
     ) -> SessionForked:
         """Copy this session into a new one and tell the room. Returns what it announced."""
         if self._data_dir is None:
@@ -1640,9 +1647,24 @@ class SessionActor:
             room=room,
             title=info.title if info is not None else (name or room),
             before_prompt_id=before_prompt_id,
+            switch=switch,
         )
         await self._emit(forked, actor_id=actor_id)
         return forked
+
+    async def open_session(self, room: str, *, actor_id: str) -> SessionSwitch:
+        """Ask the host's client to switch to another session this host keeps."""
+        if self._data_dir is None:
+            raise Conflict("this host cannot switch sessions")
+        try:
+            info = await asyncio.to_thread(read_session, session_path(self._data_dir, room))
+        except ValueError:
+            info = None
+        if info is None:
+            raise NotFound(f"no session {room}")
+        switch = SessionSwitch(room=room, title=info.title)
+        await self._emit(switch, actor_id=actor_id)
+        return switch
 
     async def _start_run(self, turn: UserTurn) -> None:
         run_id = self._ids.new("run_")
@@ -1937,3 +1959,20 @@ class SessionActor:
     def _sync_policy(self) -> None:
         self._gate.use_session_rules(policies.to_rules(self._state.policy))
         self._gate.use_mode(self._state.permission_mode)
+
+
+class _PluginSessions:
+    """What a plugin command reaches of the sessions: forking this one and opening another."""
+
+    def __init__(self, actor: SessionActor, actor_id: str) -> None:
+        self._actor = actor
+        self._actor_id = actor_id
+
+    async def fork(self, title: str | None, before_prompt_id: str | None, switch: bool) -> str:
+        forked = await self._actor.fork(
+            title=title, before_prompt_id=before_prompt_id, actor_id=self._actor_id, switch=switch
+        )
+        return forked.room
+
+    async def open(self, room: str) -> None:
+        await self._actor.open_session(room, actor_id=self._actor_id)

@@ -1482,6 +1482,7 @@
               "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
               "session.refused": "#/$defs/JoinRefused",
               "session.snapshot": "#/$defs/SessionSnapshot",
+              "session.switch": "#/$defs/SessionSwitch",
               "session.welcome": "#/$defs/SessionWelcome",
               "skills.changed": "#/$defs/SkillsChanged",
               "skills.found": "#/$defs/SkillsFound",
@@ -1641,6 +1642,9 @@
             },
             {
               "$ref": "#/$defs/SessionForked"
+            },
+            {
+              "$ref": "#/$defs/SessionSwitch"
             },
             {
               "$ref": "#/$defs/ContextCompacted"
@@ -3056,6 +3060,10 @@
         "room": {
           "type": "string"
         },
+        "switch": {
+          "default": false,
+          "type": "boolean"
+        },
         "title": {
           "type": "string"
         },
@@ -3069,7 +3077,8 @@
         "type",
         "room",
         "title",
-        "before_prompt_id"
+        "before_prompt_id",
+        "switch"
       ],
       "type": "object"
     },
@@ -3349,6 +3358,28 @@
         "transcript",
         "chat",
         "board"
+      ],
+      "type": "object"
+    },
+    "SessionSwitch": {
+      "description": "The host's client is asked to leave this session for another one it keeps, by a plugin.",
+      "properties": {
+        "room": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "session.switch",
+          "default": "session.switch",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "room",
+        "title"
       ],
       "type": "object"
     },
@@ -4099,6 +4130,7 @@
           "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
           "session.refused": "#/$defs/JoinRefused",
           "session.snapshot": "#/$defs/SessionSnapshot",
+          "session.switch": "#/$defs/SessionSwitch",
           "session.welcome": "#/$defs/SessionWelcome",
           "skills.changed": "#/$defs/SkillsChanged",
           "skills.found": "#/$defs/SkillsFound",
@@ -4258,6 +4290,9 @@
         },
         {
           "$ref": "#/$defs/SessionForked"
+        },
+        {
+          "$ref": "#/$defs/SessionSwitch"
         },
         {
           "$ref": "#/$defs/ContextCompacted"

@@ -218,6 +218,7 @@ export interface EventsSchema {
     | MessageEnded
     | ContextCompacting
     | SessionForked
+    | SessionSwitch
     | ContextCompacted
     | ContextUsage
     | McpChanged
@@ -938,8 +939,20 @@ export interface ContextCompacting {
 export interface SessionForked {
   before_prompt_id: string | null;
   room: string;
+  switch: boolean;
   title: string;
   type: "session.forked";
+}
+/**
+ * The host's client is asked to leave this session for another one it keeps, by a plugin.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "SessionSwitch".
+ */
+export interface SessionSwitch {
+  room: string;
+  title: string;
+  type: "session.switch";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -1477,6 +1490,7 @@ export interface EventRecord {
     | MessageEnded
     | ContextCompacting
     | SessionForked
+    | SessionSwitch
     | ContextCompacted
     | ContextUsage
     | McpChanged

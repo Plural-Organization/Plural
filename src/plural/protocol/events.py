@@ -448,6 +448,16 @@ class SessionForked(EventBase):
     room: str
     title: str
     before_prompt_id: str | None = None
+    # The host's client goes on in the fork at once.
+    switch: bool = False
+
+
+class SessionSwitch(EventBase):
+    """The host's client is asked to leave this session for another one it keeps, by a plugin."""
+
+    type: Literal["session.switch"] = "session.switch"
+    room: str
+    title: str
 
 
 class ContextCompacted(EventBase):
@@ -588,6 +598,7 @@ Event = Annotated[
     | MessageEnded
     | ContextCompacting
     | SessionForked
+    | SessionSwitch
     | ContextCompacted
     | ContextUsage
     | McpChanged

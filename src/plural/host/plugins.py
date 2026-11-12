@@ -11,7 +11,7 @@ from dataclasses import dataclass, replace
 from itertools import count
 from pathlib import Path
 from types import ModuleType
-from typing import Final, Literal, cast
+from typing import Final, Literal, Protocol, cast
 
 import structlog
 from pydantic import JsonValue
@@ -230,6 +230,7 @@ class CommandContext:
         inbox: Inbox,
         asker: Asker = _no_model,
         switcher: "Switcher | None" = None,
+        sessions: "Sessions | None" = None,
     ) -> None:
         self.command = command
         self.args = args
@@ -240,9 +241,32 @@ class CommandContext:
         self._inbox = inbox
         self._asker = asker
         self._switcher = switcher
+        self._sessions = sessions
 
     async def reply(self, text: str) -> None:
         self._inbox.put(PluginReply(self.command, self.author_id, text))
+
+    async def fork(
+        self,
+        title: str | None = None,
+        *,
+        before_prompt_id: str | None = None,
+        switch: bool = False,
+    ) -> str:
+        """Copy this session into a new one and return its id; with `switch`, the host's
+        client goes on in it at once. Only a command the host ran may."""
+        return await self._host_sessions().fork(title, before_prompt_id, switch)
+
+    async def switch(self, room: str) -> None:
+        """Have the host's client leave this session for another one the host keeps."""
+        await self._host_sessions().open(room)
+
+    def _host_sessions(self) -> "Sessions":
+        if self.role is not Role.HOST:
+            raise PluginError("only the host can fork or switch sessions")
+        if self._sessions is None:
+            raise PluginError("this host cannot fork or switch sessions")
+        return self._sessions
 
     async def set_model(self, model: str, *, provider: str | None = None) -> str:
         """Switch the agent's model, and its provider when one is named, as the host would in
@@ -533,6 +557,14 @@ class SummaryInfo:
     # The summary the last compaction left, or None.
     previous: str | None
     messages: int
+
+
+class Sessions(Protocol):
+    """Forking the session a command runs in, and opening another one."""
+
+    async def fork(self, title: str | None, before_prompt_id: str | None, switch: bool) -> str: ...
+
+    async def open(self, room: str) -> None: ...
 
 
 # Switches the agent's model: the model, and a provider preset or None for the current one.

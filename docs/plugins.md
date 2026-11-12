@@ -274,6 +274,29 @@ change. It raises `PluginError` when the person who ran the command is not the h
 works, or when the host was started without a client to configure it, such as `plural-host` on its
 own.
 
+## Forking and switching sessions
+
+A command the host runs can fork the session and move the host's terminal client between sessions:
+
+```python
+def setup(plural):
+    @plural.command("try", host_only=True, usage="/try <title>")
+    async def try_another_way(ctx):
+        room = await ctx.fork(ctx.args or None, switch=True)
+        await ctx.notify(f"now in {room}")
+
+    @plural.command("back", host_only=True, usage="/back <session id>")
+    async def back(ctx):
+        await ctx.switch(ctx.args)
+```
+
+`await ctx.fork(title=None, before_prompt_id=None, switch=False)` copies the session, whole or up to
+before a prompt, into a new one and returns its id, as `/fork` does; with `switch=True` the host's
+client goes on in the copy. `await ctx.switch(room)` asks the host's client to leave this session for
+another one this host keeps. Both raise when the person who ran the command is not the host, or when
+the session or prompt is not there. Switching needs the terminal client: a host started on its own
+keeps the fork for `plural -r`.
+
 ## Which tools the agent has
 
 `plural.hide_tools(names)` keeps tools from the agent: they are not declared on its requests,

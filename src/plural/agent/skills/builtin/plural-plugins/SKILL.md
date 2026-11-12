@@ -147,6 +147,12 @@ settings: the same provider unless a preset is named. Only a command the host ra
 the agent works; it returns the new label and raises `PluginError` otherwise. Make such commands
 `host_only=True`.
 
+## Forking and switching sessions
+
+In a command the host ran, `await ctx.fork(title=None, before_prompt_id=None, switch=False)` copies the
+session into a new one and returns its id (`switch=True` moves the host's terminal client there), and
+`await ctx.switch(room)` moves it to another session the host keeps. Make such commands `host_only`.
+
 ## Which tools the agent has
 
 `plural.hide_tools(names)` keeps those tools from the agent from its next model call on (not declared,

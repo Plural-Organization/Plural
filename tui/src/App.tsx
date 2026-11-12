@@ -323,8 +323,11 @@ export function App({
               sound.ring();
             }
           }
+          if (event.type === "session.switch" && client.projection.me?.role === "host" && onSwitch) {
+            onSwitch(event.room);
+          }
           if (event.type === "session.forked" && client.projection.me?.role === "host") {
-            if (switchToFork.current && onSwitch) {
+            if ((switchToFork.current || event.switch) && onSwitch) {
               switchToFork.current = false;
               onSwitch(event.room);
             } else {
