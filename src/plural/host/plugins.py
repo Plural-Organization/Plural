@@ -15,7 +15,7 @@ from typing import Final, Literal, cast
 import structlog
 from pydantic import JsonValue
 
-from plural.agent.providers.base import ToolCallRequest, ToolSchema
+from plural.agent.providers.base import LlmRequest, ToolCallRequest, ToolSchema
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
 from plural.agent.tools.registry import Exposure
 from plural.host.inbox import (
@@ -72,7 +72,15 @@ MAX_CONTEXT_CHARS: Final = 8000
 # What a tool_result hook may hand the model in place of a result.
 MAX_RESULT_CHARS: Final = 200_000
 HOOK_EVENTS: Final = frozenset(
-    {"session_start", "before_run", "tool_args", "tool_call", "tool_result", "run_end"}
+    {
+        "session_start",
+        "before_run",
+        "context",
+        "tool_args",
+        "tool_call",
+        "tool_result",
+        "run_end",
+    }
 )
 MAX_OUTPUT_CHARS: Final = 64_000
 
@@ -397,6 +405,25 @@ class ToolOutcome:
     is_error: bool
     author_id: str
     role: str
+
+
+@dataclass(slots=True)
+class ContextMessage:
+    """One message the model is about to be sent. A context hook may change its `content`."""
+
+    role: str
+    content: str
+    # For a tool result: the tool that gave it.
+    tool: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ModelContext:
+    """What a context hook sees before a model call: the system prompt, to read, and the
+    messages, whose content it may change. Messages cannot be added or removed."""
+
+    system: str
+    messages: tuple[ContextMessage, ...]
 
 
 Handler = Callable[[CommandContext], Awaitable[None]]
@@ -795,6 +822,49 @@ class PluginHost:
         if content == result.content:
             return result
         return replace(result, content=content)
+
+    async def request(self, request: LlmRequest) -> LlmRequest:
+        """Let each context hook change the text of the messages a model call is sent."""
+        hooks = self.hooks("context")
+        if not hooks:
+            return request
+        names = {call.id: call.name for m in request.messages for call in m.tool_calls}
+        seen = ModelContext(
+            system=request.system,
+            messages=tuple(
+                ContextMessage(
+                    role=m.role,
+                    content=m.content,
+                    tool=names.get(m.tool_call_id or "") if m.role == "tool" else None,
+                )
+                for m in request.messages
+            ),
+        )
+        for hook in hooks:
+            before = [m.content for m in seen.messages]
+            try:
+                await asyncio.wait_for(
+                    hook.handler(seen, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                )
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                for message, content in zip(seen.messages, before, strict=True):
+                    message.content = content
+                continue
+            # Plugin code is not type-checked: text that is not a string is put back.
+            for message, content in zip(seen.messages, before, strict=True):
+                changed = cast(object, message.content)
+                if not isinstance(changed, str):
+                    message.content = content
+        messages = tuple(
+            original
+            if view.content == original.content
+            else original.model_copy(update={"content": view.content[:MAX_RESULT_CHARS]})
+            for original, view in zip(request.messages, seen.messages, strict=True)
+        )
+        if messages == request.messages:
+            return request
+        return request.model_copy(update={"messages": messages})
 
     async def guard_tool(self, call: ToolCallView, provenance: Provenance) -> Verdict | None:
         """Ask every tool_call hook about a call. Any deny wins; a hook that fails counts as ask."""

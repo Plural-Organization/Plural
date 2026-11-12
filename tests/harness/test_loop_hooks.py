@@ -5,8 +5,8 @@ from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.loop.events import ToolEnd, ToolStart
 from plural.agent.loop.hooks import NoHooks
-from plural.agent.loop.messages import ToolResultTurn
-from plural.agent.providers.base import ToolCallRequest
+from plural.agent.loop.messages import ToolResultTurn, UserTurn
+from plural.agent.providers.base import LlmRequest, ToolCallRequest
 from plural.agent.tools.base import ToolResult
 from plural.protocol.models import Provenance, ToolCallView
 
@@ -50,3 +50,22 @@ async def test_the_hooks_change_what_a_call_gives_back(tmp_path: Path) -> None:
     assert "ALPHA" in end.result.content
     kept = next(m for m in loop.conversation if isinstance(m, ToolResultTurn))
     assert kept.content == end.result.content
+
+
+class Remind(NoHooks):
+    async def request(self, request: LlmRequest) -> LlmRequest:
+        last = request.messages[-1]
+        reminded = last.model_copy(update={"content": last.content + "\n(remember the tests)"})
+        return request.model_copy(update={"messages": (*request.messages[:-1], reminded)})
+
+
+async def test_the_hooks_change_what_the_model_is_sent_but_not_the_history(
+    tmp_path: Path,
+) -> None:
+    provider = FakeProvider([reply("ok")])
+    loop = make_loop(tmp_path, provider, StubGate(), hooks=Remind())
+    await collect(loop, turn("fix it"))
+
+    assert provider.requests[0].messages[-1].content.endswith("(remember the tests)")
+    prompt = next(m for m in loop.conversation if isinstance(m, UserTurn))
+    assert prompt.text == "fix it"

@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from plural.agent.providers.base import ToolCallRequest
+from plural.agent.providers.base import LlmMessage, LlmRequest, ToolCallRequest
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import ToolCtx, ToolResult
@@ -417,3 +417,46 @@ async def test_tool_result_hooks_change_what_the_model_gets(tmp_path: Path) -> N
     # Hooks that change nothing, fail or answer with something else leave the result as it was.
     plain = ToolResult("ok")
     assert await plugins.tool_result(BASH, plain, HOST) is plain
+
+
+CONTEXT = """
+def setup(plural):
+    @plural.on("context")
+    async def short(context, ctx):
+        for message in context.messages:
+            if message.tool == "bash":
+                message.content = message.content[:5]
+
+    @plural.on("context")
+    async def broken(context, ctx):
+        context.messages[0].content = "lost"
+        raise RuntimeError("boom")
+
+    @plural.on("context")
+    async def wrong(context, ctx):
+        context.messages[0].content = 42
+
+    @plural.on("context")
+    async def grow(context, ctx):
+        context.messages.append(None)
+"""
+
+
+async def test_context_hooks_change_the_text_of_what_the_model_is_sent(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, context=CONTEXT)
+    call = ToolCallRequest(id="c1", name="bash", args={"command": "make"})
+    request = LlmRequest(
+        system="be brief",
+        messages=(
+            LlmMessage(role="user", content="build it"),
+            LlmMessage(role="assistant", content="", tool_calls=(call,)),
+            LlmMessage(role="tool", content="lots of output", tool_call_id="c1"),
+        ),
+    )
+    changed = await plugins.request(request)
+    assert [m.content for m in changed.messages] == ["build it", "", "lots "]
+    assert changed.messages[1] is request.messages[1]
+    # Without context hooks the request goes as it was.
+    none = tmp_path / "none"
+    none.mkdir()
+    assert await host_with(none).request(request) is request

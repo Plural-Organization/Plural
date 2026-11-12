@@ -135,6 +135,13 @@ it gets `(result, ctx)` (`result.name`, `result.risk`, `result.subject`, `result
 nothing. 5 seconds; a hook that fails changes nothing. Use it to hide secrets, shorten noisy output or
 add a hint to an error.
 
+`@plural.on("context")` runs before every model call with `(context, ctx)`: `context.system` (read only)
+and `context.messages`, each with `role` (`user`, `assistant`, `tool`), `content` and, for tool
+results, `tool`. Set a message's `content` to change what the model is sent; messages cannot be added
+or removed, and the session's history keeps the original. 5 seconds; a hook that fails changes
+nothing. Changing older messages costs the provider's cache, and with the Claude Code, Codex or Grok CLI
+restarts their session, so prefer the latest messages.
+
 `@plural.on("session_start")` gets `(session, ctx)` (`session.room`, `session.workspace`) after the
 plugins load, at start and on every reload.
 

@@ -225,6 +225,31 @@ the hooks left it; output the tool streamed while it ran was already shown. A ca
 aborted never reaches the hook. A hook gets 5 seconds; one that raises, is late or returns something
 other than text changes nothing.
 
+### Changing what the model is sent
+
+A `context` hook runs before every model call of the agent and may change the text of the messages it
+is sent: shorten old output, mask a value, or add a reminder to the latest message. The session's
+history keeps the original, so the next call starts again from it:
+
+```python
+def setup(plural):
+    @plural.on("context")
+    async def remind(context, ctx):
+        last = context.messages[-1]
+        if last.role == "user":
+            last.content += "\n\nRun the tests before you say it is done."
+```
+
+`context.system` is the system prompt, to read. `context.messages` holds each message with `role`
+(`user`, `assistant` or `tool`), `content` and, for a tool result, `tool`, the tool that gave it. Set
+`content` to change a message; messages cannot be added or removed, so a tool result never loses its
+call. Hooks run in turn on the same messages. A hook gets 5 seconds; if it raises or is late, what it
+changed is put back, and so is a `content` that is not text.
+
+A model reads the start of its prompt from the provider's cache, so a change to an older message makes
+every later call pay for the whole prompt again. With the Claude Code, Codex or Grok CLI it also starts
+their session over, since they keep the conversation themselves. Prefer changing the latest messages.
+
 ### When the plugins load
 
 A `session_start` hook runs after the plugins load: when the host starts and after every

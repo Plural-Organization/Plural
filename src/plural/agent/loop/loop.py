@@ -34,7 +34,7 @@ from plural.agent.loop.events import (
     ToolsLoaded,
 )
 from plural.agent.loop.gate import PolicyGate
-from plural.agent.loop.hooks import LoopHooks
+from plural.agent.loop.hooks import LoopHooks, NoHooks
 from plural.agent.loop.messages import (
     HARNESS_SOURCE,
     PLUGIN_SOURCE,
@@ -180,6 +180,7 @@ class AgentLoop:
     ) -> None:
         self._tools = tools
         self._gate = gate
+        self._hooks = hooks or NoHooks()
         self._context = context
         self._tool_ctx = tool_ctx
         self._ids = ids
@@ -535,7 +536,8 @@ class AgentLoop:
     async def _model_turn(self, turn: _Turn, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         """One model call: its text and thinking go out as deltas, the rest is kept in `turn`."""
         measured = len(self._conversation)
-        async for event in self._models.stream(self._request(), cancel):
+        request = await self._hooks.request(self._request())
+        async for event in self._models.stream(request, cancel):
             match event:
                 case TextDelta(text=text):
                     turn.text.append(text)

@@ -6,7 +6,7 @@ hooks passes `NoHooks`, which changes nothing.
 
 from typing import Protocol
 
-from plural.agent.providers.base import ToolCallRequest
+from plural.agent.providers.base import LlmRequest, ToolCallRequest
 from plural.agent.tools.base import ToolResult
 from plural.protocol.models import Provenance, ToolCallView
 
@@ -22,6 +22,10 @@ class LoopHooks(Protocol):
         """The result the model gets in place of `result`, for a call that ran."""
         ...
 
+    async def request(self, request: LlmRequest) -> LlmRequest:
+        """The request the model is sent in place of `request`, before each model call."""
+        ...
+
 
 class NoHooks:
     async def tool_args(self, call: ToolCallRequest, provenance: Provenance) -> ToolCallRequest:
@@ -31,3 +35,6 @@ class NoHooks:
         self, call: ToolCallView, result: ToolResult, provenance: Provenance
     ) -> ToolResult:
         return result
+
+    async def request(self, request: LlmRequest) -> LlmRequest:
+        return request
