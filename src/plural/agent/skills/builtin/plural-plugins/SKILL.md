@@ -228,6 +228,13 @@ mirror the session elsewhere or update `plural.status`.
 - Trim large output (`text[:20000]`) before replying or prompting.
 - One file can hold several commands and tools; the file name is the plugin's name.
 
+## Bigger plugins
+
+A plugin can be a folder `~/.plural/plugins/<name>/` starting from `plugin.py`, importing its other
+modules relatively (`from .client import Tracker`), with PyPI packages in `requirements.txt`. The host
+installs one with `plural-host plugins install <git URL | folder | file> [--name N]`, which puts the
+requirements in the folder's own `.deps` with uv. Prefer a single file until it grows.
+
 ## Checklist before you hand it over
 
 1. The file defines `setup(plural)` and every handler is `async def`.

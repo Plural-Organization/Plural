@@ -4,6 +4,7 @@ import inspect
 import json
 import keyword
 import re
+import shutil
 import sys
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
@@ -943,11 +944,7 @@ class PluginHost:
         apis: list[PluginApi] = []
         reserved = set(self._reserved_tools())
         generation = next(self._generation)
-        paths = sorted(self.directory.glob("*.py")) if self.directory.is_dir() else []
-        for path in paths:
-            name = path.stem
-            if name.startswith("_"):
-                continue
+        for name, path in _discover(self.directory):
             try:
                 store = PluginStore(self.directory / ".data" / f"{name}.json")
                 api = PluginApi(name, workspace=self.workspace, inbox=self._inbox, store=store)
@@ -1373,14 +1370,47 @@ class PluginHost:
 
     def remove(self, name: str) -> Path:
         path = self.directory / f"{name}.py"
-        if not NAME.match(name) or not path.is_file():
-            raise PluginError(f"no plugin named {name}")
-        path.unlink()
-        return path
+        folder = self.directory / name
+        if NAME.match(name) and path.is_file():
+            path.unlink()
+            return path
+        if NAME.match(name) and (folder / PACKAGE_ENTRY).is_file():
+            shutil.rmtree(folder)
+            return folder
+        raise PluginError(f"no plugin named {name}")
+
+
+# The file a plugin folder starts from, and where its own dependencies are installed.
+PACKAGE_ENTRY: Final = "plugin.py"
+PACKAGE_DEPS: Final = ".deps"
+
+
+def _discover(directory: Path) -> list[tuple[str, Path]]:
+    """The plugins in the folder: each `name.py`, and each `name/` folder with a plugin.py."""
+    if not directory.is_dir():
+        return []
+    found: dict[str, Path] = {}
+    for path in sorted(directory.iterdir()):
+        if path.name.startswith(("_", ".")):
+            continue
+        if path.is_file() and path.suffix == ".py":
+            found.setdefault(path.stem, path)
+        elif path.is_dir() and (path / PACKAGE_ENTRY).is_file():
+            found.setdefault(path.name, path / PACKAGE_ENTRY)
+    return sorted(found.items())
 
 
 def _import(path: Path, module_name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(module_name, path)
+    package = path.name == PACKAGE_ENTRY
+    if package:
+        # A plugin folder is a package: its plugin.py imports its other modules relatively,
+        # and what its .deps folder holds is importable.
+        deps = path.parent / PACKAGE_DEPS
+        if deps.is_dir() and str(deps) not in sys.path:
+            sys.path.append(str(deps))
+    spec = importlib.util.spec_from_file_location(
+        module_name, path, submodule_search_locations=[str(path.parent)] if package else None
+    )
     if spec is None or spec.loader is None:
         raise PluginError(f"cannot import {path}")
     module = importlib.util.module_from_spec(spec)

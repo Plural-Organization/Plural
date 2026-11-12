@@ -24,6 +24,27 @@ In the terminal client, as the host:
 
 Open the file, edit it, run `/plugins reload`, then `/hello` in the room.
 
+## A plugin of several files
+
+A plugin can also be a folder, `~/.plural/plugins/<name>/`, that starts from `plugin.py`. The folder is
+a Python package, so `plugin.py` imports its other modules relatively, `from .client import Tracker`.
+Packages it needs from PyPI go in a `requirements.txt` next to it; they are installed into the folder's
+own `.deps`, apart from the host and from other plugins.
+
+Install one from a git repository, a folder or a single file:
+
+```bash
+plural-host plugins install https://github.com/acme/plural-plugin-tracker
+plural-host plugins install ~/code/my-plugin --name tools
+plural-host plugins install ./ci.py
+```
+
+The name comes from the source, without a `plural-plugin-` or `plural-` prefix, unless `--name` gives
+one. A git repository is cloned without its history; `requirements.txt` is installed with `uv`, which
+has to be on the `PATH`. A plugin already installed under that name is not replaced, and a failed
+install leaves nothing behind. In a running session, `/plugins reload` loads it, and `/plugins rm
+<name>` deletes the whole folder.
+
 ## Write one
 
 A plugin file defines `setup(plural)` and registers commands with `plural.command`:

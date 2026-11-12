@@ -390,6 +390,28 @@ def rm(
     console.print(f"Deleted {room}.")
 
 
+plugins_app = typer.Typer(help="Install and list the host's plugins.", no_args_is_help=True)
+app.add_typer(plugins_app, name="plugins")
+
+
+@plugins_app.command("install")
+def plugins_install(
+    source: Annotated[str, typer.Argument(help="A git URL, a plugin folder or a .py file.")],
+    name: Annotated[str | None, typer.Option(help="Install under this name.")] = None,
+) -> None:
+    """Install a plugin. It runs inside the host with your permissions: install only code you
+    trust. A running host picks it up with /plugins reload."""
+    from plural.host.plugin_install import install
+    from plural.host.plugins import PluginError
+
+    try:
+        target = install(source, HostSettings().state_dir / "plugins", name=name)
+    except PluginError as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(1) from error
+    console.print(f"Installed {escape(str(target))}. In a running session: /plugins reload")
+
+
 @app.command()
 def doctor(
     workspace: Annotated[Path, typer.Option(help="Project directory to check.")] = Path("."),
