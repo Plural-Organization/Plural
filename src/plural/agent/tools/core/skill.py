@@ -26,8 +26,7 @@ class SkillTool(TypedTool[SkillArgs]):
         risk=ToolRisk.READ,
         args_model=SkillArgs,
         guidelines=(
-            "When a task matches an installed skill, load it with skill before you start and "
-            "follow it, loading its other files when it points to them.",
+            "If an installed skill matches the task, load it with skill first and follow it.",
         ),
     )
 

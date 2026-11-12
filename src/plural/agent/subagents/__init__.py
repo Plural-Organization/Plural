@@ -216,8 +216,7 @@ def describe(agents: Sequence[AgentSpec]) -> str | None:
         "sub_agents",
         "\n".join(
             (
-                "Hand broad searches and research to one with the agent tool instead of reading "
-                "many files yourself:",
+                "For broad searches, start one with the agent tool instead of many reads:",
                 *lines,
             )
         ),

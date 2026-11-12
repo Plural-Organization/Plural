@@ -1,6 +1,6 @@
 ---
 name: plural-plugins
-description: Write, fix or explain a Plural plugin, a Python file that adds slash commands to the room or tools for the agent. Use when someone asks for a custom /command, a plugin, a plugin tool, or why a plugin failed to load.
+description: Only for Plural plugins, Python files that add /commands or agent tools to Plural itself; write, fix or explain one, or why it failed to load.
 ---
 
 # Plural plugins

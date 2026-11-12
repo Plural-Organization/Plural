@@ -1,6 +1,6 @@
 ---
 name: explore
-description: "Broad read-only research across the codebase or the web: finding where something lives, how a flow works, every place a name is used. Returns findings with path:line. Use it instead of many reads of your own when the answer needs looking through many files."
+description: "Read-only research across the codebase or the web: where something lives, how a flow works, every use of a name. Returns findings with path:line."
 tools: read, grep, glob, ls, web_search, web_fetch, skill
 model: fast
 max_turns: 20
