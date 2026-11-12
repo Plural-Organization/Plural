@@ -65,7 +65,7 @@ function Setup({ unlinked }: { unlinked: boolean }) {
 
 // Start a room on this computer from the page: the folder comes from the system's own dialog.
 export function StartRoom({ account, onBack, onOpen, team = null }: StartRoomProps) {
-  const { phase, check } = useDaemon(true);
+  const { phase, stuck, check } = useDaemon(true);
   const agent = useAgentSetup(phase === "ready");
   const [relay, setRelay] = useState<string | null>(null);
   const relayWrong = relay === null ? null : relayProblem(relay);
@@ -235,10 +235,21 @@ export function StartRoom({ account, onBack, onOpen, team = null }: StartRoomPro
           </Button>
         </div>
       ) : phase === "checking" ? (
-        <p className="flex items-center gap-2 text-sm text-muted">
-          <Spinner size="sm" color="current" />
-          Looking for Plural on this computer…
-        </p>
+        <div className="flex flex-col gap-2">
+          <p className="flex items-center gap-2 text-sm text-muted">
+            <Spinner size="sm" color="current" />
+            Looking for Plural on this computer…
+          </p>
+          {stuck ? (
+            <Alert status="warning">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Your browser may be waiting for you</Alert.Title>
+                <Alert.Description>Look near the address bar: when it asks to access the local network (devices on your network), choose Allow. Plural talks only to your own computer. Nothing happens? Reload the page.</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          ) : null}
+        </div>
       ) : (
         <Setup unlinked={phase === "unlinked"} />
       )}

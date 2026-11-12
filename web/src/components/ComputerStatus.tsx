@@ -10,21 +10,21 @@ const WORDS: Record<Exclude<DaemonPhase, "checking">, { text: string; hint: stri
 
 // One line in the rail that says whether this page can reach Plural on this computer, so a room that will not
 // start never comes as a surprise. Pressing it opens the setup when something is missing.
-export function ComputerStatus({ phase, onFix }: { phase: DaemonPhase; onFix: () => void }) {
-  if (phase === "checking") return null;
-  const { text, hint, color } = WORDS[phase];
+export function ComputerStatus({ phase, stuck, onFix }: { phase: DaemonPhase; stuck: boolean; onFix: () => void }) {
+  if (phase === "checking" && !stuck) return null;
+  const { text, hint, color } = phase === "checking" ? { text: "Allow local network access", hint: "Your browser is asking whether this page may reach Plural on your computer. Choose Allow near the address bar.", color: "warning" as const } : WORDS[phase];
   return (
     <button
       type="button"
       title={hint}
-      onClick={phase === "ready" ? undefined : onFix}
+      onClick={phase === "ready" || phase === "checking" ? undefined : onFix}
       className="flex w-full items-center gap-2 rounded-xl px-2.5 py-1.5 text-left text-[13px] text-muted outline-none transition-colors enabled:hover:bg-surface-secondary data-[focus-visible=true]:ring-2 data-[focus-visible=true]:ring-focus"
-      disabled={phase === "ready"}
+      disabled={phase === "ready" || phase === "checking"}
     >
       <Desktop size={15} className="flex-none" />
       <span className="min-w-0 flex-1 truncate">{text}</span>
       <Chip size="sm" variant="soft" color={color} className="flex-none">
-        <Chip.Label>{phase === "ready" ? "On" : "Off"}</Chip.Label>
+        <Chip.Label>{phase === "ready" ? "On" : phase === "checking" ? "Wait" : "Off"}</Chip.Label>
       </Chip>
     </button>
   );
