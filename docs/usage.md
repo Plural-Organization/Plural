@@ -57,8 +57,9 @@ A resumed session works in the folder it was started in, even when you are somew
 ### Fork a session
 
 A fork copies a session into a new one, to try another way from the same point and keep the original
-as it was. The host forks the session that is running with `/fork`, or one that is not with the host
-program:
+as it was. In the terminal client, `/fork [title]` forks the session you host and goes on in the fork
+at once; `/resume <id or title>` switches to another of your sessions the same way, without quitting
+plural. A session that is not running is forked with the host program:
 
 ```bash
 plural-host fork <id>                       # the whole conversation

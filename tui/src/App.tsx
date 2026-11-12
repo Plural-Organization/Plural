@@ -26,6 +26,7 @@ import {
   type Session,
 } from "@plural/client";
 import { COMMANDS, pluginHints, shortcutCommand, skillHints, type AskTarget } from "./commands";
+import { listSessions, resolveSession } from "./sessions";
 import { parseAsk } from "./lib/ask";
 import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
@@ -104,6 +105,8 @@ export interface AppProps {
   conflicts?: Conflict[];
   splash?: boolean;
   onQuit: () => void;
+  /** Leave this session for another one this client hosts: a fork, or one /resume found. */
+  onSwitch?: (room: string) => void;
 }
 
 type Focus = "composer" | "inbox" | "search";
@@ -160,6 +163,7 @@ export function App({
   conflicts = [],
   splash = false,
   onQuit,
+  onSwitch,
 }: AppProps) {
   const renderer = useRenderer();
   const [settings, setSettings] = useState<Settings>(initialSettings ?? DEFAULT_SETTINGS);
@@ -317,6 +321,14 @@ export function App({
           if (event.type === "participant.joined" && client.projection.me?.role === "host" && event.participant.id !== client.projection.meId) {
             if (liveSettings.current.joinBell) {
               sound.ring();
+            }
+          }
+          if (event.type === "session.forked" && client.projection.me?.role === "host") {
+            if (switchToFork.current && onSwitch) {
+              switchToFork.current = false;
+              onSwitch(event.room);
+            } else {
+              showToast(`forked into “${event.title}”`, `/resume ${event.room} opens it`, "accent", "⑂");
             }
           }
           if (event.type === "invite.created") {
@@ -1119,6 +1131,8 @@ export function App({
     }
   };
 
+  const switchToFork = useRef(false);
+
   const local = (text: string): boolean => {
     const [name = "", ...rest] = text.slice(1).split(/\s+/);
     switch (name) {
@@ -1258,6 +1272,26 @@ export function App({
       }
       case "quit":
         onQuit();
+        return true;
+      case "fork":
+        if (!isHost) {
+          warn("fork", "only the host can fork the session");
+        } else {
+          // Hosting it here: go on in the fork. Otherwise the fork is only kept.
+          switchToFork.current = onSwitch !== undefined;
+          send({ type: "session.fork", title: rest.join(" ").trim() || null, before_prompt_id: null });
+        }
+        return true;
+      case "resume":
+        if (onSwitch === undefined) {
+          warn("resume", "this client does not host the session: quit and run plural -r");
+        } else if (rest.length === 0) {
+          warn("resume", "usage: /resume <id or title>, plural -r lists them");
+        } else {
+          void listSessions()
+            .then((sessions) => onSwitch(resolveSession({ kind: "id", value: rest.join(" ") }, sessions, process.cwd()).room))
+            .catch((error: unknown) => warn("resume", error instanceof Error ? error.message : String(error)));
+        }
         return true;
       default:
         return false;

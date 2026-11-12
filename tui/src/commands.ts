@@ -27,6 +27,8 @@ export const COMMANDS: CommandHint[] = [
   { name: "context", usage: "/context", description: "what fills the agent's context, and whether the cache was used" },
   { name: "trace", usage: "/trace [all]", description: "what the last run did and what each step spent; all: who called what in the session" },
   { name: "plugins", usage: "/plugins [new <name> | reload]", description: "the host's plugins and their commands" },
+  { name: "fork", usage: "/fork [title]", description: "copy this session into a new one and go on there", hostOnly: true },
+  { name: "resume", usage: "/resume <id|title>", description: "switch to another session of yours", hostOnly: true },
   { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
   { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
   { name: "cancel", usage: "/cancel <n>", description: "remove a queued prompt (yours, or any as host)" },
