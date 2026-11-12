@@ -31,6 +31,7 @@ from plural.host.extras import (
     is_installed,
 )
 from plural.host.inbox import Reconfigure
+from plural.host.plugins import PluginError
 from plural.host.providers import ConfigError, build_provider, provider_secrets, resolve_api_key
 from plural.host.routing import build_helper
 from plural.host.tools import Tool, ToolInstallError, inventory, tool_for
@@ -130,6 +131,10 @@ class Control:
         self._host = host
         self._base = base
         self._reply = reply
+        # The agent's configuration the client last applied, for a plugin to switch its model.
+        self._config: AgentConfig | None = None
+        if host.plugins is not None:
+            host.plugins.switch_model = self._switch_model
 
     async def handle(self, line: str) -> None:
         request = self._parse(line)
@@ -186,6 +191,20 @@ class Control:
                 {"type": "result", "id": request.id, "ok": False, "error": "internal error"}
             )
 
+    async def _switch_model(self, model: str, preset: str | None) -> str:
+        """A plugin's model switch: the configuration the client last applied, with this model,
+        or this provider preset's with its own key."""
+        if preset is not None:
+            config = AgentConfig(preset=preset, model=model)
+        elif self._config is not None:
+            config = self._config.model_copy(update={"model": model})
+        else:
+            config = AgentConfig(model=model)
+        try:
+            return await self._configure(config)
+        except (ConfigError, ProviderError, DomainError) as error:
+            raise PluginError(str(error)) from error
+
     async def _configure(self, config: AgentConfig) -> str:
         provider, settings, key = provider_for(self._base, config)
         if isinstance(provider, CodexCliProvider):
@@ -210,6 +229,7 @@ class Control:
             )
         )
         await done
+        self._config = config
         if self._host.web_search is not None:
             self._host.web_search.use(searcher)
         return label

@@ -89,6 +89,7 @@ class Host:
     conflicts: ConflictBoard | None = None
     import_url: str | None = None
     chat_link: McpLink | None = None
+    plugins: PluginHost | None = None
 
     async def serve(self) -> None:
         async with asyncio.TaskGroup() as group:
@@ -409,6 +410,7 @@ async def _assemble(
         conflicts=board,
         import_url=import_url,
         chat_link=chat_link,
+        plugins=plugins,
     )
 
 

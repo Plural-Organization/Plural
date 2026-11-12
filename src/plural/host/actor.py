@@ -1420,6 +1420,7 @@ class SessionActor:
             workspace=self._require_plugins().workspace,
             inbox=self._inbox,
             asker=self._plugin_ask,
+            switcher=self._require_plugins().switch_model,
         )
         self._background(self._invoke_plugin(found, context))
 

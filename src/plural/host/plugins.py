@@ -198,6 +198,7 @@ class CommandContext:
         workspace: Path,
         inbox: Inbox,
         asker: Asker = _no_model,
+        switcher: "Switcher | None" = None,
     ) -> None:
         self.command = command
         self.args = args
@@ -207,9 +208,20 @@ class CommandContext:
         self.workspace = workspace
         self._inbox = inbox
         self._asker = asker
+        self._switcher = switcher
 
     async def reply(self, text: str) -> None:
         self._inbox.put(PluginReply(self.command, self.author_id, text))
+
+    async def set_model(self, model: str, *, provider: str | None = None) -> str:
+        """Switch the agent's model, and its provider when one is named, as the host would in
+        settings. Only a command the host ran may, and not while the agent works. Returns the
+        new model's label."""
+        if self.role is not Role.HOST:
+            raise PluginError("only the host can switch the model")
+        if self._switcher is None:
+            raise PluginError("this host cannot switch models from a plugin")
+        return await self._switcher(model, provider)
 
     async def prompt(
         self, text: str, *, follow_up: bool = False, display: str | None = None
@@ -492,6 +504,8 @@ class SummaryInfo:
     messages: int
 
 
+# Switches the agent's model: the model, and a provider preset or None for the current one.
+Switcher = Callable[[str, str | None], Awaitable[str]]
 Handler = Callable[[CommandContext], Awaitable[None]]
 ToolHandler = Callable[[dict[str, JsonValue], ToolContext], Awaitable[object]]
 HookHandler = Callable[[object, HookContext], Awaitable[object]]
@@ -838,6 +852,8 @@ class PluginHost:
         self._reserved_tools = reserved_tools
         self._builtin_tool = builtin_tool
         self._hide_tools = hide_tools
+        # Set by whoever configures the agent's model, for plugin commands to switch it.
+        self.switch_model: Switcher | None = None
         self._overrides: dict[str, OverrideTool] = {}
         self._views: tuple[PluginView, ...] = ()
         self._commands: dict[str, PluginCommand] = {}

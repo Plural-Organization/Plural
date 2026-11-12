@@ -663,3 +663,30 @@ async def test_a_plugin_keeps_tools_from_the_agent(tmp_path: Path) -> None:
     (directory / "modes.py").unlink()
     plugins.load()
     assert "bash" in {schema.name for schema in registry.schemas()}
+
+
+async def test_only_the_host_switches_the_model_from_a_command(tmp_path: Path) -> None:
+    switched: list[tuple[str, str | None]] = []
+
+    async def switch(model: str, provider: str | None) -> str:
+        switched.append((model, provider))
+        return f"label {model}"
+
+    def made(role: Role, switcher: object) -> CommandContext:
+        return CommandContext(
+            command="fast",
+            args="",
+            author="X",
+            author_id="p_x",
+            role=role,
+            workspace=tmp_path,
+            inbox=Inbox(),
+            switcher=switcher,  # pyright: ignore[reportArgumentType]
+        )
+
+    assert await made(Role.HOST, switch).set_model("haiku") == "label haiku"
+    assert switched == [("haiku", None)]
+    with pytest.raises(PluginError, match="only the host"):
+        await made(Role.PARTICIPANT, switch).set_model("haiku")
+    with pytest.raises(PluginError, match="cannot switch models"):
+        await made(Role.HOST, None).set_model("haiku")

@@ -123,6 +123,13 @@ module variables for anything that must survive `/plugins reload`.
 the side panel that the whole room sees, at most 80 characters and one change a second; `""` removes it.
 Use it for state that matters while people work, such as `tests 3/3 ✓` after a `run_end` hook.
 
+## Switching the model
+
+`await ctx.set_model(model, provider=None)` in a command switches the agent's model, as the host would in
+settings: the same provider unless a preset is named. Only a command the host ran may, and not while
+the agent works; it returns the new label and raises `PluginError` otherwise. Make such commands
+`host_only=True`.
+
 ## Which tools the agent has
 
 `plural.hide_tools(names)` keeps those tools from the agent from its next model call on (not declared,

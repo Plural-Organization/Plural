@@ -178,6 +178,25 @@ everyone in the room: `ci  tests 3/3 ✓`. Call it from a command, a tool or a h
 the line. It is one line of at most 80 characters, the host shows at most one change a second (the
 latest wins), and the line goes away when the plugin is removed or fails to load.
 
+## Switching the model
+
+A command the host runs can switch the agent's model, as the host would in settings:
+
+```python
+def setup(plural):
+    @plural.command("fast", host_only=True, description="Switch to the quick model")
+    async def fast(ctx):
+        label = await ctx.set_model("claude-haiku-5-5")
+        await ctx.notify(f"now on {label}")
+```
+
+`await ctx.set_model(model, provider=None)` keeps the provider, key and address the client set and
+changes the model; with `provider`, a preset name such as `anthropic` or `openai`, it switches to that
+preset with its own sign-in. It returns the new model's label, and everyone in the room sees the
+change. It raises `PluginError` when the person who ran the command is not the host, while the agent
+works, or when the host was started without a client to configure it, such as `plural-host` on its
+own.
+
 ## Which tools the agent has
 
 `plural.hide_tools(names)` keeps tools from the agent: they are not declared on its requests,
