@@ -18,6 +18,7 @@ from plural.agent.context.compaction import (
 from plural.agent.context.context import ContextBuilder, system_text
 from plural.agent.context.meter import Sections, context_parts, estimate_tokens, signature
 from plural.agent.context.telemetry import RequestDump, hit_rate
+from plural.agent.context.trimming import trimmed
 from plural.agent.loop.events import (
     AgentEvent,
     Compacted,
@@ -743,9 +744,16 @@ class AgentLoop:
         sections, tools = self._prompt_parts()
         return LlmRequest(
             system=system_text(sections),
-            messages=to_llm(self._conversation),
+            messages=to_llm(self._sent_conversation()),
             tools=tools,
         )
+
+    def _sent_conversation(self) -> list[Message]:
+        """The conversation as the model is sent it: old tool results shortened, unless the
+        provider keeps the history itself and must be sent the same messages as before."""
+        if getattr(self.provider, "keeps_history", False):
+            return list(self._conversation)
+        return trimmed(self._conversation)
 
     def _answer(self, call: ToolCallRequest, result: ToolResult) -> None:
         self._conversation.append(
