@@ -91,7 +91,17 @@ export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, 
         {profile !== null ? (
           <section aria-label={profile.team_name}>
             {team.sessions.length === 0 ? (
-              <p className="px-2.5 py-2 text-sm leading-relaxed text-muted">Nobody shares a session right now. Sessions show up here the moment someone starts one.</p>
+              <div className="flex flex-col items-start gap-3 px-2.5 py-2">
+                <p className="text-sm leading-relaxed text-muted">Nobody shares a session in {profile.team_name} right now. Start one, or wait: sessions show up here the moment someone does.</p>
+                {account.status === "in" && account.account !== null ? (
+                  <Button size="sm" onPress={onStart}>
+                    <Plus size={15} />
+                    Start a room in {profile.team_name}
+                  </Button>
+                ) : (
+                  <p className="text-sm leading-relaxed text-muted">Sign in to start a room from here.</p>
+                )}
+              </div>
             ) : (
               <ListBox aria-label={`${profile.team_name} sessions`} selectionMode="single" selectedKeys={selected} onSelectionChange={pick}>
                 {team.sessions.map((card) => (
