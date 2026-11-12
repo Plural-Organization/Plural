@@ -2332,6 +2332,17 @@
         "plugin": {
           "type": "string"
         },
+        "shortcut": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "usage": {
           "default": "",
           "type": "string"
@@ -2342,7 +2353,8 @@
         "plugin",
         "description",
         "usage",
-        "host_only"
+        "host_only",
+        "shortcut"
       ],
       "type": "object"
     },

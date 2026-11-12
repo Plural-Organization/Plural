@@ -739,3 +739,22 @@ async def test_a_plugin_connects_mcp_servers_while_it_is_loaded(tmp_path: Path) 
     error = next(view.error for view in plugins.views() if view.name == "both")
     assert error is not None
     assert "needs a command or a url" in error
+
+
+def test_commands_take_a_free_shortcut(tmp_path: Path) -> None:
+    keyed = (
+        'def setup(plural):\n    @plural.command("ship", shortcut="{}")\n    async def h(c): ...\n'
+    )
+    plugins = host_with(
+        tmp_path,
+        a_ship=keyed.format("F5"),
+        b_again=keyed.replace("ship", "again").format("f5"),
+        c_taken=keyed.replace("ship", "taken").format("ctrl+o"),
+        d_bad=keyed.replace("ship", "bad").format("alt+x"),
+    )
+    [command] = plugins.command_views()
+    assert (command.name, command.shortcut) == ("ship", "f5")
+    errors = {view.name: view.error or "" for view in plugins.views()}
+    assert "shortcut f5 is already taken" in errors["b_again"]
+    assert "'ctrl+o' of /taken is taken" in errors["c_taken"]
+    assert "'alt+x' of /bad" in errors["d_bad"]

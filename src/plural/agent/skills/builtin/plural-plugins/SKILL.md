@@ -235,6 +235,11 @@ modules relatively (`from .client import Tracker`), with PyPI packages in `requi
 installs one with `plural-host plugins install <git URL | folder | file> [--name N]`, which puts the
 requirements in the folder's own `.deps` with uv. Prefer a single file until it grows.
 
+## Shortcuts
+
+`plural.command(name, ..., shortcut="f5")` binds a key in the terminal client that runs the command with
+no arguments: `ctrl+<letter>` or `f5`–`f12`, not one the client uses (ctrl+o, ctrl+f, ctrl+b, ...).
+
 ## Checklist before you hand it over
 
 1. The file defines `setup(plural)` and every handler is `async def`.

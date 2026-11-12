@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { COMMANDS, pluginHints, suggestions, visibleSuggestionWindow } from "../src/commands";
+import { COMMANDS, pluginHints, suggestions, visibleSuggestionWindow, shortcutCommand } from "../src/commands";
 
 describe("command suggestions", () => {
   test("keeps the selected command in the visible window", () => {
@@ -19,14 +19,22 @@ describe("command suggestions", () => {
 });
 
 describe("plugin commands", () => {
-  const plugins = pluginHints([
-    { name: "deploy", plugin: "ops", description: "ship it", usage: "/deploy <env>", host_only: true },
-    { name: "hello", plugin: "fun", description: "", usage: "/hello", host_only: false },
-  ]);
+  const views = [
+    { name: "deploy", plugin: "ops", description: "ship it", usage: "/deploy <env>", host_only: true, shortcut: "f5" },
+    { name: "hello", plugin: "fun", description: "", usage: "/hello", host_only: false, shortcut: "ctrl+g" },
+  ];
+  const plugins = pluginHints(views);
 
   test("are suggested next to the built-in commands", () => {
     expect(suggestions("/he", "participant", [], plugins).map((hint) => hint.name)).toEqual(["help", "hello"]);
     expect(plugins[1]?.description).toBe("from the fun plugin");
+  });
+
+  test("run from their shortcut, host-only ones for the host alone", () => {
+    expect(shortcutCommand(views, { name: "g", ctrl: true }, "participant")?.name).toBe("hello");
+    expect(shortcutCommand(views, { name: "g", ctrl: false }, "participant")).toBeUndefined();
+    expect(shortcutCommand(views, { name: "f5", ctrl: false }, "participant")).toBeUndefined();
+    expect(shortcutCommand(views, { name: "f5", ctrl: false }, "host")?.name).toBe("deploy");
   });
 
   test("hide host-only plugin commands from guests", () => {

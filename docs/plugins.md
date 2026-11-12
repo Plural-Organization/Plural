@@ -65,6 +65,11 @@ def setup(plural):
 `/name`. Names use `a-z`, `0-9`, `-` and `_`, and cannot reuse a built-in command or another plugin's
 command. `host_only=True` refuses the command to everyone but the host. Viewers cannot run commands.
 
+`shortcut` binds a key that runs the command with no arguments in the terminal client: `ctrl+<letter>`
+or `f5` to `f12`, as in `@plural.command("ship", shortcut="f5")`. The client's own keys, such as
+`ctrl+o` or `ctrl+f`, and a key another plugin took make the plugin fail to load. A host-only
+command's key works for the host alone.
+
 The handler gets a context:
 
 | | |

@@ -25,7 +25,7 @@ import {
   type PluginAsked,
   type Session,
 } from "@plural/client";
-import { COMMANDS, pluginHints, skillHints, type AskTarget } from "./commands";
+import { COMMANDS, pluginHints, shortcutCommand, skillHints, type AskTarget } from "./commands";
 import { parseAsk } from "./lib/ask";
 import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
@@ -1428,6 +1428,12 @@ export function App({
     if (key.ctrl && key.name === "b") {
       key.preventDefault();
       change({ ...settings, panel: !settings.panel });
+      return;
+    }
+    const bound = me?.role === "viewer" ? undefined : shortcutCommand(state.commands, key, me?.role);
+    if (bound) {
+      key.preventDefault();
+      send({ type: "command.run", name: bound.name, args: "" });
       return;
     }
     if (key.name === "pageup" || key.name === "pagedown") {

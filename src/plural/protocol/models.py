@@ -291,6 +291,9 @@ class PluginCommandView(Model):
     description: str
     usage: str = ""
     host_only: bool = False
+    # A key that runs the command with no arguments in the terminal client: ctrl+<letter> or
+    # f5 to f12.
+    shortcut: str | None = None
 
 
 class ContextPartKind(StrEnum):

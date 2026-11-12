@@ -1058,6 +1058,7 @@ export interface PluginCommandView {
   host_only: boolean;
   name: string;
   plugin: string;
+  shortcut: string | null;
   usage: string;
 }
 /**

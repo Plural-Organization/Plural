@@ -68,6 +68,32 @@ BUILT_IN: Final = frozenset(
         "who",
     }
 )
+SHORTCUT: Final = re.compile(r"^(ctrl\+[a-z]|f([5-9]|1[0-2]))$")
+# Keys the terminal client keeps for itself.
+TAKEN_SHORTCUTS: Final = frozenset(
+    {
+        "ctrl+a",
+        "ctrl+b",
+        "ctrl+c",
+        "ctrl+d",
+        "ctrl+e",
+        "ctrl+f",
+        "ctrl+h",
+        "ctrl+i",
+        "ctrl+j",
+        "ctrl+k",
+        "ctrl+l",
+        "ctrl+m",
+        "ctrl+n",
+        "ctrl+o",
+        "ctrl+p",
+        "ctrl+u",
+        "ctrl+v",
+        "ctrl+w",
+        "ctrl+y",
+        "ctrl+z",
+    }
+)
 PROVIDER_ID: Final = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 TOOL_NAME: Final = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 RISKS: Final = {"read": ToolRisk.READ, "write": ToolRisk.WRITE, "exec": ToolRisk.EXEC}
@@ -820,10 +846,22 @@ class PluginApi:
         return Verdict("deny", reason, self._plugin)
 
     def command(
-        self, name: str, *, description: str = "", usage: str = "", host_only: bool = False
+        self,
+        name: str,
+        *,
+        description: str = "",
+        usage: str = "",
+        host_only: bool = False,
+        shortcut: str | None = None,
     ) -> Callable[[Handler], Handler]:
         if not NAME.match(name):
             raise PluginError(f"invalid command name {name!r}: use a-z, 0-9, - and _")
+        if shortcut is not None:
+            shortcut = shortcut.lower().replace(" ", "")
+            if not SHORTCUT.match(shortcut) or shortcut in TAKEN_SHORTCUTS:
+                raise PluginError(
+                    f"shortcut {shortcut!r} of /{name} is taken or not ctrl+<letter> or f5 to f12"
+                )
 
         def register(handler: Handler) -> Handler:
             if not inspect.iscoroutinefunction(handler):
@@ -834,6 +872,7 @@ class PluginApi:
                 description=description,
                 usage=usage or f"/{name}",
                 host_only=host_only,
+                shortcut=shortcut,
             )
             self.commands.append(PluginCommand(view, handler))
             return handler
@@ -952,10 +991,16 @@ class PluginHost:
                 if not callable(setup):
                     raise PluginError("the file defines no setup(plural) function")
                 setup(api)
+                keys = [c.view.shortcut for c in commands.values() if c.view.shortcut]
                 for command in api.commands:
                     taken = command.view.name in BUILT_IN or command.view.name in commands
                     if taken or sum(c.view.name == command.view.name for c in api.commands) > 1:
                         raise PluginError(f"/{command.view.name} is already taken")
+                    key = command.view.shortcut
+                    if key is not None:
+                        if key in keys:
+                            raise PluginError(f"shortcut {key} is already taken")
+                        keys.append(key)
                 for tool in api.tools:
                     taken = tool.name in reserved or tool.name in tools
                     if taken or sum(t.name == tool.name for t in api.tools) > 1:

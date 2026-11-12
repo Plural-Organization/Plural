@@ -44,6 +44,16 @@ export function pluginHints(commands: readonly PluginCommandView[]): CommandHint
   }));
 }
 
+/** The plugin command whose shortcut is this key, such as ctrl+r or f5, that this person may run. */
+export function shortcutCommand(
+  commands: readonly PluginCommandView[],
+  key: { name: string; ctrl: boolean },
+  role: Role | undefined,
+): PluginCommandView | undefined {
+  const pressed = key.ctrl ? `ctrl+${key.name}` : key.name;
+  return commands.find((command) => command.shortcut === pressed && (!command.host_only || role === "host"));
+}
+
 /** `/skill:<name>` for every skill, the only way to run one the model does not see. */
 export function skillHints(skills: readonly SkillView[]): CommandHint[] {
   return skills.map((skill) => ({
