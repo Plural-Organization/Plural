@@ -399,6 +399,20 @@ def daemon(
     if linked is None:
         console.print("[red]This computer is not linked to an account. Run `plural login`.[/red]")
         raise typer.Exit(1)
+    from plural.daemon.port import PortState, port_state
+
+    taken = port_state(port)
+    if taken is PortState.DAEMON:
+        console.print(
+            f"Plural daemon is already running on http://127.0.0.1:{port}. Nothing to do."
+        )
+        return
+    if taken is PortState.BUSY:
+        console.print(
+            f"[red]Port {port} is used by something else.[/red] "
+            "Stop it, or pick another port with `plural daemon --port`."
+        )
+        raise typer.Exit(1)
     console.print(f"Plural daemon for {linked.email} on http://127.0.0.1:{port}. Ctrl+C stops it.")
     uvicorn.run(
         create_app(

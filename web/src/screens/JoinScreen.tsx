@@ -2,7 +2,6 @@ import { Button } from "@heroui/react";
 import { UsersThree } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { JoinLink } from "@plural/client";
-import { CreateTeam } from "../components/CreateTeam";
 import { JoinFlow } from "../components/JoinFlow";
 import { LogoMark } from "../components/LogoMark";
 import { RecentRooms } from "../components/RecentRooms";
@@ -16,15 +15,14 @@ interface JoinScreenProps {
   account: AccountState;
   onJoin: (link: JoinLink, name: string) => void;
   onTeamJoined: () => void;
+  onCreateTeam: () => void;
 }
 
 // The page for someone with no room open and no team yet.
-export function JoinScreen({ notice, team, account, onJoin, onTeamJoined }: JoinScreenProps) {
+export function JoinScreen({ notice, team, account, onJoin, onTeamJoined, onCreateTeam }: JoinScreenProps) {
   const [rooms, setRooms] = useState<SavedRoom[]>(savedRooms);
   // While someone sets up a room the big title steps aside, so the setup fits one screen.
   const [compact, setCompact] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const email = account.status === "in" ? (account.account?.email ?? null) : null;
   return (
     <main className="relative isolate flex min-h-full flex-col items-center justify-center overflow-hidden px-4 py-12">
       <div className="pixel-grid" aria-hidden="true" />
@@ -49,7 +47,7 @@ export function JoinScreen({ notice, team, account, onJoin, onTeamJoined }: Join
           </div>
         </div>
         {compact ? null : (
-          <Button variant="ghost" size="sm" className="mx-auto mt-5 flex" onPress={() => setCreating(true)}>
+          <Button variant="ghost" size="sm" className="mx-auto mt-5 flex" onPress={onCreateTeam}>
             <UsersThree size={16} />
             Create a team
           </Button>
@@ -66,7 +64,6 @@ export function JoinScreen({ notice, team, account, onJoin, onTeamJoined }: Join
           <a href="https://plrl.host" className="text-muted underline-offset-4 hover:text-foreground hover:underline">What is Plural?</a>
         </p>
       </div>
-      {creating ? <CreateTeam team={team} email={email} onClose={() => setCreating(false)} /> : null}
     </main>
   );
 }

@@ -6,7 +6,6 @@ import type { Space } from "../App";
 import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
 import { AccountModal } from "./AccountModal";
-import { CreateTeam } from "./CreateTeam";
 import { TeamSwitcher } from "./TeamSwitcher";
 import { TeamWindow } from "./TeamWindow";
 import { LogoMark } from "./LogoMark";
@@ -25,18 +24,17 @@ interface RailProps {
   onWatch: (card: SessionCard, url: string) => void;
   onAdd: () => void;
   onStart: () => void;
+  onCreateTeam: () => void;
   onHide: () => void;
 }
 
 // The left column: the team's live sessions and the rooms joined by link. Picking one opens it on the right, and
 // a room stays connected once opened, so moving back is instant.
-export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, onStart, onHide }: RailProps) {
+export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, onStart, onCreateTeam, onHide }: RailProps) {
   const [note, setNote] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
   const [managing, setManaging] = useState(false);
   const profile = team.team?.profile ?? null;
-  const email = account.status === "in" ? (account.account?.email ?? null) : null;
   const open = new Set(spaces.map((space) => space.link.room));
   const teamRooms = new Set(team.sessions.map((card) => card.room));
   const byLink = spaces.filter((space) => !teamRooms.has(space.link.room));
@@ -78,7 +76,7 @@ export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, 
       </div>
       <div className="flex flex-none items-center gap-1 px-2 pb-2">
         <div className="min-w-0 flex-1">
-          <TeamSwitcher team={team} onCreate={() => setCreating(true)} onJoin={onAdd} />
+          <TeamSwitcher team={team} onCreate={onCreateTeam} onJoin={onAdd} />
         </div>
         {profile !== null ? (
           <Button isIconOnly variant="ghost" size="sm" aria-label={`Manage ${profile.team_name}`} onPress={() => setManaging(true)}>
@@ -170,7 +168,6 @@ export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, 
         ) : null}
       </div>
       {accountOpen ? <AccountModal state={account} onClose={() => setAccountOpen(false)} /> : null}
-      {creating ? <CreateTeam team={team} email={email} onClose={() => setCreating(false)} /> : null}
       {managing && profile !== null ? <TeamWindow team={team} onClose={() => setManaging(false)} /> : null}
     </aside>
   );

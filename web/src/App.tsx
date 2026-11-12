@@ -2,6 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { Alert, Button } from "@heroui/react";
 import { firstSession, parseLink, type JoinLink, type SessionCard } from "@plural/client";
 import { JoinFlow } from "./components/JoinFlow";
+import { CreateTeam } from "./components/CreateTeam";
 import { StartRoom } from "./components/StartRoom";
 import { Rail } from "./components/Rail";
 import { DeviceScreen } from "./screens/DeviceScreen";
@@ -35,6 +36,9 @@ export function App() {
   const team = useTeam(account.status === "in");
   // Whether the right side shows the form for joining another room.
   // What the right side shows instead of a room: the form to join one, or to start one.
+  // The create-a-team window lives here, not in the screen that opened it: creating a team swaps the
+  // screen, and the invite link it shows has to outlive that.
+  const [creating, setCreating] = useState(false);
   const [adding, setAdding] = useState<"join" | "start" | false>(false);
   const [railOpen, setRailOpen] = useState(false);
   const [railTucked, setRailTucked] = useTucked("plural.rail.tucked");
@@ -130,8 +134,14 @@ export function App() {
   if (team.loading) {
     return null;
   }
+  const createTeam = creating ? <CreateTeam team={team} email={account.status === "in" ? (account.account?.email ?? null) : null} onClose={() => setCreating(false)} /> : null;
   if (team.teams.length === 0 && spaces.length === 0) {
-    return <JoinScreen notice={notice} team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} />;
+    return (
+      <>
+        <JoinScreen notice={notice} team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} onCreateTeam={() => setCreating(true)} />
+        {createTeam}
+      </>
+    );
   }
   const showForm = adding !== false || (active === null && team.teams.length === 0);
   return (
@@ -151,6 +161,7 @@ export function App() {
           setAdding("join");
           setRailOpen(false);
         }}
+        onCreateTeam={() => setCreating(true)}
         onStart={() => {
           setAdding("start");
           setRailOpen(false);
@@ -217,6 +228,7 @@ export function App() {
           </div>
         ) : null}
       </div>
+      {createTeam}
     </div>
   );
 }
