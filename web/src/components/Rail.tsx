@@ -6,6 +6,8 @@ import type { Space } from "../App";
 import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
 import { AccountModal } from "./AccountModal";
+import { ComputerStatus } from "./ComputerStatus";
+import { useDaemon } from "../hooks/useDaemon";
 import { TeamSwitcher } from "./TeamSwitcher";
 import { TeamWindow } from "./TeamWindow";
 import { LogoMark } from "./LogoMark";
@@ -34,6 +36,9 @@ export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, 
   const [note, setNote] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [managing, setManaging] = useState(false);
+  const signedIn = account.status === "in" && account.account !== null;
+  // Only a signed-in page asks the computer: the browser may ask to allow the local network, and that should come with a reason.
+  const daemon = useDaemon(signedIn);
   const profile = team.team?.profile ?? null;
   const open = new Set(spaces.map((space) => space.link.room));
   const teamRooms = new Set(team.sessions.map((card) => card.room));
@@ -150,6 +155,7 @@ export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, 
       {team.error !== null ? <p className="px-4 pb-2 text-[13px] leading-snug text-warning">{team.error}</p> : null}
       <Separator />
       <div className="flex flex-none flex-col gap-2 p-3">
+        {signedIn ? <ComputerStatus phase={daemon.phase} onFix={onStart} /> : null}
         {account.status === "in" && account.account !== null ? (
           <Button size="sm" fullWidth onPress={onStart}>
             <Plus size={15} />

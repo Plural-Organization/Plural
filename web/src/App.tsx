@@ -3,6 +3,7 @@ import { Alert, Button } from "@heroui/react";
 import { firstSession, parseLink, type JoinLink, type SessionCard } from "@plural/client";
 import { JoinFlow } from "./components/JoinFlow";
 import { CreateTeam } from "./components/CreateTeam";
+import { TeamNext } from "./components/TeamNext";
 import { StartRoom } from "./components/StartRoom";
 import { Rail } from "./components/Rail";
 import { DeviceScreen } from "./screens/DeviceScreen";
@@ -134,7 +135,7 @@ export function App() {
   if (team.loading) {
     return null;
   }
-  const createTeam = creating ? <CreateTeam team={team} email={account.status === "in" ? (account.account?.email ?? null) : null} onClose={() => setCreating(false)} /> : null;
+  const createTeam = creating ? <CreateTeam team={team} email={account.status === "in" ? (account.account?.email ?? null) : null} onClose={() => setCreating(false)} onStartRoom={account.status === "in" && account.account !== null ? () => { setCreating(false); setAdding("start"); } : undefined} /> : null;
   if (team.teams.length === 0 && spaces.length === 0) {
     return (
       <>
@@ -204,6 +205,10 @@ export function App() {
         ) : active === null ? (
           <div className="relative isolate flex h-full flex-col items-center justify-center overflow-hidden p-6 text-center">
             <div className="pixel-grid" aria-hidden="true" />
+            {team.team !== null && team.sessions.length === 0 && spaces.length === 0 ? (
+              <TeamNext team={team} canStart={account.status === "in" && account.account !== null} onStart={() => setAdding("start")} />
+            ) : (
+            <>
             <h2 className="text-4xl font-medium leading-[1.05] tracking-[-0.022em]">
               Pick a session
               <br />
@@ -225,6 +230,8 @@ export function App() {
                 Start a room in {team.team.profile.team_name}
               </Button>
             ) : null}
+            </>
+            )}
           </div>
         ) : null}
       </div>

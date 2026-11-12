@@ -40,24 +40,25 @@ function Setup({ unlinked }: { unlinked: boolean }) {
         </Tabs.ListContainer>
         <Tabs.Panel id="agent" className="flex flex-col gap-2.5 px-0! pb-0! pt-3">
           <CopyBox text={daemonPrompt()} label="Copy the prompt" multiline />
-          <Description>Paste it into Claude Code, Codex, Cursor or another agent that can run commands. It installs Plural, starts it, and tells you the two things only you can do.</Description>
+          <Description>Paste it into Claude Code, Codex, Cursor or another agent that can run commands. It installs Plural and signs in, and tells you the two things only you can do.</Description>
         </Tabs.Panel>
         <Tabs.Panel id="self" className="flex flex-col gap-2.5 px-0! pb-0! pt-3">
           <ol className="flex flex-col gap-3">
-            {(unlinked ? manualSteps().slice(1, 2) : manualSteps()).map((step, index) => (
+            {(unlinked ? manualSteps().slice(1) : manualSteps()).map((step, index) => (
               <li key={step.command} className="flex flex-col gap-1.5">
                 <span className="text-sm text-muted">{unlinked ? step.title : `${index + 1}. ${step.title}`}</span>
                 <CopyBox text={step.command} label={`Copy: ${step.command}`} />
               </li>
             ))}
           </ol>
-          <Description>Run these in a terminal, one after another (macOS and Linux). Signing in opens your browser to approve this computer; when your browser asks to access the local network, choose Allow.</Description>
+          <Description>Run these in a terminal, one after another (macOS and Linux). Signing in opens your browser to approve this computer and starts Plural in the background; when your browser asks to access the local network, choose Allow.</Description>
         </Tabs.Panel>
       </Tabs>
       <p className="flex items-center gap-2 text-sm text-muted">
         <Spinner size="sm" color="current" />
         Waiting for Plural on this computer…
       </p>
+      <Description>Still not found after signing in? Run <code>plural daemon</code> in a terminal and leave it open.</Description>
     </div>
   );
 }

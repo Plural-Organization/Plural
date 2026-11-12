@@ -4,7 +4,7 @@ import { DAEMON_PORT, daemonPrompt, manualSteps } from "./agentPrompt";
 describe("daemonPrompt", () => {
   test("lists install, sign in and the daemon in that order", () => {
     const prompt = daemonPrompt();
-    const order = ["install.sh", "plural login", "nohup plural daemon", `127.0.0.1:${DAEMON_PORT}/v1/status`].map((part) => prompt.indexOf(part));
+    const order = ["install.sh", "plural login", `127.0.0.1:${DAEMON_PORT}/v1/status`].map((part) => prompt.indexOf(part));
     expect(order.every((at) => at >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
   });
@@ -21,7 +21,7 @@ describe("daemonPrompt", () => {
 });
 
 describe("manualSteps", () => {
-  test("is the three commands, one each", () => {
-    expect(manualSteps().map((step) => step.command)).toEqual([expect.stringContaining("install.sh"), "plural login", "plural daemon"]);
+  test("is install and sign in, one command each: sign in starts the daemon", () => {
+    expect(manualSteps().map((step) => step.command)).toEqual([expect.stringContaining("install.sh"), "plural login"]);
   });
 });
