@@ -15,6 +15,8 @@ interface StartRoomProps {
   account: Account;
   onBack: () => void;
   onOpen: (link: JoinLink, name: string) => void;
+  // A team to show the room to from the start, when the person began from that team.
+  team?: string | null;
 }
 
 // Shown while no Plural answers on this computer. The agent does everything, or the person runs three
@@ -38,24 +40,32 @@ function Setup({ unlinked }: { unlinked: boolean }) {
         </Tabs.ListContainer>
         <Tabs.Panel id="agent" className="flex flex-col gap-2.5 px-0! pb-0! pt-3">
           <CopyBox text={daemonPrompt()} label="Copy the prompt" multiline />
-          <Description>Paste it into Claude Code, Codex, Cursor or another agent that can run commands. It installs Plural, starts it, and tells you the two things only you can do.</Description>
+          <Description>Paste it into Claude Code, Codex, Cursor or another agent that can run commands. It installs Plural and signs in, and tells you the two things only you can do.</Description>
         </Tabs.Panel>
         <Tabs.Panel id="self" className="flex flex-col gap-2.5 px-0! pb-0! pt-3">
-          <CopyBox text={unlinked ? "plural login" : manualSteps()} label="Copy the commands" multiline />
-          <Description>Run these in a terminal (macOS and Linux). The second opens your browser to approve this computer; when your browser asks to access the local network, choose Allow.</Description>
+          <ol className="flex flex-col gap-3">
+            {(unlinked ? manualSteps().slice(1) : manualSteps()).map((step, index) => (
+              <li key={step.command} className="flex flex-col gap-1.5">
+                <span className="text-sm text-muted">{unlinked ? step.title : `${index + 1}. ${step.title}`}</span>
+                <CopyBox text={step.command} label={`Copy: ${step.command}`} />
+              </li>
+            ))}
+          </ol>
+          <Description>Run these in a terminal, one after another (macOS and Linux). Signing in opens your browser to approve this computer and starts Plural in the background; when your browser asks to access the local network, choose Allow.</Description>
         </Tabs.Panel>
       </Tabs>
       <p className="flex items-center gap-2 text-sm text-muted">
         <Spinner size="sm" color="current" />
         Waiting for Plural on this computer…
       </p>
+      <Description>Still not found after signing in? Run <code>plural daemon</code> in a terminal and leave it open.</Description>
     </div>
   );
 }
 
 // Start a room on this computer from the page: the folder comes from the system's own dialog.
-export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
-  const { phase, check } = useDaemon(true);
+export function StartRoom({ account, onBack, onOpen, team = null }: StartRoomProps) {
+  const { phase, stuck, check } = useDaemon(true);
   const agent = useAgentSetup(phase === "ready");
   const [relay, setRelay] = useState<string | null>(null);
   const relayWrong = relay === null ? null : relayProblem(relay);
@@ -67,7 +77,12 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
     if (phase !== "ready") return;
     let alive = true;
     computerTeams()
-      .then((found) => alive && setTeams(found ?? []))
+      .then((found) => {
+        if (!alive) return;
+        setTeams(found ?? []);
+        // Started from a team: show the room to it, as long as this computer knows the team.
+        if (team !== null && (found ?? []).some((item) => item.id === team)) setShowTo((chosen) => chosen ?? team);
+      })
       .catch(() => alive && setTeams([]));
     return () => {
       alive = false;
@@ -220,10 +235,21 @@ export function StartRoom({ account, onBack, onOpen }: StartRoomProps) {
           </Button>
         </div>
       ) : phase === "checking" ? (
-        <p className="flex items-center gap-2 text-sm text-muted">
-          <Spinner size="sm" color="current" />
-          Looking for Plural on this computer…
-        </p>
+        <div className="flex flex-col gap-2">
+          <p className="flex items-center gap-2 text-sm text-muted">
+            <Spinner size="sm" color="current" />
+            Looking for Plural on this computer…
+          </p>
+          {stuck ? (
+            <Alert status="warning">
+              <Alert.Indicator />
+              <Alert.Content>
+                <Alert.Title>Your browser may be waiting for you</Alert.Title>
+                <Alert.Description>Look near the address bar: when it asks to access the local network (devices on your network), choose Allow. Plural talks only to your own computer. Nothing happens? Reload the page.</Alert.Description>
+              </Alert.Content>
+            </Alert>
+          ) : null}
+        </div>
       ) : (
         <Setup unlinked={phase === "unlinked"} />
       )}

@@ -9,10 +9,12 @@ interface CreateTeamProps {
   team: TeamState;
   email: string | null;
   onClose: () => void;
+  // Offered once the team exists: the next step is a room in it.
+  onStartRoom?: () => void;
 }
 
 // A new team in two fields; then the invite link to share, once.
-export function CreateTeam({ team, email, onClose }: CreateTeamProps) {
+export function CreateTeam({ team, email, onClose, onStartRoom }: CreateTeamProps) {
   const [name, setName] = useState("");
   const [memberName, setMemberName] = useState(() => suggestedName(email));
   const [busy, setBusy] = useState(false);
@@ -65,7 +67,7 @@ export function CreateTeam({ team, email, onClose }: CreateTeamProps) {
                 )}
               </>
             ) : link === "" ? (
-              <Description>The team is ready. Make an invite link from the team's window.</Description>
+              <Description>The team is ready. Make an invite link from the team's window, or start its first room now.</Description>
             ) : (
               <>
                 <CopyBox text={link} label="Copy the invite link" />
@@ -80,7 +82,10 @@ export function CreateTeam({ team, email, onClose }: CreateTeamProps) {
                 Create team
               </Button>
             ) : (
-              <Button slot="close">Done</Button>
+              <>
+                <Button slot="close" variant="secondary">Done</Button>
+                {onStartRoom === undefined ? null : <Button onPress={onStartRoom}>Start the first room</Button>}
+              </>
             )}
           </Modal.Footer>
         </Modal.Dialog>

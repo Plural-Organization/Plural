@@ -34,18 +34,19 @@ export function daemonPrompt(): string {
     "2. Install it into my home folder, without sudo:",
     `   curl -fsSL ${INSTALL_URL} -o /tmp/plural-install.sh`,
     "   sh /tmp/plural-install.sh",
-    "3. Sign in. This opens my browser and I approve it there (needs me). Wait until it prints \"Linked to\":",
+    "3. Sign in. This opens my browser and I approve it there (needs me). It also starts the daemon in the background. Wait until it prints \"Linked to\" and \"daemon is running\":",
     "   plural login",
-    "4. Start the daemon in the background so it keeps running after you finish:",
-    "   nohup plural daemon > /tmp/plural-daemon.log 2>&1 &",
-    `5. Check it answers: curl -s http://127.0.0.1:${DAEMON_PORT}/v1/status`,
+    `4. Check it answers: curl -s http://127.0.0.1:${DAEMON_PORT}/v1/status`,
     "",
     "Then tell me to go back to the Plural page and press Allow when my browser asks to access the local network (needs me).",
     "Do not read my files, keys or environment variables, do not use sudo, and do not run anything that is not listed here. When you are done, reply with one line: PLURAL_OK, or what went wrong.",
   ].join("\n");
 }
 
-// The same three steps for someone who runs them by hand, as one block to copy.
-export function manualSteps(): string {
-  return [`curl -fsSL ${INSTALL_URL} | sh`, "plural login", "plural daemon"].join("\n");
+// The same steps for someone who runs them by hand, one command each so each can be copied.
+export function manualSteps(): { title: string; command: string }[] {
+  return [
+    { title: "Install Plural", command: `curl -fsSL ${INSTALL_URL} | sh` },
+    { title: "Sign in and approve this computer", command: "plural login" },
+  ];
 }

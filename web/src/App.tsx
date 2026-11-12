@@ -1,7 +1,10 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { Alert } from "@heroui/react";
+import { Alert, Button } from "@heroui/react";
 import { firstSession, parseLink, type JoinLink, type SessionCard } from "@plural/client";
 import { JoinFlow } from "./components/JoinFlow";
+import { CreateTeam } from "./components/CreateTeam";
+import { TeamNext } from "./components/TeamNext";
+import { StartRoom } from "./components/StartRoom";
 import { Rail } from "./components/Rail";
 import { DeviceScreen } from "./screens/DeviceScreen";
 import { JoinScreen } from "./screens/JoinScreen";
@@ -32,8 +35,11 @@ export function App() {
   const account = useAccount();
   // Signed in, the browser is the account's member, and the account's teams come along (ADR 0016).
   const team = useTeam(account.status === "in");
-  // Whether the right side shows the form for joining another room.
-  const [adding, setAdding] = useState(false);
+  // What the right side shows instead of a room: the form to join one, or to start one.
+  // The create-a-team window lives here, not in the screen that opened it: creating a team swaps the
+  // screen, and the invite link it shows has to outlive that.
+  const [creating, setCreating] = useState(false);
+  const [adding, setAdding] = useState<"join" | "start" | false>(false);
   const [railOpen, setRailOpen] = useState(false);
   const [railTucked, setRailTucked] = useTucked("plural.rail.tucked");
   const [railWidth, setRailWidth] = useWidth("plural.rail.width", 288, RAIL_WIDTH);
@@ -128,10 +134,16 @@ export function App() {
   if (team.loading) {
     return null;
   }
+  const createTeam = creating ? <CreateTeam team={team} email={account.status === "in" ? (account.account?.email ?? null) : null} onClose={() => setCreating(false)} onStartRoom={account.status === "in" && account.account !== null ? () => { setCreating(false); setAdding("start"); } : undefined} /> : null;
   if (team.teams.length === 0 && spaces.length === 0) {
-    return <JoinScreen notice={notice} team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} />;
+    return (
+      <>
+        <JoinScreen notice={notice} team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} onCreateTeam={() => setCreating(true)} />
+        {createTeam}
+      </>
+    );
   }
-  const showForm = adding || (active === null && team.teams.length === 0);
+  const showForm = adding !== false || (active === null && team.teams.length === 0);
   return (
     <div className="workspace" data-rail={railOpen ? "open" : "closed"} data-rail-tucked={railTucked} style={{ "--rail-w": `${railWidth}px` } as CSSProperties} data-room={active === null ? "none" : "open"}>
       <Rail
@@ -146,7 +158,12 @@ export function App() {
         }}
         onWatch={watch}
         onAdd={() => {
-          setAdding(true);
+          setAdding("join");
+          setRailOpen(false);
+        }}
+        onCreateTeam={() => setCreating(true)}
+        onStart={() => {
+          setAdding("start");
           setRailOpen(false);
         }}
         onHide={() => (isNarrow() ? setRailOpen(false) : setRailTucked(true))}
@@ -173,14 +190,24 @@ export function App() {
         {showForm ? (
           <div className="flex h-full items-center justify-center overflow-y-auto p-6">
             <div className="w-full max-w-[26rem]">
-              <h2 className="mb-5 text-3xl font-medium tracking-[-0.022em]">Join another room</h2>
-              <JoinFlow team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} />
+              {adding === "start" && account.status === "in" && account.account !== null ? (
+                <StartRoom account={account.account} team={team.team?.profile.team_id ?? null} onBack={() => setAdding(false)} onOpen={join} />
+              ) : (
+                <>
+                  <h2 className="mb-5 text-3xl font-medium tracking-[-0.022em]">Join another room</h2>
+                  <JoinFlow team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} />
+                </>
+              )}
               {spaces.length > 0 ? <button type="button" className="link-button mt-4" onClick={() => setAdding(false)}>Back to the room</button> : null}
             </div>
           </div>
         ) : active === null ? (
           <div className="relative isolate flex h-full flex-col items-center justify-center overflow-hidden p-6 text-center">
             <div className="pixel-grid" aria-hidden="true" />
+            {team.team !== null && team.sessions.length === 0 && spaces.length === 0 ? (
+              <TeamNext team={team} canStart={account.status === "in" && account.account !== null} onStart={() => setAdding("start")} />
+            ) : (
+            <>
             <h2 className="text-4xl font-medium leading-[1.05] tracking-[-0.022em]">
               Pick a session
               <br />
@@ -197,9 +224,17 @@ export function App() {
             <p className="mt-4 max-w-[42ch] text-[15px] leading-relaxed text-muted text-pretty">
               {(entering ? "You are in. The first session someone shares opens here on its own." : "Open anyone's session to read it from the start. Ask the host when you want to write.")}
             </p>
+            {account.status === "in" && account.account !== null && team.team !== null ? (
+              <Button className="mt-6" onPress={() => setAdding("start")}>
+                Start a room in {team.team.profile.team_name}
+              </Button>
+            ) : null}
+            </>
+            )}
           </div>
         ) : null}
       </div>
+      {createTeam}
     </div>
   );
 }
