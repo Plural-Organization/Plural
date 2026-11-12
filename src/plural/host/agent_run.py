@@ -14,8 +14,9 @@ log = structlog.get_logger(__name__)
 
 ABORT_GRACE_S = 5.0
 
-# Plugin before_run hooks: the prompt in, (plugin, text) pairs out.
-Prepare = Callable[[UserTurn], Awaitable[Sequence[tuple[str, str]]]]
+# Plugin hooks before a run: the prompt in; the prompt to run, maybe rewritten by input hooks,
+# and the (plugin, text) notes of before_run hooks out.
+Prepare = Callable[[UserTurn], Awaitable[tuple[UserTurn, Sequence[tuple[str, str]]]]]
 
 
 class AgentRun:
@@ -37,7 +38,10 @@ class AgentRun:
         self, turn: UserTurn, prepare: Prepare | None, cancel: asyncio.Event
     ) -> AsyncIterator[AgentEvent]:
         # Plugin hooks run in the run's task, so a slow one never holds up the room.
-        for plugin, text in await prepare(turn) if prepare is not None else ():
+        notes: Sequence[tuple[str, str]] = ()
+        if prepare is not None:
+            turn, notes = await prepare(turn)
+        for plugin, text in notes:
             if self._loop.add_context(NotesTurn(source=f"{PLUGIN_SOURCE}{plugin}", text=text)):
                 yield ContextNote(plugin, text)
         async for event in self._loop.run(turn, cancel=cancel):

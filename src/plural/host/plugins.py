@@ -82,6 +82,7 @@ MAX_LIVE_QUEUE: Final = 1000
 HOOK_EVENTS: Final = frozenset(
     {
         "session_start",
+        "input",
         "before_run",
         "context",
         "tool_args",
@@ -802,6 +803,22 @@ class PluginHost:
         return HookContext(
             plugin=plugin, workspace=self.workspace, inbox=self._inbox, can_prompt=can_prompt
         )
+
+    async def rewrite_input(self, prompt: PromptInfo) -> str:
+        """The prompt's text after each input hook had its turn to rewrite it."""
+        text = prompt.text
+        for hook in self.hooks("input"):
+            seen = replace(prompt, text=text)
+            try:
+                answer = await asyncio.wait_for(
+                    hook.handler(seen, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                )
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                continue
+            if isinstance(answer, str) and answer.strip():
+                text = answer[:MAX_RESULT_CHARS]
+        return text
 
     async def before_run(self, prompt: PromptInfo) -> list[tuple[str, str]]:
         """Collect what before_run hooks add for the agent, 8,000 characters at most in all."""

@@ -476,3 +476,30 @@ async def test_a_plugin_asks_whoever_ran_it_and_waits_for_the_answers(tmp_path: 
         closed = await guest.next(PluginAsked)
         await guest.client.send(PluginAnswer(ask_id=closed.ask_id))
         assert (await owner.next(CommandReplied)).text == "cancelled"
+
+
+INPUT = """
+def setup(plural):
+    @plural.on("input")
+    async def expand(prompt, ctx):
+        if prompt.text.startswith("!fix "):
+            return "Fix this bug and run the tests: " + prompt.text.removeprefix("!fix ")
+
+    @plural.on("before_run")
+    async def seen(prompt, ctx):
+        return f"prompt seen as: {prompt.text}"
+"""
+
+
+async def test_an_input_hook_rewrites_the_prompt_the_agent_gets(tmp_path: Path) -> None:
+    install(tmp_path, "macros", INPUT)
+    provider = FakeProvider([reply("on it")])
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        owner = await session.owner()
+        await owner.client.send(PromptSubmit(text="!fix the login page"))
+        added = await owner.next(PluginContextAdded)
+        assert added.text == "prompt seen as: Fix this bug and run the tests: the login page"
+        await owner.next(RunEnded)
+        contents = [message.content for message in provider.requests[0].messages]
+        assert "Fix this bug and run the tests: the login page" in contents[-1]
+        assert not any("!fix" in text for text in contents)

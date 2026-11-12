@@ -152,6 +152,10 @@ restarts their session, so prefer the latest messages.
 `@plural.on("session_start")` gets `(session, ctx)` (`session.room`, `session.workspace`) after the
 plugins load, at start and on every reload.
 
+`@plural.on("input")` gets `(prompt, ctx)` when a run starts and may return new text for the prompt
+the agent gets, such as a macro expanded; nothing leaves it. The room still shows what the person
+typed. 5 seconds; it runs before `before_run`, which sees the new text.
+
 `@plural.on("before_run")` gets `(prompt, ctx)` (`prompt.text`, `prompt.author_id`, `prompt.role`) when
 a run starts and returns text the agent reads as a note right before the prompt, or nothing. 5 seconds,
 8,000 characters across plugins. Use it for facts the agent should not have to look up: branch, failing

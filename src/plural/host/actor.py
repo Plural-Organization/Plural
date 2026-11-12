@@ -5,7 +5,7 @@ import hashlib
 import json
 from collections.abc import Coroutine, Sequence
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import PurePath
 
@@ -1593,19 +1593,23 @@ class SessionActor:
             self._run_changes = ChangeLedger(self._plugins.workspace)
         await self._emit(RunStarted(run_id=run_id, prompt_id=turn.id, provenance=turn.provenance))
         plugins = self._plugins
-        if plugins is None or not plugins.hooks("before_run"):
+        if plugins is None or not (plugins.hooks("before_run") or plugins.hooks("input")):
             self._agent.start(run_id, turn)
             return
 
-        async def prepare(prompt: UserTurn) -> list[tuple[str, str]]:
+        async def prepare(prompt: UserTurn) -> tuple[UserTurn, list[tuple[str, str]]]:
             info = PromptInfo(
                 prompt_id=prompt.id,
                 text=prompt.text,
                 author_id=prompt.provenance.initiator_id,
                 role=prompt.provenance.initiator_role.value,
             )
+            text = await plugins.rewrite_input(info)
+            if text != prompt.text:
+                prompt = prompt.model_copy(update={"text": text})
+                info = replace(info, text=text)
             added = await plugins.before_run(info)
-            return [(name, self._redactor.redact(text)) for name, text in added]
+            return prompt, [(name, self._redactor.redact(note)) for name, note in added]
 
         self._agent.start(run_id, turn, prepare)
 

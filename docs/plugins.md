@@ -281,6 +281,25 @@ async def ready(session, ctx):
 
 It has 120 seconds; if it fails the room sees why.
 
+### Rewriting a prompt
+
+An `input` hook runs when a run starts and may rewrite the prompt the agent gets, for example to expand
+a shorthand:
+
+```python
+def setup(plural):
+    @plural.on("input")
+    async def fix(prompt, ctx):
+        if prompt.text.startswith("!fix "):
+            return "Fix this bug and run the tests: " + prompt.text.removeprefix("!fix ")
+```
+
+It gets the same `prompt` as a `before_run` hook and returns the new text, or nothing to leave it. Hooks
+run in turn, then `before_run` hooks see the new text. The room keeps showing what the person typed;
+the agent and the session log get the rewritten prompt. Like `before_run`, it runs for the prompt a run
+starts with, not one that joins a run already going. A hook gets 5 seconds; one that fails or is late
+changes nothing.
+
 ### Before a run
 
 A `before_run` hook can hand the agent context just before a run starts, such as the branch or the tests
