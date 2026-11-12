@@ -200,6 +200,30 @@ connected, and one that changed is connected again. A name already taken by a co
 another plugin's, makes the plugin fail to load. Its env and header values are masked in what the room
 sees, like any MCP server's.
 
+## Model providers
+
+A plugin can offer a model provider: a company gateway, a local server, any API that speaks the
+OpenAI or Anthropic protocol. It shows in the host's model settings (`F2` → Model) next to the built-in
+presets:
+
+```python
+def setup(plural):
+    plural.provider(
+        "gateway",
+        label="Team gateway",
+        base_url="https://llm.example.com/v1",
+        models=["fast-1", "smart-1"],
+        key_env="GATEWAY_KEY",
+    )
+```
+
+`plural.provider(id, base_url, models=(), label=None, kind="openai", key_env=None, hint="")`: `id` uses
+`a-z`, `0-9`, `-` and `_` and cannot be a built-in preset's or another plugin's; `kind` is `openai` or
+`anthropic`, the protocol the API speaks; `models` are offered in settings, the first by default. The
+key is read from the environment variable `key_env` when the provider is chosen, and is never stored by
+the plugin; without `key_env` no key is sent, as for a local server. A command can switch to it with
+`ctx.set_model("smart-1", provider="gateway")`.
+
 ## Switching the model
 
 A command the host runs can switch the agent's model, as the host would in settings:

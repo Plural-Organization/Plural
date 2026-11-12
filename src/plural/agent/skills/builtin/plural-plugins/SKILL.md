@@ -130,6 +130,13 @@ Use it for state that matters while people work, such as `tests 3/3 ✓` after a
 config; its tools load on demand like any MCP server's. Read tokens from the environment, never
 hard-code them.
 
+## Model providers
+
+`plural.provider(id, base_url=..., models=[...], label=None, kind="openai", key_env=None)` offers an
+OpenAI-compatible (or `kind="anthropic"`) API in the host's model settings next to the built-in
+presets, its key read from the environment variable `key_env`. `ctx.set_model(model, provider=id)`
+switches to it.
+
 ## Switching the model
 
 `await ctx.set_model(model, provider=None)` in a command switches the agent's model, as the host would in

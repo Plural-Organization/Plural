@@ -2,6 +2,7 @@ import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
 from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from pydantic import SecretStr
@@ -162,3 +163,52 @@ async def test_a_plugin_switches_the_model_the_client_last_configured(
     assert applied[-1].base_url == "http://x/v1"
     assert await plugins.switch_model("sonnet", "anthropic") == "anthropic · sonnet"
     assert applied[-1].preset == "anthropic"
+
+
+PROVIDER = """
+def setup(plural):
+    plural.provider(
+        "gateway",
+        label="Team gateway",
+        base_url="https://llm.example.com/v1",
+        models=["fast-1", "smart-1"],
+        key_env="GATEWAY_KEY",
+    )
+"""
+
+
+async def test_a_plugin_offers_a_provider_in_the_model_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "plugins"
+    directory.mkdir()
+    (directory / "gateway.py").write_text(PROVIDER)
+    (directory / "clash.py").write_text(
+        'def setup(plural):\n    plural.provider("anthropic", base_url="https://x.test")\n'
+    )
+    plugins = PluginHost(directory, workspace=tmp_path)
+    plugins.load()
+    errors = {view.name: view.error for view in plugins.views()}
+    assert errors["clash"] is not None
+    assert "provider anthropic is already taken" in errors["clash"]
+
+    replies: list[dict[str, object]] = []
+    gate = control.Control(SimpleNamespace(plugins=plugins), BASE, replies.append)  # pyright: ignore[reportArgumentType]
+    await gate.handle('{"id": "1", "type": "catalog"}')
+    presets = cast("list[dict[str, object]]", replies[-1]["presets"])
+    offered = next(p for p in presets if p.get("id") == "gateway")
+    assert offered["baseUrl"] == "https://llm.example.com/v1"
+    assert offered["models"] == ["fast-1", "smart-1"]
+
+    with pytest.raises(ConfigError, match="GATEWAY_KEY"):
+        gate._resolve(AgentConfig(preset="gateway"))  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setenv("GATEWAY_KEY", "k" * 24)
+    resolved = gate._resolve(AgentConfig(preset="gateway"))  # pyright: ignore[reportPrivateUsage]
+    assert (resolved.provider, resolved.base_url, resolved.model) == (
+        "openai",
+        "https://llm.example.com/v1",
+        "fast-1",
+    )
+    assert resolved.preset is None
+    assert resolved.api_key is not None
+    assert resolved.api_key.get_secret_value() == "k" * 24

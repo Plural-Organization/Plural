@@ -21,6 +21,8 @@ from plural.agent.loop.messages import Message
 from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.prompts import tag
 from plural.agent.providers.base import LlmRequest, ToolCallRequest, ToolSchema
+from plural.agent.providers.catalog import PRESETS
+from plural.agent.providers.preset import Preset
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
 from plural.agent.tools.registry import Exposure
 from plural.host.inbox import (
@@ -65,6 +67,7 @@ BUILT_IN: Final = frozenset(
         "who",
     }
 )
+PROVIDER_ID: Final = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 TOOL_NAME: Final = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 RISKS: Final = {"read": ToolRisk.READ, "write": ToolRisk.WRITE, "exec": ToolRisk.EXEC}
 RUN_TIMEOUT_S: Final = 120.0
@@ -715,6 +718,7 @@ class PluginApi:
         self.instruction = ""
         self.hidden: frozenset[str] = frozenset()
         self.servers: dict[str, ServerSpec] = {}
+        self.providers: list[Preset] = []
         self.on_hide: Callable[[], None] = lambda: None
 
     def mcp(
@@ -737,6 +741,39 @@ class PluginApi:
             env=dict(env or {}),
             url=url,
             headers=dict(headers or {}),
+        )
+
+    def provider(
+        self,
+        id: str,
+        *,
+        base_url: str,
+        models: Sequence[str] = (),
+        label: str | None = None,
+        kind: str = "openai",
+        key_env: str | None = None,
+        hint: str = "",
+    ) -> None:
+        """Offer a model provider in the host's model settings: an OpenAI- or
+        Anthropic-compatible API at `base_url`, its key read from the variable `key_env`."""
+        if not PROVIDER_ID.match(id):
+            raise PluginError(f"invalid provider id {id!r}: use a-z, 0-9, - and _")
+        if kind not in {"openai", "anthropic"}:
+            raise PluginError(f"kind of {id} must be openai or anthropic")
+        if not base_url.startswith(("http://", "https://")):
+            raise PluginError(f"base_url of {id} must be an http(s) URL")
+        self.providers.append(
+            Preset(
+                id=id,
+                label=label or id,
+                adapter="anthropic" if kind == "anthropic" else "openai",
+                hint=hint or f"from the {self._plugin} plugin",
+                base_url=base_url,
+                needs_key=key_env is not None,
+                models=tuple(models),
+                connection="api_key" if key_env is not None else "local",
+                key_env=(key_env,) if key_env is not None else (),
+            )
         )
 
     def hide_tools(self, names: Iterable[str]) -> None:
@@ -880,6 +917,7 @@ class PluginHost:
         self._mcp = mcp
         # The MCP servers plugins connected, as last applied.
         self._servers: dict[str, ServerSpec] = {}
+        self._providers: dict[str, Preset] = {}
         self._syncing: asyncio.Task[None] | None = None
         # Set by whoever configures the agent's model, for plugin commands to switch it.
         self.switch_model: Switcher | None = None
@@ -900,6 +938,7 @@ class PluginHost:
         tools: dict[str, PluginTool] = {}
         overrides: dict[str, OverrideTool] = {}
         servers: dict[str, ServerSpec] = {}
+        providers: dict[str, Preset] = {}
         hooks: list[Hook] = []
         apis: list[PluginApi] = []
         reserved = set(self._reserved_tools())
@@ -928,6 +967,10 @@ class PluginHost:
                 for server in api.servers:
                     if server in servers or (server in configured and server not in self._servers):
                         raise PluginError(f"MCP server {server} is already connected")
+                for preset in api.providers:
+                    builtin = any(p.id == preset.id for p in PRESETS)
+                    if builtin or preset.id in providers:
+                        raise PluginError(f"provider {preset.id} is already taken")
                 for override in api.overrides:
                     if override.name in overrides or (
                         sum(o.name == override.name for o in api.overrides) > 1
@@ -951,6 +994,7 @@ class PluginHost:
             tools.update((tool.name, tool) for tool in api.tools)
             overrides.update((override.name, override) for override in api.overrides)
             servers.update(api.servers)
+            providers.update((preset.id, preset) for preset in api.providers)
             hooks.extend(api.hooks)
             apis.append(api)
             views.append(
@@ -966,6 +1010,7 @@ class PluginHost:
         self._commands = commands
         self._tools = tools
         self._overrides = overrides
+        self._providers = providers
         self._hooks = tuple(hooks)
         self._apis = tuple(apis)
         for api in apis:
@@ -1001,6 +1046,10 @@ class PluginHost:
         """Wait until the last change to the plugins' MCP servers is applied."""
         if self._syncing is not None:
             await self._syncing
+
+    def providers(self) -> tuple[Preset, ...]:
+        """The model providers the loaded plugins offer, as presets of the model settings."""
+        return tuple(self._providers.values())
 
     def hidden_tools(self) -> frozenset[str]:
         """The tools the loaded plugins keep from the agent."""
