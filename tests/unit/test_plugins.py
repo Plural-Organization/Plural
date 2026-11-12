@@ -7,7 +7,7 @@ import pytest
 from plural.agent.providers.base import ToolCallRequest
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
-from plural.agent.tools.base import ToolCtx
+from plural.agent.tools.base import ToolCtx, ToolResult
 from plural.agent.tools.registry import Exposure
 from plural.host import plugins as plugin_module
 from plural.host.inbox import Inbox, PluginPrompt, PluginReply
@@ -384,3 +384,36 @@ async def test_tool_args_hooks_change_the_arguments_in_turn(tmp_path: Path) -> N
     # A hook that fails or answers with something else leaves the arguments as they were.
     read = ToolCallRequest(id="c2", name="read", args={"path": "a.txt"})
     assert await plugins.tool_args(read, HOST) is read
+
+
+RESULTS = """
+def setup(plural):
+    @plural.on("tool_result")
+    async def redact(result, ctx):
+        if "SECRET" in result.content:
+            return result.content.replace("SECRET", "[hidden]")
+
+    @plural.on("tool_result")
+    async def hint(result, ctx):
+        if result.is_error and result.name == "bash":
+            return result.content + "\\nhint: run make setup first"
+
+    @plural.on("tool_result")
+    async def broken(result, ctx):
+        raise RuntimeError("boom")
+
+    @plural.on("tool_result")
+    async def wrong(result, ctx):
+        return 42
+"""
+
+
+async def test_tool_result_hooks_change_what_the_model_gets(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, results=RESULTS)
+    failed = ToolResult("token SECRET missing", is_error=True)
+    changed = await plugins.tool_result(BASH, failed, HOST)
+    assert changed.content == "token [hidden] missing\nhint: run make setup first"
+    assert changed.is_error
+    # Hooks that change nothing, fail or answer with something else leave the result as it was.
+    plain = ToolResult("ok")
+    assert await plugins.tool_result(BASH, plain, HOST) is plain

@@ -129,6 +129,12 @@ or nothing to leave them. The changed call is then validated and put to `tool_ca
 like any other. 5 seconds; a hook that fails changes nothing. Use it to fix commands (`pip` → `uv pip`),
 add flags, or point paths elsewhere.
 
+`@plural.on("tool_result")` runs after a tool call that ran and may replace what the model gets back:
+it gets `(result, ctx)` (`result.name`, `result.risk`, `result.subject`, `result.args`,
+`result.content`, `result.is_error`, `result.author_id`, `result.role`) and returns the new text, or
+nothing. 5 seconds; a hook that fails changes nothing. Use it to hide secrets, shorten noisy output or
+add a hint to an error.
+
 `@plural.on("session_start")` gets `(session, ctx)` (`session.room`, `session.workspace`) after the
 plugins load, at start and on every reload.
 

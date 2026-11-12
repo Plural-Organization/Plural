@@ -6,7 +6,7 @@ import keyword
 import re
 import sys
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import count
 from pathlib import Path
 from types import ModuleType
@@ -69,7 +69,11 @@ HOOK_TIMEOUT_S: Final = 120.0
 MAX_OPTIONS: Final = 20
 MAX_STORE_BYTES: Final = 1_000_000
 MAX_CONTEXT_CHARS: Final = 8000
-HOOK_EVENTS: Final = frozenset({"session_start", "before_run", "tool_args", "tool_call", "run_end"})
+# What a tool_result hook may hand the model in place of a result.
+MAX_RESULT_CHARS: Final = 200_000
+HOOK_EVENTS: Final = frozenset(
+    {"session_start", "before_run", "tool_args", "tool_call", "tool_result", "run_end"}
+)
 MAX_OUTPUT_CHARS: Final = 64_000
 
 TEMPLATE: Final = '''\
@@ -377,6 +381,20 @@ class ToolArgs:
 
     name: str
     args: Mapping[str, JsonValue]
+    author_id: str
+    role: str
+
+
+@dataclass(frozen=True, slots=True)
+class ToolOutcome:
+    """A finished tool call, as a tool_result hook sees it before the model does."""
+
+    name: str
+    risk: str
+    subject: str
+    args: Mapping[str, JsonValue]
+    content: str
+    is_error: bool
     author_id: str
     role: str
 
@@ -748,6 +766,35 @@ class PluginHost:
             except (TypeError, ValueError) as error:
                 log.warning("plugins.bad_args", plugin=hook.plugin, error=str(error))
         return call if args == call.args else call.model_copy(update={"args": args})
+
+    async def tool_result(
+        self, call: ToolCallView, result: ToolResult, provenance: Provenance
+    ) -> ToolResult:
+        """Let each tool_result hook replace what the model gets back from a call, in turn."""
+        content = result.content
+        for hook in self.hooks("tool_result"):
+            seen = ToolOutcome(
+                name=call.name,
+                risk=call.risk.value,
+                subject=call.subject,
+                args=call.args,
+                content=content,
+                is_error=result.is_error,
+                author_id=provenance.initiator_id,
+                role=provenance.initiator_role.value,
+            )
+            try:
+                answer = await asyncio.wait_for(
+                    hook.handler(seen, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                )
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                continue
+            if isinstance(answer, str):
+                content = answer[:MAX_RESULT_CHARS]
+        if content == result.content:
+            return result
+        return replace(result, content=content)
 
     async def guard_tool(self, call: ToolCallView, provenance: Provenance) -> Verdict | None:
         """Ask every tool_call hook about a call. Any deny wins; a hook that fails counts as ask."""

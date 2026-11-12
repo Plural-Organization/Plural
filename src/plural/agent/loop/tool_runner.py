@@ -181,6 +181,9 @@ class ToolRunner:
                 finally:
                     if not runner.done():
                         runner.cancel()
+                result = await interruptible(
+                    self._hooks.tool_result(view, result, provenance), cancel
+                )
             else:
                 result = ToolResult(f"Denied: {verdict.reason}", is_error=True)
         except Interrupted:

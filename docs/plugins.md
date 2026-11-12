@@ -204,6 +204,27 @@ any other, so a hook cannot make a call more permitted than its new arguments ar
 call as it ran. A hook gets 5 seconds; one that raises, is late or returns something other than a dict
 changes nothing.
 
+### Changing what a call gives back
+
+A `tool_result` hook runs after every tool call that ran, before the model sees the result, and may
+replace its text: hide a secret, shorten noisy output, or add a hint to an error:
+
+```python
+def setup(plural):
+    @plural.on("tool_result")
+    async def hint(result, ctx):
+        if result.is_error and "ModuleNotFoundError" in result.content:
+            return result.content + "\nhint: run `uv sync` first"
+```
+
+It gets `result.name`, `result.risk`, `result.subject`, `result.args`, `result.content`,
+`result.is_error`, `result.author_id` and `result.role`, and returns the new text, or nothing to leave
+it. Hooks run in turn, each seeing what the one before returned, and the text is cut at 200,000
+characters. Whether the call failed stays as it was. The room and the session log get the result as
+the hooks left it; output the tool streamed while it ran was already shown. A call that was denied or
+aborted never reaches the hook. A hook gets 5 seconds; one that raises, is late or returns something
+other than text changes nothing.
+
 ### When the plugins load
 
 A `session_start` hook runs after the plugins load: when the host starts and after every
