@@ -677,6 +677,17 @@
       },
       "type": "object"
     },
+    "ImportLink": {
+      "description": "Ask for the address a chat service sends its chats to.",
+      "properties": {
+        "type": {
+          "const": "import.link",
+          "default": "import.link",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "InviteCreate": {
       "properties": {
         "reusable": {
@@ -1511,6 +1522,7 @@
           "context.compact": "#/$defs/ContextCompact",
           "file.attach": "#/$defs/FileAttach",
           "history.get": "#/$defs/HistoryGet",
+          "import.link": "#/$defs/ImportLink",
           "invite.create": "#/$defs/InviteCreate",
           "join.decide": "#/$defs/JoinDecide",
           "link.revoke": "#/$defs/LinkRevoke",
@@ -1571,6 +1583,9 @@
         },
         {
           "$ref": "#/$defs/InviteCreate"
+        },
+        {
+          "$ref": "#/$defs/ImportLink"
         },
         {
           "$ref": "#/$defs/JoinDecide"

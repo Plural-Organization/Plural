@@ -19,7 +19,7 @@ from plural.cli.account import login, logout, whoami
 from plural.cli.agent import agent_app
 from plural.cli.format import ago
 from plural.cli.team import ls, team_app
-from plural.host.config import DEFAULT_RELAY_URL, HostSettings
+from plural.host.config import DEFAULT_MCP_URL, DEFAULT_RELAY_URL, HostSettings
 from plural.host.team import TeamStore
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.models import AdmissionMode, PromptMode
@@ -126,9 +126,12 @@ def host(
         options["host_name"] = getpass.getuser()
     settings = HostSettings(**options)
     if local:
-        settings = settings.model_copy(update={"relay_url": None})
-    elif _wants_relay(settings):
-        settings = settings.model_copy(update={"relay_url": _default_relay(settings)})
+        settings = settings.model_copy(update={"relay_url": None, "mcp_url": None})
+    else:
+        if settings.mcp_url is None:
+            settings = settings.model_copy(update={"mcp_url": DEFAULT_MCP_URL})
+        if _wants_relay(settings):
+            settings = settings.model_copy(update={"relay_url": _default_relay(settings)})
     from plural.host.providers import ConfigError
     from plural.host.team_presence import PresenceUnavailable
 

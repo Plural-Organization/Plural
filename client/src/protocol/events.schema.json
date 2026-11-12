@@ -1443,6 +1443,7 @@
               "context.compacting": "#/$defs/ContextCompacting",
               "context.usage": "#/$defs/ContextUsage",
               "error": "#/$defs/ErrorRaised",
+              "import.link": "#/$defs/ImportLinkShown",
               "invite.created": "#/$defs/InviteCreated",
               "join.requested": "#/$defs/JoinRequested",
               "join.resolved": "#/$defs/JoinResolved",
@@ -1700,6 +1701,9 @@
               "$ref": "#/$defs/InviteCreated"
             },
             {
+              "$ref": "#/$defs/ImportLinkShown"
+            },
+            {
               "$ref": "#/$defs/ErrorRaised"
             }
           ]
@@ -1742,6 +1746,31 @@
         "folder",
         "write",
         "broad"
+      ],
+      "type": "object"
+    },
+    "ImportLinkShown": {
+      "properties": {
+        "type": {
+          "const": "import.link",
+          "default": "import.link",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "type",
+        "url"
       ],
       "type": "object"
     },
@@ -3819,6 +3848,7 @@
           "context.compacting": "#/$defs/ContextCompacting",
           "context.usage": "#/$defs/ContextUsage",
           "error": "#/$defs/ErrorRaised",
+          "import.link": "#/$defs/ImportLinkShown",
           "invite.created": "#/$defs/InviteCreated",
           "join.requested": "#/$defs/JoinRequested",
           "join.resolved": "#/$defs/JoinResolved",
@@ -4074,6 +4104,9 @@
         },
         {
           "$ref": "#/$defs/InviteCreated"
+        },
+        {
+          "$ref": "#/$defs/ImportLinkShown"
         },
         {
           "$ref": "#/$defs/ErrorRaised"

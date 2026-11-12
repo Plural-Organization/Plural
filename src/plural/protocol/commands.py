@@ -97,6 +97,12 @@ class InviteCreate(Model):
     reusable: bool = False
 
 
+class ImportLink(Model):
+    """Ask for the address a chat service sends its chats to."""
+
+    type: Literal["import.link"] = "import.link"
+
+
 class JoinDecide(Model):
     type: Literal["join.decide"] = "join.decide"
     request_id: str
@@ -367,6 +373,7 @@ Command = Annotated[
     | ApprovalRespond
     | RunAbort
     | InviteCreate
+    | ImportLink
     | JoinDecide
     | AccessRequest
     | AccessDecide

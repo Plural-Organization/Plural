@@ -76,6 +76,7 @@ export interface CommandsSchema {
     | ApprovalRespond
     | RunAbort
     | InviteCreate
+    | ImportLink
     | JoinDecide
     | AccessRequest
     | AccessDecide
@@ -218,6 +219,15 @@ export interface InviteCreate {
   role?: "host" | "participant" | "viewer";
   ttl_s?: number;
   type?: "invite.create";
+}
+/**
+ * Ask for the address a chat service sends its chats to.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "ImportLink".
+ */
+export interface ImportLink {
+  type?: "import.link";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

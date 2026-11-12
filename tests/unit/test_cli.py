@@ -10,7 +10,7 @@ from typer.testing import CliRunner
 from plural import __version__
 from plural.cli import main
 from plural.cli.main import app
-from plural.host.config import DEFAULT_RELAY_URL, HostSettings
+from plural.host.config import DEFAULT_MCP_URL, DEFAULT_RELAY_URL, HostSettings
 from plural.host.team import TeamProfile, TeamStore
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.events import ParticipantLeft
@@ -183,6 +183,17 @@ def test_host_without_an_address_uses_the_plural_relay(
     settings = host_settings(monkeypatch, ["--workspace", str(tmp_path)])
     assert settings.relay_url == DEFAULT_RELAY_URL
     assert settings.host_name != ""
+
+
+def test_a_host_connects_to_the_chat_gateway_unless_it_stays_local(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    clean_address_environment(monkeypatch, tmp_path)
+    workspace = ["--workspace", str(tmp_path)]
+    assert host_settings(monkeypatch, workspace).mcp_url == DEFAULT_MCP_URL
+    assert host_settings(monkeypatch, [*workspace, "--local"]).mcp_url is None
+    own = host_settings(monkeypatch, [*workspace, "--mcp-url", "https://mcp.example"])
+    assert own.mcp_url == "https://mcp.example"
 
 
 def test_a_host_stays_on_this_machine_when_asked_or_given_its_own_address(

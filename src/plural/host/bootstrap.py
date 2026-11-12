@@ -338,6 +338,7 @@ async def _assemble(
         owner=settings.host_name,
         scrub=redactor.redact,
     )
+    chat_link, import_url = await _chat_link(inbox, registry, ids, clock, settings)
     actor = SessionActor(
         inbox=inbox,
         store=store,
@@ -373,10 +374,10 @@ async def _assemble(
         ledger=ledger,
         team_sweep_s=settings.team_roster_ttl_s,
         imported=imported,
+        import_url=import_url,
     )
     desk.attach(actor.board)
     await actor.start()
-    chat_link, import_url = await _chat_link(inbox, registry, ids, clock, settings)
     transport: HostTransport = (
         RelayLink(
             url=settings.relay_url,

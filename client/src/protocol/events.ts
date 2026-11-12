@@ -227,6 +227,7 @@ export interface EventsSchema {
     | SessionWelcome
     | SessionSnapshot
     | InviteCreated
+    | ImportLinkShown
     | ErrorRaised;
   record: EventRecord;
 }
@@ -1341,6 +1342,14 @@ export interface InviteCreated {
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ImportLinkShown".
+ */
+export interface ImportLinkShown {
+  type: "import.link";
+  url: string | null;
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "ErrorRaised".
  */
 export interface ErrorRaised {
@@ -1424,6 +1433,7 @@ export interface EventRecord {
     | SessionWelcome
     | SessionSnapshot
     | InviteCreated
+    | ImportLinkShown
     | ErrorRaised;
   id: string;
   seq: number;

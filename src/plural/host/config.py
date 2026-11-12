@@ -14,6 +14,8 @@ from plural.protocol.models import AdmissionMode, PromptMode
 # The relay a host and a team use when none is named. Everything else is opt-in: --local stays on
 # this machine, --bind and --public-url serve directly, --relay picks another relay.
 DEFAULT_RELAY_URL = "wss://relay.plrl.host"
+# The gateway a chat service (Claude, ChatGPT, Grok) sends chats through. --local turns it off.
+DEFAULT_MCP_URL = "https://mcp.plrl.host"
 # Where a computer is linked to an account.
 DEFAULT_ACCOUNTS_URL = "https://accounts.plrl.host"
 
@@ -33,7 +35,7 @@ class HostSettings(BaseSettings):
     port: int = 7777
     public_url: str | None = None
     relay_url: str | None = None
-    # The MCP gateway a chat service sends chats through. Off until one is named.
+    # Where a chat service sends chats through. The CLI fills in DEFAULT_MCP_URL; None is off.
     mcp_url: str | None = None
     team: bool = False
     # Which of this computer's teams a team session shows to; None is the one in team.json.
