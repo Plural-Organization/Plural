@@ -142,7 +142,7 @@ export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, 
                   <PersonAvatar seed={space.link.room} />
                   <div className="flex min-w-0 flex-col">
                     <Label className="truncate">{space.owner ?? "Room"}</Label>
-                    <Description className="truncate font-mono">{space.link.room}</Description>
+                    <Description className="truncate" title={space.link.room}>{space.owner !== null && space.owner === space.name ? "Your room" : "Room link"}</Description>
                   </div>
                 </ListBox.Item>
               ))}

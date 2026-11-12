@@ -35,7 +35,6 @@ export function App() {
   const account = useAccount();
   // Signed in, the browser is the account's member, and the account's teams come along (ADR 0016).
   const team = useTeam(account.status === "in");
-  // Whether the right side shows the form for joining another room.
   // What the right side shows instead of a room: the form to join one, or to start one.
   // The create-a-team window lives here, not in the screen that opened it: creating a team swaps the
   // screen, and the invite link it shows has to outlive that.

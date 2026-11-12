@@ -34,10 +34,10 @@ export function ProviderPicker({ providers, value, onPick }: ProviderPickerProps
     <>
       <Card variant="secondary">
         <Card.Content className="flex-row items-center gap-3">
-          <AgentLogo label={value.label} size={22} />
+          <AgentLogo label={value.label} size={22} fallback />
           <div className="min-w-0 flex-1 overflow-hidden">
             <p className="truncate text-[15px] font-medium">{value.label}</p>
-            <Description className="block truncate">{value.hint}</Description>
+            <Description className="line-clamp-2">{value.hint}</Description>
           </div>
           <Status provider={value} />
           <Button size="sm" variant="secondary" onPress={() => setOpen(true)} aria-label="Choose another provider">
@@ -76,13 +76,13 @@ export function ProviderPicker({ providers, value, onPick }: ProviderPickerProps
                       <Header className="px-2 pb-1 pt-3 text-xs font-medium uppercase tracking-wide text-muted">{group.title}</Header>
                       {group.providers.map((provider) => (
                         <ListBox.Item key={provider.id} id={provider.id} textValue={provider.label}>
-                          <AgentLogo label={provider.label} size={20} decorative />
+                          <AgentLogo label={provider.label} size={20} decorative fallback />
                           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
                             <Label className="flex items-center gap-1.5 truncate">
                               {provider.label}
                               {provider.id === value.id ? <Check size={13} weight="bold" aria-label="Chosen now" className="flex-none text-muted" /> : null}
                             </Label>
-                            <Description className="block truncate">{provider.hint}</Description>
+                            <Description className="line-clamp-2">{provider.hint}</Description>
                           </div>
                           <Status provider={provider} />
                         </ListBox.Item>

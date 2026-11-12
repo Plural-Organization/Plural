@@ -57,6 +57,10 @@ function AgentSection({ room, label }: { room: string; label: string }) {
     };
   }, [phase, room]);
 
+  // Nothing to switch while the chosen provider and model are the ones the room runs.
+  const running = now ?? label;
+  const same = setup.provider !== null && setup.choice !== null && running.includes(setup.provider.label) && (setup.choice.model === "" || running.includes(setup.choice.model));
+
   const apply = () => {
     setProblem(null);
     setBusy(true);
@@ -74,10 +78,12 @@ function AgentSection({ room, label }: { room: string; label: string }) {
         <Card.Title className="text-[15px]">Agent</Card.Title>
       </Card.Header>
       <Card.Content className="gap-4">
-        <div className="flex items-center gap-3">
-          <AgentLogo label={now ?? label} size={20} />
-          <p className="min-w-0 flex-1 truncate text-[15px]">{now ?? (label || "No agent")}</p>
-        </div>
+        {mine === true ? null : (
+          <div className="flex items-center gap-3">
+            <AgentLogo label={now ?? label} size={20} />
+            <p className="min-w-0 flex-1 truncate text-[15px]">{now ?? (label || "No agent")}</p>
+          </div>
+        )}
         {mine === true ? (
           <>
             <AgentSetup setup={setup} />
@@ -89,7 +95,7 @@ function AgentSection({ room, label }: { room: string; label: string }) {
                 </Alert.Content>
               </Alert>
             )}
-            <Button className="self-start" onPress={apply} isDisabled={busy || setup.provider === null || setup.blocker !== null}>
+            <Button className="self-start" onPress={apply} isDisabled={busy || setup.provider === null || setup.blocker !== null || same}>
               {busy ? <Spinner size="sm" color="current" /> : null}
               {busy ? "Switching…" : "Switch agent"}
             </Button>
