@@ -289,6 +289,7 @@ async def _assemble(
         ),
         tool_ctx=ToolCtx(workspace=workspace, backend=LocalBackend()),
         ids=ids,
+        hooks=plugins,
         dump=RequestDump(state_dir / "logs" / "requests" / room)
         if settings.dump_requests
         else None,

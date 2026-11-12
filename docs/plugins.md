@@ -183,6 +183,27 @@ Any deny wins. There is no allow: a call the policy refuses, or one plan mode fo
 hook. A hook gets 5 seconds; one that raises or takes longer counts as `ask`, so a broken guard makes the
 host ask rather than let a call through. `ctx.reply(text)` and `ctx.run(*argv)` work as in commands.
 
+### Changing a call's arguments
+
+A `tool_args` hook runs first on every tool call the agent makes and may replace its arguments, for
+example to fix a command or add a flag:
+
+```python
+def setup(plural):
+    @plural.on("tool_args")
+    async def use_uv(call, ctx):
+        if call.name == "bash" and "pip install" in call.args.get("command", ""):
+            command = call.args["command"].replace("pip install", "uv pip install")
+            return {**call.args, "command": command}
+```
+
+It gets `call.name`, `call.args`, `call.author_id` and `call.role`, and returns the new arguments as a
+dict, or nothing to leave them. Hooks run in turn, each seeing what the one before returned. The changed
+call is then validated against the tool's parameters and put to `tool_call` hooks and the policy like
+any other, so a hook cannot make a call more permitted than its new arguments are; the room sees the
+call as it ran. A hook gets 5 seconds; one that raises, is late or returns something other than a dict
+changes nothing.
+
 ### When the plugins load
 
 A `session_start` hook runs after the plugins load: when the host starts and after every

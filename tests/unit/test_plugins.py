@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from plural.agent.providers.base import ToolCallRequest
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import ToolCtx
@@ -345,3 +346,41 @@ def test_a_store_keeps_json_and_refuses_the_rest(tmp_path: Path) -> None:
     assert plugin_module.PluginStore(tmp_path / "s.json").get("seen") == ["a", "b"]
     store.delete("seen")
     assert plugin_module.PluginStore(tmp_path / "s.json").all() == {}
+
+
+ARGS = """
+def setup(plural):
+    @plural.on("tool_args")
+    async def uv(call, ctx):
+        if call.name == "bash":
+            command = call.args["command"].replace("pip install", "uv pip install")
+            return {**call.args, "command": command}
+
+    @plural.on("tool_args")
+    async def quiet(call, ctx):
+        if call.name == "bash":
+            return {**call.args, "command": call.args["command"] + " -q"}
+
+    @plural.on("tool_args")
+    async def nothing(call, ctx):
+        return None
+
+    @plural.on("tool_args")
+    async def broken(call, ctx):
+        raise RuntimeError("boom")
+
+    @plural.on("tool_args")
+    async def wrong(call, ctx):
+        return "not a mapping"
+"""
+
+
+async def test_tool_args_hooks_change_the_arguments_in_turn(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, args=ARGS)
+    call = ToolCallRequest(id="c1", name="bash", args={"command": "pip install x"})
+    changed = await plugins.tool_args(call, HOST)
+    assert changed.id == "c1"
+    assert changed.args == {"command": "uv pip install x -q"}
+    # A hook that fails or answers with something else leaves the arguments as they were.
+    read = ToolCallRequest(id="c2", name="read", args={"path": "a.txt"})
+    assert await plugins.tool_args(read, HOST) is read

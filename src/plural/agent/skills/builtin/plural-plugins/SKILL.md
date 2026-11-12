@@ -123,6 +123,12 @@ returns `plural.deny(reason)`, `plural.ask(reason)` or nothing. There is no allo
 ("never push to main", "ask before touching migrations/"), not to skip approvals. Keep it fast: after 5
 seconds, or if it raises, the call needs the host's approval.
 
+`@plural.on("tool_args")` runs first on every tool call and may change its arguments: it gets `(call,
+ctx)` (`call.name`, `call.args`, `call.author_id`, `call.role`) and returns the new arguments as a dict,
+or nothing to leave them. The changed call is then validated and put to `tool_call` hooks and the policy
+like any other. 5 seconds; a hook that fails changes nothing. Use it to fix commands (`pip` → `uv pip`),
+add flags, or point paths elsewhere.
+
 `@plural.on("session_start")` gets `(session, ctx)` (`session.room`, `session.workspace`) after the
 plugins load, at start and on every reload.
 

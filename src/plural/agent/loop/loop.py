@@ -34,6 +34,7 @@ from plural.agent.loop.events import (
     ToolsLoaded,
 )
 from plural.agent.loop.gate import PolicyGate
+from plural.agent.loop.hooks import LoopHooks
 from plural.agent.loop.messages import (
     HARNESS_SOURCE,
     PLUGIN_SOURCE,
@@ -175,6 +176,7 @@ class AgentLoop:
         tracer: Tracer | None = None,
         span: Span | None = None,
         role: str = "main",
+        hooks: LoopHooks | None = None,
     ) -> None:
         self._tools = tools
         self._gate = gate
@@ -203,7 +205,11 @@ class AgentLoop:
         self._compaction_failed = False
         self._verify_compaction = False
         self._runner = ToolRunner(
-            tools=tools, gate=gate, tool_ctx=tool_ctx, timeout_s=self._limits.tool_timeout_s
+            tools=tools,
+            gate=gate,
+            tool_ctx=tool_ctx,
+            timeout_s=self._limits.tool_timeout_s,
+            hooks=hooks,
         )
         # The registry's revision the run's tool list was taken at.
         self._revision = tools.revision

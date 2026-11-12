@@ -11,6 +11,7 @@ from pydantic import ValidationError
 
 from plural.agent.loop.events import AgentEvent, ToolEnd, ToolOutput, ToolStart
 from plural.agent.loop.gate import GateResult, PolicyGate
+from plural.agent.loop.hooks import LoopHooks, NoHooks
 from plural.agent.loop.interrupt import Interrupted, TimedOut, interruptible
 from plural.agent.providers.base import ToolCallRequest
 from plural.agent.sandbox.base import SandboxError, Workspace
@@ -28,9 +29,16 @@ ABORTED = "Not executed: run aborted"
 
 class ToolRunner:
     def __init__(
-        self, *, tools: ToolRegistry, gate: PolicyGate, tool_ctx: ToolCtx, timeout_s: float
+        self,
+        *,
+        tools: ToolRegistry,
+        gate: PolicyGate,
+        tool_ctx: ToolCtx,
+        timeout_s: float,
+        hooks: LoopHooks | None = None,
     ) -> None:
         self._tools = tools
+        self._hooks = hooks or NoHooks()
         self._gate = gate
         self._tool_ctx = tool_ctx
         self._timeout_s = timeout_s
@@ -96,6 +104,8 @@ class ToolRunner:
             for event in self.skip(call, f"Invalid tool call: {call.parse_error}"):
                 yield event
             return
+        # The host may change the arguments; what it changes still goes through every check.
+        call = await self._hooks.tool_args(call, provenance)
         try:
             prepared = self._tools.prepare(call)
         except (UnknownTool, ValidationError) as error:
