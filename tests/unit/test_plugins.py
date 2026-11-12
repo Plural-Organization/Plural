@@ -11,7 +11,7 @@ from plural.agent.providers.base import LlmMessage, LlmRequest, ToolCallRequest
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import ToolCtx, ToolResult
-from plural.agent.tools.registry import Exposure, builtin_tools
+from plural.agent.tools.registry import Exposure, UnknownTool, builtin_tools
 from plural.host import plugins as plugin_module
 from plural.host.inbox import Inbox, PluginPrompt, PluginReply
 from plural.host.plugins import CommandContext, PluginError, PluginHost
@@ -618,3 +618,48 @@ async def test_the_first_summary_hook_that_answers_writes_the_summary(tmp_path: 
     none = tmp_path / "empty"
     none.mkdir()
     assert await host_with(none).summary(history, None) is None
+
+
+READ_ONLY = """
+def setup(plural):
+    @plural.command("readonly")
+    async def readonly(ctx):
+        plural.hide_tools([] if ctx.args == "off" else ["write", "edit", "bash"])
+"""
+
+
+async def test_a_plugin_keeps_tools_from_the_agent(tmp_path: Path) -> None:
+    registry = builtin_tools()
+    directory = tmp_path / "plugins"
+    directory.mkdir()
+    (directory / "modes.py").write_text(READ_ONLY)
+    plugins = PluginHost(directory, workspace=tmp_path, hide_tools=registry.hide)
+    plugins.load()
+    command = plugins.get("readonly")
+    assert command is not None
+    before = registry.revision
+
+    await command.handler(context(tmp_path, Inbox()))
+    names = {schema.name for schema in registry.schemas()}
+    assert names.isdisjoint({"write", "edit", "bash"})
+    assert "read" in names
+    assert registry.revision > before
+    with pytest.raises(UnknownTool):
+        registry.get("bash")
+
+    off = CommandContext(
+        command="readonly",
+        args="off",
+        author="Host",
+        author_id="p_host",
+        role=Role.HOST,
+        workspace=tmp_path,
+        inbox=Inbox(),
+    )
+    await command.handler(off)
+    assert {"write", "edit", "bash"} <= {schema.name for schema in registry.schemas()}
+    # A reload with the plugin gone shows every tool too.
+    await command.handler(context(tmp_path, Inbox()))
+    (directory / "modes.py").unlink()
+    plugins.load()
+    assert "bash" in {schema.name for schema in registry.schemas()}

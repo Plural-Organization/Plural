@@ -178,6 +178,26 @@ everyone in the room: `ci  tests 3/3 ✓`. Call it from a command, a tool or a h
 the line. It is one line of at most 80 characters, the host shows at most one change a second (the
 latest wins), and the line goes away when the plugin is removed or fails to load.
 
+## Which tools the agent has
+
+`plural.hide_tools(names)` keeps tools from the agent: they are not declared on its requests,
+`tool_search` does not find them, and a call to one by name fails as an unknown tool. It takes effect
+from the agent's next model call, also in a run that is going. Calling it again replaces the plugin's
+set, and an empty list shows the tools again; a reload or `/plugins rm` shows them too.
+
+A read-only mode, switched by a command:
+
+```python
+def setup(plural):
+    @plural.command("readonly", host_only=True, usage="/readonly [off]")
+    async def readonly(ctx):
+        writing = ["write", "edit", "multi_edit", "bash"]
+        plural.hide_tools([] if ctx.args == "off" else writing)
+        plural.status("" if ctx.args == "off" else "read-only")
+```
+
+When several plugins hide tools, every tool any of them hides is hidden.
+
 ## Instructions for the agent
 
 `plural.instructions(text)` puts text in the agent's system prompt, so it knows something for as long

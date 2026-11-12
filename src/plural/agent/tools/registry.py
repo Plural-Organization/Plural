@@ -55,6 +55,7 @@ class ToolRegistry:
         self._allowed: frozenset[str] | None = None
         self._loaded: set[str] = set()
         self._pinned: frozenset[str] = frozenset()
+        self._hidden: frozenset[str] = frozenset()
         self._revision = 0
 
     def subset(self, names: Iterable[str]) -> "ToolRegistry":
@@ -63,6 +64,7 @@ class ToolRegistry:
         view._tools = self._tools
         view._sources = self._sources
         view._allowed = frozenset(names)
+        view._hidden = self._hidden
         return view
 
     def register(self, tool: Tool, *, exposure: Exposure = Exposure.CORE) -> None:
@@ -80,6 +82,14 @@ class ToolRegistry:
     def pin(self, names: Iterable[str]) -> None:
         """Declare these tools, or every tool of these groups, as if they were core."""
         self._pinned = frozenset(names)
+
+    def hide(self, names: Iterable[str]) -> None:
+        """Keep these tools from the model: they are not declared, found or run, from the next
+        model call on. Calling again replaces the set; an empty one shows every tool."""
+        hidden = frozenset(names)
+        if hidden != self._hidden:
+            self._hidden = hidden
+            self._revision += 1
 
     @property
     def revision(self) -> int:
@@ -155,6 +165,8 @@ class ToolRegistry:
         return {**self._tools, **dynamic}
 
     def _allowed_name(self, name: str) -> bool:
+        if name in self._hidden:
+            return False
         return (
             self._allowed is None
             or name in self._allowed

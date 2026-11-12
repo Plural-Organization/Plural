@@ -123,6 +123,12 @@ module variables for anything that must survive `/plugins reload`.
 the side panel that the whole room sees, at most 80 characters and one change a second; `""` removes it.
 Use it for state that matters while people work, such as `tests 3/3 ✓` after a `run_end` hook.
 
+## Which tools the agent has
+
+`plural.hide_tools(names)` keeps those tools from the agent from its next model call on (not declared,
+not found by tool_search, not run); calling it again replaces the plugin's set and `[]` shows them all.
+Use it for modes, such as read-only: `plural.hide_tools(["write", "edit", "multi_edit", "bash"])`.
+
 ## Instructions for the agent
 
 `plural.instructions(text)` (on the `plural` object, in `setup` or later) puts the text in the agent's

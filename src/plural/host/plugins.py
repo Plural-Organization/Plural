@@ -698,6 +698,15 @@ class PluginApi:
         self.overrides: list[OverrideTool] = []
         self.hooks: list[Hook] = []
         self.instruction = ""
+        self.hidden: frozenset[str] = frozenset()
+        self.on_hide: Callable[[], None] = lambda: None
+
+    def hide_tools(self, names: Iterable[str]) -> None:
+        """Keep these tools from the agent, from its next model call on, such as `write`,
+        `edit` and `bash` for a read-only mode. Calling again replaces this plugin's set; an
+        empty one shows them all again."""
+        self.hidden = frozenset(names)
+        self.on_hide()
 
     def instructions(self, text: str) -> None:
         """Set what this plugin tells the agent in its system prompt; an empty text removes it.
@@ -821,12 +830,14 @@ class PluginHost:
         inbox: Inbox | None = None,
         reserved_tools: Callable[[], Iterable[str]] = lambda: (),
         builtin_tool: Callable[[str], Tool | None] = lambda name: None,
+        hide_tools: Callable[[frozenset[str]], None] = lambda names: None,
     ) -> None:
         self.directory = directory
         self._inbox = inbox or Inbox()
         self.workspace = workspace
         self._reserved_tools = reserved_tools
         self._builtin_tool = builtin_tool
+        self._hide_tools = hide_tools
         self._overrides: dict[str, OverrideTool] = {}
         self._views: tuple[PluginView, ...] = ()
         self._commands: dict[str, PluginCommand] = {}
@@ -906,6 +917,16 @@ class PluginHost:
         self._overrides = overrides
         self._hooks = tuple(hooks)
         self._apis = tuple(apis)
+        for api in apis:
+            api.on_hide = self._apply_hidden
+        self._apply_hidden()
+
+    def hidden_tools(self) -> frozenset[str]:
+        """The tools the loaded plugins keep from the agent."""
+        return frozenset[str]().union(*(api.hidden for api in self._apis))
+
+    def _apply_hidden(self) -> None:
+        self._hide_tools(self.hidden_tools())
 
     def describe(self) -> str | None:
         """The plugins' instructions for the system prompt, 4,000 characters at most in all."""
