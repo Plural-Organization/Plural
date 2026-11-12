@@ -1476,6 +1476,7 @@
               "proposal.rejected": "#/$defs/ProposalRejected",
               "run.ended": "#/$defs/RunEnded",
               "run.started": "#/$defs/RunStarted",
+              "session.forked": "#/$defs/SessionForked",
               "session.pending": "#/$defs/JoinPending",
               "session.permission_mode_changed": "#/$defs/PermissionModeChanged",
               "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
@@ -1637,6 +1638,9 @@
             },
             {
               "$ref": "#/$defs/ContextCompacting"
+            },
+            {
+              "$ref": "#/$defs/SessionForked"
             },
             {
               "$ref": "#/$defs/ContextCompacted"
@@ -3035,6 +3039,40 @@
       ],
       "type": "object"
     },
+    "SessionForked": {
+      "description": "The host copied this session into a new one, which `plural -r <room>` continues.",
+      "properties": {
+        "before_prompt_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "room": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "const": "session.forked",
+          "default": "session.forked",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "room",
+        "title",
+        "before_prompt_id"
+      ],
+      "type": "object"
+    },
     "SessionSnapshot": {
       "properties": {
         "state": {
@@ -4055,6 +4093,7 @@
           "proposal.rejected": "#/$defs/ProposalRejected",
           "run.ended": "#/$defs/RunEnded",
           "run.started": "#/$defs/RunStarted",
+          "session.forked": "#/$defs/SessionForked",
           "session.pending": "#/$defs/JoinPending",
           "session.permission_mode_changed": "#/$defs/PermissionModeChanged",
           "session.prompt_mode_changed": "#/$defs/PromptModeChanged",
@@ -4216,6 +4255,9 @@
         },
         {
           "$ref": "#/$defs/ContextCompacting"
+        },
+        {
+          "$ref": "#/$defs/SessionForked"
         },
         {
           "$ref": "#/$defs/ContextCompacted"

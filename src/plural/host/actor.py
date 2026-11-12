@@ -3,11 +3,12 @@ import base64
 import binascii
 import hashlib
 import json
+import sqlite3
 from collections.abc import Coroutine, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import datetime
-from pathlib import PurePath
+from pathlib import Path, PurePath
 
 import structlog
 from pydantic import ValidationError
@@ -138,6 +139,7 @@ from plural.protocol.commands import (
     QueueCancel,
     RunAbort,
     SelectionSet,
+    SessionFork,
     SessionHello,
     SkillsInstall,
     SkillsRemove,
@@ -201,6 +203,7 @@ from plural.protocol.events import (
     ProposalApproved,
     RunEnded,
     RunStarted,
+    SessionForked,
     SessionSnapshot,
     SessionWelcome,
     SkillsChanged,
@@ -247,6 +250,7 @@ from plural.protocol.models import (
     UsageLine,
 )
 from plural.security.secrets import Redactor, is_denied_path
+from plural.storage.sessions import fork_session, read_session, session_path
 
 log = structlog.get_logger(__name__)
 
@@ -303,6 +307,8 @@ class SessionActor:
         mcp: McpHub | None = None,
         agents: AgentLibrary | None = None,
         plugins: PluginHost | None = None,
+        # Where sessions are kept, for forking this one; None on a host that cannot fork.
+        data_dir: Path | None = None,
         typing_ttl_s: float = 6.0,
         agent_label: str = "",
         fast_label: str = "",
@@ -361,6 +367,7 @@ class SessionActor:
         self._mcp = mcp
         self._agents = agents
         self._plugins = plugins
+        self._data_dir = data_dir
         self._jobs: set[asyncio.Task[None]] = set()
         self._typing_ttl_s = typing_ttl_s
         self._agent_label = agent_label
@@ -643,6 +650,8 @@ class SessionActor:
                 if self._state.run is None:
                     raise Conflict("no active run")
                 self._agent.abort()
+            case SessionFork(title=title, before_prompt_id=before):
+                await self.fork(title=title, before_prompt_id=before, actor_id=participant.id)
             case ContextCompact():
                 if self._state.run is not None:
                     self._agent.request_compaction()
@@ -1591,6 +1600,49 @@ class SessionActor:
             self._agent.follow_up(turn)
         else:
             self._agent.steer(turn)
+
+    async def fork(
+        self, *, title: str | None, before_prompt_id: str | None, actor_id: str
+    ) -> SessionForked:
+        """Copy this session into a new one and tell the room. Returns what it announced."""
+        if self._data_dir is None:
+            raise Conflict("this host cannot fork its session")
+        before_seq: int | None = None
+        if before_prompt_id is not None:
+            records = await self._store.read()
+            before_seq = next(
+                (
+                    record.seq
+                    for record in records
+                    if isinstance(record.event, PromptAccepted)
+                    and record.event.prompt_id == before_prompt_id
+                ),
+                None,
+            )
+            if before_seq is None:
+                raise NotFound(f"no prompt {before_prompt_id} in this session")
+        room = self._ids.new("r_")
+        name = (title or "").strip() or None
+        try:
+            await asyncio.to_thread(
+                fork_session,
+                self._data_dir,
+                self._publisher.room,
+                room,
+                before_seq=before_seq,
+                title=name,
+                now=self._clock.now(),
+            )
+        except (ValueError, sqlite3.Error) as error:
+            raise Conflict(f"could not fork the session: {error}") from None
+        info = await asyncio.to_thread(read_session, session_path(self._data_dir, room))
+        forked = SessionForked(
+            room=room,
+            title=info.title if info is not None else (name or room),
+            before_prompt_id=before_prompt_id,
+        )
+        await self._emit(forked, actor_id=actor_id)
+        return forked
 
     async def _start_run(self, turn: UserTurn) -> None:
         run_id = self._ids.new("run_")

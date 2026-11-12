@@ -367,6 +367,7 @@ async def _assemble(
         mcp=mcp,
         agents=agents,
         plugins=plugins,
+        data_dir=settings.state_dir,
         typing_ttl_s=settings.typing_ttl_s,
         agent_label=settings.agent_label(),
         fast_label=helper.label if helper else "",

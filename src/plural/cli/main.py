@@ -2,6 +2,7 @@ import asyncio
 import getpass
 import json
 import os
+import sqlite3
 import sys
 from contextlib import suppress
 from pathlib import Path
@@ -388,6 +389,35 @@ def rm(
         raise typer.Exit(1)
     delete_session(data_dir, room)
     console.print(f"Deleted {room}.")
+
+
+@app.command()
+def fork(
+    room: Annotated[str, typer.Argument(help="Session id to copy.")],
+    title: Annotated[str | None, typer.Option(help="Name of the new session.")] = None,
+    before: Annotated[
+        str | None, typer.Option(help="Copy only what came before this prompt id.")
+    ] = None,
+) -> None:
+    """Copy a session into a new one, to try another way from the same point."""
+    from datetime import UTC, datetime
+
+    from plural.host.system import UlidGenerator
+    from plural.storage.sessions import fork_session, prompt_seq
+
+    data_dir = HostSettings().state_dir
+    try:
+        before_seq = None if before is None else prompt_seq(data_dir, room, before)
+        if before is not None and before_seq is None:
+            raise ValueError(f"there is no prompt {before} in {room}")
+        new_room = UlidGenerator().new("r_")
+        fork_session(
+            data_dir, room, new_room, before_seq=before_seq, title=title, now=datetime.now(UTC)
+        )
+    except (ValueError, OSError, sqlite3.Error) as error:
+        console.print(f"[red]{escape(str(error))}[/red]")
+        raise typer.Exit(1) from error
+    console.print(f"Forked {room} into {new_room}. Continue it with: plural -r {new_room}")
 
 
 plugins_app = typer.Typer(help="Install and list the host's plugins.", no_args_is_help=True)

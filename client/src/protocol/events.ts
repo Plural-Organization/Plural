@@ -217,6 +217,7 @@ export interface EventsSchema {
     | MessageDelta
     | MessageEnded
     | ContextCompacting
+    | SessionForked
     | ContextCompacted
     | ContextUsage
     | McpChanged
@@ -929,6 +930,18 @@ export interface ContextCompacting {
   type: "context.compacting";
 }
 /**
+ * The host copied this session into a new one, which `plural -r <room>` continues.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "SessionForked".
+ */
+export interface SessionForked {
+  before_prompt_id: string | null;
+  room: string;
+  title: string;
+  type: "session.forked";
+}
+/**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "ContextCompacted".
  */
@@ -1463,6 +1476,7 @@ export interface EventRecord {
     | MessageDelta
     | MessageEnded
     | ContextCompacting
+    | SessionForked
     | ContextCompacted
     | ContextUsage
     | McpChanged

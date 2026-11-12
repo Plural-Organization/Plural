@@ -441,6 +441,15 @@ class ContextUsage(EventBase):
     context: ContextView
 
 
+class SessionForked(EventBase):
+    """The host copied this session into a new one, which `plural -r <room>` continues."""
+
+    type: Literal["session.forked"] = "session.forked"
+    room: str
+    title: str
+    before_prompt_id: str | None = None
+
+
 class ContextCompacted(EventBase):
     type: Literal["context.compacted"] = "context.compacted"
     run_id: str
@@ -578,6 +587,7 @@ Event = Annotated[
     | MessageDelta
     | MessageEnded
     | ContextCompacting
+    | SessionForked
     | ContextCompacted
     | ContextUsage
     | McpChanged

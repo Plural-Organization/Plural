@@ -88,6 +88,7 @@ export interface CommandsSchema {
     | ParticipantSetRole
     | ParticipantRevoke
     | ContextCompact
+    | SessionFork
     | PromptModeSet
     | PermissionModeSet
     | SkillsSearch
@@ -320,6 +321,17 @@ export interface ParticipantRevoke {
  */
 export interface ContextCompact {
   type?: "context.compact";
+}
+/**
+ * Copy this session into a new one: all of it, or what came before one prompt.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "SessionFork".
+ */
+export interface SessionFork {
+  before_prompt_id?: string | null;
+  title?: string | null;
+  type?: "session.fork";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

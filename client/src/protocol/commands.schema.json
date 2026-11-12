@@ -1259,6 +1259,41 @@
       ],
       "type": "object"
     },
+    "SessionFork": {
+      "description": "Copy this session into a new one: all of it, or what came before one prompt.",
+      "properties": {
+        "before_prompt_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 200,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "session.fork",
+          "default": "session.fork",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "SessionHello": {
       "properties": {
         "client": {
@@ -1564,6 +1599,7 @@
           "proposal.decide": "#/$defs/ProposalDecide",
           "queue.cancel": "#/$defs/QueueCancel",
           "run.abort": "#/$defs/RunAbort",
+          "session.fork": "#/$defs/SessionFork",
           "session.hello": "#/$defs/SessionHello",
           "session.set_briefing_sharing": "#/$defs/BriefingSharingSet",
           "session.set_permission_mode": "#/$defs/PermissionModeSet",
@@ -1635,6 +1671,9 @@
         },
         {
           "$ref": "#/$defs/ContextCompact"
+        },
+        {
+          "$ref": "#/$defs/SessionFork"
         },
         {
           "$ref": "#/$defs/PromptModeSet"
