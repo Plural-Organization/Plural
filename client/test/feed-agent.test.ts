@@ -17,3 +17,10 @@ test("a run stopped by a limit or by a person is not the agent's fault", () => {
   expect(limited).not.toHaveProperty("action");
   expect(aborted).not.toHaveProperty("action");
 });
+
+test("the import address is shown, or the reason there is none", () => {
+  const shown = (url: string | null) => absorb(emptyFeed(), { type: "import.link", url } as unknown as Event, new Projection()).items.at(-1);
+  expect(shown("https://mcp.example/i/abc")).toMatchObject({ kind: "notice", tone: "ok" });
+  expect(JSON.stringify(shown("https://mcp.example/i/abc"))).toContain("https://mcp.example/i/abc");
+  expect(shown(null)).toMatchObject({ kind: "notice", tone: "warn" });
+});

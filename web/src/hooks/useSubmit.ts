@@ -57,6 +57,10 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
             notify("warn", "usage: /invite [link | once | viewer | revoke | open | approve]");
         }
         return true;
+      case "import":
+        if (!isHost) { notify("warn", "only the host has an import address"); return true; }
+        send({ type: "import.link" });
+        return true;
       case "copy": {
         const reply = lastReply(feed);
         if (reply === "") {

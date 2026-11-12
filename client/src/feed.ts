@@ -356,6 +356,13 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
       return note("dim", `${nameOf(event.attachment.owner_id)} attached ${event.attachment.name}`);
     case "invite.created":
       return note("ok", `invite for a ${event.role}: ${event.link}`);
+    case "import.link":
+      return note(
+        event.url === null ? "warn" : "ok",
+        event.url === null
+          ? "no import address: this host is not connected to the MCP gateway (it runs with --local)"
+          : `connect this address in Claude, ChatGPT or Grok as a custom connector, then ask the chat to send its context to Plural:\n${event.url}`,
+      );
     case "error":
       return note("danger", event.message);
     default:
