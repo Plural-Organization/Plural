@@ -24,12 +24,13 @@ interface RailProps {
   onSwitch: (room: string) => void;
   onWatch: (card: SessionCard, url: string) => void;
   onAdd: () => void;
+  onStart: () => void;
   onHide: () => void;
 }
 
 // The left column: the team's live sessions and the rooms joined by link. Picking one opens it on the right, and
 // a room stays connected once opened, so moving back is instant.
-export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, onHide }: RailProps) {
+export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, onStart, onHide }: RailProps) {
   const [note, setNote] = useState<string | null>(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -141,6 +142,12 @@ export function Rail({ team, account, spaces, active, onSwitch, onWatch, onAdd, 
       {team.error !== null ? <p className="px-4 pb-2 text-[13px] leading-snug text-warning">{team.error}</p> : null}
       <Separator />
       <div className="flex flex-none flex-col gap-2 p-3">
+        {account.status === "in" && account.account !== null ? (
+          <Button size="sm" fullWidth onPress={onStart}>
+            <Plus size={15} />
+            {profile === null ? "Start a room" : `Start a room in ${profile.team_name}`}
+          </Button>
+        ) : null}
         <Button variant="tertiary" size="sm" fullWidth onPress={onAdd}>
           <Plus size={15} />
           Join a room

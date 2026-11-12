@@ -1,7 +1,8 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { Alert } from "@heroui/react";
+import { Alert, Button } from "@heroui/react";
 import { firstSession, parseLink, type JoinLink, type SessionCard } from "@plural/client";
 import { JoinFlow } from "./components/JoinFlow";
+import { StartRoom } from "./components/StartRoom";
 import { Rail } from "./components/Rail";
 import { DeviceScreen } from "./screens/DeviceScreen";
 import { JoinScreen } from "./screens/JoinScreen";
@@ -33,7 +34,8 @@ export function App() {
   // Signed in, the browser is the account's member, and the account's teams come along (ADR 0016).
   const team = useTeam(account.status === "in");
   // Whether the right side shows the form for joining another room.
-  const [adding, setAdding] = useState(false);
+  // What the right side shows instead of a room: the form to join one, or to start one.
+  const [adding, setAdding] = useState<"join" | "start" | false>(false);
   const [railOpen, setRailOpen] = useState(false);
   const [railTucked, setRailTucked] = useTucked("plural.rail.tucked");
   const [railWidth, setRailWidth] = useWidth("plural.rail.width", 288, RAIL_WIDTH);
@@ -131,7 +133,7 @@ export function App() {
   if (team.teams.length === 0 && spaces.length === 0) {
     return <JoinScreen notice={notice} team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} />;
   }
-  const showForm = adding || (active === null && team.teams.length === 0);
+  const showForm = adding !== false || (active === null && team.teams.length === 0);
   return (
     <div className="workspace" data-rail={railOpen ? "open" : "closed"} data-rail-tucked={railTucked} style={{ "--rail-w": `${railWidth}px` } as CSSProperties} data-room={active === null ? "none" : "open"}>
       <Rail
@@ -146,7 +148,11 @@ export function App() {
         }}
         onWatch={watch}
         onAdd={() => {
-          setAdding(true);
+          setAdding("join");
+          setRailOpen(false);
+        }}
+        onStart={() => {
+          setAdding("start");
           setRailOpen(false);
         }}
         onHide={() => (isNarrow() ? setRailOpen(false) : setRailTucked(true))}
@@ -173,8 +179,14 @@ export function App() {
         {showForm ? (
           <div className="flex h-full items-center justify-center overflow-y-auto p-6">
             <div className="w-full max-w-[26rem]">
-              <h2 className="mb-5 text-3xl font-medium tracking-[-0.022em]">Join another room</h2>
-              <JoinFlow team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} />
+              {adding === "start" && account.status === "in" && account.account !== null ? (
+                <StartRoom account={account.account} team={team.team?.profile.team_id ?? null} onBack={() => setAdding(false)} onOpen={join} />
+              ) : (
+                <>
+                  <h2 className="mb-5 text-3xl font-medium tracking-[-0.022em]">Join another room</h2>
+                  <JoinFlow team={team} account={account} onJoin={join} onTeamJoined={() => setEntering(true)} />
+                </>
+              )}
               {spaces.length > 0 ? <button type="button" className="link-button mt-4" onClick={() => setAdding(false)}>Back to the room</button> : null}
             </div>
           </div>
@@ -197,6 +209,11 @@ export function App() {
             <p className="mt-4 max-w-[42ch] text-[15px] leading-relaxed text-muted text-pretty">
               {(entering ? "You are in. The first session someone shares opens here on its own." : "Open anyone's session to read it from the start. Ask the host when you want to write.")}
             </p>
+            {account.status === "in" && account.account !== null && team.team !== null ? (
+              <Button className="mt-6" onPress={() => setAdding("start")}>
+                Start a room in {team.team.profile.team_name}
+              </Button>
+            ) : null}
           </div>
         ) : null}
       </div>

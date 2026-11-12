@@ -45,7 +45,11 @@ export function daemonPrompt(): string {
   ].join("\n");
 }
 
-// The same three steps for someone who runs them by hand, as one block to copy.
-export function manualSteps(): string {
-  return [`curl -fsSL ${INSTALL_URL} | sh`, "plural login", "plural daemon"].join("\n");
+// The same three steps for someone who runs them by hand, one command each so each can be copied.
+export function manualSteps(): { title: string; command: string }[] {
+  return [
+    { title: "Install Plural", command: `curl -fsSL ${INSTALL_URL} | sh` },
+    { title: "Sign in and approve this computer", command: "plural login" },
+    { title: "Start it", command: "plural daemon" },
+  ];
 }

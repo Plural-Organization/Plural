@@ -21,7 +21,7 @@ describe("daemonPrompt", () => {
 });
 
 describe("manualSteps", () => {
-  test("is the three commands, one per line", () => {
-    expect(manualSteps().split("\n")).toEqual([expect.stringContaining("install.sh"), "plural login", "plural daemon"]);
+  test("is the three commands, one each", () => {
+    expect(manualSteps().map((step) => step.command)).toEqual([expect.stringContaining("install.sh"), "plural login", "plural daemon"]);
   });
 });
