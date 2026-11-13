@@ -1,16 +1,26 @@
 ---
 name: plural-plugins
-description: Only for Plural plugins, Python files that add /commands or agent tools to Plural itself; write, fix or explain one, or why it failed to load.
+description: Only for Plural plugins, Python code that extends Plural itself (commands, agent tools, hooks on prompts, tool calls and context, replaced built-in tools, MCP servers, model providers, sessions); write, fix or explain one, or why it failed to load.
 ---
 
 # Plural plugins
 
-A plugin is one Python file in the host's plugin folder, `~/.plural/plugins/<name>.py` (under
-`PLURAL_DATA_DIR` when the host set it; `/plugins` shows each plugin's path). The host imports every
-file there at start and on `/plugins reload`, and calls its `setup(plural)` function. A plugin can add:
+A plugin is one Python file in the host's plugin folder, `~/.plural/plugins/<name>.py`, or a folder
+`<name>/` that starts from `plugin.py` (under `PLURAL_DATA_DIR` when the host set it; `/plugins` shows
+each plugin's path). The host imports every plugin there at start and on `/plugins reload`, and calls
+its `setup(plural)` function. A plugin can add:
 
-- **commands**: `/name` typed by a person in the room, handled by an async function;
-- **tools**: functions the agent calls like any other tool, through the host's approvals.
+- **commands**: `/name` typed by a person in the room, with an optional keyboard shortcut;
+- **tools**: functions the agent calls like any other tool, through the host's approvals, or a
+  built-in tool such as bash run its own way;
+- **hooks**: rewrite a prompt (`input`), add notes before a run (`before_run`), change a tool call's
+  arguments (`tool_args`) or result (`tool_result`), guard a call (`tool_call`), change what the model
+  is sent (`context`), write the compaction summary (`summary`), act after a run (`run_end`) or watch
+  the agent work (`tool_start`, `tool_end`, `message_end`, `compaction`);
+- **settings for the agent**: text in its system prompt, hidden tools, MCP servers, model providers,
+  and from a host's command a model switch, a fork of the session or a switch to another one.
+
+Look up the section for what the user asks for; most plugins need one or two of these.
 
 Plugins run inside the host process with the host's permissions. Only the host installs them, and they
 are never loaded from the workspace.
@@ -227,16 +237,6 @@ The first hook that answers wins; 120 seconds.
 in order, in the background, and their return value is ignored. 5 seconds each. Use them to log, count,
 mirror the session elsewhere or update `plural.status`.
 
-## Good plugins
-
-- Keep handlers `async`. Wrap blocking work in `await asyncio.to_thread(...)` so the room does not
-  freeze.
-- Module-level variables keep state between calls until the next `/plugins reload`; `plural.store` keeps it for good.
-- Read settings from the environment, never hard-code tokens, and never put secrets in replies or tool
-  results.
-- Trim large output (`text[:20000]`) before replying or prompting.
-- One file can hold several commands and tools; the file name is the plugin's name.
-
 ## Bigger plugins
 
 A plugin can be a folder `~/.plural/plugins/<name>/` starting from `plugin.py`, importing its other
@@ -248,6 +248,16 @@ requirements in the folder's own `.deps` with uv. Prefer a single file until it 
 
 `plural.command(name, ..., shortcut="f5")` binds a key in the terminal client that runs the command with
 no arguments: `ctrl+<letter>` or `f5`–`f12`, not one the client uses (ctrl+o, ctrl+f, ctrl+b, ...).
+
+## Good plugins
+
+- Keep handlers `async`. Wrap blocking work in `await asyncio.to_thread(...)` so the room does not
+  freeze.
+- Module-level variables keep state between calls until the next `/plugins reload`; `plural.store` keeps it for good.
+- Read settings from the environment, never hard-code tokens, and never put secrets in replies or tool
+  results.
+- Trim large output (`text[:20000]`) before replying or prompting.
+- One file can hold several commands and tools; the file name is the plugin's name.
 
 ## Checklist before you hand it over
 
