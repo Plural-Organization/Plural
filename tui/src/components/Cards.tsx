@@ -231,7 +231,7 @@ export function ChatCard({ item }: { item: Extract<FeedItem, { kind: "chat" }> }
           <b>{head}</b>
         </span>
         <span fg={theme.dim}>
-          {direct ? " · private, the agent does not see it" : " · the agent does not see it"}
+          {direct ? " · private, the agent does not see it" : item.agentSees ? " · the agent reads it" : " · the agent does not see it"}
           {item.mentioned && !direct ? " · mentions you" : ""}
         </span>
       </text>

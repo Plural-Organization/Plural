@@ -18,6 +18,7 @@ from plural.protocol.events import (
     BriefingRequested,
     BriefingResolved,
     BriefingSharingChanged,
+    ChatModeChanged,
     ChatPosted,
     ContextCompacted,
     ContextUsage,
@@ -151,6 +152,8 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             return state.model_copy(update={"prompt_mode": mode})
         case PermissionModeChanged(mode=mode):
             return state.model_copy(update={"permission_mode": mode})
+        case ChatModeChanged(mode=mode):
+            return state.model_copy(update={"chat_mode": mode})
         case AgentsChanged(agents=agents):
             return state.model_copy(update={"agents": agents})
         case UsageRecorded(lines=lines):
@@ -213,6 +216,7 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
                 ts=record.ts,
                 to=event.to,
                 mentions=event.mentions,
+                agent_sees=event.agent_sees,
             )
             return state.model_copy(update={"chat": (*state.chat, entry)[-CHAT_LIMIT:]})
         case PreviewChanged(preview=preview):

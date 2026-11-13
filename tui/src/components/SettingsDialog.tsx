@@ -53,6 +53,7 @@ export interface DialogProps {
   height: number;
   settings: Settings;
   mode: "open" | "review";
+  replies?: "mention" | "all";
   role: Role | undefined;
   agent: string;
   room: string;
@@ -63,6 +64,7 @@ export interface DialogProps {
   onSettings: (next: Settings) => void;
   onKeys: (preset: PresetId, key: string, remember: boolean) => void;
   onMode: (mode: "open" | "review") => void;
+  onReplies?: (mode: "mention" | "all") => void;
   onInvite: () => void;
   admission?: "approve" | "open";
   onAdmission?: (mode: "approve" | "open") => void;
@@ -98,6 +100,7 @@ export function SettingsDialog(props: DialogProps) {
     choice: local.current.choice,
     keys: local.current.keys,
     mode: live.current.mode,
+    replies: live.current.replies,
     admission: live.current.admission,
     role: live.current.role,
     canConfigure: live.current.control !== null && live.current.role === "host",
@@ -242,6 +245,8 @@ export function SettingsDialog(props: DialogProps) {
       set({ choice: { ...choice, model: nextModel(choice, direction) }, status: null });
     } else if (row.id === "fast") {
       set({ choice: { ...choice, fastModel: nextFast(choice, direction) }, status: null });
+    } else if (row.id === "replies") {
+      live.current.onReplies?.(live.current.replies === "mention" ? "all" : "mention");
     } else if (row.kind === "toggle") {
       toggleSetting(row.id);
     }

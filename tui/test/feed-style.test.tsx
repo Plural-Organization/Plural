@@ -31,8 +31,8 @@ async function conversation(): Promise<Setup> {
   fake.emit({ type: "message.ended", run_id: "r", message_id: "m1", text: "I will look at the retry logic", thinking: "" });
   fake.emit({ type: "tool.started", run_id: "r", call: { id: "t1", name: "bash", risk: "exec", subject: "pytest -q", args: {} } });
   fake.emit({ type: "tool.ended", run_id: "r", call_id: "t1", ok: true, output: "a\n[exit 0]", diff: null });
-  fake.emit({ type: "chat.posted", message_id: "c1", author_id: "p_alia", text: "standup in five", to: null, mentions: [] });
-  fake.emit({ type: "chat.posted", message_id: "c2", author_id: "p_alia", text: "a secret for you", to: "p_host", mentions: [] });
+  fake.emit({ type: "chat.posted", message_id: "c1", author_id: "p_alia", text: "standup in five", to: null, mentions: [], agent_sees: false });
+  fake.emit({ type: "chat.posted", message_id: "c2", author_id: "p_alia", text: "a secret for you", to: "p_host", mentions: [], agent_sees: false });
   const setup = await testRender(<App client={fake} room="r_1" version="0.2.9" guestLink={null} settings={{ ...DEFAULT_SETTINGS, setupSeen: true }} onQuit={() => undefined} />, { width: 130, height: 46 });
   open.push(setup);
   await new Promise((resolve) => setTimeout(resolve, 300));

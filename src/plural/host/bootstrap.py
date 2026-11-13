@@ -363,6 +363,7 @@ async def _assemble(
         max_attachment_bytes=settings.max_attachment_bytes,
         max_image_bytes=settings.max_image_bytes,
         prompt_mode=settings.prompt_mode,
+        chat_mode=settings.chat_mode,
         admission=settings.admission,
         skills=skills,
         mcp=mcp,

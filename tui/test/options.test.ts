@@ -81,6 +81,10 @@ describe("a session", () => {
     expect(options.hostArgs).toEqual(["--workspace", "/w", "--prompts", "review", "--port", "7001", "--relay", "wss://r.example.com", "--public-url", "wss://p.example.com", "--bind", "0.0.0.0", "--room", "r_1"]);
   });
 
+  test("--chat is passed to the host", () => {
+    expect(session("--chat", "all").hostArgs).toEqual(["--chat", "all"]);
+  });
+
   test("--flag=value works like --flag value", () => {
     expect(session("--workspace=/w", "--model=gpt-x").hostArgs).toEqual(["--workspace", "/w"]);
     expect(session("--model=gpt-x").model).toBe("gpt-x");

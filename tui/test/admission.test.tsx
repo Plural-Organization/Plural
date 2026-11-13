@@ -194,6 +194,7 @@ test("the settings let the host choose between letting each person in and an ope
   await setup.mockInput.pressArrow("down");
   await setup.mockInput.pressArrow("down");
   await setup.mockInput.pressArrow("down");
+  await setup.mockInput.pressArrow("down");
   await setup.mockInput.pressEnter();
   await wait();
   expect(fake.commands.at(-1)).toEqual({ type: "link.set_admission", mode: "open" });

@@ -1,7 +1,7 @@
 from plural.core.errors import Invalid, NotFound
 from plural.protocol.commands import MAX_MENTIONS, ChatSend
 from plural.protocol.events import ChatPosted
-from plural.protocol.models import Participant, Role, SessionState
+from plural.protocol.models import ChatMode, Participant, Role, SessionState
 
 
 def post(
@@ -30,4 +30,6 @@ def post(
         text=command.text,
         to=to,
         mentions=tuple(mentions),
+        # In mention mode the agent reads what the whole room says, never a private message.
+        agent_sees=to is None and state.chat_mode is ChatMode.MENTION,
     )

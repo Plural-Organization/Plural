@@ -24,7 +24,7 @@ from plural.cli.team import ls, team_app
 from plural.host.config import DEFAULT_MCP_URL, DEFAULT_RELAY_URL, HostSettings
 from plural.host.team import TeamStore
 from plural.protocol.envelope import PROTOCOL_VERSION
-from plural.protocol.models import AdmissionMode, PromptMode
+from plural.protocol.models import AdmissionMode, ChatMode, PromptMode
 from plural.relay.directory import TeamLimits
 from plural.relay.limits import RelayLimits
 from plural.storage.jsonl_export import export_jsonl
@@ -80,6 +80,12 @@ def host(
         PromptMode | None,
         typer.Option(help="open: participants prompt directly; review: the host approves them."),
     ] = None,
+    chat: Annotated[
+        ChatMode | None,
+        typer.Option(
+            help="mention: the agent answers @plrl and reads the rest as chat; all: every message."
+        ),
+    ] = None,
     admission: Annotated[
         AdmissionMode | None,
         typer.Option(help="approve: the host lets in whoever uses the room link; open: anyone."),
@@ -120,6 +126,7 @@ def host(
         "import_from": import_from,
         "host_name": name,
         "prompt_mode": prompts,
+        "chat_mode": chat,
         "admission": admission,
     }
     options = {key: value for key, value in given.items() if value is not None}

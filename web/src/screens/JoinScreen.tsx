@@ -1,9 +1,8 @@
-import { Button } from "@heroui/react";
-import { UsersThree } from "@phosphor-icons/react";
 import { useState } from "react";
 import type { JoinLink } from "@plural/client";
 import { JoinFlow } from "../components/JoinFlow";
 import { LogoMark } from "../components/LogoMark";
+import { PersonAvatar } from "../components/PersonAvatar";
 import { RecentRooms } from "../components/RecentRooms";
 import type { AccountState } from "../hooks/useAccount";
 import type { TeamState } from "../hooks/useTeam";
@@ -18,52 +17,61 @@ interface JoinScreenProps {
   onCreateTeam: () => void;
 }
 
-// The page for someone with no room open and no team yet.
+// The page for someone with no room open and no team yet. Every action sits in the one centred
+// column: people do not read the bottom of a page.
 export function JoinScreen({ notice, team, account, onJoin, onTeamJoined, onCreateTeam }: JoinScreenProps) {
   const [rooms, setRooms] = useState<SavedRoom[]>(savedRooms);
-  // While someone sets up a room the big title steps aside, so the setup fits one screen.
-  const [compact, setCompact] = useState(false);
+  // In a step (signing in, setting up a room, joining) the headline and the recent rooms step aside.
+  const [inStep, setInStep] = useState(false);
+  const problem = notice ?? account.loginError;
   return (
-    <main className="relative isolate flex min-h-full flex-col items-center justify-center overflow-hidden px-4 py-12">
+    <div className="relative isolate flex min-h-full flex-col overflow-x-hidden">
       <div className="pixel-grid" aria-hidden="true" />
-      <div className="w-full max-w-[28rem]">
-        <div className="text-center">
-          <LogoMark size={compact ? 40 : 56} className="mx-auto text-foreground" />
-          {compact ? null : (
-            <h1 className="mt-6 text-[2.6rem] font-medium leading-[1.05] tracking-[-0.022em] sm:text-5xl">
-              Join a room,
-              <br />
-              <span className="tone-2">or start your own.</span>
-            </h1>
-          )}
-        </div>
-        {notice ?? account.loginError ? (
-          <p className="mt-6 rounded-2xl border border-danger/40 bg-danger/10 px-4 py-3 text-sm text-danger">{notice ?? account.loginError}</p>
-        ) : null}
-        {/* Double bezel, as on the landing: a thin outer tray holding the form. */}
-        <div className={`${compact ? "mt-5" : "mt-8"} rounded-[2rem] border border-white/[0.08] bg-white/[0.02] p-2`}>
-          <div className="rounded-[calc(2rem-0.5rem)] bg-[#0b0b0d] p-5 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)] sm:p-6">
-            <JoinFlow team={team} account={account} onJoin={onJoin} onTeamJoined={onTeamJoined} onStarting={setCompact} />
+      {account.status === "in" && account.account !== null ? (
+        <header className="flex h-14 flex-none items-center justify-end gap-2 px-[clamp(12px,2.2vw,32px)]">
+          <PersonAvatar seed={account.account.email} size="sm" />
+          <span className="max-w-[220px] truncate text-sm">{account.account.email}</span>
+          <button type="button" className="pl-quiet-button text-sm" onClick={() => void account.signOut()}>
+            Sign out
+          </button>
+        </header>
+      ) : null}
+      <main className="flex flex-[1_0_auto] flex-col px-4 py-12">
+        <div className="m-auto flex w-full max-w-[560px] flex-col gap-[clamp(16px,1.6vw,22px)]">
+          <div className="text-center">
+            <LogoMark size={inStep ? 40 : 56} className="mx-auto text-foreground" />
+            {inStep ? null : (
+              <h1 className="pl-in mt-6 mb-0 font-display text-[2.6rem] font-medium leading-[1.05] tracking-[-0.022em] sm:text-5xl">
+                Start a room,
+                <br />
+                <span className="tone-2">or join one.</span>
+              </h1>
+            )}
           </div>
+          {problem ? (
+            <p role="alert" className="m-0 rounded-2xl border border-white/40 px-4 py-3 text-sm">{problem}</p>
+          ) : null}
+          <div className={`pl-tray pl-in ${inStep ? "mx-auto w-full max-w-[440px]" : ""}`} style={{ animationDelay: inStep ? "0ms" : "70ms" }}>
+            <div className={`pl-panel ${inStep ? "p-[clamp(16px,2vw,28px)]" : "p-[clamp(12px,1.3vw,18px)]"}`}>
+              <JoinFlow team={team} account={account} onJoin={onJoin} onTeamJoined={onTeamJoined} onStep={setInStep} onCreateTeam={onCreateTeam} />
+            </div>
+          </div>
+          {inStep ? null : (
+            <RecentRooms
+              rooms={rooms}
+              onReopen={(room) => onJoin(linkOf(room), room.name)}
+              onForget={() => {
+                rooms.forEach((room) => forgetRoom(room.room));
+                setRooms([]);
+              }}
+            />
+          )}
+          <p className="text-center text-sm text-muted">
+            <a href="https://plrl.host" className="text-muted underline-offset-4 hover:text-foreground hover:underline">What is Plural?</a>
+          </p>
         </div>
-        {compact ? null : (
-          <Button variant="ghost" size="sm" className="mx-auto mt-5 flex" onPress={onCreateTeam}>
-            <UsersThree size={16} />
-            Create a team
-          </Button>
-        )}
-        <RecentRooms
-          rooms={rooms}
-          onReopen={(room) => onJoin(linkOf(room), room.name)}
-          onForget={() => {
-            rooms.forEach((room) => forgetRoom(room.room));
-            setRooms([]);
-          }}
-        />
-        <p className="mt-8 text-center text-sm text-muted">
-          <a href="https://plrl.host" className="text-muted underline-offset-4 hover:text-foreground hover:underline">What is Plural?</a>
-        </p>
-      </div>
-    </main>
+      </main>
+
+    </div>
   );
 }

@@ -10,7 +10,7 @@ from plural.agent.providers.base import Effort
 from plural.agent.providers.catalog import Preset, preset
 from plural.agent.providers.cli import CLI_PROVIDERS
 from plural.agent.providers.preset import Adapter
-from plural.protocol.models import AdmissionMode, PromptMode
+from plural.protocol.models import AdmissionMode, ChatMode, PromptMode
 
 # The relay a host and a team use when none is named. Everything else is opt-in: --local stays on
 # this machine, --bind and --public-url serve directly, --relay picks another relay.
@@ -31,6 +31,7 @@ class HostSettings(BaseSettings):
     title: str | None = Field(default=None, min_length=1, max_length=80)
     host_name: str = "host"
     prompt_mode: PromptMode | None = None
+    chat_mode: ChatMode | None = None
     admission: AdmissionMode | None = None
     bind_host: str = "127.0.0.1"
     port: int = 7777

@@ -19,6 +19,7 @@ from plural.protocol.models import (
     BriefingImportView,
     BriefingRequestView,
     BriefingSharing,
+    ChatMode,
     ContextView,
     Delivery,
     DequeueReason,
@@ -80,6 +81,11 @@ class ParticipantRevoked(EventBase):
 class PromptModeChanged(EventBase):
     type: Literal["session.prompt_mode_changed"] = "session.prompt_mode_changed"
     mode: PromptMode
+
+
+class ChatModeChanged(EventBase):
+    type: Literal["session.chat_mode_changed"] = "session.chat_mode_changed"
+    mode: ChatMode
 
 
 class PermissionModeChanged(EventBase):
@@ -319,6 +325,7 @@ class ChatPosted(EventBase):
     text: str
     to: str | None = None
     mentions: tuple[str, ...] = ()
+    agent_sees: bool = False
 
 
 class ProposalCreated(EventBase):
@@ -560,6 +567,7 @@ Event = Annotated[
     | ParticipantRevoked
     | PromptModeChanged
     | PermissionModeChanged
+    | ChatModeChanged
     | SkillsChanged
     | SkillsFound
     | TraceFound

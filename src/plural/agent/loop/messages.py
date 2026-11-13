@@ -17,9 +17,23 @@ def summary_message(text: str) -> str:
 HARNESS_SOURCE = "plural:harness"
 
 
+# The room's chat since the agent's last turn, read in mention mode before the next prompt.
+CHAT_SOURCE = "plural:chat"
+# The most chat messages the agent reads at once; the oldest are left out.
+CHAT_CONTEXT_LIMIT = 100
+
+
+def chat_lines(lines: Iterable[tuple[str, str]]) -> str:
+    """(author, text) chat messages as the agent reads them, each tagged with its author."""
+    kept = list(lines)[-CHAT_CONTEXT_LIMIT:]
+    return "\n".join(tag("message", text, author=author) for author, text in kept)
+
+
 def notes_message(source: str, text: str) -> str:
     if source == HARNESS_SOURCE:
         return text
+    if source == CHAT_SOURCE:
+        return f"{prompt('chat_note')}\n{tag('chat', text)}"
     if source.startswith(PLUGIN_SOURCE):
         plugin = source.removeprefix(PLUGIN_SOURCE)
         note = prompt("plugin_note").format(plugin=plugin)
@@ -35,6 +49,8 @@ class UserTurn(Model):
     provenance: Provenance
     text: str
     images: tuple[LlmImage, ...] = ()
+    # The room's chat the agent reads just before this prompt, from chat_lines; "" for none.
+    chat: str = ""
 
 
 class AssistantTurn(Model):

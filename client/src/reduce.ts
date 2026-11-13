@@ -13,6 +13,7 @@ export function emptyState(): SessionState {
     last_seq: 0,
     prompt_mode: "open",
     permission_mode: "default",
+    chat_mode: "all",
     participants: {},
     proposals: {},
     approvals: {},
@@ -117,6 +118,7 @@ function apply(state: SessionState, record: EventRecord): SessionState {
             ts: record.ts,
             to: event.to,
             mentions: event.mentions,
+            agent_sees: event.agent_sees ?? false,
           },
         ].slice(-CHAT_LIMIT),
       };
@@ -144,6 +146,8 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return { ...state, prompt_mode: event.mode };
     case "session.permission_mode_changed":
       return { ...state, permission_mode: event.mode };
+    case "session.chat_mode_changed":
+      return { ...state, chat_mode: event.mode };
     case "agents.changed":
       return { ...state, agents: event.agents };
     case "usage.recorded":

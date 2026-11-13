@@ -1,4 +1,4 @@
-import type { PermissionMode, PromptMode } from "@plural/client";
+import type { ChatMode, PermissionMode, PromptMode } from "@plural/client";
 
 // What the host can set on a room that is already running. Each option names what it does, so the
 // panel can say it in words instead of leaving a bare toggle.
@@ -14,6 +14,11 @@ export interface Option<T extends string> {
 export const PROMPTS: Option<PromptMode>[] = [
   { id: "open", label: "Open", says: "Everyone who can prompt talks to the agent directly." },
   { id: "review", label: "Review", says: "You approve each prompt before the agent sees it." },
+];
+
+export const REPLIES: Option<ChatMode>[] = [
+  { id: "mention", label: "@plrl", says: "A plain message is chat between people. The agent reads it and answers only messages that tag @plrl." },
+  { id: "all", label: "Every message", says: "The agent answers everything typed. /team writes to people only." },
 ];
 
 export const PERMISSIONS: Option<PermissionMode>[] = [

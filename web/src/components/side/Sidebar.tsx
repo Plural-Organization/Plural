@@ -3,6 +3,7 @@ import { cx } from "../../lib/cx";
 import { AgentStatus } from "./AgentStatus";
 import { People } from "./People";
 import { PromptMode } from "./PromptMode";
+import { Replies } from "./Replies";
 import { Queue } from "./Queue";
 import { Rules } from "./Rules";
 import { Section } from "./Section";
@@ -48,6 +49,7 @@ export function Sidebar({ projection, status, waiting, open, tucked, onHide, sen
       ) : null}
       <Queue projection={projection} isHost={isHost} send={send} />
       <AgentStatus projection={projection} status={status} isHost={isHost} send={send} onSwitch={isHost ? onSettings : undefined} />
+      <Replies mode={projection.state.chat_mode} isHost={isHost} send={send} />
       <PromptMode mode={projection.state.prompt_mode} isHost={isHost} send={send} />
       {isHost ? <Rules projection={projection} send={send} /> : null}
     </aside>

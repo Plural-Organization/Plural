@@ -1,6 +1,7 @@
 from collections.abc import Iterable, Mapping
 
 from plural.agent.loop.messages import (
+    CHAT_SOURCE,
     PLUGIN_SOURCE,
     AssistantTurn,
     Message,
@@ -8,10 +9,12 @@ from plural.agent.loop.messages import (
     SummaryTurn,
     ToolResultTurn,
     UserTurn,
+    chat_lines,
 )
 from plural.agent.providers.base import ToolCallRequest
 from plural.protocol.events import (
     BriefingImported,
+    ChatPosted,
     ContextCompacted,
     EventRecord,
     MessageEnded,
@@ -28,6 +31,20 @@ from plural.protocol.models import Actor, ActorKind, DequeueReason
 INTERRUPTED = "Not executed: run interrupted"
 
 
+def unheard(records: Iterable[EventRecord]) -> list[ChatPosted]:
+    """The room chat posted for the agent after the last prompt, which the next prompt carries."""
+    waiting: list[ChatPosted] = []
+    for record in records:
+        match record.event:
+            case ChatPosted(agent_sees=True) as posted:
+                waiting.append(posted)
+            case PromptAccepted():
+                waiting.clear()
+            case _:
+                pass
+    return waiting
+
+
 def replay(
     records: Iterable[EventRecord], *, names: Mapping[str, str], texts: Mapping[str, str]
 ) -> list[Message]:
@@ -38,8 +55,12 @@ def replay(
     run_prompt: UserTurn | None = None
     assistant_at: int | None = None
     notes: list[NotesTurn] = []
+    # Room chat for the agent since the last prompt, as (author, text): the next one carries it.
+    chat: list[tuple[str, str]] = []
     for record in records:
         match record.event:
+            case ChatPosted(author_id=author_id, text=text, agent_sees=True):
+                chat.append((names.get(author_id, author_id), text))
             case PromptAccepted(prompt_id=prompt_id, author_id=author_id, provenance=provenance):
                 prompts[prompt_id] = UserTurn(
                     id=prompt_id,
@@ -48,19 +69,21 @@ def replay(
                     ),
                     provenance=provenance,
                     text=texts.get(prompt_id, record.event.text),
+                    chat=chat_lines(chat) if chat else "",
                 )
+                chat.clear()
             case RunStarted(prompt_id=prompt_id):
                 _settle(messages)
                 messages.extend(notes)
                 notes.clear()
                 run_prompt = prompts.get(prompt_id)
                 if run_prompt is not None:
-                    messages.append(run_prompt)
+                    _add_prompt(messages, run_prompt)
                 assistant_at = None
             case PromptDequeued(prompt_id=prompt_id, reason=DequeueReason.DELIVERED) if (
                 run_prompt is not None and prompt_id != run_prompt.id and prompt_id in prompts
             ):
-                messages.append(prompts[prompt_id])
+                _add_prompt(messages, prompts[prompt_id])
                 assistant_at = None
             case MessageEnded(text=text):
                 messages.append(AssistantTurn(text=text))
@@ -90,6 +113,10 @@ def replay(
                     (i for i in range(len(messages) - 1, -1, -1) if messages[i] is run_prompt),
                     len(messages),
                 )
+                # Before the room's chat that came with the prompt, as the agent loop adds them.
+                before = messages[at - 1] if at > 0 else None
+                if run_prompt.chat and isinstance(before, NotesTurn):
+                    at -= before.source == CHAT_SOURCE
                 messages.insert(at, NotesTurn(source=f"{PLUGIN_SOURCE}{plugin}", text=text))
             case BriefingImported(item=item, text=text):
                 turn = NotesTurn(source=item.source, text=text)
@@ -115,6 +142,13 @@ def replay(
         for message in messages
         if not isinstance(message, AssistantTurn) or message.text or message.tool_calls
     ]
+
+
+def _add_prompt(messages: list[Message], prompt: UserTurn) -> None:
+    """A prompt, after the room's chat it came with, the way the agent loop adds it."""
+    if prompt.chat:
+        messages.append(NotesTurn(source=CHAT_SOURCE, text=prompt.chat))
+    messages.append(prompt)
 
 
 def _kept(messages: list[Message], kept: str | None) -> list[Message]:

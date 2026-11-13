@@ -75,3 +75,42 @@ h1, h2, .font-display { font-family: var(--font-display); }
   .enter, .status-dot[data-status="running"] { animation: none; }
   .workspace .rail { transition: none; }
 }
+
+/* The start page: one centred column of a double-bezel tray, pills and fields, in the landing's style. */
+@layer components {
+  .pl-tray { border: 1px solid var(--border); background: oklch(1 0 0 / 0.02); border-radius: 32px; padding: 8px; }
+  .pl-panel { background: #0b0b0d; border-radius: 24px; box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.06); }
+  .pl-tile { display: flex; flex-direction: column; gap: 10px; padding: clamp(12px, 1.1vw, 16px); border-radius: 18px; background: var(--surface); border: 1px solid var(--border); }
+  .pl-pill { display: inline-flex; align-items: center; justify-content: center; gap: 10px; height: 44px; padding: 0 14px; border: 0; border-radius: 999px; font: 600 15px/1 var(--font-sans); letter-spacing: -0.01em; white-space: nowrap; cursor: pointer; transition: transform 160ms cubic-bezier(.16,1,.3,1), opacity 160ms, filter 160ms; }
+  .pl-pill:active:not(:disabled) { transform: scale(0.98); }
+  .pl-pill:disabled { cursor: not-allowed; }
+  .pl-pill-tall { height: 48px; }
+  .pl-pill-small { height: 36px; padding: 0 14px; font-size: 13px; font-weight: 500; }
+  .pl-pill-primary { background: var(--foreground); color: var(--background); }
+  .pl-pill-primary:hover:not(:disabled) { opacity: 0.9; }
+  .pl-pill-primary:disabled { opacity: 0.5; }
+  .pl-pill-secondary { background: var(--surface-tertiary); color: var(--foreground); }
+  .pl-pill-secondary:hover:not(:disabled) { filter: brightness(1.15); }
+  .pl-pill-quiet { background: var(--surface); color: var(--muted); }
+  .pl-soon { padding: 3px 8px; border-radius: 999px; border: 1px solid var(--border); font: 500 11px var(--font-mono); }
+  .pl-field { height: 48px; padding: 0 18px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); color: var(--foreground); font-size: 15px; outline: none; }
+  .pl-field::placeholder { color: var(--muted); }
+  .pl-field[aria-invalid="true"] { border-color: oklch(1 0 0 / 0.42); }
+  .pl-field:focus-visible { box-shadow: 0 0 0 2px #0b0b0d, 0 0 0 4px var(--focus); }
+  .pl-pill:focus-visible, .pl-back:focus-visible, .pl-quiet-button:focus-visible, .pl-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+  .pl-label { font-size: 13px; font-weight: 500; color: var(--muted); }
+  .pl-back { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin: -8px 0 -4px -8px; padding: 0 14px 0 10px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 500 14px var(--font-sans); cursor: pointer; }
+  .pl-back:hover { background: var(--surface); color: var(--foreground); }
+  .pl-step { display: flex; flex-direction: column; gap: 20px; }
+  .pl-step-art { display: block; width: 120px; height: auto; }
+  .pl-step-title { margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 30px; line-height: 1.1; letter-spacing: -0.03em; }
+  .pl-step-text { margin: 0; font-size: 15px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+  .pl-target { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--border); }
+  .pl-copy { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 18px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
+  .pl-quiet-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font: 500 13px var(--font-sans); cursor: pointer; }
+  .pl-quiet-button:hover { background: var(--surface); color: var(--foreground); }
+  .pl-row { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 6px 12px; border: 0; border-radius: 18px; background: transparent; color: var(--foreground); text-align: left; cursor: pointer; }
+  .pl-row:hover { background: var(--surface); }
+  .pl-in { animation: enter .55s cubic-bezier(.16,1,.3,1) both; }
+  @media (prefers-reduced-motion: reduce) { .pl-in { animation: none; } }
+}

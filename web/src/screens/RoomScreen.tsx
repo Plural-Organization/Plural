@@ -1,7 +1,7 @@
 import { Alert, Button, Spinner } from "@heroui/react";
 import { ArrowDown } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { label, mentionable, status, type JoinLink, type ProposalView } from "@plural/client";
+import { AGENT_HANDLE, inMentionMode, label, mentionable, routeOf, status, type JoinLink, type ProposalView } from "@plural/client";
 import { Board, type Pointer } from "../components/Board";
 import { Canvas } from "../components/Canvas";
 import { Composer } from "../components/Composer";
@@ -179,13 +179,15 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
   const waiting = useRef(0);
   const submit = (text: string) => {
     const withFiles = files.attachments.length > 0;
-    if (withFiles && (editing !== null || text.startsWith("/") || text.startsWith("@"))) {
+    // Files go with a prompt; a command, a chat message or a private one leaves them in place.
+    const route = text === "" ? "agent" : routeOf(text, state, projection.meId).kind;
+    if (withFiles && (editing !== null || route !== "agent")) {
       if (text === "") {
         flash("write something to go with the files");
         return;
       }
       submitText(text);
-      flash("the files stay for your next prompt");
+      flash(route === "room" && inMentionMode(state) ? `the files stay: tag @${AGENT_HANDLE} to give them to the agent` : "the files stay for your next prompt");
       return;
     }
     if (withFiles && !files.ready) {
@@ -254,7 +256,9 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
       ? me.id in state.access_requests
         ? "Waiting for the host. Type / for commands"
         : "Type / for commands"
-      : me?.role === "participant" && state.prompt_mode === "review"
+      : inMentionMode(state)
+        ? `Message the room, @${AGENT_HANDLE} for the agent, / for commands`
+        : me?.role === "participant" && state.prompt_mode === "review"
         ? "Propose a prompt, the host approves it"
         : "Message the agent, / for commands";
 

@@ -18,6 +18,7 @@ from plural.protocol.events import (
     BriefingRequested,
     BriefingResolved,
     BriefingSharingChanged,
+    ChatModeChanged,
     ChatPosted,
     ContextCompacted,
     Event,
@@ -55,6 +56,7 @@ from plural.protocol.models import (
     BriefingImportView,
     BriefingRequestView,
     BriefingSharing,
+    ChatMode,
     Delivery,
     DequeueReason,
     JoinDecision,
@@ -331,6 +333,11 @@ def _steps() -> list[tuple[str, Event]]:
         (
             "record",
             ChatPosted(message_id="c_3", author_id="p_host", text="only for Alia", to="p_alia"),
+        ),
+        ("record", ChatModeChanged(mode=ChatMode.MENTION)),
+        (
+            "record",
+            ChatPosted(message_id="c_4", author_id="p_alia", text="lunch?", agent_sees=True),
         ),
         (
             "record",

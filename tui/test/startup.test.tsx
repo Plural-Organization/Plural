@@ -69,3 +69,13 @@ test("nothing is sent without a first prompt or commands", async () => {
   await wait();
   expect(fake.commands).toEqual([]);
 });
+
+test("in mention mode the first prompt still asks the agent", async () => {
+  const fake = new FakeSession();
+  await mount(fake, [], "fix the failing test");
+  fake.emit({ type: "session.welcome", room: "r_1", token: "t", participant: HOST, base_policy: [], agent: "demo agent (scripted)" });
+  fake.emit({ type: "session.snapshot", state: { ...fake.projection.state, chat_mode: "mention" }, streaming: {}, typing: [] });
+  fake.emit({ type: "participant.joined", participant: HOST });
+  await wait();
+  expect(fake.commands).toEqual([{ type: "prompt.submit", text: "@plrl fix the failing test", delivery: "now" }]);
+});

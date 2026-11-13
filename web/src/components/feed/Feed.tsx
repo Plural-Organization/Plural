@@ -174,7 +174,7 @@ function Entry({ item, meId, onOpenDoc, onOpenBoard, onSwitchAgent }: EntryProps
               <Text text={item.text} anchor={item.id} />
             </div>
             <div className={styles.meta}>
-              {direct ? "private, the agent does not see it" : "the agent does not see it"}
+              {direct ? "private, the agent does not see it" : item.agentSees ? "the agent reads it" : "the agent does not see it"}
               {item.mentioned && !direct ? " · mentions you" : ""}
             </div>
           </div>

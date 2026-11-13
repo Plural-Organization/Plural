@@ -10,6 +10,7 @@ from plural.protocol.models import (
     BoardCursor,
     BoardShape,
     BriefingSharing,
+    ChatMode,
     Color,
     Delivery,
     Model,
@@ -180,6 +181,11 @@ class SessionFork(Model):
 class PromptModeSet(Model):
     type: Literal["session.set_prompt_mode"] = "session.set_prompt_mode"
     mode: PromptMode
+
+
+class ChatModeSet(Model):
+    type: Literal["session.set_chat_mode"] = "session.set_chat_mode"
+    mode: ChatMode
 
 
 class PermissionModeSet(Model):
@@ -407,6 +413,7 @@ Command = Annotated[
     | SessionFork
     | PromptModeSet
     | PermissionModeSet
+    | ChatModeSet
     | SkillsSearch
     | TraceGet
     | SkillsInstall

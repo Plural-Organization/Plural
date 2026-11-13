@@ -21,7 +21,8 @@ export function TopBar({ state, update, team, sharing, onSettings }: { state: Se
       </text>
       <box flexGrow={1} flexBasis={0} flexDirection="row" justifyContent="flex-end">
         <text fg={theme.dim}>
-          prompts <span fg={state.prompt_mode === "open" ? theme.ok : theme.warn}>{state.prompt_mode}</span>
+          replies <span fg={theme.accent}>{state.chat_mode === "mention" ? "@plrl" : "all"}</span>
+          {"  "}prompts <span fg={state.prompt_mode === "open" ? theme.ok : theme.warn}>{state.prompt_mode}</span>
           {"  "}
         </text>
         {update && update.phase !== "failed" ? (

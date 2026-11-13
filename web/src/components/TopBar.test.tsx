@@ -11,3 +11,12 @@ test("OAuth hides the context meter and returning to an API connection restores 
   projection.state = { ...projection.state, agent: "Anthropic · claude-opus-5-5" };
   expect(render()).toContain("context 75%");
 });
+
+test("everyone sees whether a plain message reaches the agent", () => {
+  const projection = new Projection();
+  const render = () => renderToStaticMarkup(<TopBar room="r_test" projection={projection} connection="online" panelOpen={false} railOpen onToggleRail={() => undefined} onCopyRoom={() => undefined} onTogglePanel={() => undefined} onLeave={() => undefined} />);
+  projection.state = { ...projection.state, chat_mode: "mention" };
+  expect(render()).toContain("agent answers @plrl");
+  projection.state = { ...projection.state, chat_mode: "all" };
+  expect(render()).toContain("agent answers all");
+});

@@ -891,6 +891,10 @@
     },
     "ChatEntry": {
       "properties": {
+        "agent_sees": {
+          "default": false,
+          "type": "boolean"
+        },
         "author_id": {
           "type": "string"
         },
@@ -929,12 +933,42 @@
         "text",
         "ts",
         "to",
-        "mentions"
+        "mentions",
+        "agent_sees"
+      ],
+      "type": "object"
+    },
+    "ChatMode": {
+      "description": "Which messages the agent answers. mention: only those that tag @plrl, it reads the rest of\nthe room's chat as context; all: every message, /team writes to people only.",
+      "enum": [
+        "mention",
+        "all"
+      ],
+      "type": "string"
+    },
+    "ChatModeChanged": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ChatMode"
+        },
+        "type": {
+          "const": "session.chat_mode_changed",
+          "default": "session.chat_mode_changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "mode"
       ],
       "type": "object"
     },
     "ChatPosted": {
       "properties": {
+        "agent_sees": {
+          "default": false,
+          "type": "boolean"
+        },
         "author_id": {
           "type": "string"
         },
@@ -974,7 +1008,8 @@
         "author_id",
         "text",
         "to",
-        "mentions"
+        "mentions",
+        "agent_sees"
       ],
       "type": "object"
     },
@@ -1477,6 +1512,7 @@
               "proposal.rejected": "#/$defs/ProposalRejected",
               "run.ended": "#/$defs/RunEnded",
               "run.started": "#/$defs/RunStarted",
+              "session.chat_mode_changed": "#/$defs/ChatModeChanged",
               "session.forked": "#/$defs/SessionForked",
               "session.pending": "#/$defs/JoinPending",
               "session.permission_mode_changed": "#/$defs/PermissionModeChanged",
@@ -1514,6 +1550,9 @@
             },
             {
               "$ref": "#/$defs/PermissionModeChanged"
+            },
+            {
+              "$ref": "#/$defs/ChatModeChanged"
             },
             {
               "$ref": "#/$defs/SkillsChanged"
@@ -3205,6 +3244,10 @@
           },
           "type": "array"
         },
+        "chat_mode": {
+          "$ref": "#/$defs/ChatMode",
+          "default": "all"
+        },
         "commands": {
           "default": [],
           "items": {
@@ -3358,6 +3401,7 @@
         "preview",
         "last_seq",
         "prompt_mode",
+        "chat_mode",
         "permission_mode",
         "admission",
         "join_requests",
@@ -4154,6 +4198,7 @@
           "proposal.rejected": "#/$defs/ProposalRejected",
           "run.ended": "#/$defs/RunEnded",
           "run.started": "#/$defs/RunStarted",
+          "session.chat_mode_changed": "#/$defs/ChatModeChanged",
           "session.forked": "#/$defs/SessionForked",
           "session.pending": "#/$defs/JoinPending",
           "session.permission_mode_changed": "#/$defs/PermissionModeChanged",
@@ -4191,6 +4236,9 @@
         },
         {
           "$ref": "#/$defs/PermissionModeChanged"
+        },
+        {
+          "$ref": "#/$defs/ChatModeChanged"
         },
         {
           "$ref": "#/$defs/SkillsChanged"

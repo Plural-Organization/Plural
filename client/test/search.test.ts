@@ -23,7 +23,7 @@ const items: FeedItem[] = [
     diff: "-    return None\n+    return token",
     live: "",
   },
-  { kind: "chat", id: "m1", authorId: "p_b", name: "Bek", text: "lunch?", to: null, toName: null, mine: false, mentioned: false },
+  { kind: "chat", id: "m1", authorId: "p_b", name: "Bek", text: "lunch?", to: null, toName: null, mine: false, mentioned: false, agentSees: false },
   { kind: "notice", id: "n1", tone: "dim", text: "Bek joined" },
 ];
 
