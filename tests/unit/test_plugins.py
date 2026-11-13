@@ -3,15 +3,21 @@ import json
 from pathlib import Path
 
 import pytest
+from tests.loop_support import turn
 
+from plural.agent.context.context import ContextBuilder
+from plural.agent.loop.events import MessageEnd, ToolEnd, ToolOutput, ToolStart
+from plural.agent.mcp import ServerSpec
+from plural.agent.providers.base import LlmMessage, LlmRequest, ToolCallRequest
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
-from plural.agent.tools.base import ToolCtx
-from plural.agent.tools.registry import Exposure
+from plural.agent.tools.base import ToolCtx, ToolResult
+from plural.agent.tools.registry import Exposure, UnknownTool, builtin_tools
 from plural.host import plugins as plugin_module
 from plural.host.inbox import Inbox, PluginPrompt, PluginReply
 from plural.host.plugins import CommandContext, PluginError, PluginHost
 from plural.protocol.models import (
+    ContextPartKind,
     Origin,
     PluginStatus,
     Provenance,
@@ -345,3 +351,435 @@ def test_a_store_keeps_json_and_refuses_the_rest(tmp_path: Path) -> None:
     assert plugin_module.PluginStore(tmp_path / "s.json").get("seen") == ["a", "b"]
     store.delete("seen")
     assert plugin_module.PluginStore(tmp_path / "s.json").all() == {}
+
+
+ARGS = """
+def setup(plural):
+    @plural.on("tool_args")
+    async def uv(call, ctx):
+        if call.name == "bash":
+            command = call.args["command"].replace("pip install", "uv pip install")
+            return {**call.args, "command": command}
+
+    @plural.on("tool_args")
+    async def quiet(call, ctx):
+        if call.name == "bash":
+            return {**call.args, "command": call.args["command"] + " -q"}
+
+    @plural.on("tool_args")
+    async def nothing(call, ctx):
+        return None
+
+    @plural.on("tool_args")
+    async def broken(call, ctx):
+        raise RuntimeError("boom")
+
+    @plural.on("tool_args")
+    async def wrong(call, ctx):
+        return "not a mapping"
+"""
+
+
+async def test_tool_args_hooks_change_the_arguments_in_turn(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, args=ARGS)
+    call = ToolCallRequest(id="c1", name="bash", args={"command": "pip install x"})
+    changed = await plugins.tool_args(call, HOST)
+    assert changed.id == "c1"
+    assert changed.args == {"command": "uv pip install x -q"}
+    # A hook that fails or answers with something else leaves the arguments as they were.
+    read = ToolCallRequest(id="c2", name="read", args={"path": "a.txt"})
+    assert await plugins.tool_args(read, HOST) is read
+
+
+RESULTS = """
+def setup(plural):
+    @plural.on("tool_result")
+    async def redact(result, ctx):
+        if "SECRET" in result.content:
+            return result.content.replace("SECRET", "[hidden]")
+
+    @plural.on("tool_result")
+    async def hint(result, ctx):
+        if result.is_error and result.name == "bash":
+            return result.content + "\\nhint: run make setup first"
+
+    @plural.on("tool_result")
+    async def broken(result, ctx):
+        raise RuntimeError("boom")
+
+    @plural.on("tool_result")
+    async def wrong(result, ctx):
+        return 42
+"""
+
+
+async def test_tool_result_hooks_change_what_the_model_gets(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, results=RESULTS)
+    failed = ToolResult("token SECRET missing", is_error=True)
+    changed = await plugins.tool_result(BASH, failed, HOST)
+    assert changed.content == "token [hidden] missing\nhint: run make setup first"
+    assert changed.is_error
+    # Hooks that change nothing, fail or answer with something else leave the result as it was.
+    plain = ToolResult("ok")
+    assert await plugins.tool_result(BASH, plain, HOST) is plain
+
+
+CONTEXT = """
+def setup(plural):
+    @plural.on("context")
+    async def short(context, ctx):
+        for message in context.messages:
+            if message.tool == "bash":
+                message.content = message.content[:5]
+
+    @plural.on("context")
+    async def broken(context, ctx):
+        context.messages[0].content = "lost"
+        raise RuntimeError("boom")
+
+    @plural.on("context")
+    async def wrong(context, ctx):
+        context.messages[0].content = 42
+
+    @plural.on("context")
+    async def grow(context, ctx):
+        context.messages.append(None)
+"""
+
+
+async def test_context_hooks_change_the_text_of_what_the_model_is_sent(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, context=CONTEXT)
+    call = ToolCallRequest(id="c1", name="bash", args={"command": "make"})
+    request = LlmRequest(
+        system="be brief",
+        messages=(
+            LlmMessage(role="user", content="build it"),
+            LlmMessage(role="assistant", content="", tool_calls=(call,)),
+            LlmMessage(role="tool", content="lots of output", tool_call_id="c1"),
+        ),
+    )
+    changed = await plugins.request(request)
+    assert [m.content for m in changed.messages] == ["build it", "", "lots "]
+    assert changed.messages[1] is request.messages[1]
+    # Without context hooks the request goes as it was.
+    none = tmp_path / "none"
+    none.mkdir()
+    assert await host_with(none).request(request) is request
+
+
+INSTRUCTIONS = """
+def setup(plural):
+    plural.instructions("Tickets look like PLR-123; use the ticket tool to read one.")
+
+    @plural.command("quiet")
+    async def quiet(ctx):
+        plural.instructions("")
+"""
+
+
+async def test_plugins_add_their_instructions_to_the_system_prompt(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, tickets=INSTRUCTIONS, hello=HELLO)
+    text = plugins.describe()
+    assert text == (
+        '<plugin name="tickets">\nTickets look like PLR-123; use the ticket tool to read one.\n'
+        "</plugin>"
+    )
+    builder = ContextBuilder(plugins=plugins)
+    assert (ContextPartKind.PLUGINS, text) in builder.sections()
+
+    command = plugins.get("quiet")
+    assert command is not None
+    await command.handler(context(tmp_path, Inbox()))
+    assert plugins.describe() is None
+    assert all(kind is not ContextPartKind.PLUGINS for kind, _ in builder.sections())
+
+
+LIVE = """
+seen = []
+
+
+def setup(plural):
+    @plural.on("tool_start")
+    async def started(call, ctx):
+        seen.append(("start", call.name, call.subject))
+
+    @plural.on("tool_end")
+    async def ended(result, ctx):
+        seen.append(("end", result.name, result.content))
+
+    @plural.on("message_end")
+    async def said(message, ctx):
+        seen.append(("said", message.text))
+
+    @plural.on("message_end")
+    async def broken(message, ctx):
+        raise RuntimeError("boom")
+
+    @plural.command("seen")
+    async def show(ctx):
+        await ctx.reply(repr(seen))
+"""
+
+
+async def test_plugins_watch_the_agent_work_in_order(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, live=LIVE)
+    plugins.observe("r1", ToolStart(BASH))
+    plugins.observe("r1", ToolOutput("c", "partial"))
+    plugins.observe("r1", ToolEnd("c", ToolResult("built")))
+    plugins.observe("r1", MessageEnd("m1", "all done", ""))
+    await plugins.drained()
+
+    inbox = Inbox()
+    command = plugins.get("seen")
+    assert command is not None
+    await command.handler(context(tmp_path, inbox))
+    reply = await inbox.get()
+    assert isinstance(reply, PluginReply)
+    assert reply.text == repr(
+        [("start", "bash", "rm -rf build"), ("end", "bash", "built"), ("said", "all done")]
+    )
+
+
+OVERRIDES = """
+def setup(plural):
+    @plural.override("bash")
+    async def remote(args, ctx):
+        if args["command"].startswith("make"):
+            return f"ran remotely: {args['command']}"
+
+    @plural.override("read")
+    async def loud(args, ctx):
+        return (await ctx.original()).upper()
+"""
+
+
+async def test_a_plugin_runs_a_built_in_tool_its_own_way(tmp_path: Path) -> None:
+    (tmp_path / "a.txt").write_text("alpha\n")
+    registry = builtin_tools()
+    directory = tmp_path / "plugins"
+    directory.mkdir()
+    (directory / "remote.py").write_text(OVERRIDES)
+    (directory / "second.py").write_text(
+        'def setup(plural):\n    @plural.override("bash")\n    async def h(a, c): ...\n'
+    )
+    (directory / "skill.py").write_text(
+        'def setup(plural):\n    @plural.override("skill")\n    async def h(a, c): ...\n'
+    )
+    plugins = PluginHost(
+        directory,
+        workspace=tmp_path,
+        reserved_tools=registry.registered,
+        builtin_tool=registry.builtin,
+    )
+    plugins.load()
+    registry.add_source(plugins.tools_source(Exposure.CORE))
+    errors = {view.name: view.error for view in plugins.views()}
+    assert errors["remote"] is None
+    assert errors["second"] is not None
+    assert "bash is already replaced by a plugin" in errors["second"]
+    assert errors["skill"] is not None
+    assert "skill cannot be replaced" in errors["skill"]
+
+    # The model and the policy see the built-in.
+    builtin = registry.builtin("bash")
+    assert builtin is not None
+    assert registry.get("bash") is not builtin
+    assert registry.get("bash").schema() == builtin.schema()
+    ctx = ToolCtx(workspace=Workspace.at(tmp_path), backend=LocalBackend())
+    make = registry.prepare(ToolCallRequest(id="c1", name="bash", args={"command": "make test"}))
+    assert (make.risk, make.subject) == (ToolRisk.EXEC, "make test")
+    assert (await make.execute(ctx)).content == "ran remotely: make test"
+    # Nothing back runs the built-in.
+    echo = registry.prepare(ToolCallRequest(id="c2", name="bash", args={"command": "echo hi"}))
+    assert "hi" in (await echo.execute(ctx)).content
+    read = registry.prepare(ToolCallRequest(id="c3", name="read", args={"path": "a.txt"}))
+    assert "ALPHA" in (await read.execute(ctx)).content
+
+
+SUMMARY = """
+def setup(plural):
+    @plural.on("summary")
+    async def broken(event, ctx):
+        raise RuntimeError("boom")
+
+    @plural.on("summary")
+    async def short(event, ctx):
+        return f"{event.messages} messages; asked: {'fix it' in event.conversation}"
+
+    @plural.on("summary")
+    async def late(event, ctx):
+        return "never used"
+"""
+
+
+async def test_the_first_summary_hook_that_answers_writes_the_summary(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, summary=SUMMARY)
+    history = [turn("fix it")]
+    assert await plugins.summary(history, None) == "1 messages; asked: True"
+    none = tmp_path / "empty"
+    none.mkdir()
+    assert await host_with(none).summary(history, None) is None
+
+
+READ_ONLY = """
+def setup(plural):
+    @plural.command("readonly")
+    async def readonly(ctx):
+        plural.hide_tools([] if ctx.args == "off" else ["write", "edit", "bash"])
+"""
+
+
+async def test_a_plugin_keeps_tools_from_the_agent(tmp_path: Path) -> None:
+    registry = builtin_tools()
+    directory = tmp_path / "plugins"
+    directory.mkdir()
+    (directory / "modes.py").write_text(READ_ONLY)
+    plugins = PluginHost(directory, workspace=tmp_path, hide_tools=registry.hide)
+    plugins.load()
+    command = plugins.get("readonly")
+    assert command is not None
+    before = registry.revision
+
+    await command.handler(context(tmp_path, Inbox()))
+    names = {schema.name for schema in registry.schemas()}
+    assert names.isdisjoint({"write", "edit", "bash"})
+    assert "read" in names
+    assert registry.revision > before
+    with pytest.raises(UnknownTool):
+        registry.get("bash")
+
+    off = CommandContext(
+        command="readonly",
+        args="off",
+        author="Host",
+        author_id="p_host",
+        role=Role.HOST,
+        workspace=tmp_path,
+        inbox=Inbox(),
+    )
+    await command.handler(off)
+    assert {"write", "edit", "bash"} <= {schema.name for schema in registry.schemas()}
+    # A reload with the plugin gone shows every tool too.
+    await command.handler(context(tmp_path, Inbox()))
+    (directory / "modes.py").unlink()
+    plugins.load()
+    assert "bash" in {schema.name for schema in registry.schemas()}
+
+
+async def test_only_the_host_switches_the_model_from_a_command(tmp_path: Path) -> None:
+    switched: list[tuple[str, str | None]] = []
+
+    async def switch(model: str, provider: str | None) -> str:
+        switched.append((model, provider))
+        return f"label {model}"
+
+    def made(role: Role, switcher: object) -> CommandContext:
+        return CommandContext(
+            command="fast",
+            args="",
+            author="X",
+            author_id="p_x",
+            role=role,
+            workspace=tmp_path,
+            inbox=Inbox(),
+            switcher=switcher,  # pyright: ignore[reportArgumentType]
+        )
+
+    assert await made(Role.HOST, switch).set_model("haiku") == "label haiku"
+    assert switched == [("haiku", None)]
+    with pytest.raises(PluginError, match="only the host"):
+        await made(Role.PARTICIPANT, switch).set_model("haiku")
+    with pytest.raises(PluginError, match="cannot switch models"):
+        await made(Role.HOST, None).set_model("haiku")
+
+
+class FakeHub:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []
+
+    def views(self) -> tuple[object, ...]:
+        return ()
+
+    def attach(self, name: str, spec: ServerSpec) -> None:
+        self.calls.append(("attach", f"{name}:{spec.where()}"))
+
+    async def detach(self, name: str) -> None:
+        self.calls.append(("detach", name))
+
+
+async def test_a_plugin_connects_mcp_servers_while_it_is_loaded(tmp_path: Path) -> None:
+    hub = FakeHub()
+    directory = tmp_path / "plugins"
+    directory.mkdir()
+    source = 'def setup(plural):\n    plural.mcp("tickets", command="tickets-mcp", args=["{}"])\n'
+    (directory / "tickets.py").write_text(source.format("--fast"))
+    plugins = PluginHost(directory, workspace=tmp_path, mcp=hub)  # pyright: ignore[reportArgumentType]
+    plugins.load()
+    await plugins.servers_ready()
+    assert hub.calls == [("attach", "tickets:tickets-mcp --fast")]
+
+    # A reload with the same server changes nothing; a changed one is connected again.
+    plugins.load()
+    await plugins.servers_ready()
+    assert len(hub.calls) == 1
+    (directory / "tickets.py").write_text(source.format("--slower"))
+    plugins.load()
+    await plugins.servers_ready()
+    assert hub.calls[1:] == [("detach", "tickets"), ("attach", "tickets:tickets-mcp --slower")]
+
+    (directory / "tickets.py").unlink()
+    plugins.load()
+    await plugins.servers_ready()
+    assert hub.calls[-1] == ("detach", "tickets")
+
+    (directory / "both.py").write_text(
+        'def setup(plural):\n    plural.mcp("x", command="a", url="http://b")\n'
+    )
+    plugins.load()
+    error = next(view.error for view in plugins.views() if view.name == "both")
+    assert error is not None
+    assert "needs a command or a url" in error
+
+
+def test_commands_take_a_free_shortcut(tmp_path: Path) -> None:
+    keyed = (
+        'def setup(plural):\n    @plural.command("ship", shortcut="{}")\n    async def h(c): ...\n'
+    )
+    plugins = host_with(
+        tmp_path,
+        a_ship=keyed.format("F5"),
+        b_again=keyed.replace("ship", "again").format("f5"),
+        c_taken=keyed.replace("ship", "taken").format("ctrl+o"),
+        d_bad=keyed.replace("ship", "bad").format("alt+x"),
+    )
+    [command] = plugins.command_views()
+    assert (command.name, command.shortcut) == ("ship", "f5")
+    errors = {view.name: view.error or "" for view in plugins.views()}
+    assert "shortcut f5 is already taken" in errors["b_again"]
+    assert "'ctrl+o' of /taken is taken" in errors["c_taken"]
+    assert "'alt+x' of /bad" in errors["d_bad"]
+
+
+SUBJECT = """
+def setup(plural):
+    @plural.tool(
+        "ticket",
+        description="Read a ticket",
+        parameters={"key": "Ticket key"},
+        subject=lambda args: f"ticket {args['key']}",
+    )
+    async def ticket(args, ctx):
+        return "open"
+
+    @plural.tool("broken", description="x", parameters={"key": "k"}, subject=lambda args: 1 / 0)
+    async def broken(args, ctx):
+        return "ok"
+"""
+
+
+def test_a_plugin_tool_says_in_its_own_words_what_a_call_does(tmp_path: Path) -> None:
+    plugins = host_with(tmp_path, tickets=SUBJECT)
+    tools = {tool.name: tool for tool in plugins.tools()}
+    assert tools["ticket"].prepare({"key": "PLR-1"}).subject == "ticket PLR-1"
+    # When its words fail, the arguments say it.
+    assert tools["broken"].prepare({"key": "PLR-1"}).subject == '{"key": "PLR-1"}'

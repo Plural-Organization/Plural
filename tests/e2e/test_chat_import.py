@@ -7,10 +7,10 @@ from typing import Any
 
 from websockets.asyncio.server import ServerConnection, serve
 
-from plural.agent.providers.fake import FakeProvider
 from plural.protocol.commands import ApprovalRespond, ImportLink
 from plural.protocol.events import ApprovalRequested, BriefingImported, ImportLinkShown
 from plural.protocol.models import ApprovalDecision
+from tests.doubles import FakeProvider
 from tests.e2e.support import Session, running_session
 
 NOTE = "Goal: move the billing page to the new API. Done: the list view. Left: the invoice PDF."

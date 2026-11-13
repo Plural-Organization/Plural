@@ -20,7 +20,7 @@ test("help lists only the commands the role can use", () => {
 });
 
 test("plugin commands are suggested and their host-only flag is respected", () => {
-  const plugins = pluginHints([{ name: "deploy", plugin: "ops", description: "ship it", usage: "/deploy", host_only: true }]);
+  const plugins = pluginHints([{ name: "deploy", plugin: "ops", description: "ship it", usage: "/deploy", host_only: true, shortcut: null }]);
   expect(suggestions("/dep", "host", plugins).map((hint) => hint.name)).toEqual(["deploy"]);
   expect(suggestions("/dep", "participant", plugins)).toEqual([]);
   expect(isHostOnly("/deploy prod", plugins)).toBe(true);

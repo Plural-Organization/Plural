@@ -1,9 +1,24 @@
 import asyncio
 import shutil
 from dataclasses import dataclass
-from typing import Final, Literal
+from typing import Annotated, Final
 
-Tool = Literal["claude", "codex"]
+from pydantic import AfterValidator
+
+from plural.agent.providers.cli import CLI_PROVIDERS, CliProvider
+
+
+def _known(tool: str) -> str:
+    if tool not in _BY_ID:
+        raise ValueError(f"unknown tool: {tool}")
+    return tool
+
+
+# A CLI the host can check for and install, named by its binary (claude, codex, gemini…). A
+# client names it, so only a known one passes: install never runs a command a client chose.
+Tool = Annotated[str, AfterValidator(_known)]
+
+NPM_INSTALL: Final = "npm install -g "
 
 INSTALL_TIMEOUT_S: Final = 300.0
 OUTPUT_TAIL_LINES: Final = 6
@@ -18,17 +33,28 @@ class ToolSpec:
     id: Tool
     label: str
     binary: str
-    package: str
+    # How to install it by hand; an npm package the host can also install itself.
+    command: str
+    package: str | None
     login: str
 
 
-SPECS: Final[tuple[ToolSpec, ...]] = (
-    ToolSpec(
-        "claude", "Claude Code CLI", "claude", "@anthropic-ai/claude-code", "claude auth login"
-    ),
-    ToolSpec("codex", "Codex CLI", "codex", "@openai/codex", "codex login"),
-)
-ADAPTER_TOOL: Final[dict[str, Tool]] = {"claude_code": "claude", "codex_cli": "codex"}
+def _spec(provider: type[CliProvider]) -> ToolSpec:
+    npm = provider.install.startswith(NPM_INSTALL)
+    return ToolSpec(
+        id=provider.binary,
+        label=provider.label,
+        binary=provider.binary,
+        command=provider.install,
+        package=provider.install.removeprefix(NPM_INSTALL) if npm else None,
+        login=provider.login,
+    )
+
+
+SPECS: Final[tuple[ToolSpec, ...]] = tuple(_spec(cli) for cli in CLI_PROVIDERS.values())
+ADAPTER_TOOL: Final[dict[str, str]] = {
+    adapter: cli.binary for adapter, cli in CLI_PROVIDERS.items()
+}
 _BY_ID: Final = {spec.id: spec for spec in SPECS}
 
 
@@ -41,14 +67,15 @@ def is_installed(tool: Tool) -> bool:
 
 
 def install_command(tool: Tool) -> list[str] | None:
+    package = _BY_ID[tool].package
     npm = shutil.which("npm")
-    if npm is None:
+    if package is None or npm is None:
         return None
-    return [npm, "install", "-g", _BY_ID[tool].package]
+    return [npm, "install", "-g", package]
 
 
 def manual_command(tool: Tool) -> str:
-    return f"npm install -g {_BY_ID[tool].package}"
+    return _BY_ID[tool].command
 
 
 def describe(spec: ToolSpec) -> dict[str, object]:
@@ -67,11 +94,12 @@ def inventory() -> list[dict[str, object]]:
 
 
 async def install(tool: Tool) -> None:
+    if tool not in _BY_ID:
+        raise ToolInstallError(f"unknown tool: {tool}")
     command = install_command(tool)
     if command is None:
-        raise ToolInstallError(
-            f"npm was not found. Install Node.js, then run: {manual_command(tool)}"
-        )
+        needs = "npm was not found. Install Node.js, then run" if _BY_ID[tool].package else "Run"
+        raise ToolInstallError(f"{needs}: {manual_command(tool)}")
     process = await asyncio.create_subprocess_exec(
         *command,
         stdin=asyncio.subprocess.DEVNULL,

@@ -8,7 +8,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from plural.agent.providers.base import Effort
 from plural.agent.providers.catalog import Preset, preset
-from plural.agent.providers.preset import AGENT_CLI_ADAPTERS, Adapter
+from plural.agent.providers.cli import CLI_PROVIDERS
+from plural.agent.providers.preset import Adapter
 from plural.protocol.models import AdmissionMode, PromptMode
 
 # The relay a host and a team use when none is named. Everything else is opt-in: --local stays on
@@ -114,12 +115,9 @@ class HostSettings(BaseSettings):
             return "demo agent (scripted)"
         if provider == "anthropic_oauth":
             return f"Claude OAuth · {self.model or 'claude-haiku-4-5'}"
-        if provider == "claude_code":
-            return f"Claude Code · {self.model or 'claude-sonnet-5-5'}"
-        if provider == "codex_cli":
-            return f"Codex CLI · {self.model or 'gpt-6.1-sol'}"
-        if provider in AGENT_CLI_ADAPTERS:
-            return f"{provider} · {self.model or 'default'}"
+        cli = CLI_PROVIDERS.get(provider)
+        if cli is not None:
+            return f"{cli.label} · {self.model or next(iter(cli.models), 'default')}"
         model = self.model or ("claude-opus-5-5" if provider == "anthropic" else "")
         where = " · local" if provider == "openai" and self.base_url else ""
         return f"{provider} · {model}{where}" if model else provider

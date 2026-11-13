@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.protocol.commands import ApprovalRespond, PromptSubmit
 from plural.protocol.events import ApprovalRequested, RunEnded, ToolEnded, ToolOutput
 from plural.protocol.models import ApprovalDecision
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import Watcher, running_session
 
 SLOW = "printf 'one\\ntwo\\n'; sleep 0.3; printf 'three\\n'"

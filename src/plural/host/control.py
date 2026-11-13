@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import time
 from collections.abc import Callable, Coroutine
 from typing import Any, Final, Literal
@@ -16,8 +17,8 @@ from plural.agent.providers.base import (
     TextDelta,
 )
 from plural.agent.providers.catalog import PRESETS
-from plural.agent.providers.cli.codex_cli import CodexCliProvider
-from plural.agent.providers.preset import Adapter
+from plural.agent.providers.cli.codex import CodexCliProvider
+from plural.agent.providers.preset import Adapter, Preset
 from plural.core.errors import DomainError
 from plural.host.bootstrap import Host, build_web_search
 from plural.host.config import HostSettings, preset_values
@@ -31,6 +32,7 @@ from plural.host.extras import (
     is_installed,
 )
 from plural.host.inbox import Reconfigure
+from plural.host.plugins import PluginError
 from plural.host.providers import ConfigError, build_provider, provider_secrets, resolve_api_key
 from plural.host.routing import build_helper
 from plural.host.tools import Tool, ToolInstallError, inventory, tool_for
@@ -130,6 +132,11 @@ class Control:
         self._host = host
         self._base = base
         self._reply = reply
+        # The agent's configuration the client last applied, for a plugin to switch its model.
+        self._config: AgentConfig | None = None
+        plugins = getattr(host, "plugins", None)
+        if plugins is not None:
+            plugins.switch_model = self._switch_model
 
     async def handle(self, line: str) -> None:
         request = self._parse(line)
@@ -143,7 +150,7 @@ class Control:
                         "extra": extra_for(entry.adapter),
                         "tool": tool_for(entry.adapter),
                     }
-                    for entry in PRESETS
+                    for entry in (*PRESETS, *self._plugin_presets())
                 ]
                 extras = [
                     {"id": extra, "label": LABELS[extra], "installed": is_installed(extra)}
@@ -172,7 +179,7 @@ class Control:
             if request.config is None:
                 raise ConfigError(f"{request.type} needs a config")
             if request.type == "test":
-                provider, _, _ = provider_for(self._base, request.config)
+                provider, _, _ = provider_for(self._base, self._resolve(request.config))
                 message = await probe(provider)
                 self._reply({"type": "result", "id": request.id, "ok": True, "message": message})
             else:
@@ -186,8 +193,48 @@ class Control:
                 {"type": "result", "id": request.id, "ok": False, "error": "internal error"}
             )
 
+    async def _switch_model(self, model: str, preset: str | None) -> str:
+        """A plugin's model switch: the configuration the client last applied, with this model,
+        or this provider preset's with its own key."""
+        if preset is not None:
+            config = AgentConfig(preset=preset, model=model)
+        elif self._config is not None:
+            config = self._config.model_copy(update={"model": model})
+        else:
+            config = AgentConfig(model=model)
+        try:
+            return await self._configure(config)
+        except (ConfigError, ProviderError, DomainError) as error:
+            raise PluginError(str(error)) from error
+
+    def _plugin_presets(self) -> tuple[Preset, ...]:
+        plugins = getattr(self._host, "plugins", None)
+        return plugins.providers() if plugins is not None else ()
+
+    def _resolve(self, config: AgentConfig) -> AgentConfig:
+        """A plugin's provider as the adapter, address and key it stands for."""
+        preset = next((p for p in self._plugin_presets() if p.id == config.preset), None)
+        if preset is None:
+            return config
+        key = config.api_key
+        if key is None and preset.key_env:
+            found = os.environ.get(preset.key_env[0])
+            if not found:
+                raise ConfigError(f"{preset.label} needs its key in {preset.key_env[0]}")
+            key = SecretStr(found)
+        return config.model_copy(
+            update={
+                "preset": None,
+                "provider": preset.adapter,
+                "provider_name": preset.label,
+                "base_url": preset.base_url,
+                "api_key": key,
+                "model": config.model or (preset.models[0] if preset.models else None),
+            }
+        )
+
     async def _configure(self, config: AgentConfig) -> str:
-        provider, settings, key = provider_for(self._base, config)
+        provider, settings, key = provider_for(self._base, self._resolve(config))
         if isinstance(provider, CodexCliProvider):
             await provider.check_available()
         searcher = build_web_search(settings, key, provider)
@@ -210,6 +257,7 @@ class Control:
             )
         )
         await done
+        self._config = config
         if self._host.web_search is not None:
             self._host.web_search.use(searcher)
         return label

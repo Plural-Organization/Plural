@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 from pydantic import JsonValue
-from tests.doubles import ScriptedProvider, StallingProvider
+from tests.doubles import FakeProvider, ScriptedProvider, StallingProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
-from plural.agent.context import ContextBuilder
-from plural.agent.events import AgentEvent, MessageEnd, RunEnd, ToolEnd, ToolsLoaded, ToolStart
-from plural.agent.gate import GateResult
-from plural.agent.loop import AgentLoop, LoopLimits
-from plural.agent.messages import AssistantTurn, ToolResultTurn, attribute
+from plural.agent.context.context import ContextBuilder
+from plural.agent.loop.events import AgentEvent, MessageEnd, RunEnd, ToolEnd, ToolsLoaded, ToolStart
+from plural.agent.loop.gate import GateResult
+from plural.agent.loop.loop import AgentLoop, LoopLimits
+from plural.agent.loop.messages import AssistantTurn, ToolResultTurn, attribute
 from plural.agent.providers.base import (
     LlmEvent,
     LlmImage,
@@ -28,7 +28,6 @@ from plural.agent.providers.base import (
     ToolCallRequest,
     ToolSchema,
 )
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult

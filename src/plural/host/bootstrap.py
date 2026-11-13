@@ -9,15 +9,15 @@ from typing import cast
 
 import structlog
 
-from plural.agent.agents import AgentLibrary
-from plural.agent.context import ContextBuilder, Environment
-from plural.agent.loop import AgentLoop, LoopLimits
+from plural.agent.context.context import ContextBuilder, Environment
+from plural.agent.context.telemetry import RequestDump
+from plural.agent.loop.loop import AgentLoop, LoopLimits
 from plural.agent.mcp import BROWSER_SERVER, McpHub, browser_spec
 from plural.agent.providers.base import LLMProvider
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
 from plural.agent.skills import SkillLibrary
-from plural.agent.telemetry import RequestDump
+from plural.agent.subagents import AgentLibrary
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.core.discovery import ToolSearchTool
 from plural.agent.tools.core.skill import SkillTool
@@ -89,6 +89,7 @@ class Host:
     conflicts: ConflictBoard | None = None
     import_url: str | None = None
     chat_link: McpLink | None = None
+    plugins: PluginHost | None = None
 
     async def serve(self) -> None:
         async with asyncio.TaskGroup() as group:
@@ -247,6 +248,9 @@ async def _assemble(
         workspace=workspace.root,
         inbox=inbox,
         reserved_tools=tools.registered,
+        builtin_tool=tools.builtin,
+        hide_tools=tools.hide,
+        mcp=mcp,
     )
     tools.add_source(plugins.tools_source(Exposure.CORE))
     tools.add_source(plugins.tools_source(Exposure.DEFERRED), exposure=Exposure.DEFERRED)
@@ -285,10 +289,12 @@ async def _assemble(
             project_notes=await _project_notes(workspace),
             skills=skills,
             agents=agents,
+            plugins=plugins,
             tool_rules=tools.guidelines(),
         ),
         tool_ctx=ToolCtx(workspace=workspace, backend=LocalBackend()),
         ids=ids,
+        hooks=plugins,
         dump=RequestDump(state_dir / "logs" / "requests" / room)
         if settings.dump_requests
         else None,
@@ -362,6 +368,7 @@ async def _assemble(
         mcp=mcp,
         agents=agents,
         plugins=plugins,
+        data_dir=settings.state_dir,
         typing_ttl_s=settings.typing_ttl_s,
         agent_label=settings.agent_label(),
         fast_label=helper.label if helper else "",
@@ -406,6 +413,7 @@ async def _assemble(
         conflicts=board,
         import_url=import_url,
         chat_link=chat_link,
+        plugins=plugins,
     )
 
 

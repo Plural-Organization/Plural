@@ -51,13 +51,19 @@ def test_the_inventory_says_what_is_installed_and_whether_it_can_be_installed_he
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("plural.host.tools.shutil.which", on_path("claude", "npm"))
-    claude, codex = tools.inventory()
+    listed = {entry["id"]: entry for entry in tools.inventory()}
+    claude, codex, cursor = listed["claude"], listed["codex"], listed["cursor-agent"]
     assert (claude["id"], claude["installed"], claude["canInstall"]) == ("claude", True, True)
     assert (codex["id"], codex["installed"], codex["canInstall"]) == ("codex", False, True)
     assert codex["command"] == "npm install -g @openai/codex"
     assert codex["login"] == "codex login"
+    # A CLI without an npm package is installed by hand, with the command it names.
+    assert (cursor["canInstall"], cursor["command"]) == (
+        False,
+        "curl https://cursor.com/install -fsS | bash",
+    )
     monkeypatch.setattr("plural.host.tools.shutil.which", on_path())
-    assert [entry["canInstall"] for entry in tools.inventory()] == [False, False]
+    assert not any(entry["canInstall"] for entry in tools.inventory())
 
 
 async def test_a_successful_install_runs_npm_with_a_fixed_package_and_checks_the_binary(
@@ -117,9 +123,8 @@ async def test_the_control_channel_installs_only_a_known_tool_and_lists_them(
     assert replies[0] == {"type": "result", "id": "t1", "ok": True}
     assert [reply["id"] for reply in replies] == ["t1", "c1"]
     catalog = replies[1]
-    assert {entry["id"] for entry in cast("list[dict[str, object]]", catalog["tools"])} == {
-        "claude",
-        "codex",
+    assert {"claude", "codex", "gemini"} <= {
+        entry["id"] for entry in cast("list[dict[str, object]]", catalog["tools"])
     }
     presets = {entry["id"]: entry for entry in cast("list[dict[str, object]]", catalog["presets"])}
     assert presets["claude_code"]["tool"] == "claude"

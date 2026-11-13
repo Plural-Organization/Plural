@@ -1,0 +1,5 @@
+prompt = """Add percentage discount codes to this shop. `Cart.apply_code(code)` takes a code from the `CODES`
+table in `shop/discounts.py` (`SAVE10` is 10 percent, `HALF` is 50 percent) and raises
+`UnknownCode` for any other code. One code applies at a time, the last one wins. The discount is
+rounded down to whole cents and tax is charged on the price after the discount. `receipt()` shows
+a `Discount` line with the code above `Tax`, and only when a code is applied."""

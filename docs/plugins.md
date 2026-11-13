@@ -24,6 +24,27 @@ In the terminal client, as the host:
 
 Open the file, edit it, run `/plugins reload`, then `/hello` in the room.
 
+## A plugin of several files
+
+A plugin can also be a folder, `~/.plural/plugins/<name>/`, that starts from `plugin.py`. The folder is
+a Python package, so `plugin.py` imports its other modules relatively, `from .client import Tracker`.
+Packages it needs from PyPI go in a `requirements.txt` next to it; they are installed into the folder's
+own `.deps`, apart from the host and from other plugins.
+
+Install one from a git repository, a folder or a single file:
+
+```bash
+plural-host plugins install https://github.com/acme/plural-plugin-tracker
+plural-host plugins install ~/code/my-plugin --name tools
+plural-host plugins install ./ci.py
+```
+
+The name comes from the source, without a `plural-plugin-` or `plural-` prefix, unless `--name` gives
+one. A git repository is cloned without its history; `requirements.txt` is installed with `uv`, which
+has to be on the `PATH`. A plugin already installed under that name is not replaced, and a failed
+install leaves nothing behind. In a running session, `/plugins reload` loads it, and `/plugins rm
+<name>` deletes the whole folder.
+
 ## Write one
 
 A plugin file defines `setup(plural)` and registers commands with `plural.command`:
@@ -43,6 +64,11 @@ def setup(plural):
 `plural.command(name, description="", usage="", host_only=False)` registers an `async` handler for
 `/name`. Names use `a-z`, `0-9`, `-` and `_`, and cannot reuse a built-in command or another plugin's
 command. `host_only=True` refuses the command to everyone but the host. Viewers cannot run commands.
+
+`shortcut` binds a key that runs the command with no arguments in the terminal client: `ctrl+<letter>`
+or `f5` to `f12`, as in `@plural.command("ship", shortcut="f5")`. The client's own keys, such as
+`ctrl+o` or `ctrl+f`, and a key another plugin took make the plugin fail to load. A host-only
+command's key works for the host alone.
 
 The handler gets a context:
 
@@ -122,9 +148,44 @@ def setup(plural):
 | `risk` | `read`, `write` or `exec`. Like every tool the call goes through the host's policy: a tool without a rule asks the host, and write and exec in a guest's run always do. Allow one for good with `/policy allow ticket *` |
 | `exposure` | `deferred` (default): the agent finds it with `tool_search`. `core`: declared on every request |
 
+`subject` is how a call reads in the room, in approval cards and to `/policy` rules: a function of the
+arguments, such as `subject=lambda args: f"ticket {args['key']}"`, in place of the arguments as JSON. It
+should name what the call acts on, since a rule like `/policy allow ticket PLR-*` matches it; if it
+fails or returns nothing, the JSON is used.
+
 The handler receives the arguments as a dict and a context with `ctx.workspace`, `ctx.log(text)`, which
 streams progress to the room, and `await ctx.run(*argv)`. A string result goes to the model as is, any
 other value as JSON. If the handler raises, the model gets the error as the tool's result.
+
+## Running a built-in tool your own way
+
+`plural.override(name)` runs one of the agent's built-in tools with a plugin function: `read`, `write`,
+`edit`, `multi_edit`, `bash`, `grep`, `glob`, `ls` or `web_fetch`. Use it to run commands in a container
+or on another machine, or to change what a tool does without the agent learning a new one:
+
+```python
+def setup(plural):
+    @plural.override("bash")
+    async def in_container(args, ctx):
+        if args["command"].startswith(("make", "pytest")):
+            return await ctx.run("docker", "exec", "dev", "sh", "-c", args["command"])
+        # Nothing back: the built-in bash runs as usual.
+
+    @plural.override("read")
+    async def numbered(args, ctx):
+        text = await ctx.original()
+        return text.replace("\t", "    ")
+```
+
+The handler gets the call's arguments and a context with `ctx.workspace`, `ctx.log(text)`, `await
+ctx.run(*argv)` and `await ctx.original()`, which runs the built-in tool with the same arguments and
+returns its text, raising if it fails. Return the result text, any other value as JSON, or nothing to
+let the built-in run.
+
+Only how the call runs changes. The model sees the built-in's description and parameters, the arguments
+are checked against them, and the policy, folder access and approvals go by the built-in's risk and
+subject, so replacing `bash` cannot make a shell command need less approval. One plugin may replace a
+tool; a second that tries fails to load. `/plugins` lists the replaced tools with the plugin's own.
 
 ## Keeping state
 
@@ -147,6 +208,138 @@ file, and a store holds at most 1 MB. `/plugins rm` leaves the file, so a plugin
 everyone in the room: `ci  tests 3/3 ✓`. Call it from a command, a tool or a hook; an empty text removes
 the line. It is one line of at most 80 characters, the host shows at most one change a second (the
 latest wins), and the line goes away when the plugin is removed or fails to load.
+
+## MCP servers
+
+A plugin can bring MCP servers with it. They connect when the plugin loads and disconnect when it is
+removed, and are never written to the MCP config files:
+
+```python
+import os
+
+
+def setup(plural):
+    plural.mcp(
+        "tracker",
+        command="npx",
+        args=["-y", "tracker-mcp"],
+        env={"TOKEN": os.environ["TRACKER_TOKEN"]},
+    )
+    plural.mcp("docs", url="https://docs.example.com/mcp", headers={"Authorization": "Bearer …"})
+```
+
+`plural.mcp(name, command=None, args=(), env=None, url=None, headers=None)` takes a command to launch or
+a URL to reach, not both. The server's tools load on demand like those of any MCP server, through
+`tool_search` or by name, and the host's policy applies to them. `/mcp` lists it, but it is turned off
+or removed by changing the plugin. On a reload, a server whose settings did not change stays
+connected, and one that changed is connected again. A name already taken by a configured server, or by
+another plugin's, makes the plugin fail to load. Its env and header values are masked in what the room
+sees, like any MCP server's.
+
+## Model providers
+
+A plugin can offer a model provider: a company gateway, a local server, any API that speaks the
+OpenAI or Anthropic protocol. It shows in the host's model settings (`F2` → Model) next to the built-in
+presets:
+
+```python
+def setup(plural):
+    plural.provider(
+        "gateway",
+        label="Team gateway",
+        base_url="https://llm.example.com/v1",
+        models=["fast-1", "smart-1"],
+        key_env="GATEWAY_KEY",
+    )
+```
+
+`plural.provider(id, base_url, models=(), label=None, kind="openai", key_env=None, hint="")`: `id` uses
+`a-z`, `0-9`, `-` and `_` and cannot be a built-in preset's or another plugin's; `kind` is `openai` or
+`anthropic`, the protocol the API speaks; `models` are offered in settings, the first by default. The
+key is read from the environment variable `key_env` when the provider is chosen, and is never stored by
+the plugin; without `key_env` no key is sent, as for a local server. A command can switch to it with
+`ctx.set_model("smart-1", provider="gateway")`.
+
+## Switching the model
+
+A command the host runs can switch the agent's model, as the host would in settings:
+
+```python
+def setup(plural):
+    @plural.command("fast", host_only=True, description="Switch to the quick model")
+    async def fast(ctx):
+        label = await ctx.set_model("claude-haiku-5-5")
+        await ctx.notify(f"now on {label}")
+```
+
+`await ctx.set_model(model, provider=None)` keeps the provider, key and address the client set and
+changes the model; with `provider`, a preset name such as `anthropic` or `openai`, it switches to that
+preset with its own sign-in. It returns the new model's label, and everyone in the room sees the
+change. It raises `PluginError` when the person who ran the command is not the host, while the agent
+works, or when the host was started without a client to configure it, such as `plural-host` on its
+own.
+
+## Forking and switching sessions
+
+A command the host runs can fork the session and move the host's terminal client between sessions:
+
+```python
+def setup(plural):
+    @plural.command("try", host_only=True, usage="/try <title>")
+    async def try_another_way(ctx):
+        room = await ctx.fork(ctx.args or None, switch=True)
+        await ctx.notify(f"now in {room}")
+
+    @plural.command("back", host_only=True, usage="/back <session id>")
+    async def back(ctx):
+        await ctx.switch(ctx.args)
+```
+
+`await ctx.fork(title=None, before_prompt_id=None, switch=False)` copies the session, whole or up to
+before a prompt, into a new one and returns its id, as `/fork` does; with `switch=True` the host's
+client goes on in the copy. `await ctx.switch(room)` asks the host's client to leave this session for
+another one this host keeps. Both raise when the person who ran the command is not the host, or when
+the session or prompt is not there. Switching needs the terminal client: a host started on its own
+keeps the fork for `plural -r`.
+
+## Which tools the agent has
+
+`plural.hide_tools(names)` keeps tools from the agent: they are not declared on its requests,
+`tool_search` does not find them, and a call to one by name fails as an unknown tool. It takes effect
+from the agent's next model call, also in a run that is going. Calling it again replaces the plugin's
+set, and an empty list shows the tools again; a reload or `/plugins rm` shows them too.
+
+A read-only mode, switched by a command:
+
+```python
+def setup(plural):
+    @plural.command("readonly", host_only=True, usage="/readonly [off]")
+    async def readonly(ctx):
+        writing = ["write", "edit", "multi_edit", "bash"]
+        plural.hide_tools([] if ctx.args == "off" else writing)
+        plural.status("" if ctx.args == "off" else "read-only")
+```
+
+When several plugins hide tools, every tool any of them hides is hidden.
+
+## Instructions for the agent
+
+`plural.instructions(text)` puts text in the agent's system prompt, so it knows something for as long
+as the plugin is loaded: how to use the plugin's tools, a convention of the team, where things live:
+
+```python
+def setup(plural):
+    plural.instructions(
+        "Tickets look like PLR-123. Read one with the ticket tool before you work on it."
+    )
+```
+
+The agent reads it as `<plugin name="tickets">…</plugin>` from the start of its next run; a run that is
+going keeps the prompt it started with, so the provider's cache holds. Call it again to change the
+text, or with `""` to remove it; a reload or `/plugins rm` takes it away too. All plugins together get
+4,000 characters, in the order they load, and `/context` shows them as `plugins`. For facts that change
+from run to run, such as the branch, a `before_run` hook is cheaper: the system prompt is cached, and
+changing it costs the next call the whole prompt.
 
 ## Hooks
 
@@ -183,6 +376,73 @@ Any deny wins. There is no allow: a call the policy refuses, or one plan mode fo
 hook. A hook gets 5 seconds; one that raises or takes longer counts as `ask`, so a broken guard makes the
 host ask rather than let a call through. `ctx.reply(text)` and `ctx.run(*argv)` work as in commands.
 
+### Changing a call's arguments
+
+A `tool_args` hook runs first on every tool call the agent makes and may replace its arguments, for
+example to fix a command or add a flag:
+
+```python
+def setup(plural):
+    @plural.on("tool_args")
+    async def use_uv(call, ctx):
+        if call.name == "bash" and "pip install" in call.args.get("command", ""):
+            command = call.args["command"].replace("pip install", "uv pip install")
+            return {**call.args, "command": command}
+```
+
+It gets `call.name`, `call.args`, `call.author_id` and `call.role`, and returns the new arguments as a
+dict, or nothing to leave them. Hooks run in turn, each seeing what the one before returned. The changed
+call is then validated against the tool's parameters and put to `tool_call` hooks and the policy like
+any other, so a hook cannot make a call more permitted than its new arguments are; the room sees the
+call as it ran. A hook gets 5 seconds; one that raises, is late or returns something other than a dict
+changes nothing.
+
+### Changing what a call gives back
+
+A `tool_result` hook runs after every tool call that ran, before the model sees the result, and may
+replace its text: hide a secret, shorten noisy output, or add a hint to an error:
+
+```python
+def setup(plural):
+    @plural.on("tool_result")
+    async def hint(result, ctx):
+        if result.is_error and "ModuleNotFoundError" in result.content:
+            return result.content + "\nhint: run `uv sync` first"
+```
+
+It gets `result.name`, `result.risk`, `result.subject`, `result.args`, `result.content`,
+`result.is_error`, `result.author_id` and `result.role`, and returns the new text, or nothing to leave
+it. Hooks run in turn, each seeing what the one before returned, and the text is cut at 200,000
+characters. Whether the call failed stays as it was. The room and the session log get the result as
+the hooks left it; output the tool streamed while it ran was already shown. A call that was denied or
+aborted never reaches the hook. A hook gets 5 seconds; one that raises, is late or returns something
+other than text changes nothing.
+
+### Changing what the model is sent
+
+A `context` hook runs before every model call of the agent and may change the text of the messages it
+is sent: shorten old output, mask a value, or add a reminder to the latest message. The session's
+history keeps the original, so the next call starts again from it:
+
+```python
+def setup(plural):
+    @plural.on("context")
+    async def remind(context, ctx):
+        last = context.messages[-1]
+        if last.role == "user":
+            last.content += "\n\nRun the tests before you say it is done."
+```
+
+`context.system` is the system prompt, to read. `context.messages` holds each message with `role`
+(`user`, `assistant` or `tool`), `content` and, for a tool result, `tool`, the tool that gave it. Set
+`content` to change a message; messages cannot be added or removed, so a tool result never loses its
+call. Hooks run in turn on the same messages. A hook gets 5 seconds; if it raises or is late, what it
+changed is put back, and so is a `content` that is not text.
+
+A model reads the start of its prompt from the provider's cache, so a change to an older message makes
+every later call pay for the whole prompt again. With the Claude Code, Codex or Grok CLI it also starts
+their session over, since they keep the conversation themselves. Prefer changing the latest messages.
+
 ### When the plugins load
 
 A `session_start` hook runs after the plugins load: when the host starts and after every
@@ -196,6 +456,25 @@ async def ready(session, ctx):
 ```
 
 It has 120 seconds; if it fails the room sees why.
+
+### Rewriting a prompt
+
+An `input` hook runs when a run starts and may rewrite the prompt the agent gets, for example to expand
+a shorthand:
+
+```python
+def setup(plural):
+    @plural.on("input")
+    async def fix(prompt, ctx):
+        if prompt.text.startswith("!fix "):
+            return "Fix this bug and run the tests: " + prompt.text.removeprefix("!fix ")
+```
+
+It gets the same `prompt` as a `before_run` hook and returns the new text, or nothing to leave it. Hooks
+run in turn, then `before_run` hooks see the new text. The room keeps showing what the person typed;
+the agent and the session log get the rewritten prompt. Like `before_run`, it runs for the prompt a run
+starts with, not one that joins a run already going. A hook gets 5 seconds; one that fails or is late
+changes nothing.
 
 ### Before a run
 
@@ -245,6 +524,53 @@ A run started by a `run_end` prompt does not fire `run_end` again, so hooks cann
 on their own. Such a prompt is the host's, so it is not reviewed and does not taint the run; do not paste
 a guest's text into it. A hook has 120 seconds; if it fails the room sees why and the other hooks still
 run.
+
+### Writing the compaction summary
+
+When the conversation grows too long for the model, the host summarizes its older part and keeps the
+newest part as it is. A `summary` hook can write that summary instead of the model, for example by its
+own rules or with another model:
+
+```python
+def setup(plural):
+    @plural.on("summary")
+    async def notes(event, ctx):
+        text = await ctx.run("my-summarizer", "--max-words", "400", event.conversation[-100_000:])
+        return f"{event.previous or ''}\n{text}".strip()
+```
+
+It gets `event.conversation`, the part being summarized written out as text (who said what, which
+tools ran and what they gave), `event.previous`, the summary the last compaction left or `None`, and
+`event.messages`, how many messages are summarized. It returns the summary text, or nothing to let the
+model write it. The first hook that answers wins. The list of files read and changed is added to the
+summary either way. A hook gets 120 seconds; one that fails or is late is skipped.
+
+### Watching the agent work
+
+Four events let a plugin follow a run as it goes, to log it, count things, mirror it to another tool or
+keep `plural.status` up to date:
+
+```python
+def setup(plural):
+    calls = {"n": 0}
+
+    @plural.on("tool_start")
+    async def count(call, ctx):
+        calls["n"] += 1
+        plural.status(f"{calls['n']} tool calls, last: {call.name}")
+```
+
+| event | gets |
+|---|---|
+| `tool_start` | `call.run_id`, `call.call_id`, `call.name`, `call.risk`, `call.subject`, `call.args`: a call the agent made, before it is approved and run |
+| `tool_end` | `result.run_id`, `result.call_id`, `result.name`, `result.content`, `result.is_error`: what the call gave back, as the model got it |
+| `message_end` | `message.run_id`, `message.message_id`, `message.text`, `message.thinking`: a reply of the agent, whole |
+| `compaction` | `event.run_id`, `event.summary`, `event.tokens_before`: the conversation was summarized |
+
+These hooks only watch: what they return is ignored, and they cannot change or stop the run. They get
+the events in order, in the background, so a slow one never holds up the agent or the room; each call
+has 5 seconds, and one that fails is logged and the next event still comes. If more than 1,000 events
+wait for the plugins, new ones are dropped.
 
 If a handler raises, the room sees `/name failed: …` and the host keeps running. A file that fails to
 import, has no `setup`, or registers a taken name is listed as failed by `/plugins` with the reason.

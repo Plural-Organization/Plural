@@ -1,17 +1,17 @@
 import asyncio
 from pathlib import Path
 
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, turn
 
-from plural.agent.agents import EXPLORE, AgentLibrary, read_agent
-from plural.agent.context import ContextBuilder
-from plural.agent.events import ToolEnd, ToolOutput, ToolStart
-from plural.agent.gate import GateResult
-from plural.agent.loop import AgentLoop
+from plural.agent.context.context import ContextBuilder
+from plural.agent.loop.events import ToolEnd, ToolOutput, ToolStart
+from plural.agent.loop.gate import GateResult
+from plural.agent.loop.loop import AgentLoop
 from plural.agent.providers.base import LlmEvent, Stop, ToolCallReady, ToolCallRequest
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
+from plural.agent.subagents import EXPLORE, AgentLibrary, read_agent
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.extra.agent import AgentTool
 from plural.agent.tools.registry import builtin_tools

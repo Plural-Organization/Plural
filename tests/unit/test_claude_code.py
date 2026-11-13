@@ -29,7 +29,7 @@ def fake_cli(tmp_path: Path, response: dict[str, object], *, exit_code: int = 0)
         "import json, os, sys\n"
         f"response = json.loads({json.dumps(response)!r})\n"
         f"with open({str(record)!r}, 'w') as target:\n"
-        "    json.dump({'argv': sys.argv[1:], 'prompt': sys.stdin.read(), "
+        "    json.dump({'argv': sys.argv[1:], 'prompt': sys.stdin.readline(), "
         "'api_key': os.getenv('ANTHROPIC_API_KEY')}, target)\n"
         "answer = response.get('structured_output')\n"
         "if isinstance(answer, dict):\n"
@@ -38,7 +38,7 @@ def fake_cli(tmp_path: Path, response: dict[str, object], *, exit_code: int = 0)
         "        print(json.dumps({'type': 'stream_event', "
         "'event': {'type': 'content_block_delta', "
         "'delta': {'type': 'input_json_delta', 'partial_json': encoded[offset:offset + 7]}}}))\n"
-        "print(json.dumps({'type': 'result', **response}))\n"
+        "print(json.dumps({'type': 'result', **response}), flush=True)\n"
         f"sys.exit({exit_code})\n"
     )
     script.chmod(0o755)
@@ -164,11 +164,26 @@ async def test_claude_code_receives_the_conversation_images(tmp_path: Path) -> N
     assert "images" not in json.loads(followed["text"])["message"]
 
 
-async def test_each_call_repeats_the_blocks_of_the_one_before_it(tmp_path: Path) -> None:
-    # The provider caches a prompt by its blocks, so a call that only adds blocks at the end
-    # is served from the cache instead of being sent again at full price.
-    cli = fake_cli(tmp_path, {"structured_output": {"text": "ok", "tool_calls": []}})
-    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(cli))
+def lasting_cli(tmp_path: Path) -> Path:
+    """A Claude Code that keeps answering on one process, as `--input-format stream-json` does,
+    and records each message it was sent and each time it started."""
+    script = tmp_path / "claude"
+    script.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        f"open({str(tmp_path / 'starts')!r}, 'a').write('x')\n"
+        "for line in sys.stdin:\n"
+        f"    open({str(tmp_path / 'sent.jsonl')!r}, 'a').write(line)\n"
+        "    answer = {'text': 'ok', 'tool_calls': []}\n"
+        "    print(json.dumps({'type': 'result', 'structured_output': answer, "
+        "'usage': {'input_tokens': 3, 'cache_read_input_tokens': 100}}), flush=True)\n"
+    )
+    script.chmod(0o755)
+    return script
+
+
+async def test_a_conversation_keeps_one_process_and_sends_only_what_is_new(tmp_path: Path) -> None:
+    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(lasting_cli(tmp_path)))
     tools = (ToolSchema(name="read", description="Read file", parameters={"type": "object"}),)
     first = (LlmMessage(role="user", content="hello"),)
     second = (
@@ -176,15 +191,74 @@ async def test_each_call_repeats_the_blocks_of_the_one_before_it(tmp_path: Path)
         LlmMessage(role="assistant", content="ok"),
         LlmMessage(role="user", content="again"),
     )
-    sent: list[list[dict[str, object]]] = []
-    for messages in (first, second):
-        request = LlmRequest(system="s", messages=messages, tools=tools)
-        [event async for event in provider.stream(request, cancel=asyncio.Event())]
-        prompt = json.loads((tmp_path / "request.json").read_text())["prompt"]
-        sent.append(json.loads(prompt)["message"]["content"])
-    assert sent[1][: len(sent[0])] == sent[0]
-    assert len(sent[1]) == len(sent[0]) + 2
+    try:
+        for messages in (first, second):
+            request = LlmRequest(system="s", messages=messages, tools=tools)
+            events = [event async for event in provider.stream(request, cancel=asyncio.Event())]
+            assert events[-1] == Stop(reason="end_turn")
+    finally:
+        await provider.close()
+    assert (tmp_path / "starts").read_text() == "x"
+    sent = [
+        json.loads(line)["message"]["content"]
+        for line in (tmp_path / "sent.jsonl").read_text().splitlines()
+    ]
     assert '"read"' in str(sent[0][1]["text"])
+    assert "hello" in str(sent[0])
+    # The model's own answer is in Claude Code's history; only the new message goes.
+    assert len(sent[1]) == 1
+    assert "again" in sent[1][0]["text"]
+    assert "hello" not in str(sent[1])
+
+
+async def test_another_conversation_or_a_changed_history_starts_over(tmp_path: Path) -> None:
+    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(lasting_cli(tmp_path)))
+    hello = (LlmMessage(role="user", content="hello"),)
+    try:
+        for system, messages in (
+            ("s", hello),
+            ("summarize", hello),
+            (
+                "s",
+                (
+                    *hello,
+                    LlmMessage(role="assistant", content="ok"),
+                    LlmMessage(role="user", content="more"),
+                ),
+            ),
+            (
+                "s",
+                (
+                    LlmMessage(role="user", content="hello"),
+                    LlmMessage(role="user", content="summary instead"),
+                ),
+            ),
+        ):
+            request = LlmRequest(system=system, messages=messages)
+            [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    finally:
+        await provider.close()
+    # The summary has a process of its own; the main one goes on; a rewritten history restarts.
+    assert (tmp_path / "starts").read_text() == "xxx"
+
+
+async def test_a_process_that_ended_is_started_again_with_everything(tmp_path: Path) -> None:
+    # This Claude Code answers once and exits, as one that crashed between turns would.
+    cli = fake_cli(tmp_path, {"structured_output": {"text": "ok", "tool_calls": []}})
+    provider = ClaudeCodeProvider(workspace=tmp_path, cli=str(cli))
+    first = (LlmMessage(role="user", content="hello"),)
+    second = (
+        *first,
+        LlmMessage(role="assistant", content="ok"),
+        LlmMessage(role="user", content="again"),
+    )
+    for messages in (first, second):
+        request = LlmRequest(system="s", messages=messages)
+        events = [event async for event in provider.stream(request, cancel=asyncio.Event())]
+        assert events[-1] == Stop(reason="end_turn")
+    prompt = json.loads((tmp_path / "request.json").read_text())["prompt"]
+    assert "hello" in prompt
+    assert "again" in prompt
 
 
 async def test_claude_code_reports_the_window_of_its_model(tmp_path: Path) -> None:
@@ -209,7 +283,7 @@ async def test_text_written_beside_the_structured_answer_is_not_shown_twice(
     script.write_text(
         f"#!{sys.executable}\n"
         "import json, sys\n"
-        "sys.stdin.read()\n"
+        "sys.stdin.readline()\n"
         "def delta(d): print(json.dumps({'type': 'stream_event', "
         "'event': {'type': 'content_block_delta', 'delta': d}}))\n"
         "delta({'type': 'text_delta', 'text': 'The answer.'})\n"
@@ -231,7 +305,7 @@ def scripted_cli(tmp_path: Path, lines: list[dict[str, object]], *, then_sleep: 
     script.write_text(
         f"#!{sys.executable}\n"
         "import json, sys, time\n"
-        "sys.stdin.read()\n"
+        "sys.stdin.readline()\n"
         f"for line in json.loads({json.dumps(lines)!r}):\n"
         "    print(json.dumps(line), flush=True)\n"
         f"time.sleep({then_sleep})\n"

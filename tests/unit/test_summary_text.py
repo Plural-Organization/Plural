@@ -1,5 +1,5 @@
-from plural.agent.compaction import RESULT_CHARS, serialize, summary_request, with_files
-from plural.agent.messages import AssistantTurn, SummaryTurn, ToolResultTurn, UserTurn
+from plural.agent.context.compaction import RESULT_CHARS, serialize, summary_request, with_files
+from plural.agent.loop.messages import AssistantTurn, SummaryTurn, ToolResultTurn, UserTurn
 from plural.agent.providers.base import ToolCallRequest
 from plural.core.provenance import direct
 from plural.protocol.models import Actor, ActorKind, Role

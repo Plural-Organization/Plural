@@ -84,3 +84,6 @@ CLAUDE.local.md
 /plan.md
 *.tsbuildinfo
 .vercel
+
+# Eval runs
+/benchmarks/results/

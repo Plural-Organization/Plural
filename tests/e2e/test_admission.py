@@ -5,7 +5,6 @@ from typing import Any
 
 import pytest
 
-from plural.agent.providers.fake import FakeProvider, reply
 from plural.client.connection import CommandRejected
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.host.bootstrap import build_host
@@ -22,6 +21,7 @@ from plural.protocol.events import (
     SessionWelcome,
 )
 from plural.protocol.models import AdmissionMode, JoinDecision, Role
+from tests.doubles import FakeProvider, reply
 from tests.e2e.support import (
     CLIENT,
     ROOM,

@@ -8,11 +8,12 @@ from typing import Any
 
 import pytest
 from structlog.testing import capture_logs
-from tests.doubles import ScriptedProvider
+from tests.doubles import FakeProvider, ScriptedProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
-from plural.agent.context import ContextBuilder
-from plural.agent.loop import AgentLoop, LoopLimits
+from plural.agent.context.context import ContextBuilder
+from plural.agent.context.telemetry import RequestDump, hit_rate, observed
+from plural.agent.loop.loop import AgentLoop, LoopLimits
 from plural.agent.providers.base import (
     LlmEvent,
     LlmImage,
@@ -23,10 +24,8 @@ from plural.agent.providers.base import (
     TextDelta,
     UsageReport,
 )
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.agent.sandbox.base import Workspace
 from plural.agent.sandbox.local import LocalBackend
-from plural.agent.telemetry import RequestDump, hit_rate, observed
 from plural.agent.tools.base import ToolCtx
 from plural.agent.tools.registry import builtin_tools
 from plural.host.system import UlidGenerator

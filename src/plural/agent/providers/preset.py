@@ -3,8 +3,10 @@
 from dataclasses import asdict, dataclass
 from typing import Final, Literal, get_args
 
-# Agent CLIs run through one provider that asks them for a JSON answer (cli/agent_cli.py).
-AgentCliAdapter = Literal[
+# Models behind an installed agent CLI (providers/cli/), signed in with the CLI's own account.
+CliAdapter = Literal[
+    "claude_code",
+    "codex_cli",
     "gemini_cli",
     "qwen_cli",
     "copilot_cli",
@@ -14,11 +16,8 @@ AgentCliAdapter = Literal[
     "amp_cli",
     "opencode_cli",
 ]
-AGENT_CLI_ADAPTERS: Final[tuple[AgentCliAdapter, ...]] = get_args(AgentCliAdapter)
-Adapter = (
-    Literal["fake", "anthropic", "anthropic_oauth", "claude_code", "codex_cli", "openai"]
-    | AgentCliAdapter
-)
+CLI_ADAPTERS: Final[tuple[CliAdapter, ...]] = get_args(CliAdapter)
+Adapter = Literal["fake", "anthropic", "anthropic_oauth", "openai"] | CliAdapter
 Connection = Literal["api_key", "oauth", "local"]
 
 

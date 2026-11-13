@@ -3,7 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
-from plural.agent.gate import FolderResult, GateResult
+from plural.agent.loop.gate import FolderResult, GateResult
 from plural.core.policy.engine import PLAN_MODE, Policy, ToolInvocation, evaluate, run_limit
 from plural.core.policy.rejections import RejectionLedger
 from plural.core.policy.rules import RuleSet
@@ -129,10 +129,10 @@ class HostPolicyGate:
             self._registry.discard(approval.id)
         if answer is ApprovalDecision.REJECT:
             self._rejections.record(invocation)
-            return GateResult(allowed=False, reason=f"rejected by the host. {FINAL}")
+            return GateResult(allowed=False, reason=f"rejected by the host. {FINAL}", asked=True)
         if answer is ApprovalDecision.BLOCK:
-            return GateResult(allowed=False, reason=f"blocked by the host. {FINAL}")
-        return GateResult(allowed=True, reason=f"approved by host ({answer})")
+            return GateResult(allowed=False, reason=f"blocked by the host. {FINAL}", asked=True)
+        return GateResult(allowed=True, reason=f"approved by host ({answer})", asked=True)
 
 
 def _is_broad(folder: Path) -> bool:

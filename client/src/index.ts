@@ -13,5 +13,6 @@ export * from "./session";
 export * from "./slash";
 export * from "./team";
 export * from "./tools";
+export * from "./trace";
 export * from "./usage";
 export * from "./wire";

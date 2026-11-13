@@ -1,0 +1,307 @@
+import asyncio
+import json
+import sys
+from pathlib import Path
+
+import pytest
+from tests.loop_support import StubGate, collect, make_loop, turn
+
+from plural.agent.loop.events import MessageEnd, RunEnd
+from plural.agent.loop.loop import LoopLimits
+from plural.agent.providers.base import (
+    LlmImage,
+    LlmMessage,
+    LlmRequest,
+    Stop,
+    TextDelta,
+    ToolCallReady,
+    ToolSchema,
+    UsageReport,
+)
+from plural.agent.providers.cli import codex as codex_cli
+from plural.agent.providers.cli.codex import CodexCliProvider
+from plural.protocol.models import RunEndReason, Usage
+
+
+def fake_codex(tmp_path: Path, *, progress: str) -> Path:
+    cli = tmp_path / "codex"
+    cli.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys, time\n"
+        "if sys.argv[1:3] == ['login', 'status'] or '--help' in sys.argv:\n"
+        "    sys.exit(0)\n"
+        "def emit(method, params):\n"
+        "    print(json.dumps({'method': method, 'params': params}), flush=True)\n"
+        f"progress = {progress!r}\n"
+        "for line in sys.stdin:\n"
+        "    msg = json.loads(line)\n"
+        "    if 'id' not in msg: continue\n"
+        "    method = msg['method']\n"
+        "    if progress == 'rpc_silent' and method == 'thread/start': continue\n"
+        "    result = {'thread': {'id': 'thread_test'}} if method == 'thread/start' else {}\n"
+        "    print(json.dumps({'id': msg['id'], 'result': result}), flush=True)\n"
+        "    if method != 'turn/start': continue\n"
+        "    if progress == 'initial':\n"
+        "        emit('item/started', {'item': {'type': 'reasoning'}})\n"
+        "        time.sleep(0.25)\n"
+        "    emit('item/agentMessage/delta', {'delta': 'Working'})\n"
+        "    for _ in range(6):\n"
+        "        time.sleep(0.12 if progress == 'long_silent' else 0.04)\n"
+        "        if progress in {'reasoning', 'initial'}:\n"
+        "            emit('item/reasoning/summaryTextDelta', {'delta': 'Still working.'})\n"
+        "        elif progress == 'raw_reasoning':\n"
+        "            emit('item/reasoning/textDelta', {'delta': 'Still working.'})\n"
+        "        elif progress == 'structured':\n"
+        "            emit('item/agentMessage/delta', {'delta': ''})\n"
+        "            emit('item/started', {'item': {'type': 'agentMessage'}})\n"
+        "    emit('turn/completed', {'turn': {'status': 'completed', 'items': [\n"
+        "        {'type': 'agentMessage', 'text': 'Working'}\n"
+        "    ]}})\n"
+    )
+    cli.chmod(0o755)
+    return cli
+
+
+async def run_codex(
+    tmp_path: Path, progress: str, *, idle_timeout_s: float = 0.15
+) -> list[RunEnd | MessageEnd]:
+    cli = fake_codex(tmp_path, progress=progress)
+    provider = CodexCliProvider(workspace=tmp_path, cli=str(cli))
+    loop = make_loop(
+        tmp_path,
+        provider,
+        StubGate(),
+        LoopLimits(first_token_timeout_s=2, idle_timeout_s=idle_timeout_s),
+    )
+    try:
+        events = await asyncio.wait_for(collect(loop, turn("hello")), 5)
+    finally:
+        await provider.close()
+    return [event for event in events if isinstance(event, RunEnd | MessageEnd)]
+
+
+@pytest.mark.parametrize("progress", ["reasoning", "raw_reasoning", "initial"])
+async def test_codex_reasoning_activity_keeps_the_run_alive(tmp_path: Path, progress: str) -> None:
+    events = await run_codex(tmp_path, progress)
+    assert isinstance(events[-1], RunEnd)
+    assert events[-1].reason is RunEndReason.STOP
+
+
+async def test_codex_structured_output_activity_keeps_the_run_alive(tmp_path: Path) -> None:
+    events = await run_codex(tmp_path, "structured")
+    assert isinstance(events[-1], RunEnd)
+    assert events[-1].reason is RunEndReason.STOP
+    assert any(isinstance(event, MessageEnd) and event.text == "Working" for event in events)
+
+
+async def test_codex_still_times_out_when_the_server_stops_producing_events(tmp_path: Path) -> None:
+    events = await run_codex(tmp_path, "silent")
+    assert isinstance(events[-1], RunEnd)
+    assert events[-1].reason is RunEndReason.ERROR
+    assert events[-1].error == "model produced no output for 0.15s"
+
+
+async def test_codex_generation_uses_the_loop_deadline_instead_of_the_rpc_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(codex_cli, "RPC_TIMEOUT_S", 0.5)
+    events = await run_codex(tmp_path, "long_silent", idle_timeout_s=1.5)
+    assert isinstance(events[-1], RunEnd)
+    assert events[-1].reason is RunEndReason.STOP
+
+
+async def test_codex_rpc_still_has_a_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(codex_cli, "RPC_TIMEOUT_S", 0.5)
+    events = await run_codex(tmp_path, "rpc_silent")
+    assert isinstance(events[-1], RunEnd)
+    assert events[-1].reason is RunEndReason.ERROR
+    assert events[-1].error == "Codex app server timed out waiting for thread/start"
+
+
+async def test_codex_receives_the_new_messages_images(tmp_path: Path) -> None:
+    record = tmp_path / "turns.jsonl"
+    cli = tmp_path / "codex"
+    cli.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "if sys.argv[1:3] == ['login', 'status'] or '--help' in sys.argv:\n"
+        "    sys.exit(0)\n"
+        "for line in sys.stdin:\n"
+        "    msg = json.loads(line)\n"
+        "    if 'id' not in msg: continue\n"
+        "    result = {'thread': {'id': 't'}} if msg['method'] == 'thread/start' else {}\n"
+        "    print(json.dumps({'id': msg['id'], 'result': result}), flush=True)\n"
+        "    if msg['method'] != 'turn/start': continue\n"
+        f"    open({str(record)!r}, 'a').write(json.dumps(msg['params']['input']) + '\\n')\n"
+        "    answer = 'red'\n"
+        "    last = {'inputTokens': 50, 'cachedInputTokens': 40, 'outputTokens': 3}\n"
+        "    print(json.dumps({'method': 'thread/tokenUsage/updated', 'params': {\n"
+        "        'tokenUsage': {'last': last, 'modelContextWindow': 475000}}}), flush=True)\n"
+        "    print(json.dumps({'method': 'turn/completed', 'params': {'turn': {\n"
+        "        'status': 'completed', 'items': [{'type': 'agentMessage', 'text': answer}]}}}),\n"
+        "        flush=True)\n"
+    )
+    cli.chmod(0o755)
+    provider = CodexCliProvider(workspace=tmp_path, cli=str(cli))
+    red = LlmImage(media_type="image/png", data="cmVk")
+    first = (LlmMessage(role="user", content="what color?", images=(red,)),)
+    second = (
+        *first,
+        LlmMessage(role="assistant", content="red"),
+        LlmMessage(role="user", content="sure?"),
+    )
+    reports: list[UsageReport] = []
+    try:
+        for messages in (first, second):
+            request = LlmRequest(system="", messages=messages)
+            async for event in provider.stream(request, cancel=asyncio.Event()):
+                if isinstance(event, UsageReport):
+                    reports.append(event)
+    finally:
+        await provider.close()
+    assert reports[0].usage == Usage(input_tokens=10, cache_read_tokens=40, output_tokens=3)
+    assert await provider.context_window() == 475000
+    turns = [json.loads(line) for line in record.read_text().splitlines()]
+    assert turns[0][1] == {"type": "image", "url": "data:image/png;base64,cmVk"}
+    assert [item["type"] for item in turns[1]] == ["text"]
+    # The thread keeps the conversation: a turn starts with the new message only.
+    assert (turns[0][0]["text"], turns[1][0]["text"]) == ("what color?", "sure?")
+
+
+def test_codex_turn_usage_counts_the_cached_prompt_apart() -> None:
+    last = {"inputTokens": 1000, "cachedInputTokens": 900, "outputTokens": 7}
+    usage = codex_cli._usage({"tokenUsage": {"last": last, "total": last}})  # pyright: ignore[reportPrivateUsage]
+    assert usage == Usage(input_tokens=100, cache_read_tokens=900, output_tokens=7)
+    assert codex_cli._usage({}) is None  # pyright: ignore[reportPrivateUsage]
+
+
+def test_codex_usage_limit_is_named_instead_of_turn_failed() -> None:
+    failure = codex_cli._failure  # pyright: ignore[reportPrivateUsage]
+    limited = failure(
+        {"message": "You've hit your usage limit.", "codexErrorInfo": "usageLimitExceeded"},
+        "Codex app server: turn failed",
+    )
+    assert limited.startswith("Codex usage limit reached, try again after it resets")
+    assert "hit your usage limit" in limited
+    assert failure({"codexErrorInfo": "usageLimitExceeded"}, "x") == (
+        "Codex usage limit reached, try again after it resets"
+    )
+    assert failure({"message": "boom"}, "fallback") == "boom"
+    assert failure(None, "fallback") == "fallback"
+
+
+async def test_codex_adds_none_of_its_own_prompt(tmp_path: Path) -> None:
+    record = tmp_path / "codex.jsonl"
+    cli = tmp_path / "codex"
+    cli.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "if sys.argv[1:3] == ['login', 'status'] or '--help' in sys.argv:\n"
+        "    sys.exit(0)\n"
+        f"log = open({str(record)!r}, 'a')\n"
+        "log.write(json.dumps({'argv': sys.argv[1:]}) + '\\n')\n"
+        "for line in sys.stdin:\n"
+        "    msg = json.loads(line)\n"
+        "    if 'id' not in msg: continue\n"
+        "    log.write(json.dumps(msg) + '\\n'); log.flush()\n"
+        "    result = {'thread': {'id': 't'}} if msg['method'] == 'thread/start' else {}\n"
+        "    print(json.dumps({'id': msg['id'], 'result': result}), flush=True)\n"
+        "    if msg['method'] != 'turn/start': continue\n"
+        "    answer = json.dumps({'text': 'ok', 'tool_calls': []})\n"
+        "    print(json.dumps({'method': 'turn/completed', 'params': {'turn': {\n"
+        "        'status': 'completed', 'items': [{'type': 'agentMessage', 'text': answer}]}}}),\n"
+        "        flush=True)\n"
+    )
+    cli.chmod(0o755)
+    provider = CodexCliProvider(workspace=tmp_path, cli=str(cli))
+    request = LlmRequest(system="", messages=(LlmMessage(role="user", content="say ok"),))
+    try:
+        _ = [event async for event in provider.stream(request, cancel=asyncio.Event())]
+    finally:
+        await provider.close()
+    lines = [json.loads(line) for line in record.read_text().splitlines()]
+    argv = lines[0]["argv"]
+    settings = {argv[i + 1] for i, arg in enumerate(argv) if arg == "-c"}
+    assert {
+        "features.shell_tool=false",
+        "features.hooks=false",
+        "features.plugins=false",
+        "skills.include_instructions=false",
+        "include_environment_context=false",
+    } <= settings
+    # An unknown `--disable` feature would stop a newer or older Codex from starting.
+    assert "--disable" not in argv
+    start = next(line for line in lines[1:] if line.get("method") == "thread/start")
+    assert start["params"]["baseInstructions"] == codex_cli.BASE_INSTRUCTIONS
+
+
+async def test_codex_calls_plurals_tools_natively_and_gets_their_results(tmp_path: Path) -> None:
+    record = tmp_path / "codex.jsonl"
+    cli = tmp_path / "codex"
+    cli.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "if sys.argv[1:3] == ['login', 'status'] or '--help' in sys.argv:\n"
+        "    sys.exit(0)\n"
+        f"log = open({str(record)!r}, 'a')\n"
+        "def emit(message):\n"
+        "    print(json.dumps(message), flush=True)\n"
+        "for line in sys.stdin:\n"
+        "    msg = json.loads(line)\n"
+        "    log.write(json.dumps(msg) + '\\n'); log.flush()\n"
+        "    if 'method' not in msg and msg.get('id') == 'tool-1':\n"
+        "        text = msg['result']['contentItems'][0]['text']\n"
+        "        delta = {'delta': 'It says ' + text}\n"
+        "        emit({'method': 'item/agentMessage/delta', 'params': delta})\n"
+        "        emit({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})\n"
+        "        continue\n"
+        "    if 'id' not in msg: continue\n"
+        "    result = {'thread': {'id': 't'}} if msg['method'] == 'thread/start' else {}\n"
+        "    emit({'id': msg['id'], 'result': result})\n"
+        "    if msg['method'] == 'turn/start':\n"
+        "        emit({'id': 'tool-1', 'method': 'item/tool/call', 'params': {\n"
+        "            'threadId': 't', 'turnId': 'u', 'callId': 'call-9', 'tool': 'read',\n"
+        "            'arguments': {'path': 'a.txt'}}})\n"
+    )
+    cli.chmod(0o755)
+    provider = CodexCliProvider(workspace=tmp_path, cli=str(cli))
+    tools = (ToolSchema(name="read", description="Read a file", parameters={"type": "object"}),)
+    asked = (LlmMessage(role="user", content="what is in a.txt?"),)
+    try:
+        first = [
+            event
+            async for event in provider.stream(
+                LlmRequest(system="Be brief.", messages=asked, tools=tools), cancel=asyncio.Event()
+            )
+        ]
+        (call,) = [event.call for event in first if isinstance(event, ToolCallReady)]
+        assert (call.id, call.name, call.args) == ("call-9", "read", {"path": "a.txt"})
+        assert first[-1] == Stop(reason="tool_use")
+        answered = (
+            *asked,
+            LlmMessage(role="assistant", content="", tool_calls=(call,)),
+            LlmMessage(role="tool", content="alpha", tool_call_id="call-9"),
+        )
+        second = [
+            event
+            async for event in provider.stream(
+                LlmRequest(system="Be brief.", messages=answered, tools=tools),
+                cancel=asyncio.Event(),
+            )
+        ]
+    finally:
+        await provider.close()
+    assert "".join(e.text for e in second if isinstance(e, TextDelta)) == "It says alpha"
+    assert second[-1] == Stop(reason="end_turn")
+    sent = [json.loads(line) for line in record.read_text().splitlines()]
+    initialize = next(m for m in sent if m.get("method") == "initialize")
+    assert initialize["params"]["capabilities"] == {"experimentalApi": True}
+    start = next(m for m in sent if m.get("method") == "thread/start")
+    assert [tool["name"] for tool in start["params"]["dynamicTools"]] == ["read"]
+    assert "Be brief." in start["params"]["baseInstructions"]
+    # The result went back into the open turn; no second turn was started.
+    assert sum(m.get("method") == "turn/start" for m in sent) == 1
+    reply = next(m for m in sent if m.get("id") == "tool-1" and "result" in m)
+    assert reply["result"]["success"] is True

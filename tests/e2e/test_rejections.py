@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.protocol.commands import ApprovalRespond, PromptSubmit
 from plural.protocol.events import ApprovalRequested, Event, RunEnded, ToolEnded
 from plural.protocol.models import ApprovalDecision
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import running_session
 
 

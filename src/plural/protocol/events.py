@@ -40,6 +40,7 @@ from plural.protocol.models import (
     SessionState,
     SkillHit,
     SkillView,
+    Span,
     TextSelection,
     ToolCallView,
     Usage,
@@ -91,6 +92,17 @@ class SkillsChanged(EventBase):
     skills: tuple[SkillView, ...]
     added: tuple[str, ...] = ()
     removed: tuple[str, ...] = ()
+
+
+class TraceFound(TransientEvent):
+    """The answer to `trace.get`: the spans asked for, and the newest runs to choose from."""
+
+    type: Literal["trace.found"] = "trace.found"
+    # The run the spans belong to; None when they are every run's.
+    run_id: str | None
+    spans: tuple[Span, ...]
+    # The root span of each recent run, newest first.
+    runs: tuple[Span, ...] = ()
 
 
 class SkillsFound(TransientEvent):
@@ -429,6 +441,25 @@ class ContextUsage(EventBase):
     context: ContextView
 
 
+class SessionForked(EventBase):
+    """The host copied this session into a new one, which `plural -r <room>` continues."""
+
+    type: Literal["session.forked"] = "session.forked"
+    room: str
+    title: str
+    before_prompt_id: str | None = None
+    # The host's client goes on in the fork at once.
+    switch: bool = False
+
+
+class SessionSwitch(EventBase):
+    """The host's client is asked to leave this session for another one it keeps, by a plugin."""
+
+    type: Literal["session.switch"] = "session.switch"
+    room: str
+    title: str
+
+
 class ContextCompacted(EventBase):
     type: Literal["context.compacted"] = "context.compacted"
     run_id: str
@@ -531,6 +562,7 @@ Event = Annotated[
     | PermissionModeChanged
     | SkillsChanged
     | SkillsFound
+    | TraceFound
     | AgentChanged
     | AdmissionChanged
     | JoinRequested
@@ -570,6 +602,8 @@ Event = Annotated[
     | MessageDelta
     | MessageEnded
     | ContextCompacting
+    | SessionForked
+    | SessionSwitch
     | ContextCompacted
     | ContextUsage
     | McpChanged

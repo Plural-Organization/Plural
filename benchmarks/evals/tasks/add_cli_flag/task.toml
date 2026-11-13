@@ -1,0 +1,3 @@
+prompt = """Add a `--json` flag to `count.py`. With it the program prints one JSON object with the keys
+`lines`, `words` and `path` instead of the usual text. Without the flag nothing changes.
+Update the README."""

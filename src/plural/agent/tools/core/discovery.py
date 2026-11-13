@@ -117,9 +117,8 @@ class ToolSearchTool:
 
     name = TOOL_SEARCH
     guidelines = (
-        "The web, MCP servers, the board, sub-agents and installing skills load on demand: find "
-        "them with tool_search, or call one by its exact name, before you say you cannot do "
-        "something.",
+        "More tools load on demand (web, MCP, board, sub-agents, skill installs): look with "
+        "tool_search before you say you cannot do something.",
     )
 
     def __init__(self, registry: ToolRegistry) -> None:

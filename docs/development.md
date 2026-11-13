@@ -61,9 +61,12 @@ src/plural/
 ├── core/       state reducer, roles, policy engine   (pure)
 ├── security/   tokens, host keys, redaction
 ├── agent/      loop, tools, sandbox, providers
+│   ├── loop/       the agent loop, its events, messages, approval gate and interrupts
+│   ├── context/    the system prompt, compaction, briefings, per-call telemetry
 │   ├── prompts/    the agent's prompts as Markdown, their parts in XML tags
-│   ├── builtin_agents/, builtin_skills/   explore and plural-plugins, in the user format
-│   ├── providers/  api/anthropic, api/openai_compat, cli/: each adapter with its presets.py
+│   ├── subagents/  sub-agent definitions; builtin/ holds explore, in the user format
+│   ├── skills/     skill discovery and install; builtin/ holds plural-plugins
+│   ├── providers/  api/anthropic, api/openai_compat with their presets.py; cli/: one module per agent CLI
 │   └── tools/  core/ declared on every request, extra/ loaded with tool_search
 ├── storage/    SQLite event store, migrations, export
 ├── host/       session actor, gateway, transports

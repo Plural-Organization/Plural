@@ -168,6 +168,15 @@ class ContextCompact(Model):
     type: Literal["context.compact"] = "context.compact"
 
 
+class SessionFork(Model):
+    """Copy this session into a new one: all of it, or what came before one prompt."""
+
+    type: Literal["session.fork"] = "session.fork"
+    title: str | None = Field(default=None, max_length=200)
+    # The prompt to fork before: the copy ends right before it was accepted.
+    before_prompt_id: str | None = Field(default=None, max_length=64)
+
+
 class PromptModeSet(Model):
     type: Literal["session.set_prompt_mode"] = "session.set_prompt_mode"
     mode: PromptMode
@@ -176,6 +185,15 @@ class PromptModeSet(Model):
 class PermissionModeSet(Model):
     type: Literal["session.set_permission_mode"] = "session.set_permission_mode"
     mode: PermissionMode
+
+
+class TraceGet(Model):
+    """Ask for what a run did, as spans. Without a run, the latest one; `everything` asks for
+    the spans of every run instead, for a picture of the whole session."""
+
+    type: Literal["trace.get"] = "trace.get"
+    run_id: str | None = Field(default=None, max_length=64)
+    everything: bool = False
 
 
 class SkillsSearch(Model):
@@ -386,9 +404,11 @@ Command = Annotated[
     | ParticipantSetRole
     | ParticipantRevoke
     | ContextCompact
+    | SessionFork
     | PromptModeSet
     | PermissionModeSet
     | SkillsSearch
+    | TraceGet
     | SkillsInstall
     | SkillsRemove
     | McpAdd

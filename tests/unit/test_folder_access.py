@@ -2,11 +2,11 @@ import asyncio
 from pathlib import Path
 
 import pytest
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.loop_support import StubGate, collect, make_loop, turn
 
-from plural.agent.events import AgentEvent, ToolEnd
-from plural.agent.gate import FolderResult
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
+from plural.agent.loop.events import AgentEvent, ToolEnd
+from plural.agent.loop.gate import FolderResult
 from plural.agent.sandbox.base import PathDenied, PathOutsideWorkspace, Workspace
 from plural.core import approvals
 from plural.core.errors import Invalid

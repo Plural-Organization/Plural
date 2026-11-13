@@ -25,7 +25,10 @@ export const COMMANDS: CommandHint[] = [
   { name: "agents", usage: "/agents [rm <name>]", description: "sub-agents the agent can hand work to; create your own" },
   { name: "usage", usage: "/usage", description: "tokens spent per model and agent in this session" },
   { name: "context", usage: "/context", description: "what fills the agent's context, and whether the cache was used" },
+  { name: "trace", usage: "/trace [all]", description: "what the last run did and what each step spent; all: who called what in the session" },
   { name: "plugins", usage: "/plugins [new <name> | reload]", description: "the host's plugins and their commands" },
+  { name: "fork", usage: "/fork [title]", description: "copy this session into a new one and go on there", hostOnly: true },
+  { name: "resume", usage: "/resume <id|title>", description: "switch to another session of yours", hostOnly: true },
   { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
   { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
   { name: "cancel", usage: "/cancel <n>", description: "remove a queued prompt (yours, or any as host)" },
@@ -41,6 +44,16 @@ export function pluginHints(commands: readonly PluginCommandView[]): CommandHint
     description: command.description || `from the ${command.plugin} plugin`,
     hostOnly: command.host_only ?? false,
   }));
+}
+
+/** The plugin command whose shortcut is this key, such as ctrl+r or f5, that this person may run. */
+export function shortcutCommand(
+  commands: readonly PluginCommandView[],
+  key: { name: string; ctrl: boolean },
+  role: Role | undefined,
+): PluginCommandView | undefined {
+  const pressed = key.ctrl ? `ctrl+${key.name}` : key.name;
+  return commands.find((command) => command.shortcut === pressed && (!command.host_only || role === "host"));
 }
 
 /** `/skill:<name>` for every skill, the only way to run one the model does not see. */

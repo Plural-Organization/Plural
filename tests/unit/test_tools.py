@@ -126,7 +126,12 @@ async def test_long_bash_output_is_kept_whole_for_read(ctx: ToolCtx) -> None:
     assert "\n5000\n" in output
     assert "\n1\n" not in output
     head = await run(ctx, "read", path="output:1", limit=3)
-    assert head.split() == ["1", "1", "2", "2", "3", "3"]
+    assert head.splitlines()[:3] == ["     1  1", "     2  2", "     3  3"]
+    # The model is told the output goes on, and where to read on.
+    assert (
+        head.splitlines()[3]
+        == "[lines 1-3 of 5000; read on with offset=3, or search the file with grep]"
+    )
     assert "3001  3001" in await run(ctx, "read", path="output:1", offset=3000, limit=1)
 
 
@@ -164,3 +169,36 @@ def test_tool_schemas_carry_no_titles() -> None:
     assert all("title" not in field for field in schema["properties"].values())
     for tool in builtin_tools().schemas():
         assert '"title": "' not in json.dumps(tool.parameters)
+
+
+async def test_a_search_with_more_matches_than_it_shows_says_so(ctx: ToolCtx) -> None:
+    (ctx.workspace.root / "log.txt").write_text("".join(f"hit {n}\n" for n in range(450)))
+    output = await run(ctx, "grep", pattern="hit")
+    assert output.count("log.txt:") == 200
+    assert output.endswith(
+        "[the first 200 of 450 matches; narrow the pattern, path or include, "
+        "or run a shell command that filters and sorts them]"
+    )
+    few = await run(ctx, "grep", pattern="hit 44[0-9]")
+    assert "[the first" not in few
+
+
+async def test_reading_past_the_end_says_how_long_the_file_is(ctx: ToolCtx) -> None:
+    (ctx.workspace.root / "short.txt").write_text("a\nb\n")
+    assert await run(ctx, "read", path="short.txt", offset=10) == (
+        "(offset 10 is past the end: the file has 2 lines)"
+    )
+    whole = await run(ctx, "read", path="short.txt")
+    assert "[lines" not in whole
+
+
+async def test_a_leading_double_star_also_matches_the_root(ctx: ToolCtx) -> None:
+    (ctx.workspace.root / "top.py").write_text("")
+    (ctx.workspace.root / "pkg").mkdir()
+    (ctx.workspace.root / "pkg" / "deep.py").write_text("")
+    everything = await run(ctx, "glob", pattern="**/*")
+    assert "top.py" in everything
+    assert "pkg/deep.py" in everything
+    python = await run(ctx, "glob", pattern="**/*.py")
+    assert set(python.split()) >= {"top.py", "pkg/deep.py"}
+    assert set((await run(ctx, "glob", pattern="pkg/*.py")).split()) == {"pkg/deep.py"}

@@ -25,6 +25,7 @@ export const COMMANDS: CommandHint[] = [
   { name: "mcp", usage: "/mcp [add <name> <command|url> [--global] | on|off|restart|rm <name> | import]", description: "connect MCP servers and their tools" },
   { name: "usage", usage: "/usage", description: "tokens spent per model and agent in this session" },
   { name: "context", usage: "/context", description: "what fills the agent's context, and whether the cache was used" },
+  { name: "trace", usage: "/trace [all]", description: "what a run did, step by step, and what each step spent" },
   { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
   { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
   { name: "cancel", usage: "/cancel <n>", description: "remove a queued prompt" },

@@ -3,19 +3,20 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 
 import structlog
 
-from plural.agent.events import AgentEvent, ContextFill, ContextNote, RunEnd, Spend
-from plural.agent.loop import AgentLoop
-from plural.agent.messages import PLUGIN_SOURCE, Message, NotesTurn, UserTurn
+from plural.agent.loop.events import AgentEvent, ContextFill, ContextNote, RunEnd, Spend
+from plural.agent.loop.loop import AgentLoop
+from plural.agent.loop.messages import PLUGIN_SOURCE, Message, NotesTurn, UserTurn
 from plural.agent.providers.base import LLMProvider
 from plural.host.inbox import AgentOutput, Inbox
-from plural.protocol.models import RunEndReason
+from plural.protocol.models import RunEndReason, Span
 
 log = structlog.get_logger(__name__)
 
 ABORT_GRACE_S = 5.0
 
-# Plugin before_run hooks: the prompt in, (plugin, text) pairs out.
-Prepare = Callable[[UserTurn], Awaitable[Sequence[tuple[str, str]]]]
+# Plugin hooks before a run: the prompt in; the prompt to run, maybe rewritten by input hooks,
+# and the (plugin, text) notes of before_run hooks out.
+Prepare = Callable[[UserTurn], Awaitable[tuple[UserTurn, Sequence[tuple[str, str]]]]]
 
 
 class AgentRun:
@@ -37,7 +38,10 @@ class AgentRun:
         self, turn: UserTurn, prepare: Prepare | None, cancel: asyncio.Event
     ) -> AsyncIterator[AgentEvent]:
         # Plugin hooks run in the run's task, so a slow one never holds up the room.
-        for plugin, text in await prepare(turn) if prepare is not None else ():
+        notes: Sequence[tuple[str, str]] = ()
+        if prepare is not None:
+            turn, notes = await prepare(turn)
+        for plugin, text in notes:
             if self._loop.add_context(NotesTurn(source=f"{PLUGIN_SOURCE}{plugin}", text=text)):
                 yield ContextNote(plugin, text)
         async for event in self._loop.run(turn, cancel=cancel):
@@ -55,6 +59,10 @@ class AgentRun:
 
     def take_spending(self) -> tuple[Spend, ...]:
         return self._loop.take_spending()
+
+    def take_spans(self) -> tuple[Span, ...]:
+        """The spans the run opened or changed since they were last taken."""
+        return self._loop.tracer.take()
 
     def _launch(
         self, run_id: str, events: Callable[[asyncio.Event], AsyncIterator[AgentEvent]]

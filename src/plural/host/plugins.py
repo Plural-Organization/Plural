@@ -4,18 +4,26 @@ import inspect
 import json
 import keyword
 import re
+import shutil
 import sys
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from itertools import count
 from pathlib import Path
 from types import ModuleType
-from typing import Final, Literal
+from typing import Final, Literal, Protocol, cast
 
 import structlog
 from pydantic import JsonValue
 
-from plural.agent.providers.base import ToolSchema
+from plural.agent.context.compaction import serialize
+from plural.agent.loop.events import AgentEvent, Compacted, MessageEnd, ToolEnd, ToolStart
+from plural.agent.loop.messages import Message
+from plural.agent.mcp import McpError, McpHub, ServerSpec
+from plural.agent.prompts import tag
+from plural.agent.providers.base import LlmRequest, ToolCallRequest, ToolSchema
+from plural.agent.providers.catalog import PRESETS
+from plural.agent.providers.preset import Preset
 from plural.agent.tools.base import PreparedCall, Tool, ToolCtx, ToolResult
 from plural.agent.tools.registry import Exposure
 from plural.host.inbox import (
@@ -60,6 +68,33 @@ BUILT_IN: Final = frozenset(
         "who",
     }
 )
+SHORTCUT: Final = re.compile(r"^(ctrl\+[a-z]|f([5-9]|1[0-2]))$")
+# Keys the terminal client keeps for itself.
+TAKEN_SHORTCUTS: Final = frozenset(
+    {
+        "ctrl+a",
+        "ctrl+b",
+        "ctrl+c",
+        "ctrl+d",
+        "ctrl+e",
+        "ctrl+f",
+        "ctrl+h",
+        "ctrl+i",
+        "ctrl+j",
+        "ctrl+k",
+        "ctrl+l",
+        "ctrl+m",
+        "ctrl+n",
+        "ctrl+o",
+        "ctrl+p",
+        "ctrl+u",
+        "ctrl+v",
+        "ctrl+w",
+        "ctrl+y",
+        "ctrl+z",
+    }
+)
+PROVIDER_ID: Final = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 TOOL_NAME: Final = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 RISKS: Final = {"read": ToolRisk.READ, "write": ToolRisk.WRITE, "exec": ToolRisk.EXEC}
 RUN_TIMEOUT_S: Final = 120.0
@@ -69,7 +104,28 @@ HOOK_TIMEOUT_S: Final = 120.0
 MAX_OPTIONS: Final = 20
 MAX_STORE_BYTES: Final = 1_000_000
 MAX_CONTEXT_CHARS: Final = 8000
-HOOK_EVENTS: Final = frozenset({"session_start", "before_run", "tool_call", "run_end"})
+# What all plugins together may add to the system prompt.
+MAX_INSTRUCTIONS_CHARS: Final = 4000
+# What a tool_result hook may hand the model in place of a result.
+MAX_RESULT_CHARS: Final = 200_000
+# Events a plugin can watch as the agent works, delivered in order in the background.
+LIVE_EVENTS: Final = ("message_end", "tool_start", "tool_end", "compaction")
+# Live events waiting for plugins; past this, new ones are dropped.
+MAX_LIVE_QUEUE: Final = 1000
+HOOK_EVENTS: Final = frozenset(
+    {
+        "session_start",
+        "input",
+        "before_run",
+        "context",
+        "tool_args",
+        "tool_call",
+        "tool_result",
+        "summary",
+        "run_end",
+        *LIVE_EVENTS,
+    }
+)
 MAX_OUTPUT_CHARS: Final = 64_000
 
 TEMPLATE: Final = '''\
@@ -173,6 +229,8 @@ class CommandContext:
         workspace: Path,
         inbox: Inbox,
         asker: Asker = _no_model,
+        switcher: "Switcher | None" = None,
+        sessions: "Sessions | None" = None,
     ) -> None:
         self.command = command
         self.args = args
@@ -182,9 +240,43 @@ class CommandContext:
         self.workspace = workspace
         self._inbox = inbox
         self._asker = asker
+        self._switcher = switcher
+        self._sessions = sessions
 
     async def reply(self, text: str) -> None:
         self._inbox.put(PluginReply(self.command, self.author_id, text))
+
+    async def fork(
+        self,
+        title: str | None = None,
+        *,
+        before_prompt_id: str | None = None,
+        switch: bool = False,
+    ) -> str:
+        """Copy this session into a new one and return its id; with `switch`, the host's
+        client goes on in it at once. Only a command the host ran may."""
+        return await self._host_sessions().fork(title, before_prompt_id, switch)
+
+    async def switch(self, room: str) -> None:
+        """Have the host's client leave this session for another one the host keeps."""
+        await self._host_sessions().open(room)
+
+    def _host_sessions(self) -> "Sessions":
+        if self.role is not Role.HOST:
+            raise PluginError("only the host can fork or switch sessions")
+        if self._sessions is None:
+            raise PluginError("this host cannot fork or switch sessions")
+        return self._sessions
+
+    async def set_model(self, model: str, *, provider: str | None = None) -> str:
+        """Switch the agent's model, and its provider when one is named, as the host would in
+        settings. Only a command the host ran may, and not while the agent works. Returns the
+        new model's label."""
+        if self.role is not Role.HOST:
+            raise PluginError("only the host can switch the model")
+        if self._switcher is None:
+            raise PluginError("this host cannot switch models from a plugin")
+        return await self._switcher(model, provider)
 
     async def prompt(
         self, text: str, *, follow_up: bool = False, display: str | None = None
@@ -371,8 +463,116 @@ class ToolCall:
     role: str
 
 
+@dataclass(frozen=True, slots=True)
+class ToolArgs:
+    """The tool call a tool_args hook sees, before its arguments are checked."""
+
+    name: str
+    args: Mapping[str, JsonValue]
+    author_id: str
+    role: str
+
+
+@dataclass(frozen=True, slots=True)
+class ToolOutcome:
+    """A finished tool call, as a tool_result hook sees it before the model does."""
+
+    name: str
+    risk: str
+    subject: str
+    args: Mapping[str, JsonValue]
+    content: str
+    is_error: bool
+    author_id: str
+    role: str
+
+
+@dataclass(slots=True)
+class ContextMessage:
+    """One message the model is about to be sent. A context hook may change its `content`."""
+
+    role: str
+    content: str
+    # For a tool result: the tool that gave it.
+    tool: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ModelContext:
+    """What a context hook sees before a model call: the system prompt, to read, and the
+    messages, whose content it may change. Messages cannot be added or removed."""
+
+    system: str
+    messages: tuple[ContextMessage, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class MessageInfo:
+    """A message_end event: a reply of the agent, whole."""
+
+    run_id: str
+    message_id: str
+    text: str
+    thinking: str
+
+
+@dataclass(frozen=True, slots=True)
+class ToolStartInfo:
+    """A tool_start event: a call the agent made, before it is approved and run."""
+
+    run_id: str
+    call_id: str
+    name: str
+    risk: str
+    subject: str
+    args: Mapping[str, JsonValue]
+
+
+@dataclass(frozen=True, slots=True)
+class ToolEndInfo:
+    """A tool_end event: what a call gave back, as the model got it."""
+
+    run_id: str
+    call_id: str
+    name: str
+    content: str
+    is_error: bool
+
+
+@dataclass(frozen=True, slots=True)
+class CompactionInfo:
+    """A compaction event: the conversation was summarized to make room."""
+
+    run_id: str
+    summary: str
+    tokens_before: int
+
+
+@dataclass(frozen=True, slots=True)
+class SummaryInfo:
+    """What a summary hook gets when the conversation is compacted."""
+
+    # The part being summarized, as text: who said what, which tools ran and what they gave.
+    conversation: str
+    # The summary the last compaction left, or None.
+    previous: str | None
+    messages: int
+
+
+class Sessions(Protocol):
+    """Forking the session a command runs in, and opening another one."""
+
+    async def fork(self, title: str | None, before_prompt_id: str | None, switch: bool) -> str: ...
+
+    async def open(self, room: str) -> None: ...
+
+
+# Switches the agent's model: the model, and a provider preset or None for the current one.
+Switcher = Callable[[str, str | None], Awaitable[str]]
 Handler = Callable[[CommandContext], Awaitable[None]]
 ToolHandler = Callable[[dict[str, JsonValue], ToolContext], Awaitable[object]]
+# A tool's own words for a call, from its arguments: "PLR-123" rather than {"key": "PLR-123"}.
+Subject = Callable[[dict[str, JsonValue]], object]
 HookHandler = Callable[[object, HookContext], Awaitable[object]]
 
 
@@ -397,8 +597,10 @@ class PluginTool:
         exposure: Exposure,
         handler: ToolHandler,
         workspace: Path,
+        subject: "Subject | None" = None,
     ) -> None:
         self.name = name
+        self._subject = subject
         self.plugin = plugin
         self.risk = risk
         self.exposure = exposure
@@ -416,9 +618,22 @@ class PluginTool:
         return PreparedCall(
             name=self.name,
             risk=self.risk,
-            subject=json.dumps(args, ensure_ascii=False, sort_keys=True)[:500],
+            subject=self._describe_call(args),
             execute=lambda ctx: self._call(args, ctx),
         )
+
+    def _describe_call(self, args: dict[str, JsonValue]) -> str:
+        """How the call reads in the room and to the policy: the plugin's words for it, or its
+        arguments as JSON."""
+        if self._subject is not None:
+            try:
+                text = self._subject(args)
+            except Exception as error:
+                log.warning("plugins.subject_failed", tool=self.name, error=str(error))
+            else:
+                if isinstance(text, str) and text.strip():
+                    return " ".join(text.split())[:200]
+        return json.dumps(args, ensure_ascii=False, sort_keys=True)[:500]
 
     async def _call(self, args: dict[str, JsonValue], ctx: ToolCtx) -> ToolResult:
         required = self._parameters.get("required")
@@ -440,6 +655,91 @@ class PluginTool:
         return ToolResult(text[:MAX_OUTPUT_CHARS])
 
 
+# The built-in tools a plugin may run its own way.
+REPLACEABLE: Final = frozenset(
+    {"read", "write", "edit", "multi_edit", "bash", "grep", "glob", "ls", "web_fetch"}
+)
+
+
+class OverrideContext(ToolContext):
+    """What a plugin that runs a built-in tool its own way gets: `original()` runs the built-in."""
+
+    def __init__(
+        self,
+        *,
+        tool: str,
+        workspace: Path,
+        emit: Callable[[str], None],
+        original: Callable[[], Awaitable[ToolResult]],
+    ) -> None:
+        super().__init__(tool=tool, workspace=workspace, emit=emit)
+        self._original = original
+
+    async def original(self) -> str:
+        """Run the built-in tool with the call's arguments and return its result. A failure of
+        the built-in raises, so a plugin can tell it from an empty result."""
+        result = await self._original()
+        if result.is_error:
+            raise PluginError(result.content)
+        return result.content
+
+
+class OverrideTool:
+    """A built-in tool that a plugin runs its own way. The model, the policy and the room see the
+    built-in: its schema, risk, subject and folder checks. Only how the call runs changes."""
+
+    replaces = True
+    exposure = Exposure.CORE
+
+    def __init__(self, *, name: str, plugin: str, handler: ToolHandler, workspace: Path) -> None:
+        self.name = name
+        self.plugin = plugin
+        self._handler = handler
+        self._workspace = workspace
+        self.original: Tool | None = None
+
+    def _builtin(self) -> Tool:
+        if self.original is None:
+            raise PluginError(f"there is no built-in tool {self.name} to replace")
+        return self.original
+
+    def schema(self) -> ToolSchema:
+        return self._builtin().schema()
+
+    def prepare(self, raw: Mapping[str, JsonValue]) -> PreparedCall:
+        prepared = self._builtin().prepare(raw)
+        args = dict(raw)
+
+        def execute(ctx: ToolCtx) -> Awaitable[ToolResult]:
+            return self._call(args, ctx, prepared)
+
+        return replace(prepared, execute=execute)
+
+    async def _call(
+        self, args: dict[str, JsonValue], ctx: ToolCtx, prepared: PreparedCall
+    ) -> ToolResult:
+        context = OverrideContext(
+            tool=self.name,
+            workspace=self._workspace,
+            emit=ctx.emit,
+            original=lambda: prepared.execute(ctx),
+        )
+        try:
+            output = await self._handler(args, context)
+        except Exception as error:
+            log.warning("plugins.tool_failed", tool=self.name, error=str(error))
+            return ToolResult(f"{self.name} failed: {_describe(error)}", is_error=True)
+        if output is None:
+            # Nothing back: the built-in runs as usual.
+            return await prepared.execute(ctx)
+        text = (
+            output
+            if isinstance(output, str)
+            else json.dumps(output, ensure_ascii=False, default=str)
+        )
+        return ToolResult(text[:MAX_OUTPUT_CHARS])
+
+
 class PluginToolSource:
     """The loaded plugin tools of one exposure, as a registry source."""
 
@@ -448,7 +748,10 @@ class PluginToolSource:
         self._exposure = exposure
 
     def tools(self) -> Iterable[Tool]:
-        return [tool for tool in self._host.tools() if tool.exposure is self._exposure]
+        tools: list[Tool] = [tool for tool in self._host.tools() if tool.exposure is self._exposure]
+        if self._exposure is Exposure.CORE:
+            tools.extend(self._host.overrides())
+        return tools
 
 
 def _parameters(spec: Mapping[str, JsonValue] | None) -> dict[str, JsonValue]:
@@ -480,12 +783,88 @@ class PluginApi:
         store: PluginStore | None = None,
     ) -> None:
         self._plugin = plugin
+        self.name = plugin
         self._workspace = workspace
         self._inbox = inbox
         self.store = store
         self.commands: list[PluginCommand] = []
         self.tools: list[PluginTool] = []
+        self.overrides: list[OverrideTool] = []
         self.hooks: list[Hook] = []
+        self.instruction = ""
+        self.hidden: frozenset[str] = frozenset()
+        self.servers: dict[str, ServerSpec] = {}
+        self.providers: list[Preset] = []
+        self.on_hide: Callable[[], None] = lambda: None
+
+    def mcp(
+        self,
+        name: str,
+        *,
+        command: str | None = None,
+        args: Sequence[str] = (),
+        env: Mapping[str, str] | None = None,
+        url: str | None = None,
+        headers: Mapping[str, str] | None = None,
+    ) -> None:
+        """Connect an MCP server for as long as the plugin is loaded: a command to launch, or a
+        URL to reach. Its tools load on demand like those of any other MCP server."""
+        if (command is None) == (url is None):
+            raise PluginError(f"MCP server {name} needs a command or a url, not both")
+        self.servers[name] = ServerSpec(
+            command=command,
+            args=list(args),
+            env=dict(env or {}),
+            url=url,
+            headers=dict(headers or {}),
+        )
+
+    def provider(
+        self,
+        id: str,
+        *,
+        base_url: str,
+        models: Sequence[str] = (),
+        label: str | None = None,
+        kind: str = "openai",
+        key_env: str | None = None,
+        hint: str = "",
+    ) -> None:
+        """Offer a model provider in the host's model settings: an OpenAI- or
+        Anthropic-compatible API at `base_url`, its key read from the variable `key_env`."""
+        if not PROVIDER_ID.match(id):
+            raise PluginError(f"invalid provider id {id!r}: use a-z, 0-9, - and _")
+        if kind not in {"openai", "anthropic"}:
+            raise PluginError(f"kind of {id} must be openai or anthropic")
+        if not base_url.startswith(("http://", "https://")):
+            raise PluginError(f"base_url of {id} must be an http(s) URL")
+        self.providers.append(
+            Preset(
+                id=id,
+                label=label or id,
+                adapter="anthropic" if kind == "anthropic" else "openai",
+                hint=hint or f"from the {self._plugin} plugin",
+                base_url=base_url,
+                needs_key=key_env is not None,
+                models=tuple(models),
+                connection="api_key" if key_env is not None else "local",
+                key_env=(key_env,) if key_env is not None else (),
+            )
+        )
+
+    def hide_tools(self, names: Iterable[str]) -> None:
+        """Keep these tools from the agent, from its next model call on, such as `write`,
+        `edit` and `bash` for a read-only mode. Calling again replaces this plugin's set; an
+        empty one shows them all again."""
+        self.hidden = frozenset(names)
+        self.on_hide()
+
+    def instructions(self, text: str) -> None:
+        """Set what this plugin tells the agent in its system prompt; an empty text removes it.
+
+        The agent reads it from the start of its next run on, so a change mid-run waits for the
+        run to end."""
+        self.instruction = text.strip()
 
     def on(self, event: str) -> Callable[[HookHandler], HookHandler]:
         if event not in HOOK_EVENTS:
@@ -516,10 +895,22 @@ class PluginApi:
         return Verdict("deny", reason, self._plugin)
 
     def command(
-        self, name: str, *, description: str = "", usage: str = "", host_only: bool = False
+        self,
+        name: str,
+        *,
+        description: str = "",
+        usage: str = "",
+        host_only: bool = False,
+        shortcut: str | None = None,
     ) -> Callable[[Handler], Handler]:
         if not NAME.match(name):
             raise PluginError(f"invalid command name {name!r}: use a-z, 0-9, - and _")
+        if shortcut is not None:
+            shortcut = shortcut.lower().replace(" ", "")
+            if not SHORTCUT.match(shortcut) or shortcut in TAKEN_SHORTCUTS:
+                raise PluginError(
+                    f"shortcut {shortcut!r} of /{name} is taken or not ctrl+<letter> or f5 to f12"
+                )
 
         def register(handler: Handler) -> Handler:
             if not inspect.iscoroutinefunction(handler):
@@ -530,8 +921,30 @@ class PluginApi:
                 description=description,
                 usage=usage or f"/{name}",
                 host_only=host_only,
+                shortcut=shortcut,
             )
             self.commands.append(PluginCommand(view, handler))
+            return handler
+
+        return register
+
+    def override(self, name: str) -> Callable[[ToolHandler], ToolHandler]:
+        """Run a built-in tool, such as bash or read, with your own function. The model, the
+        policy and the room see the built-in; `ctx.original()` runs it, and returning nothing
+        lets it run as usual."""
+        if name not in REPLACEABLE:
+            raise PluginError(
+                f"{name} cannot be replaced: use one of {', '.join(sorted(REPLACEABLE))}"
+            )
+
+        def register(handler: ToolHandler) -> ToolHandler:
+            if not inspect.iscoroutinefunction(handler):
+                raise PluginError(f"the handler replacing {name} must be an async function")
+            self.overrides.append(
+                OverrideTool(
+                    name=name, plugin=self._plugin, handler=handler, workspace=self._workspace
+                )
+            )
             return handler
 
         return register
@@ -544,6 +957,7 @@ class PluginApi:
         parameters: Mapping[str, JsonValue] | None = None,
         risk: str = "read",
         exposure: str = "deferred",
+        subject: Subject | None = None,
     ) -> Callable[[ToolHandler], ToolHandler]:
         if not TOOL_NAME.match(name) or name.startswith("mcp__"):
             raise PluginError(f"invalid tool name {name!r}: use a-z, 0-9 and _")
@@ -565,6 +979,7 @@ class PluginApi:
                 exposure=Exposure(exposure),
                 handler=handler,
                 workspace=self._workspace,
+                subject=subject,
             )
             self.tools.append(tool)
             return handler
@@ -580,29 +995,46 @@ class PluginHost:
         workspace: Path,
         inbox: Inbox | None = None,
         reserved_tools: Callable[[], Iterable[str]] = lambda: (),
+        builtin_tool: Callable[[str], Tool | None] = lambda name: None,
+        hide_tools: Callable[[frozenset[str]], None] = lambda names: None,
+        mcp: McpHub | None = None,
     ) -> None:
         self.directory = directory
         self._inbox = inbox or Inbox()
         self.workspace = workspace
         self._reserved_tools = reserved_tools
+        self._builtin_tool = builtin_tool
+        self._hide_tools = hide_tools
+        self._mcp = mcp
+        # The MCP servers plugins connected, as last applied.
+        self._servers: dict[str, ServerSpec] = {}
+        self._providers: dict[str, Preset] = {}
+        self._syncing: asyncio.Task[None] | None = None
+        # Set by whoever configures the agent's model, for plugin commands to switch it.
+        self.switch_model: Switcher | None = None
+        self._overrides: dict[str, OverrideTool] = {}
         self._views: tuple[PluginView, ...] = ()
         self._commands: dict[str, PluginCommand] = {}
         self._tools: dict[str, PluginTool] = {}
         self._hooks: tuple[Hook, ...] = ()
+        self._apis: tuple[PluginApi, ...] = ()
+        self._live: asyncio.Queue[tuple[str, object]] = asyncio.Queue(MAX_LIVE_QUEUE)
+        self._live_worker: asyncio.Task[None] | None = None
+        self._call_names: dict[str, str] = {}
         self._generation = count()
 
     def load(self) -> None:
         views: list[PluginView] = []
         commands: dict[str, PluginCommand] = {}
         tools: dict[str, PluginTool] = {}
+        overrides: dict[str, OverrideTool] = {}
+        servers: dict[str, ServerSpec] = {}
+        providers: dict[str, Preset] = {}
         hooks: list[Hook] = []
+        apis: list[PluginApi] = []
         reserved = set(self._reserved_tools())
         generation = next(self._generation)
-        paths = sorted(self.directory.glob("*.py")) if self.directory.is_dir() else []
-        for path in paths:
-            name = path.stem
-            if name.startswith("_"):
-                continue
+        for name, path in _discover(self.directory):
             try:
                 store = PluginStore(self.directory / ".data" / f"{name}.json")
                 api = PluginApi(name, workspace=self.workspace, inbox=self._inbox, store=store)
@@ -610,14 +1042,36 @@ class PluginHost:
                 if not callable(setup):
                     raise PluginError("the file defines no setup(plural) function")
                 setup(api)
+                keys = [c.view.shortcut for c in commands.values() if c.view.shortcut]
                 for command in api.commands:
                     taken = command.view.name in BUILT_IN or command.view.name in commands
                     if taken or sum(c.view.name == command.view.name for c in api.commands) > 1:
                         raise PluginError(f"/{command.view.name} is already taken")
+                    key = command.view.shortcut
+                    if key is not None:
+                        if key in keys:
+                            raise PluginError(f"shortcut {key} is already taken")
+                        keys.append(key)
                 for tool in api.tools:
                     taken = tool.name in reserved or tool.name in tools
                     if taken or sum(t.name == tool.name for t in api.tools) > 1:
                         raise PluginError(f"tool {tool.name} is already taken")
+                configured = {view.name for view in self._mcp.views()} if self._mcp else set[str]()
+                for server in api.servers:
+                    if server in servers or (server in configured and server not in self._servers):
+                        raise PluginError(f"MCP server {server} is already connected")
+                for preset in api.providers:
+                    builtin = any(p.id == preset.id for p in PRESETS)
+                    if builtin or preset.id in providers:
+                        raise PluginError(f"provider {preset.id} is already taken")
+                for override in api.overrides:
+                    if override.name in overrides or (
+                        sum(o.name == override.name for o in api.overrides) > 1
+                    ):
+                        raise PluginError(f"{override.name} is already replaced by a plugin")
+                    override.original = self._builtin_tool(override.name)
+                    if override.original is None:
+                        raise PluginError(f"there is no built-in tool {override.name} to replace")
             except Exception as error:
                 log.warning("plugins.load_failed", plugin=name, error=str(error))
                 views.append(
@@ -631,20 +1085,83 @@ class PluginHost:
                 continue
             commands.update((command.view.name, command) for command in api.commands)
             tools.update((tool.name, tool) for tool in api.tools)
+            overrides.update((override.name, override) for override in api.overrides)
+            servers.update(api.servers)
+            providers.update((preset.id, preset) for preset in api.providers)
             hooks.extend(api.hooks)
+            apis.append(api)
             views.append(
                 PluginView(
                     name=name,
                     path=str(path),
                     status=PluginStatus.LOADED,
                     commands=tuple(command.view.name for command in api.commands),
-                    tools=tuple(tool.name for tool in api.tools),
+                    tools=(*(tool.name for tool in api.tools), *(o.name for o in api.overrides)),
                 )
             )
         self._views = tuple(views)
         self._commands = commands
         self._tools = tools
+        self._overrides = overrides
+        self._providers = providers
         self._hooks = tuple(hooks)
+        self._apis = tuple(apis)
+        for api in apis:
+            api.on_hide = self._apply_hidden
+        self._apply_hidden()
+        self._apply_servers(servers)
+
+    def _apply_servers(self, servers: dict[str, ServerSpec]) -> None:
+        """Connect the servers plugins added since the last load and disconnect the ones they
+        dropped or changed. It runs in the background, after the previous change finished."""
+        mcp = self._mcp
+        if mcp is None or servers == self._servers:
+            return
+        previous, self._servers = self._servers, dict(servers)
+        waiting = self._syncing
+
+        async def sync() -> None:
+            if waiting is not None:
+                await waiting
+            for name, spec in previous.items():
+                if servers.get(name) != spec:
+                    await mcp.detach(name)
+            for name, spec in servers.items():
+                if previous.get(name) != spec:
+                    try:
+                        mcp.attach(name, spec)
+                    except McpError as error:
+                        log.warning("plugins.mcp_failed", server=name, error=str(error))
+
+        self._syncing = asyncio.get_running_loop().create_task(sync(), name="plugins-mcp")
+
+    async def servers_ready(self) -> None:
+        """Wait until the last change to the plugins' MCP servers is applied."""
+        if self._syncing is not None:
+            await self._syncing
+
+    def providers(self) -> tuple[Preset, ...]:
+        """The model providers the loaded plugins offer, as presets of the model settings."""
+        return tuple(self._providers.values())
+
+    def hidden_tools(self) -> frozenset[str]:
+        """The tools the loaded plugins keep from the agent."""
+        return frozenset[str]().union(*(api.hidden for api in self._apis))
+
+    def _apply_hidden(self) -> None:
+        self._hide_tools(self.hidden_tools())
+
+    def describe(self) -> str | None:
+        """The plugins' instructions for the system prompt, 4,000 characters at most in all."""
+        room = MAX_INSTRUCTIONS_CHARS
+        parts: list[str] = []
+        for api in self._apis:
+            if not api.instruction or room <= 0:
+                continue
+            text = api.instruction[:room]
+            room -= len(text)
+            parts.append(tag("plugin", text, name=api.name))
+        return "\n".join(parts) or None
 
     def views(self) -> tuple[PluginView, ...]:
         return self._views
@@ -658,6 +1175,10 @@ class PluginHost:
     def tools(self) -> tuple[PluginTool, ...]:
         return tuple(self._tools.values())
 
+    def overrides(self) -> tuple[OverrideTool, ...]:
+        """The built-in tools plugins run their own way."""
+        return tuple(self._overrides.values())
+
     def tools_source(self, exposure: Exposure) -> PluginToolSource:
         return PluginToolSource(self, exposure)
 
@@ -668,6 +1189,22 @@ class PluginHost:
         return HookContext(
             plugin=plugin, workspace=self.workspace, inbox=self._inbox, can_prompt=can_prompt
         )
+
+    async def rewrite_input(self, prompt: PromptInfo) -> str:
+        """The prompt's text after each input hook had its turn to rewrite it."""
+        text = prompt.text
+        for hook in self.hooks("input"):
+            seen = replace(prompt, text=text)
+            try:
+                answer = await asyncio.wait_for(
+                    hook.handler(seen, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                )
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                continue
+            if isinstance(answer, str) and answer.strip():
+                text = answer[:MAX_RESULT_CHARS]
+        return text
 
     async def before_run(self, prompt: PromptInfo) -> list[tuple[str, str]]:
         """Collect what before_run hooks add for the agent, 8,000 characters at most in all."""
@@ -708,6 +1245,180 @@ class PluginHost:
                 )
                 text = f"the {event} hook failed: {problem}"
                 self._inbox.put(PluginReply(hook.plugin, HOST_PARTICIPANT_ID, text, ok=False))
+
+    async def tool_args(self, call: ToolCallRequest, provenance: Provenance) -> ToolCallRequest:
+        """Let each tool_args hook replace the call's arguments, in turn. The call then goes
+        through validation, tool_call hooks and the policy like any other, so a hook cannot
+        make a call more permitted than its new arguments are."""
+        args: dict[str, JsonValue] = dict(call.args)
+        for hook in self.hooks("tool_args"):
+            seen = ToolArgs(
+                name=call.name,
+                args=dict(args),
+                author_id=provenance.initiator_id,
+                role=provenance.initiator_role.value,
+            )
+            try:
+                answer = await asyncio.wait_for(
+                    hook.handler(seen, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                )
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                continue
+            if answer is None:
+                continue
+            if not isinstance(answer, Mapping):
+                log.warning("plugins.bad_args", plugin=hook.plugin, kind=type(answer).__name__)
+                continue
+            try:
+                args = json.loads(json.dumps(dict(cast("Mapping[str, JsonValue]", answer))))
+            except (TypeError, ValueError) as error:
+                log.warning("plugins.bad_args", plugin=hook.plugin, error=str(error))
+        return call if args == call.args else call.model_copy(update={"args": args})
+
+    async def tool_result(
+        self, call: ToolCallView, result: ToolResult, provenance: Provenance
+    ) -> ToolResult:
+        """Let each tool_result hook replace what the model gets back from a call, in turn."""
+        content = result.content
+        for hook in self.hooks("tool_result"):
+            seen = ToolOutcome(
+                name=call.name,
+                risk=call.risk.value,
+                subject=call.subject,
+                args=call.args,
+                content=content,
+                is_error=result.is_error,
+                author_id=provenance.initiator_id,
+                role=provenance.initiator_role.value,
+            )
+            try:
+                answer = await asyncio.wait_for(
+                    hook.handler(seen, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                )
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                continue
+            if isinstance(answer, str):
+                content = answer[:MAX_RESULT_CHARS]
+        if content == result.content:
+            return result
+        return replace(result, content=content)
+
+    async def request(self, request: LlmRequest) -> LlmRequest:
+        """Let each context hook change the text of the messages a model call is sent."""
+        hooks = self.hooks("context")
+        if not hooks:
+            return request
+        names = {call.id: call.name for m in request.messages for call in m.tool_calls}
+        seen = ModelContext(
+            system=request.system,
+            messages=tuple(
+                ContextMessage(
+                    role=m.role,
+                    content=m.content,
+                    tool=names.get(m.tool_call_id or "") if m.role == "tool" else None,
+                )
+                for m in request.messages
+            ),
+        )
+        for hook in hooks:
+            before = [m.content for m in seen.messages]
+            try:
+                await asyncio.wait_for(
+                    hook.handler(seen, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                )
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                for message, content in zip(seen.messages, before, strict=True):
+                    message.content = content
+                continue
+            # Plugin code is not type-checked: text that is not a string is put back.
+            for message, content in zip(seen.messages, before, strict=True):
+                changed = cast(object, message.content)
+                if not isinstance(changed, str):
+                    message.content = content
+        messages = tuple(
+            original
+            if view.content == original.content
+            else original.model_copy(update={"content": view.content[:MAX_RESULT_CHARS]})
+            for original, view in zip(request.messages, seen.messages, strict=True)
+        )
+        if messages == request.messages:
+            return request
+        return request.model_copy(update={"messages": messages})
+
+    def observe(self, run_id: str, event: AgentEvent) -> None:
+        """Hand an event of the agent's run to the plugins that watch it. They get it in the
+        background, in order, so a slow plugin never holds up the room or the agent."""
+        match event:
+            case ToolStart(call=call):
+                self._call_names[call.id] = call.name
+                info: tuple[str, object] | None = (
+                    "tool_start",
+                    ToolStartInfo(
+                        run_id, call.id, call.name, call.risk.value, call.subject, call.args
+                    ),
+                )
+            case ToolEnd(call_id=call_id, result=result):
+                name = self._call_names.pop(call_id, "")
+                info = (
+                    "tool_end",
+                    ToolEndInfo(run_id, call_id, name, result.content, result.is_error),
+                )
+            case MessageEnd(message_id=message_id, text=text, thinking=thinking):
+                info = ("message_end", MessageInfo(run_id, message_id, text, thinking))
+            case Compacted(summary=summary, tokens_before=tokens_before):
+                info = ("compaction", CompactionInfo(run_id, summary, tokens_before))
+            case _:
+                info = None
+        if info is None or not self.hooks(info[0]):
+            return
+        try:
+            self._live.put_nowait(info)
+        except asyncio.QueueFull:
+            log.warning("plugins.live_dropped", event=info[0])
+            return
+        if self._live_worker is None or self._live_worker.done():
+            self._live_worker = asyncio.create_task(self._deliver(), name="plugins-live")
+
+    async def _deliver(self) -> None:
+        while True:
+            event, info = await self._live.get()
+            try:
+                for hook in self.hooks(event):
+                    try:
+                        await asyncio.wait_for(
+                            hook.handler(info, self._context(hook.plugin)), GUARD_TIMEOUT_S
+                        )
+                    except Exception as error:
+                        log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+            finally:
+                self._live.task_done()
+
+    async def drained(self) -> None:
+        """Wait until every live event handed over so far has gone to the plugins."""
+        await self._live.join()
+
+    async def summary(self, history: Sequence[Message], previous: str | None) -> str | None:
+        """The first summary a summary hook writes for a compaction, or None for the model's."""
+        hooks = self.hooks("summary")
+        if not hooks:
+            return None
+        seen = SummaryInfo(
+            conversation=serialize(history), previous=previous, messages=len(history)
+        )
+        for hook in hooks:
+            try:
+                answer = await asyncio.wait_for(
+                    hook.handler(seen, self._context(hook.plugin)), HOOK_TIMEOUT_S
+                )
+            except Exception as error:
+                log.warning("plugins.hook_failed", plugin=hook.plugin, error=str(error))
+                continue
+            if isinstance(answer, str) and answer.strip():
+                return answer.strip()[:MAX_RESULT_CHARS]
+        return None
 
     async def guard_tool(self, call: ToolCallView, provenance: Provenance) -> Verdict | None:
         """Ask every tool_call hook about a call. Any deny wins; a hook that fails counts as ask."""
@@ -755,14 +1466,47 @@ class PluginHost:
 
     def remove(self, name: str) -> Path:
         path = self.directory / f"{name}.py"
-        if not NAME.match(name) or not path.is_file():
-            raise PluginError(f"no plugin named {name}")
-        path.unlink()
-        return path
+        folder = self.directory / name
+        if NAME.match(name) and path.is_file():
+            path.unlink()
+            return path
+        if NAME.match(name) and (folder / PACKAGE_ENTRY).is_file():
+            shutil.rmtree(folder)
+            return folder
+        raise PluginError(f"no plugin named {name}")
+
+
+# The file a plugin folder starts from, and where its own dependencies are installed.
+PACKAGE_ENTRY: Final = "plugin.py"
+PACKAGE_DEPS: Final = ".deps"
+
+
+def _discover(directory: Path) -> list[tuple[str, Path]]:
+    """The plugins in the folder: each `name.py`, and each `name/` folder with a plugin.py."""
+    if not directory.is_dir():
+        return []
+    found: dict[str, Path] = {}
+    for path in sorted(directory.iterdir()):
+        if path.name.startswith(("_", ".")):
+            continue
+        if path.is_file() and path.suffix == ".py":
+            found.setdefault(path.stem, path)
+        elif path.is_dir() and (path / PACKAGE_ENTRY).is_file():
+            found.setdefault(path.name, path / PACKAGE_ENTRY)
+    return sorted(found.items())
 
 
 def _import(path: Path, module_name: str) -> ModuleType:
-    spec = importlib.util.spec_from_file_location(module_name, path)
+    package = path.name == PACKAGE_ENTRY
+    if package:
+        # A plugin folder is a package: its plugin.py imports its other modules relatively,
+        # and what its .deps folder holds is importable.
+        deps = path.parent / PACKAGE_DEPS
+        if deps.is_dir() and str(deps) not in sys.path:
+            sys.path.append(str(deps))
+    spec = importlib.util.spec_from_file_location(
+        module_name, path, submodule_search_locations=[str(path.parent)] if package else None
+    )
     if spec is None or spec.loader is None:
         raise PluginError(f"cannot import {path}")
     module = importlib.util.module_from_spec(spec)

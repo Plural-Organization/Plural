@@ -271,10 +271,34 @@ async function printOnce(options: SessionOptions, name: string): Promise<void> {
   process.exit(code);
 }
 
+/** Run a session, and the next one each time the person switches: a fork or /resume. */
 async function run(options: SessionOptions, joinLink: string | null, name: string, hosting: TeamHosting | null = null): Promise<void> {
+  let next = await runOne(options, joinLink, name, hosting);
+  while (next !== null) {
+    const hostArgs = withoutFlags(options.hostArgs, ["--room", "--title", "--import"]);
+    next = await runOne({ ...options, hostArgs, prompt: null, resume: { kind: "id", value: next } }, null, name, null);
+  }
+  process.exit(0);
+}
+
+/** `args` without each of these flags and the value it takes. */
+function withoutFlags(args: string[], flags: string[]): string[] {
+  const kept: string[] = [];
+  for (let index = 0; index < args.length; index += 1) {
+    if (flags.includes(args[index] as string)) {
+      index += 1;
+    } else {
+      kept.push(args[index] as string);
+    }
+  }
+  return kept;
+}
+
+/** One session, until the person quits (null) or switches to another session (its id). */
+async function runOne(options: SessionOptions, joinLink: string | null, name: string, hosting: TeamHosting | null): Promise<string | null> {
   if (options.print) {
     await printOnce(options, name);
-    return;
+    return null;
   }
   const left = hosting === null ? await leaveClosedTunnel() : null;
   if (left !== null) {
@@ -387,6 +411,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
       throw error;
     }
   };
+  let switchTo: string | null = null;
   const quit = new Promise<void>((resolve) => {
     createRoot(renderer).render(
       <Shell
@@ -432,6 +457,13 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
           onQuit: () => {
             resolve();
           },
+          onSwitch:
+            host === null
+              ? undefined
+              : (room: string) => {
+                  switchTo = room;
+                  resolve();
+                },
         }}
       />,
     );
@@ -445,7 +477,7 @@ async function run(options: SessionOptions, joinLink: string | null, name: strin
   await tunnel?.stop();
   await hosting?.stop();
   await Promise.all(shared.map((handle) => handle.stop()));
-  process.exit(0);
+  return switchTo;
 }
 
 function teamMemberName(): string {

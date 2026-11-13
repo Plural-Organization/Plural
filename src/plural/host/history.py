@@ -1,6 +1,6 @@
 from collections.abc import Iterable, Mapping
 
-from plural.agent.messages import (
+from plural.agent.loop.messages import (
     PLUGIN_SOURCE,
     AssistantTurn,
     Message,

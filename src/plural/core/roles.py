@@ -53,10 +53,12 @@ from plural.protocol.commands import (
     QueueCancel,
     RunAbort,
     SelectionSet,
+    SessionFork,
     SessionHello,
     SkillsInstall,
     SkillsRemove,
     SkillsSearch,
+    TraceGet,
     TypingSet,
 )
 from plural.protocol.models import Model, Role
@@ -77,6 +79,7 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         ApprovalRespond: HOST_ONLY,
         RunAbort: HOST_ONLY,
         ContextCompact: HOST_ONLY,
+        SessionFork: HOST_ONLY,
         InviteCreate: HOST_ONLY,
         ImportLink: HOST_ONLY,
         JoinDecide: HOST_ONLY,
@@ -95,6 +98,7 @@ PERMISSIONS: Final[Mapping[type[Model], frozenset[Role]]] = MappingProxyType(
         PromptModeSet: HOST_ONLY,
         PermissionModeSet: HOST_ONLY,
         SkillsSearch: CONTRIBUTORS,
+        TraceGet: EVERYONE,
         SkillsInstall: HOST_ONLY,
         SkillsRemove: HOST_ONLY,
         McpAdd: HOST_ONLY,

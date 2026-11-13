@@ -1,7 +1,7 @@
 import asyncio
 from dataclasses import dataclass
 
-from plural.agent.events import AgentEvent
+from plural.agent.loop.events import AgentEvent
 from plural.agent.providers.base import LLMProvider
 from plural.host.transport.base import Connection
 from plural.protocol.commands import BoardDraw, BoardErase, BoardMove, BoardOpen, BriefingImport

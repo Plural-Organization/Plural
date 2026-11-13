@@ -2,7 +2,6 @@ from pathlib import Path
 
 from pydantic import JsonValue
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.agent.tools.extra.board import AGENT_AUTHOR, describe
 from plural.protocol.commands import BoardDraw, PromptSubmit
 from plural.protocol.events import (
@@ -14,6 +13,7 @@ from plural.protocol.events import (
     ToolEnded,
 )
 from plural.protocol.models import BoardShape, BoardStroke, BoardView
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import running_session
 
 BOX: dict[str, JsonValue] = {"kind": "rect", "points": [0.1, 0.1, 0.4, 0.3], "color": "#9fd8ff"}

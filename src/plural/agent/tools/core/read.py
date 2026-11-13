@@ -51,4 +51,14 @@ class ReadTool(TypedTool[ReadArgs]):
 def _numbered(lines: list[str], args: ReadArgs) -> ToolResult:
     window = lines[args.offset : args.offset + args.limit]
     numbered = "\n".join(f"{args.offset + i + 1:>6}  {line}" for i, line in enumerate(window))
-    return ToolResult(truncate_head(numbered) or "(empty file)")
+    shown = truncate_head(numbered)
+    end = args.offset + len(window)
+    if end < len(lines):
+        # A model that is not told the file goes on takes what it saw for all of it.
+        shown += (
+            f"\n[lines {args.offset + 1}-{end} of {len(lines)}; "
+            f"read on with offset={end}, or search the file with grep]"
+        )
+    elif not window and lines:
+        shown = f"(offset {args.offset} is past the end: the file has {len(lines)} lines)"
+    return ToolResult(shown or "(empty file)")

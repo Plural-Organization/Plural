@@ -25,6 +25,7 @@ const PART_LABELS: Record<ContextPartKind, string> = {
   project_notes: "AGENTS.md",
   skills: "skills",
   agents: "sub-agents",
+  plugins: "plugins",
   tools: "tool definitions",
   messages: "messages",
   tool_results: "tool results",

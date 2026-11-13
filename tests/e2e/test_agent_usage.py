@@ -3,12 +3,12 @@ from pathlib import Path
 import pytest
 
 from plural.agent.providers.base import LlmEvent, Stop, ToolCallReady, ToolCallRequest, UsageReport
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import AgentsCreate, AgentsRemove, PromptSubmit
 from plural.protocol.envelope import ErrorCode
 from plural.protocol.events import AgentsChanged, RunEnded, UsageRecorded
 from plural.protocol.models import Usage
+from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import running_session
 
 

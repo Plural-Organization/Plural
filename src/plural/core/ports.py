@@ -1,7 +1,9 @@
+from collections.abc import Sequence
 from datetime import datetime
 from typing import Protocol
 
 from plural.protocol.events import Event, EventRecord
+from plural.protocol.models import Span
 
 
 class EventStore(Protocol):
@@ -18,6 +20,12 @@ class EventStore(Protocol):
     async def meta(self, key: str) -> str | None: ...
 
     async def set_meta(self, key: str, value: str) -> None: ...
+
+    async def save_spans(self, spans: Sequence[Span]) -> None: ...
+
+    async def read_spans(self, run_id: str | None = None, *, limit: int = 5000) -> list[Span]: ...
+
+    async def trace_runs(self, *, limit: int = 30) -> list[Span]: ...
 
 
 class Clock(Protocol):

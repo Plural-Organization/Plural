@@ -25,7 +25,8 @@ import {
   type PluginAsked,
   type Session,
 } from "@plural/client";
-import { COMMANDS, pluginHints, skillHints, type AskTarget } from "./commands";
+import { COMMANDS, pluginHints, shortcutCommand, skillHints, type AskTarget } from "./commands";
+import { listSessions, resolveSession } from "./sessions";
 import { parseAsk } from "./lib/ask";
 import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
@@ -48,7 +49,7 @@ import { InviteDialog } from "./components/InviteDialog";
 import { LeaveDialog } from "./components/LeaveDialog";
 import { ShareDialog } from "./components/ShareDialog";
 import { candidateFolders } from "./folders";
-import { contextRows, helpRows, pluginRows, policyRows, skillRows, usageRows, whoRows } from "./trays";
+import { callGraphRows, contextRows, helpRows, pluginRows, policyRows, skillRows, traceRows, usageRows, whoRows } from "./trays";
 import type { Alerts } from "./alerts";
 import type { UpdateState, Updater } from "./update";
 import { describeConflict, type SpaceRow, type Summary } from "./spaces";
@@ -104,6 +105,8 @@ export interface AppProps {
   conflicts?: Conflict[];
   splash?: boolean;
   onQuit: () => void;
+  /** Leave this session for another one this client hosts: a fork, or one /resume found. */
+  onSwitch?: (room: string) => void;
 }
 
 type Focus = "composer" | "inbox" | "search";
@@ -160,6 +163,7 @@ export function App({
   conflicts = [],
   splash = false,
   onQuit,
+  onSwitch,
 }: AppProps) {
   const renderer = useRenderer();
   const [settings, setSettings] = useState<Settings>(initialSettings ?? DEFAULT_SETTINGS);
@@ -186,6 +190,9 @@ export function App({
       return next;
     });
   const { width, height } = useTerminalDimensions();
+  // The room a trace has in the tray, read when one arrives: beside the side panel when it shows.
+  const traceWidth = useRef(width);
+  traceWidth.current = width - (settings.panel && width >= MIN_WIDTH_FOR_PANEL ? SIDEBAR_WIDTH : 0) - 10;
   const initial = useMemo(() => withBanner(emptyFeed(), { kind: "banner", id: "banner", room, version, guestLink, teamLink }), []);
   const [feed, setFeed] = useState<Feed>(initial);
   const feedRef = useRef(initial);
@@ -316,6 +323,17 @@ export function App({
               sound.ring();
             }
           }
+          if (event.type === "session.switch" && client.projection.me?.role === "host" && onSwitch) {
+            onSwitch(event.room);
+          }
+          if (event.type === "session.forked" && client.projection.me?.role === "host") {
+            if ((switchToFork.current || event.switch) && onSwitch) {
+              switchToFork.current = false;
+              onSwitch(event.room);
+            } else {
+              showToast(`forked into “${event.title}”`, `/resume ${event.room} opens it`, "accent", "⑂");
+            }
+          }
           if (event.type === "invite.created") {
             if (event.reusable) {
               copy(
@@ -340,6 +358,11 @@ export function App({
               tone: "accent",
               rows: event.text.split("\n").map((line): Row => [line]),
             });
+          }
+          if (event.type === "trace.found") {
+            const shown =
+              event.run_id === null ? callGraphRows(client.projection, event.spans) : traceRows(client.projection, event.spans, traceWidth.current);
+            setTray({ kind: "text", title: shown.title, tone: "accent", rows: shown.rows });
           }
           if (event.type === "skills.found") {
             const host = client.projection.me?.role === "host";
@@ -1111,6 +1134,8 @@ export function App({
     }
   };
 
+  const switchToFork = useRef(false);
+
   const local = (text: string): boolean => {
     const [name = "", ...rest] = text.slice(1).split(/\s+/);
     switch (name) {
@@ -1250,6 +1275,26 @@ export function App({
       }
       case "quit":
         onQuit();
+        return true;
+      case "fork":
+        if (!isHost) {
+          warn("fork", "only the host can fork the session");
+        } else {
+          // Hosting it here: go on in the fork. Otherwise the fork is only kept.
+          switchToFork.current = onSwitch !== undefined;
+          send({ type: "session.fork", title: rest.join(" ").trim() || null, before_prompt_id: null });
+        }
+        return true;
+      case "resume":
+        if (onSwitch === undefined) {
+          warn("resume", "this client does not host the session: quit and run plural -r");
+        } else if (rest.length === 0) {
+          warn("resume", "usage: /resume <id or title>, plural -r lists them");
+        } else {
+          void listSessions()
+            .then((sessions) => onSwitch(resolveSession({ kind: "id", value: rest.join(" ") }, sessions, process.cwd()).room))
+            .catch((error: unknown) => warn("resume", error instanceof Error ? error.message : String(error)));
+        }
         return true;
       default:
         return false;
@@ -1420,6 +1465,12 @@ export function App({
     if (key.ctrl && key.name === "b") {
       key.preventDefault();
       change({ ...settings, panel: !settings.panel });
+      return;
+    }
+    const bound = me?.role === "viewer" ? undefined : shortcutCommand(state.commands, key, me?.role);
+    if (bound) {
+      key.preventDefault();
+      send({ type: "command.run", name: bound.name, args: "" });
       return;
     }
     if (key.name === "pageup" || key.name === "pagedown") {

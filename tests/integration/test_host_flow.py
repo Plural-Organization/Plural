@@ -6,8 +6,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+from tests.doubles import FakeProvider, reply, use_tool
 
-from plural.agent.providers.fake import FakeProvider, reply, use_tool
 from plural.host.bootstrap import Host, build_host
 from plural.host.config import HostSettings
 from plural.host.inbox import Disconnected, Incoming

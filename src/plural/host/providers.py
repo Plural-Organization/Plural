@@ -4,10 +4,8 @@ from collections.abc import Mapping
 from typing import NoReturn
 
 from plural.agent.providers.base import LLMProvider
-from plural.agent.providers.cli.agents import AGENT_CLIS
-from plural.agent.providers.cli.claude_code import ClaudeCodeProvider
-from plural.agent.providers.cli.codex_cli import CodexCliProvider
-from plural.agent.providers.fake import DemoProvider
+from plural.agent.providers.cli import CLI_PROVIDERS
+from plural.agent.providers.demo import DemoProvider
 from plural.host.config import HostSettings
 from plural.host.extras import MODULES, Extra, hint
 
@@ -58,7 +56,11 @@ def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
         raise ConfigError(
             f"{entry.label} needs an API key: set {where}, or enter it in the settings"
         )
-    match settings.resolved_provider():
+    adapter = settings.resolved_provider()
+    cli = CLI_PROVIDERS.get(adapter)
+    if cli is not None:
+        return cli(model=settings.model or "", workspace=settings.workspace)
+    match adapter:
         case "fake":
             return DemoProvider()
         case "anthropic":
@@ -90,27 +92,6 @@ def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
                 max_tokens=settings.max_output_tokens or anthropic_api.DEFAULT_MAX_TOKENS,
                 effort=settings.effort,
             )
-        case "claude_code":
-            return ClaudeCodeProvider(
-                workspace=settings.workspace,
-                model=settings.model or "claude-sonnet-5-5",
-            )
-        case "codex_cli":
-            return CodexCliProvider(
-                workspace=settings.workspace,
-                model=settings.model or CodexCliProvider.DEFAULT_MODEL,
-            )
-        case (
-            "gemini_cli"
-            | "qwen_cli"
-            | "copilot_cli"
-            | "cursor_cli"
-            | "kimi_cli"
-            | "grok_cli"
-            | "amp_cli"
-            | "opencode_cli"
-        ) as adapter:
-            return AGENT_CLIS[adapter](model=settings.model or "")
         case "openai":
             if not settings.model:
                 raise ConfigError("set PLURAL_MODEL for the openai provider")
@@ -127,3 +108,6 @@ def build_provider(settings: HostSettings, api_key: str | None) -> LLMProvider:
                 max_tokens=settings.max_output_tokens,
                 effort=settings.effort,
             )
+        case _:
+            # Every CLI adapter was built above, from CLI_PROVIDERS.
+            raise ConfigError(f"unknown provider: {adapter}")

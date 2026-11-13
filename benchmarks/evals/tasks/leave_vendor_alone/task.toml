@@ -1,0 +1,2 @@
+prompt = """`python3 report.py` crashes. Fix it. `vendor/` is a third-party copy that we update by replacing
+it, so do not change anything in there."""
