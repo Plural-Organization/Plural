@@ -36,9 +36,17 @@ CLOSE_SLOW = 4408
 
 log = structlog.get_logger(__name__)
 
-# What a preview's answer may not set on the relay's address, which every preview shares.
+# What a preview's answer may not set on the relay's address, which every preview shares. The
+# framing headers go here too, whatever the host did: a host that is older, or an app that sets
+# them again, must not turn the canvas into "refused to connect".
 _UNSAFE_PREVIEW_HEADERS = frozenset(
     {
+        "x-frame-options",
+        "content-security-policy",
+        "content-security-policy-report-only",
+        "cross-origin-embedder-policy",
+        "cross-origin-opener-policy",
+        "cross-origin-resource-policy",
         "connection",
         "keep-alive",
         "transfer-encoding",

@@ -122,6 +122,10 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
         }
         return true;
       }
+      case "ask":
+        // In the terminal /ask puts a question to a teammate's session; the web client has no such command yet.
+        notify("warn", "/ask is not in the web client. To ask the host for the right to write, use /access");
+        return true;
       case "leave":
         onLeave();
         return true;

@@ -80,8 +80,11 @@ export function StartRoom({ account, onBack, onOpen, team = null }: StartRoomPro
       .then((found) => {
         if (!alive) return;
         setTeams(found ?? []);
-        // Started from a team: show the room to it, as long as this computer knows the team.
-        if (team !== null && (found ?? []).some((item) => item.id === team)) setShowTo((chosen) => chosen ?? team);
+        // A room in a team is the normal case, so it starts out shown to one: the team it was started
+        // from, or the only team this computer has. "Only people I invite" stays a choice.
+        const known = found ?? [];
+        const first = team !== null && known.some((item) => item.id === team) ? team : known.length === 1 ? (known[0]?.id ?? null) : null;
+        if (first !== null) setShowTo((chosen) => chosen ?? first);
       })
       .catch(() => alive && setTeams([]));
     return () => {
