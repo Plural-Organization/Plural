@@ -39,6 +39,7 @@ const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm", "tea
 const HOST_VALUES: Record<string, string> = {
   "--workspace": "--workspace",
   "--prompts": "--prompts",
+  "--chat": "--chat",
   "--port": "--port",
   "--bind": "--bind",
   "--relay": "--relay",

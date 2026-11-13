@@ -35,6 +35,8 @@ export type FeedItem =
       toName: string | null;
       mine: boolean;
       mentioned: boolean;
+      /** Written in mention mode: the agent reads it before its next run. */
+      agentSees: boolean;
     }
   | { kind: "assistant"; id: string; text: string; streaming: boolean }
   | { kind: "tool"; id: string; call: ToolCallView; status: ToolStatus; output: string; diff: string | null; live: string }
@@ -118,7 +120,14 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
         items: [
           ...feed.items,
           chatItem(
-            { id: event.message_id, author_id: event.author_id, text: event.text, to: event.to, mentions: event.mentions },
+            {
+              id: event.message_id,
+              author_id: event.author_id,
+              text: event.text,
+              to: event.to,
+              mentions: event.mentions,
+              agent_sees: event.agent_sees ?? false,
+            },
             state,
             projection.meId,
           ),
@@ -182,6 +191,13 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
       }
       return note("dim", `${granted ? "you let" : "you said no to"} ${nameOf(event.participant_id)}${granted ? " write" : ""}`);
     }
+    case "session.chat_mode_changed":
+      return note(
+        "accent",
+        event.mode === "mention"
+          ? "the agent answers messages that tag @plrl; everything else is chat it reads"
+          : "the agent answers every message; /team writes to people only",
+      );
     case "session.prompt_mode_changed":
       return note(
         "accent",
@@ -371,7 +387,7 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
 }
 
 function chatItem(
-  entry: { id: string; author_id: string; text: string; to: string | null; mentions: string[] },
+  entry: { id: string; author_id: string; text: string; to: string | null; mentions: string[]; agent_sees?: boolean },
   state: SessionState,
   meId: string | null,
 ): FeedItem {
@@ -389,6 +405,7 @@ function chatItem(
     toName: entry.to === null ? null : nameOf(entry.to),
     mine: entry.author_id === meId,
     mentioned: mentionsMe(entry, meId),
+    agentSees: entry.agent_sees ?? false,
   };
 }
 

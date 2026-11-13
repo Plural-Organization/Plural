@@ -5,7 +5,7 @@ import { useAgentSetup } from "../hooks/useAgentSetup";
 import { useDaemon } from "../hooks/useDaemon";
 import { runningRooms, setRoomAgent } from "../lib/agent";
 import { DaemonError, daemonMessage } from "../lib/daemon";
-import { type Option, ADMISSION, BRIEFINGS, PERMISSIONS, PROMPTS } from "../lib/roomSettings";
+import { type Option, ADMISSION, BRIEFINGS, PERMISSIONS, PROMPTS, REPLIES } from "../lib/roomSettings";
 import { AgentSetup } from "./AgentSetup";
 import { AgentLogo } from "./AgentLogo";
 
@@ -129,6 +129,7 @@ export function RoomSettings({ room, projection, send, onClose }: RoomSettingsPr
           <Modal.Body className="flex flex-col gap-6">
             <AgentSection room={room} label={agentLabel} />
             <Choice title="Who may prompt" options={PROMPTS} value={state.prompt_mode} onChange={(mode) => send({ type: "session.set_prompt_mode", mode })} />
+            <Choice title="When the agent answers" options={REPLIES} value={state.chat_mode} onChange={(mode) => send({ type: "session.set_chat_mode", mode })} />
             <Choice title="What the agent may do" options={PERMISSIONS} value={state.permission_mode} onChange={(mode) => send({ type: "session.set_permission_mode", mode })} />
             <Choice title="Who gets in with the room link" options={ADMISSION} value={state.admission} onChange={(mode) => send({ type: "link.set_admission", mode })} />
             <Choice title="Briefings of this session" options={BRIEFINGS} value={state.briefing_sharing} onChange={(mode) => send({ type: "session.set_briefing_sharing", mode })} />

@@ -33,6 +33,8 @@ export interface ModelState {
   choice: AgentChoice;
   keys: Keys;
   mode: "open" | "review";
+  /** Whether the agent answers only @plrl or every message; a host without the setting answers every one. */
+  replies?: "mention" | "all";
   admission?: "approve" | "open";
   role: Role | undefined;
   canConfigure: boolean;
@@ -227,6 +229,22 @@ const SHARING: { mode: ShareMode; label: string; description: string }[] = [
   { mode: "relay", label: "Over the internet", description: "through a relay server, so nobody needs an open port. The Plural relay unless you set your own address" },
 ];
 
+function replyRow(state: ModelState, host: boolean): Row {
+  const mention = state.replies === "mention";
+  return {
+    id: "replies",
+    kind: "choice",
+    label: "Agent answers",
+    value: mention ? "only @plrl" : "every message",
+    hint: !host
+      ? "only the host chooses when the agent answers"
+      : mention
+        ? "plain messages are chat the agent reads; it answers @plrl"
+        : "every message is a prompt; /team writes to people only",
+    enabled: host,
+  };
+}
+
 function joiningRows(state: ModelState, host: boolean): Row[] {
   const admission = state.admission ?? "approve";
   const hint = host ? "applies to the next person who uses the room link" : "only the host chooses who may join";
@@ -309,6 +327,7 @@ export function sessionRows(state: ModelState): Row[] {
       selected: state.mode === "review",
       enabled: host,
     },
+    replyRow(state, host),
     ...joiningRows(state, host),
     ...shareRows(state, host),
     toggle("typing", "Show my typing", state.settings.announceTyping, "let others see when you are writing", !viewer),

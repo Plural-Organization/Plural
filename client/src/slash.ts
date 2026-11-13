@@ -1,8 +1,9 @@
-import type { Command, PromptMode } from "./protocol";
+import type { ChatMode, Command, PromptMode } from "./protocol";
 
 const USAGE =
   "usage: /policy | /policy allow|ask|deny <tool> <pattern> | /policy rm <rule id>";
 const MODE_USAGE = "usage: /mode open|review";
+const REPLIES_USAGE = "usage: /replies mention|all";
 
 export class SlashError extends Error {}
 
@@ -46,6 +47,8 @@ export function parseSlash(text: string, plugins: ReadonlySet<string> = new Set(
       return { type: "context.compact" };
     case "mode":
       return mode(argument);
+    case "replies":
+      return replies(argument);
     case "policy":
       return policy(argument);
     case "skills":
@@ -98,6 +101,14 @@ function mode(argument: string): Command {
     throw new SlashError(MODE_USAGE);
   }
   return { type: "session.set_prompt_mode", mode: argument satisfies PromptMode };
+}
+
+/** mention: the agent answers @plrl and reads the rest as chat; all: it answers every message. */
+function replies(argument: string): Command {
+  if (argument !== "mention" && argument !== "all") {
+    throw new SlashError(REPLIES_USAGE);
+  }
+  return { type: "session.set_chat_mode", mode: argument satisfies ChatMode };
 }
 
 function policy(argument: string): Slash {

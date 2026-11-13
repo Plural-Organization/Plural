@@ -1,9 +1,9 @@
 import { describe, expect, test } from "vitest";
-import { ADMISSION, BRIEFINGS, PERMISSIONS, PROMPTS, saysOf } from "./roomSettings";
+import { ADMISSION, BRIEFINGS, PERMISSIONS, PROMPTS, REPLIES, saysOf } from "./roomSettings";
 
 describe("room settings", () => {
   test("every option the host can pick says what it does", () => {
-    for (const options of [PROMPTS, PERMISSIONS, ADMISSION, BRIEFINGS]) {
+    for (const options of [PROMPTS, REPLIES, PERMISSIONS, ADMISSION, BRIEFINGS]) {
       expect(new Set(options.map((option) => option.id)).size).toBe(options.length);
       for (const option of options) {
         expect(option.label).not.toBe("");
@@ -13,6 +13,7 @@ describe("room settings", () => {
   });
   test("they cover every value the protocol accepts", () => {
     expect(PROMPTS.map((o) => o.id).sort()).toEqual(["open", "review"]);
+    expect(REPLIES.map((o) => o.id).sort()).toEqual(["all", "mention"]);
     expect(PERMISSIONS.map((o) => o.id).sort()).toEqual(["accept_edits", "auto", "default", "plan"]);
     expect(ADMISSION.map((o) => o.id).sort()).toEqual(["approve", "open"]);
     expect(BRIEFINGS.map((o) => o.id).sort()).toEqual(["ask", "off", "team"]);

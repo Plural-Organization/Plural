@@ -4,12 +4,38 @@ import { SlashError } from "./slash";
 
 export const CHAT_USAGE = "usage: /team <message> for the room · @name <message> for one person";
 export const TEAM_COMMANDS = ["team", "to-team", "chat"] as const;
+export const MAX_CHAT_CHARS = 2000;
+
+/** The agent's handle: in mention mode it answers only messages that tag it. */
+export const AGENT_HANDLE = "plrl";
 
 export interface Mentionable {
   id: string;
   label: string;
   role: Participant["role"];
   connected: boolean;
+  /** The agent itself rather than a person. */
+  agent?: boolean;
+}
+
+export const AGENT_MENTION: Mentionable = { id: "agent", label: AGENT_HANDLE, role: "participant", connected: true, agent: true };
+
+const ROOM_NOTE = `everyone sees it, the agent reads it but answers only @${AGENT_HANDLE}`;
+const AGENT_TAG = new RegExp(`(^|[\\s(])@${AGENT_HANDLE}(?=$|[\\s,:;.!?)])`, "i");
+
+/** Whether the text tags the agent with @plrl where a word begins. */
+export function mentionsAgent(text: string): boolean {
+  return AGENT_TAG.test(text);
+}
+
+/** The text as a prompt the agent answers in either mode: tagged @plrl in mention mode. */
+export function forAgent(text: string, state: SessionState): string {
+  return inMentionMode(state) && !mentionsAgent(text) && !text.startsWith("/") ? `@${AGENT_HANDLE} ${text}` : text;
+}
+
+/** Mention mode: a plain message is chat the agent reads, and it answers only @plrl. */
+export function inMentionMode(state: SessionState): boolean {
+  return state.chat_mode === "mention";
 }
 
 export interface ChatIntent {
@@ -60,12 +86,15 @@ export function mentionCompletions(value: string, people: Mentionable[]): Mentio
   }
   const start = tail.index + (tail[1]?.length ?? 0);
   const query = (tail[2] ?? "").toLowerCase();
-  return people
+  return [AGENT_MENTION, ...people]
     .filter((person) => person.label.toLowerCase().startsWith(query))
     .map((person) => ({ person, insert: `${value.slice(0, start)}@${person.label} ` }));
 }
 
 export function mentionNote(person: Mentionable): string {
+  if (person.agent === true) {
+    return "the agent · answers this message";
+  }
   return `${person.role}${person.connected ? "" : " · offline"}${person.role === "viewer" ? " · cannot get private messages" : ""}`;
 }
 
@@ -97,21 +126,28 @@ export function parseChat(text: string, state: SessionState, meId: string | null
     }
     return { command: { type: "chat.send", text: body, to: null, mentions: mentionsIn(body, people) }, to: null };
   }
-  if (!text.startsWith("@")) {
+  const person = text.startsWith("@") ? matchMention(text.slice(1), people) : null;
+  if (person === null && mentionsAgent(text)) {
     return null;
   }
-  const person = matchMention(text.slice(1), people);
-  if (person === null) {
+  if (person !== null) {
+    if (person.role === "viewer") {
+      throw new SlashError(`${person.label} watches the session and cannot get private messages`);
+    }
+    const body = text.slice(1 + person.label.length).replace(/^[,:;]/, "").trim();
+    if (body === "") {
+      throw new SlashError(`write something after @${person.label}`);
+    }
+    return { command: { type: "chat.send", text: body, to: person.id, mentions: [] }, to: person };
+  }
+  if (!inMentionMode(state) || text.trim() === "") {
     return null;
   }
-  if (person.role === "viewer") {
-    throw new SlashError(`${person.label} watches the session and cannot get private messages`);
+  const body = text.trim();
+  if (body.length > MAX_CHAT_CHARS) {
+    throw new SlashError(`a chat message holds ${MAX_CHAT_CHARS} characters; tag @${AGENT_HANDLE} to give the agent a longer one`);
   }
-  const body = text.slice(1 + person.label.length).replace(/^[,:;]/, "").trim();
-  if (body === "") {
-    throw new SlashError(`write something after @${person.label}`);
-  }
-  return { command: { type: "chat.send", text: body, to: person.id, mentions: [] }, to: person };
+  return { command: { type: "chat.send", text: body, to: null, mentions: mentionsIn(body, people) }, to: null };
 }
 
 export function mentionsMe(
@@ -141,7 +177,7 @@ export function routeOf(text: string, state: SessionState, meId: string | null):
     const space = text.search(/\s/);
     const name = text.slice(1, space === -1 ? undefined : space);
     if ((TEAM_COMMANDS as readonly string[]).includes(name)) {
-      return { kind: "room", label: "room", note: "everyone sees it, the agent does not", blocked: false };
+      return { kind: "room", label: "room", note: inMentionMode(state) ? ROOM_NOTE : "everyone sees it, the agent does not", blocked: false };
     }
     return { kind: "command", label: `/${name}`, note: "a command, not a prompt", blocked: false };
   }
@@ -158,6 +194,9 @@ export function routeOf(text: string, state: SessionState, meId: string | null):
         blocked: false,
       };
     }
+  }
+  if (inMentionMode(state) && !mentionsAgent(text)) {
+    return { kind: "room", label: "room", note: ROOM_NOTE, blocked: false };
   }
   const reviewed = me?.role === "participant" && state.prompt_mode === "review";
   return { kind: "agent", label: "agent", note: reviewed ? "the host approves it first" : "everyone in the room sees it", blocked: false };

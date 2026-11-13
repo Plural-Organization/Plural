@@ -1,5 +1,20 @@
 import { describe, expect, test } from "vitest";
-import { emptyState, findPerson, mentionable, mentionsIn, mentionsMe, parseChat, routeOf, SlashError, type SessionState } from "../src";
+import {
+  emptyState,
+  findPerson,
+  forAgent,
+  mentionable,
+  mentionCompletions,
+  mentionNote,
+  mentionsAgent,
+  mentionsIn,
+  mentionsMe,
+  parseChat,
+  parseSlash,
+  routeOf,
+  SlashError,
+  type SessionState,
+} from "../src";
 
 function room(): SessionState {
   const state = emptyState();
@@ -131,6 +146,73 @@ describe("who will see what I am typing", () => {
 
   test("other slash commands are not prompts", () => {
     expect(routeOf("/compact", room(), "p_me")).toMatchObject({ kind: "command", label: "/compact" });
+  });
+});
+
+describe("mention mode", () => {
+  const chatty = (): SessionState => ({ ...room(), chat_mode: "mention" });
+
+  test("a plain message is chat for the room, with its tags", () => {
+    const intent = parseChat("lunch at one? @Alia", chatty(), "p_me");
+    expect(intent?.command).toEqual({ type: "chat.send", text: "lunch at one? @Alia", to: null, mentions: ["p_alia"] });
+    expect(routeOf("lunch at one?", chatty(), "p_me")).toMatchObject({ kind: "room", label: "room", note: expect.stringContaining("answers only @plrl") });
+  });
+
+  test("a message that tags @plrl is a prompt, wherever the tag is", () => {
+    for (const text of ["@plrl fix the tests", "> the quoted reply\n\n@plrl what does this mean?", "can you look, @PLRL?"]) {
+      expect(parseChat(text, chatty(), "p_me")).toBeNull();
+      expect(routeOf(text, chatty(), "p_me").kind).toBe("agent");
+    }
+  });
+
+  test("@plrl inside a word or a longer handle is not a tag", () => {
+    expect(mentionsAgent("mail me@plrl.host")).toBe(false);
+    expect(mentionsAgent("@plrlbot hi")).toBe(false);
+    expect(parseChat("@plrlbot hi", chatty(), "p_me")?.command.to).toBeNull();
+  });
+
+  test("@name at the start is still private, and /team still writes to the room", () => {
+    expect(parseChat("@alia psst", chatty(), "p_me")?.command.to).toBe("p_alia");
+    expect(routeOf("/team hi", chatty(), "p_me").note).toContain("the agent reads it");
+  });
+
+  test("@name at the start stays private even with @plrl later in it", () => {
+    expect(parseChat("@alia ask @plrl later", chatty(), "p_me")?.command.to).toBe("p_alia");
+    expect(routeOf("@alia ask @plrl later", chatty(), "p_me").kind).toBe("person");
+    expect(parseChat("@alia ask @plrl later", room(), "p_me")?.command.to).toBe("p_alia");
+  });
+
+  test("a prompt from the command line is tagged for the agent only in mention mode", () => {
+    expect(forAgent("fix it", chatty())).toBe("@plrl fix it");
+    expect(forAgent("@plrl fix it", chatty())).toBe("@plrl fix it");
+    expect(forAgent("/team hi", chatty())).toBe("/team hi");
+    expect(forAgent("fix it", room())).toBe("fix it");
+  });
+
+  test("a chat message longer than the host takes is explained", () => {
+    expect(() => parseChat("x".repeat(2001), chatty(), "p_me")).toThrow(/tag @plrl/);
+  });
+
+  test("in the old mode a plain message stays a prompt", () => {
+    expect(parseChat("lunch at one?", room(), "p_me")).toBeNull();
+    expect(routeOf("lunch at one?", room(), "p_me").kind).toBe("agent");
+  });
+
+  test("@ offers the agent next to the people", () => {
+    const people = mentionable(room(), "p_me");
+    const offered = mentionCompletions("ask @", people).map(({ person }) => person.label);
+    expect(offered[0]).toBe("plrl");
+    expect(offered).toContain("Alia");
+    const [agent] = mentionCompletions("ask @pl", people);
+    expect(agent?.insert).toBe("ask @plrl ");
+    expect(agent && mentionNote(agent.person)).toContain("answers");
+    expect(mentionCompletions("ask @al", people).map(({ person }) => person.label)).toEqual(["Alia"]);
+  });
+
+  test("/replies switches the mode", () => {
+    expect(parseSlash("/replies all")).toEqual({ type: "session.set_chat_mode", mode: "all" });
+    expect(parseSlash("/replies mention")).toEqual({ type: "session.set_chat_mode", mode: "mention" });
+    expect(() => parseSlash("/replies")).toThrow(/usage: \/replies/);
   });
 });
 

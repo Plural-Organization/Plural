@@ -74,7 +74,7 @@ async function settle(): Promise<void> {
 }
 
 function chat(fake: FakeSession, id: string, text: string): void {
-  fake.emit({ type: "chat.posted", message_id: id, author_id: "p_alia", text, to: null, mentions: [] });
+  fake.emit({ type: "chat.posted", message_id: id, author_id: "p_alia", text, to: null, mentions: [], agent_sees: false });
 }
 
 test("the box always says who will see the message", async () => {

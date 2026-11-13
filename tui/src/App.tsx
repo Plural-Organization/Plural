@@ -11,6 +11,9 @@ import {
   matchPreview,
   nextPermissionMode,
   parseChat,
+  inMentionMode,
+  forAgent,
+  AGENT_HANDLE,
   isSkillCommand,
   parseSlash,
   routeOf,
@@ -663,7 +666,8 @@ export function App({
     started.current = true;
     startup.forEach((command) => send(command));
     if (initialPrompt !== null && initialPrompt.trim() !== "") {
-      submit(initialPrompt.trim());
+      // `plural "fix the tests"` asks the agent, also in mention mode.
+      submit(forAgent(initialPrompt.trim(), projection.state));
     }
   }, [connection, me?.id]);
 
@@ -1330,6 +1334,10 @@ export function App({
     }
     try {
       const chat = parseChat(text, projection.state, projection.meId);
+      if (chat !== null && images.length > 0 && chat.command.to === null && inMentionMode(projection.state) && !text.startsWith("/")) {
+        warn("chat", `a chat message carries no image: tag @${AGENT_HANDLE} to show it to the agent`);
+        return;
+      }
       if (chat !== null) {
         deliver(chat.command, text);
         return;
@@ -1569,9 +1577,11 @@ export function App({
       ? me.id in state.access_requests
         ? "You asked to write, waiting for the host…"
         : "You are watching · /access asks the host for the right to write"
-      : me?.role === "participant" && state.prompt_mode === "review"
-        ? "Propose a prompt, the host approves it"
-        : "Message the agent, / for commands";
+      : inMentionMode(state)
+        ? `Message the room, @${AGENT_HANDLE} for the agent, / for commands`
+        : me?.role === "participant" && state.prompt_mode === "review"
+          ? "Propose a prompt, the host approves it"
+          : "Message the agent, / for commands";
   const showPanel = settings.panel && width >= MIN_WIDTH_FOR_PANEL;
 
   if (intro) {
@@ -1744,6 +1754,7 @@ export function App({
           height={height}
           settings={settings}
           mode={state.prompt_mode}
+          replies={state.chat_mode}
           role={me?.role}
           agent={projection.agentLabel}
           room={room}
@@ -1754,6 +1765,7 @@ export function App({
           onSettings={change}
           onKeys={(preset, key, remember) => onKeys?.(preset, key, remember)}
           onMode={(mode) => send({ type: "session.set_prompt_mode", mode })}
+          onReplies={(mode) => send({ type: "session.set_chat_mode", mode })}
           onInvite={() => send({ type: "invite.create", role: "participant", ttl_s: 3600, reusable: true })}
           admission={state.admission}
           onAdmission={(mode) => send({ type: "link.set_admission", mode })}

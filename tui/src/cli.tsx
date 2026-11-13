@@ -56,6 +56,7 @@ options
   -n, --title <title>         name the session
   --workspace <dir>           project directory the agent works in
   --prompts open|review       who may prompt directly
+  --chat mention|all          the agent answers only @plrl, or every message
   --name <name>               your display name
   --private                   in a team, keep this session to yourself
   --port <n>  --bind <addr>  --relay <url>  --public-url <url>

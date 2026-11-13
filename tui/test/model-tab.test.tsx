@@ -312,7 +312,7 @@ describe("Sharing", () => {
     expect(text).toContain("Over the internet");
     expect(text).not.toContain("Relay address");
 
-    await down(setup, 8);
+    await down(setup, 9);
     await setup.mockInput.pressEnter();
     expect(hooks.settings.at(-1)).toMatchObject({ share: "relay" });
   });
@@ -325,7 +325,7 @@ describe("Sharing", () => {
     const text = await frame(setup, "Relay address");
     expect(text).toContain("the Plural relay");
 
-    await down(setup, 9);
+    await down(setup, 10);
     await setup.mockInput.pressEnter();
     await setup.mockInput.typeText("relay.example.com");
     await setup.mockInput.pressEnter();
@@ -346,7 +346,7 @@ describe("Sharing", () => {
     await setup.mockInput.pressKey("F2");
     await frame(setup, "Model");
     await setup.mockInput.pressTab();
-    await down(setup, 6);
+    await down(setup, 7);
     await frame(setup, "only the host chooses how the room is shared");
     await down(setup, 2);
     await setup.mockInput.pressEnter();

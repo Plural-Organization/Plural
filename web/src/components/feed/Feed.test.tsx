@@ -13,6 +13,7 @@ const chat = (overrides: Partial<Extract<FeedItem, { kind: "chat" }>>): FeedItem
   toName: null,
   mine: false,
   mentioned: false,
+  agentSees: false,
   ...overrides,
 });
 
@@ -39,6 +40,12 @@ test("a message for the room says who wrote it and that the agent does not see i
   expect(html).toContain("standup in five");
   expect(html).toContain("the agent does not see it");
   expect(html).not.toContain("private");
+});
+
+test("a message for the room in mention mode says the agent reads it", () => {
+  const html = render(chat({ agentSees: true }));
+  expect(html).toContain("the agent reads it");
+  expect(html).not.toContain("does not see it");
 });
 
 test("a private message names both sides", () => {

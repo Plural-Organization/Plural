@@ -32,6 +32,7 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
   const here = people.filter((person) => person.connected);
   const host = people.find((person) => person.role === "host");
   const review = state.prompt_mode === "review";
+  const mention = state.chat_mode === "mention";
   return (
     <header className="col-span-full flex h-14 min-w-0 flex-none items-center gap-3 px-2 sm:px-3">
       <Tooltip delay={300}>
@@ -53,6 +54,12 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
       <Chip size="sm" variant="soft" color={review ? "warning" : "default"} className="hidden sm:inline-flex">
         <Chip.Label><span className="cap">{state.prompt_mode} mode</span></Chip.Label>
       </Chip>
+      <Tooltip delay={300}>
+        <Chip size="sm" variant="soft" color={mention ? "accent" : "default"} className="hidden sm:inline-flex">
+          <Chip.Label>{mention ? "agent answers @plrl" : "agent answers all"}</Chip.Label>
+        </Chip>
+        <Tooltip.Content>{mention ? "A plain message is chat the agent reads; it answers messages that tag @plrl" : "Every message goes to the agent; /team writes to people only"}</Tooltip.Content>
+      </Tooltip>
       <span className="grow" />
       {meter ? (
         <Tooltip delay={300}>
