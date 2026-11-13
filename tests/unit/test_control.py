@@ -1,6 +1,8 @@
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
+from types import SimpleNamespace
+from typing import cast
 
 import pytest
 from pydantic import SecretStr
@@ -10,6 +12,7 @@ from plural.agent.providers.base import LlmEvent, LlmRequest, ProviderError, Tex
 from plural.host import control
 from plural.host.config import HostSettings
 from plural.host.control import AgentConfig, probe, provider_for, settings_for
+from plural.host.plugins import PluginHost
 from plural.host.providers import ConfigError
 from plural.security.secrets import Redactor
 
@@ -139,3 +142,73 @@ def test_a_secret_added_later_is_masked_like_the_first_ones() -> None:
 
 async def test_the_data_directory_is_not_touched(tmp_path: Path) -> None:
     assert not (tmp_path / "data").exists()
+
+
+async def test_a_plugin_switches_the_model_the_client_last_configured(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    plugins = PluginHost(tmp_path, workspace=tmp_path)
+    host = SimpleNamespace(plugins=plugins)
+    gate = control.Control(host, BASE, lambda message: None)  # pyright: ignore[reportArgumentType]
+    applied: list[AgentConfig] = []
+
+    async def configure(config: AgentConfig) -> str:
+        applied.append(config)
+        return f"{config.provider or config.preset} · {config.model}"
+
+    monkeypatch.setattr(gate, "_configure", configure)
+    assert plugins.switch_model is not None
+    gate._config = AgentConfig(provider="openai", model="a", base_url="http://x/v1")  # pyright: ignore[reportPrivateUsage]
+    assert await plugins.switch_model("b", None) == "openai · b"
+    assert applied[-1].base_url == "http://x/v1"
+    assert await plugins.switch_model("sonnet", "anthropic") == "anthropic · sonnet"
+    assert applied[-1].preset == "anthropic"
+
+
+PROVIDER = """
+def setup(plural):
+    plural.provider(
+        "gateway",
+        label="Team gateway",
+        base_url="https://llm.example.com/v1",
+        models=["fast-1", "smart-1"],
+        key_env="GATEWAY_KEY",
+    )
+"""
+
+
+async def test_a_plugin_offers_a_provider_in_the_model_settings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    directory = tmp_path / "plugins"
+    directory.mkdir()
+    (directory / "gateway.py").write_text(PROVIDER)
+    (directory / "clash.py").write_text(
+        'def setup(plural):\n    plural.provider("anthropic", base_url="https://x.test")\n'
+    )
+    plugins = PluginHost(directory, workspace=tmp_path)
+    plugins.load()
+    errors = {view.name: view.error for view in plugins.views()}
+    assert errors["clash"] is not None
+    assert "provider anthropic is already taken" in errors["clash"]
+
+    replies: list[dict[str, object]] = []
+    gate = control.Control(SimpleNamespace(plugins=plugins), BASE, replies.append)  # pyright: ignore[reportArgumentType]
+    await gate.handle('{"id": "1", "type": "catalog"}')
+    presets = cast("list[dict[str, object]]", replies[-1]["presets"])
+    offered = next(p for p in presets if p.get("id") == "gateway")
+    assert offered["baseUrl"] == "https://llm.example.com/v1"
+    assert offered["models"] == ["fast-1", "smart-1"]
+
+    with pytest.raises(ConfigError, match="GATEWAY_KEY"):
+        gate._resolve(AgentConfig(preset="gateway"))  # pyright: ignore[reportPrivateUsage]
+    monkeypatch.setenv("GATEWAY_KEY", "k" * 24)
+    resolved = gate._resolve(AgentConfig(preset="gateway"))  # pyright: ignore[reportPrivateUsage]
+    assert (resolved.provider, resolved.base_url, resolved.model) == (
+        "openai",
+        "https://llm.example.com/v1",
+        "fast-1",
+    )
+    assert resolved.preset is None
+    assert resolved.api_key is not None
+    assert resolved.api_key.get_secret_value() == "k" * 24

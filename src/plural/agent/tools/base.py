@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, JsonValue
 from plural.agent.providers.base import ToolSchema
 from plural.agent.sandbox.base import ExecutionBackend, Workspace
 from plural.agent.tools.truncation import FullOutputs
+from plural.agent.tracing import Span
 from plural.protocol.models import Provenance, ToolRisk
 
 
@@ -88,6 +89,8 @@ class ToolCtx:
     emit: Callable[[str], None] = _discard
     provenance: Provenance | None = None
     cancel: asyncio.Event | None = None
+    # The span of the call being run, for a tool that does traced work of its own.
+    span: Span | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -11,13 +11,15 @@ from pydantic import ValidationError
 
 from plural.agent.loop.events import AgentEvent, ToolEnd, ToolOutput, ToolStart
 from plural.agent.loop.gate import GateResult, PolicyGate
+from plural.agent.loop.hooks import LoopHooks, NoHooks
 from plural.agent.loop.interrupt import Interrupted, TimedOut, interruptible
 from plural.agent.providers.base import ToolCallRequest
 from plural.agent.sandbox.base import SandboxError, Workspace
 from plural.agent.tools.base import PreparedCall, ToolCtx, ToolError, ToolResult
 from plural.agent.tools.registry import ToolRegistry, UnknownTool
+from plural.agent.tracing import OUTPUT_CHARS, Span, args_input, clip
 from plural.core.provenance import is_guest_originated
-from plural.protocol.models import Provenance, ToolCallView, ToolRisk
+from plural.protocol.models import Provenance, SpanKind, SpanStatus, ToolCallView, ToolRisk
 from plural.security.secrets import is_denied_path
 
 log = structlog.get_logger(__name__)
@@ -27,12 +29,21 @@ ABORTED = "Not executed: run aborted"
 
 class ToolRunner:
     def __init__(
-        self, *, tools: ToolRegistry, gate: PolicyGate, tool_ctx: ToolCtx, timeout_s: float
+        self,
+        *,
+        tools: ToolRegistry,
+        gate: PolicyGate,
+        tool_ctx: ToolCtx,
+        timeout_s: float,
+        hooks: LoopHooks | None = None,
     ) -> None:
         self._tools = tools
+        self._hooks = hooks or NoHooks()
         self._gate = gate
         self._tool_ctx = tool_ctx
         self._timeout_s = timeout_s
+        # The span tool calls open under: the run's, while one is going.
+        self.span: Span | None = None
 
     def groups(self, calls: Sequence[ToolCallRequest]) -> list[list[ToolCallRequest]]:
         groups: list[list[ToolCallRequest]] = []
@@ -93,6 +104,8 @@ class ToolRunner:
             for event in self.skip(call, f"Invalid tool call: {call.parse_error}"):
                 yield event
             return
+        # The host may change the arguments; what it changes still goes through every check.
+        call = await self._hooks.tool_args(call, provenance)
         try:
             prepared = self._tools.prepare(call)
         except (UnknownTool, ValidationError) as error:
@@ -107,6 +120,16 @@ class ToolRunner:
             args=call.args,
         )
         yield ToolStart(view)
+        span = (
+            self.span.child(
+                SpanKind.TOOL,
+                prepared.name,
+                detail=prepared.subject[:200],
+                input=args_input(call.args),
+            )
+            if self.span
+            else None
+        )
         asked = time.monotonic()
         ran: float | None = None
         allowed = False
@@ -126,6 +149,9 @@ class ToolRunner:
             if not isinstance(reached, GateResult):
                 workspace = reached
             allowed = verdict.allowed
+            if span is not None and verdict.asked:
+                # The wait for the host's answer, apart from the tool's own work.
+                span.moment(SpanKind.APPROVAL, "approval", started=asked, ended=time.monotonic())
             if verdict.allowed:
                 ran = time.monotonic()
                 queue: asyncio.Queue[str] = asyncio.Queue()
@@ -139,6 +165,7 @@ class ToolRunner:
                             emit=queue.put_nowait,
                             provenance=provenance,
                             cancel=cancel,
+                            span=span,
                         ),
                     )
                 )
@@ -154,11 +181,30 @@ class ToolRunner:
                 finally:
                     if not runner.done():
                         runner.cancel()
+                result = await interruptible(
+                    self._hooks.tool_result(view, result, provenance), cancel
+                )
             else:
                 result = ToolResult(f"Denied: {verdict.reason}", is_error=True)
         except Interrupted:
             result = ToolResult(ABORTED, is_error=True)
         done = time.monotonic()
+        if span is not None:
+            status = (
+                SpanStatus.DENIED
+                if not allowed and result.content != ABORTED
+                else SpanStatus.CANCELLED
+                if result.content == ABORTED
+                else SpanStatus.ERROR
+                if result.is_error
+                else SpanStatus.OK
+            )
+            span.end(
+                status,
+                chars=len(result.content),
+                error=result.content[:300] if result.is_error else "",
+                output=clip(result.content, OUTPUT_CHARS),
+            )
         log.info(
             "tool.call",
             tool=prepared.name,

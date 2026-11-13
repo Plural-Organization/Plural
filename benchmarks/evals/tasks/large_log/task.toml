@@ -1,0 +1,2 @@
+prompt = """`server.log` is a large access log. Which `request_id` had the highest latency among the requests
+that ended with status 500 on the `/checkout` route? Reply with the id. Do not change any files."""

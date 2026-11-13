@@ -253,6 +253,8 @@ class McpHub:
         self._on_change = on_change
         self._servers: dict[str, _Server] = {}
         self._logfiles: list[IO[str]] = []
+        # Servers a host plugin brought, by name: they live while it is loaded, never in a file.
+        self._attached: set[str] = set()
 
     @property
     def project_file(self) -> Path:
@@ -319,7 +321,34 @@ class McpHub:
         self._launch(server)
         self._on_change()
 
+    def attach(self, name: str, spec: ServerSpec) -> None:
+        """Connect a server for as long as the host keeps it, without writing it to a file."""
+        if not SERVER_NAME.match(name):
+            raise McpError("a server name is letters, digits, - and _, up to 32 characters")
+        if name in self._servers:
+            raise McpError(f"{name} is already connected")
+        server = _Server(name=name, spec=spec, scope=SkillScope.GLOBAL)
+        self._servers[name] = server
+        self._attached.add(name)
+        self._launch(server)
+        self._on_change()
+
+    async def detach(self, name: str) -> None:
+        """Disconnect a server `attach` connected."""
+        if name not in self._attached:
+            return
+        self._attached.discard(name)
+        server = self._servers.pop(name, None)
+        if server is not None:
+            await self._halt(server)
+        self._on_change()
+
+    def attached(self) -> frozenset[str]:
+        return frozenset(self._attached)
+
     async def remove(self, name: str) -> None:
+        if name in self._attached:
+            raise McpError(f"{name} comes from a plugin; remove or change the plugin instead")
         server = self._get(name)
         path = self.global_file if server.scope is SkillScope.GLOBAL else self.project_file
         servers = read_config(path)
@@ -332,6 +361,8 @@ class McpHub:
         self._on_change()
 
     async def toggle(self, name: str, *, enabled: bool) -> None:
+        if name in self._attached:
+            raise McpError(f"{name} comes from a plugin; remove or change the plugin instead")
         server = self._get(name)
         path = self.global_file if server.scope is SkillScope.GLOBAL else self.project_file
         servers = read_config(path)

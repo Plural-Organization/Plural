@@ -19,9 +19,11 @@ from plural.agent.providers.base import (
     TextDelta,
     ThinkingDelta,
     ToolCallReady,
+    ToolCallRequest,
     UsageReport,
 )
-from plural.protocol.models import Usage
+from plural.agent.tracing import Span, answer_output, request_input
+from plural.protocol.models import SpanStatus, Usage
 
 log = structlog.get_logger(__name__)
 
@@ -54,6 +56,9 @@ class RequestDump:
         return path
 
 
+_STATUS = {"ok": SpanStatus.OK, "error": SpanStatus.ERROR, "cancelled": SpanStatus.CANCELLED}
+
+
 async def observed(
     events: AsyncIterator[LlmEvent],
     request: LlmRequest,
@@ -61,30 +66,57 @@ async def observed(
     purpose: str,
     role: str,
     dumped: Path | None = None,
+    span: Span | None = None,
 ) -> AsyncIterator[LlmEvent]:
-    """Pass a model call's events through and log what it cost once it ends."""
+    """Pass a model call's events through; log what it cost, and close its span, once it ends."""
     started = time.monotonic()
     first: float | None = None
     usage = Usage()
     stop: str | None = None
     outcome = "cancelled"
+    # The prompt of the call's last request: the context the conversation filled then.
+    context = 0
+    failure = ""
+    # What the model wrote and asked for, kept for the span.
+    text: list[str] = []
+    calls: list[ToolCallRequest] = []
     try:
         async for event in events:
             match event:
                 case TextDelta() | ThinkingDelta() | ToolCallReady() if first is None:
                     first = time.monotonic()
-                case UsageReport(usage=delta):
+                case _:
+                    pass
+            match event:
+                case TextDelta(text=chunk) if span is not None:
+                    text.append(chunk)
+                case ToolCallReady(call=call) if span is not None:
+                    calls.append(call)
+                case UsageReport(usage=delta, last=last):
                     usage = usage + delta
+                    context = (last or delta).prompt_tokens or context
                 case Stop(reason=reason):
                     stop = reason
                 case _:
                     pass
             yield event
         outcome = "ok"
-    except Exception:
+    except Exception as error:
         outcome = "error"
+        failure = str(error)
         raise
     finally:
+        first_ms = round((first - started) * 1000) if first is not None else None
+        if span is not None:
+            span.end(
+                _STATUS[outcome],
+                usage=usage,
+                context_tokens=context,
+                first_ms=first_ms,
+                error=failure[:300],
+                input=request_input(request),
+                output=answer_output("".join(text), calls),
+            )
         log.info(
             "llm.call",
             purpose=purpose,
@@ -98,7 +130,7 @@ async def observed(
             cache_write=usage.cache_write_tokens,
             output=usage.output_tokens,
             hit=hit_rate(usage),
-            first_ms=round((first - started) * 1000) if first is not None else None,
+            first_ms=first_ms,
             total_ms=round((time.monotonic() - started) * 1000),
             request=str(dumped) if dumped is not None else None,
         )

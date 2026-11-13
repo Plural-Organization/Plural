@@ -196,10 +196,9 @@ class SkillLibrary:
             "skills",
             "\n".join(
                 (
-                    "Expert instructions for one kind of task, picked by description. For "
-                    "specialist know-how none of them covers, such as a file format, a "
-                    "framework's conventions or a deploy target, look for one with skill_search.",
-                    "Installed skills:" if installed else "No skills are installed yet.",
+                    "Installed skills, picked by description; skill_search finds more:"
+                    if installed
+                    else "No skills are installed yet; skill_search finds some.",
                     *installed,
                 )
             ),

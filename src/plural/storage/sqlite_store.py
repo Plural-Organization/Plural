@@ -1,5 +1,5 @@
 import asyncio
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Self
@@ -8,6 +8,7 @@ import aiosqlite
 
 from plural.protocol.codec import EVENTS
 from plural.protocol.events import Event, EventRecord
+from plural.protocol.models import Span
 from plural.storage.migrations import migrate
 
 _COLUMNS = "seq, id, ts, actor_id, payload"
@@ -70,6 +71,42 @@ class SqliteEventStore:
             (key, value),
         )
         await self._db.commit()
+
+    async def save_spans(self, spans: Sequence[Span]) -> None:
+        """Store spans, replacing the earlier state of any that changed. One commit for all."""
+        if not spans:
+            return
+        await self._db.executemany(
+            "INSERT INTO spans (id, run_id, parent_id, started_ms, payload) VALUES (?, ?, ?, ?, ?) "
+            "ON CONFLICT(id) DO UPDATE SET payload = excluded.payload",
+            [
+                (span.id, span.run_id, span.parent_id, span.started_ms, span.model_dump_json())
+                for span in spans
+            ],
+        )
+        await self._db.commit()
+
+    async def read_spans(self, run_id: str | None = None, *, limit: int = 5000) -> list[Span]:
+        """One run's spans, or the newest spans of every run, oldest first."""
+        if run_id is not None:
+            rows = await self._db.execute_fetchall(
+                "SELECT payload FROM spans WHERE run_id = ? ORDER BY started_ms, rowid LIMIT ?",
+                (run_id, limit),
+            )
+            return [Span.model_validate_json(row[0]) for row in rows]
+        rows = await self._db.execute_fetchall(
+            "SELECT payload FROM spans ORDER BY started_ms DESC, rowid DESC LIMIT ?", (limit,)
+        )
+        return [Span.model_validate_json(row[0]) for row in reversed(list(rows))]
+
+    async def trace_runs(self, *, limit: int = 30) -> list[Span]:
+        """The root span of each of the newest runs, newest first."""
+        rows = await self._db.execute_fetchall(
+            "SELECT payload FROM spans WHERE parent_id IS NULL "
+            "ORDER BY started_ms DESC, rowid DESC LIMIT ?",
+            (limit,),
+        )
+        return [Span.model_validate_json(row[0]) for row in rows]
 
     async def close(self) -> None:
         await self._db.close()

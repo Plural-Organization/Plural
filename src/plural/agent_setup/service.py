@@ -13,7 +13,7 @@ from pydantic.alias_generators import to_camel
 
 from plural.agent.providers.base import ProviderError
 from plural.agent.providers.catalog import PRESETS, Preset, preset
-from plural.agent.providers.cli.agents import AGENT_CLIS
+from plural.agent.providers.cli import CLI_PROVIDERS
 from plural.agent_setup import probes
 from plural.agent_setup.store import AgentSetupError, AgentStore, Choice
 from plural.host import extras, tools
@@ -143,7 +143,7 @@ def readiness_of(
                 command=spec.login,
             )
         return READY
-    cli = AGENT_CLIS.get(adapter)  # type: ignore[call-overload]
+    cli = CLI_PROVIDERS.get(adapter)
     if cli is not None:
         if shutil.which(cli.binary) is None:
             return Readiness(

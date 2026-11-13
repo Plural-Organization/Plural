@@ -147,11 +147,10 @@ async def running_session(
         relay = RelayServer()
         await relay.start()
         relay_url = relay.url
-    options: dict[str, Any] = {"provider": "fake", **(overrides or {})}
+    options: dict[str, Any] = {"provider": "fake", "room": ROOM, **(overrides or {})}
     settings = HostSettings(
         workspace=workspace,
         data_dir=tmp_path / "data",
-        room=ROOM,
         port=free_port(),
         relay_url=relay_url,
         approval_timeout_s=30,

@@ -13,6 +13,7 @@ import { Inbox } from "../components/inbox/Inbox";
 import { askItems, inboxItems } from "../components/inbox/items";
 import { InviteDialog } from "../components/InviteDialog";
 import { RoomSettings } from "../components/RoomSettings";
+import { TraceView } from "../components/TraceView";
 import { Sidebar } from "../components/side/Sidebar";
 import { TopBar } from "../components/TopBar";
 import { useAttachments } from "../hooks/useAttachments";
@@ -221,7 +222,23 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
   const focusInput = useCallback(() => root.current?.querySelector<HTMLElement>("#composer")?.focus(), []);
   const canAbort = isHost && state.run !== null && editing === null;
 
-  useHotkeys({ enabled: invite === null && active, first: items[0], canAbort, send, onEdit: setEditing, onFocusInput: focusInput });
+  const traceOpen = session.trace !== null;
+  const toggleTrace = () => (traceOpen ? session.closeTrace() : session.openTrace());
+  // While the trace is open its own keys rule: esc closes it instead of stopping the run.
+  useHotkeys({ enabled: invite === null && active && !traceOpen, first: items[0], canAbort, send, onEdit: setEditing, onFocusInput: focusInput, onTrace: session.openTrace });
+  useEffect(() => {
+    if (!traceOpen) return;
+    // t closes the trace too, unless someone is typing.
+    const onKey = (event: KeyboardEvent) => {
+      const typing = event.target instanceof Element && event.target.closest("input, textarea, select, [contenteditable]") !== null;
+      if (event.key === "t" && !typing && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        session.closeTrace();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [traceOpen]);
 
   const writing = feed.items.some((item) => item.kind === "assistant" && item.streaming);
   const current = activity(projection, feed);
@@ -260,6 +277,8 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
         }}
         onLeave={leave}
         onToggleRail={onToggleRail}
+        traceOpen={traceOpen}
+        onToggleTrace={toggleTrace}
       />
 
       <main className={styles.stage}>
@@ -416,6 +435,7 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
       <QuoteButton enabled={active && me !== undefined && me.role !== "viewer"} onQuote={(text) => setQuote((current) => ({ text, key: (current?.key ?? 0) + 1 }))} />
       {invite && active ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}
       {isHost && settingsOpen ? <RoomSettings room={link.room} projection={projection} send={send} onClose={() => setSettingsOpen(false)} /> : null}
+      {session.trace && active ? <TraceView trace={session.trace} projection={projection} send={send} onClose={session.closeTrace} /> : null}
     </div>
   );
 }

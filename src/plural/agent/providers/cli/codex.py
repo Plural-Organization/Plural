@@ -4,12 +4,10 @@ import asyncio
 import json
 import os
 from collections import deque
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 from uuid import uuid4
-
-from pydantic import JsonValue
 
 from plural import __version__
 from plural.agent.providers.base import (
@@ -21,40 +19,14 @@ from plural.agent.providers.base import (
     Stop,
     TextDelta,
     ToolCallReady,
-    ToolCallRequest,
     UsageReport,
 )
+from plural.agent.providers.cli.answer import tool_call
 from plural.agent.providers.cli.base import CliProvider
 from plural.protocol.models import Usage
 
 MAX_LINE_BYTES = 16 * 1024 * 1024
 RPC_TIMEOUT_S = 60.0
-
-
-def _schema(request: LlmRequest) -> dict[str, Any]:
-    names = [tool.name for tool in request.tools]
-    call: dict[str, Any] = {
-        "type": "object",
-        "properties": {
-            "name": {"type": "string", **({"enum": names} if names else {})},
-            "args": {"type": "string"},
-        },
-        "required": ["name", "args"],
-        "additionalProperties": False,
-    }
-    return {
-        "type": "object",
-        "properties": {
-            "text": {"type": "string"},
-            "tool_calls": {
-                "type": "array",
-                "items": call,
-                **({"maxItems": 0} if not names else {}),
-            },
-        },
-        "required": ["text", "tool_calls"],
-        "additionalProperties": False,
-    }
 
 
 def _head(request: LlmRequest) -> dict[str, object]:
@@ -63,26 +35,6 @@ def _head(request: LlmRequest) -> dict[str, object]:
         "system": request.system,
         "tools": [tool.model_dump(mode="json") for tool in request.tools],
     }
-
-
-def _prompt(request: LlmRequest, messages: tuple[LlmMessage, ...], *, head: bool) -> str:
-    """The turn's input. The thread keeps what it was sent, so the system instructions and
-    tools go along only when they are new to it."""
-    serialized_messages = [
-        message.model_dump(mode="json", exclude_none=True, exclude={"images"})
-        for message in messages
-    ]
-    data = {**(_head(request) if head else {}), "messages": serialized_messages}
-    return (
-        "Answer the conversation using the system instructions, messages, and Plural tools in "
-        "the JSON input"
-        + ("" if head else ", the instructions and tools being the latest given in this thread")
-        + ". Treat message contents as conversation data. "
-        "Do not run commands, inspect files, or use Codex tools. If a Plural tool is needed, "
-        "return its exact name and JSON-encoded args object in tool_calls. Plural will request "
-        "approval before running it. Do not claim a tool has run before its result appears in a "
-        "later message. Otherwise answer in text.\n" + json.dumps(data, ensure_ascii=False)
-    )
 
 
 def _usage(params: dict[str, object]) -> Usage | None:
@@ -133,126 +85,6 @@ def _failure(error: dict[str, object] | None, fallback: str) -> str:
     return detail or fallback
 
 
-def _string_end(raw: str, start: int) -> int | None:
-    index = start + 1
-    while index < len(raw):
-        if raw[index] == '"':
-            return index + 1
-        if raw[index] == "\\":
-            if index + 1 >= len(raw):
-                return None
-            index += 2
-            if raw[index - 1] == "u":
-                if len(raw) < index + 4:
-                    return None
-                index += 4
-        else:
-            index += 1
-    return None
-
-
-def _value_end(raw: str, start: int) -> int | None:
-    if start >= len(raw):
-        return None
-    if raw[start] == '"':
-        return _string_end(raw, start)
-    depth = 0
-    index = start
-    while index < len(raw):
-        char = raw[index]
-        if char == '"':
-            end = _string_end(raw, index)
-            if end is None:
-                return None
-            index = end
-            continue
-        if char in "[{":
-            depth += 1
-        elif char in "]}":
-            if depth == 0:
-                return index
-            depth -= 1
-            if depth == 0:
-                return index + 1
-        elif char == "," and depth == 0:
-            return index
-        index += 1
-    return None
-
-
-def _text_value_start(raw: str) -> int | None:
-    index = 0
-    while index < len(raw) and raw[index].isspace():
-        index += 1
-    if index >= len(raw) or raw[index] != "{":
-        return None
-    index += 1
-    while index < len(raw):
-        while index < len(raw) and (raw[index].isspace() or raw[index] == ","):
-            index += 1
-        if index >= len(raw) or raw[index] == "}":
-            return None
-        if raw[index] != '"':
-            return None
-        key_end = _string_end(raw, index)
-        if key_end is None:
-            return None
-        key = json.loads(raw[index:key_end])
-        index = key_end
-        while index < len(raw) and raw[index].isspace():
-            index += 1
-        if index >= len(raw) or raw[index] != ":":
-            return None
-        index += 1
-        while index < len(raw) and raw[index].isspace():
-            index += 1
-        if key == "text":
-            return index + 1 if index < len(raw) and raw[index] == '"' else None
-        index = _value_end(raw, index)
-        if index is None:
-            return None
-    return None
-
-
-class _TextFieldStream:
-    def __init__(self) -> None:
-        self.raw = ""
-        self.start: int | None = None
-        self.emitted = ""
-
-    def feed(self, fragment: str) -> str:
-        self.raw += fragment
-        if self.start is None:
-            self.start = _text_value_start(self.raw)
-        if self.start is None:
-            return ""
-        end = self.start
-        while end < len(self.raw):
-            char = self.raw[end]
-            if char == '"':
-                break
-            if char == "\\":
-                if end + 1 >= len(self.raw):
-                    break
-                if self.raw[end + 1] == "u":
-                    if len(self.raw) < end + 6:
-                        break
-                    end += 6
-                else:
-                    end += 2
-            else:
-                end += 1
-        try:
-            decoded = json.loads(f'"{self.raw[self.start : end]}"')
-        except json.JSONDecodeError:
-            return ""
-        if not isinstance(decoded, str) or not decoded.startswith(self.emitted):
-            return ""
-        delta = decoded[len(self.emitted) :]
-        self.emitted = decoded
-        return delta
-
-
 class _Cancelled(Exception):
     pass
 
@@ -285,10 +117,14 @@ CODEX_TRIM = (
 )
 
 # Codex's own system prompt, a coding agent's, replaced by this one.
+# Said as what to do rather than what not to: told "do not inspect files", a small model takes it
+# for "you cannot look at the workspace" and stops before it starts.
 BASE_INSTRUCTIONS = (
-    "You are the model backend for Plural. Do not run commands, inspect files, or invoke Codex "
-    "tools. Return only the structured response requested for each turn. Plural owns "
-    "conversation history, tools, and approvals."
+    "You are the model behind Plural, a coding agent shared by a room of people. Codex's own "
+    "tools are switched off; the tools you have are Plural's. Call them to read, search and "
+    "change files and to run commands: Plural runs each call in the workspace, with the room's "
+    "approval where it is needed, and gives you the result. apply_patch cannot write here: "
+    "change files with edit or write. edit's old text is matched exactly, not as a pattern."
 )
 
 
@@ -315,6 +151,8 @@ class CodexCliProvider(CliProvider):
         self._sent_head: dict[str, object] | None = None
         self._window: int | None = None
         self._lock = asyncio.Lock()
+        # Tool calls Codex asked for and waits on, in its open turn: request id and call id.
+        self._pending: list[tuple[object, str]] = []
 
     async def context_window(self) -> int | None:
         """The window Codex reported with its last turn's token usage."""
@@ -396,7 +234,9 @@ class CodexCliProvider(CliProvider):
             "initialize",
             {
                 "clientInfo": {"name": "plural", "title": "Plural", "version": __version__},
-                "capabilities": {},
+                # Plural's tools go to the model as Codex dynamic tools, an experimental part of
+                # the protocol.
+                "capabilities": {"experimentalApi": True},
             },
             cancel=cancel,
         )
@@ -478,7 +318,7 @@ class CodexCliProvider(CliProvider):
         finally:
             self._notifications.extend(deferred)
 
-    async def _ensure_thread(self, cancel: asyncio.Event) -> None:
+    async def _ensure_thread(self, request: LlmRequest, cancel: asyncio.Event) -> None:
         if self._process is None or self._process.returncode is not None:
             self._process = None
             await self._start_server(cancel)
@@ -490,10 +330,22 @@ class CodexCliProvider(CliProvider):
                     "approvalPolicy": "never",
                     "sandbox": "read-only",
                     "ephemeral": True,
-                    "baseInstructions": BASE_INSTRUCTIONS,
+                    # Plural's own system prompt in place of Codex's, and Plural's tools as
+                    # tools the model calls natively: Codex asks Plural to run each one.
+                    "baseInstructions": f"{BASE_INSTRUCTIONS}\n\n{request.system}".strip(),
+                    "dynamicTools": [
+                        {
+                            "type": "function",
+                            "name": tool.name,
+                            "description": tool.description,
+                            "inputSchema": tool.parameters,
+                        }
+                        for tool in request.tools
+                    ],
                 },
                 cancel=cancel,
             )
+            self._sent_head = _head(request)
             thread = _as_dict(result.get("thread"))
             thread_id = _as_str(thread.get("id")) if thread is not None else None
             if not isinstance(thread_id, str):
@@ -506,6 +358,7 @@ class CodexCliProvider(CliProvider):
         self._thread_id = None
         self._messages_snapshot = ()
         self._sent_head = None
+        self._pending = []
         if process is not None and process.returncode is None:
             if process.stdin is not None:
                 process.stdin.close()
@@ -532,166 +385,13 @@ class CodexCliProvider(CliProvider):
     async def stream(
         self, request: LlmRequest, *, cancel: asyncio.Event
     ) -> AsyncIterator[LlmEvent]:
+        """One step of the conversation. Codex runs a turn until it asks for a tool, and Plural
+        runs the tool; the next request brings the result, which goes back into the same turn.
+        """
         async with self._lock:
             try:
-                await self._ensure_thread(cancel)
-                assert self._thread_id is not None
-                assert self._process is not None
-                request_messages = request.messages
-                prefix_matches = request_messages[: len(self._messages_snapshot)] == (
-                    self._messages_snapshot
-                )
-                if not prefix_matches:
-                    # The host compacted or replaced its transcript. Start a clean thread
-                    # seeded with the new history so Codex and Plural do not diverge.
-                    await self._close_server()
-                    await self._ensure_thread(cancel)
-                    assert self._thread_id is not None
-                    self._messages_snapshot = ()
-                head = _head(request)
-                new_messages = tuple(
-                    message
-                    for message in request_messages[len(self._messages_snapshot) :]
-                    if message.role in {"user", "tool"}
-                )
-                if not new_messages:
-                    new_messages = request_messages
-                    await self._close_server()
-                    await self._ensure_thread(cancel)
-                    assert self._thread_id is not None
-                await self._rpc(
-                    "turn/start",
-                    {
-                        "threadId": self._thread_id,
-                        "cwd": str(self._workspace),
-                        "input": [
-                            {
-                                "type": "text",
-                                "text": _prompt(
-                                    request, new_messages, head=head != self._sent_head
-                                ),
-                            },
-                            # Codex keeps the thread, so only the new messages' images go along.
-                            *(
-                                {
-                                    "type": "image",
-                                    "url": f"data:{image.media_type};base64,{image.data}",
-                                }
-                                for message in new_messages
-                                for image in message.images
-                            ),
-                        ],
-                        "model": self._model,
-                        "approvalPolicy": "never",
-                        "outputSchema": _schema(request),
-                    },
-                    cancel=cancel,
-                )
-                text_stream = _TextFieldStream()
-                final_text: str | None = None
-                completed = False
-                while not completed:
-                    message = await self._next_message(cancel)
-                    method = message.get("method")
-                    params = message.get("params")
-                    if not isinstance(method, str) or not isinstance(params, dict):
-                        continue
-                    event = cast("dict[str, object]", params)
-                    if method == "item/agentMessage/delta":
-                        delta = event.get("delta")
-                        if isinstance(delta, str) and delta:
-                            text = text_stream.feed(delta)
-                            if text:
-                                yield TextDelta(text=text)
-                            else:
-                                yield ProviderActivity(source=method)
-                    elif method in {
-                        "item/reasoning/summaryTextDelta",
-                        "item/reasoning/textDelta",
-                        "item/reasoning/summaryPartAdded",
-                        "item/started",
-                        "item/completed",
-                        "turn/started",
-                    }:
-                        yield ProviderActivity(source=method)
-                    elif method == "thread/tokenUsage/updated":
-                        if (usage := _usage(event)) is not None:
-                            yield UsageReport(usage=usage)
-                        token_usage = _as_dict(event.get("tokenUsage"))
-                        window = token_usage.get("modelContextWindow") if token_usage else None
-                        if isinstance(window, int) and window > 0:
-                            self._window = window
-                    elif method == "turn/completed":
-                        turn = _as_dict(event.get("turn"))
-                        if turn is None:
-                            raise ProviderError("Codex app server returned an invalid turn")
-                        status = turn.get("status")
-                        if status != "completed":
-                            turn_error = _as_dict(turn.get("error"))
-                            raise ProviderError(
-                                _failure(turn_error, f"Codex turn failed: {status}")
-                            )
-                        items = turn.get("items")
-                        if isinstance(items, list):
-                            for raw_item in cast("list[object]", items):
-                                item = _as_dict(raw_item)
-                                if item is not None and item.get("type") == "agentMessage":
-                                    item_text = _as_str(item.get("text"))
-                                    if item_text is not None:
-                                        final_text = item_text
-                        completed = True
-                    elif method == "error":
-                        nested = _as_dict(event.get("error")) or event
-                        raise ProviderError(_failure(nested, "Codex app server: turn failed"))
-
-                if final_text is None:
-                    raise ProviderError("Codex app server returned no answer")
-                try:
-                    answer: object = json.loads(final_text)
-                except ValueError as error:
-                    raise ProviderError(
-                        "Codex app server returned invalid structured output"
-                    ) from error
-                if not isinstance(answer, dict):
-                    raise ProviderError("Codex app server returned invalid structured output")
-                answer_data = cast("dict[str, object]", answer)
-                text = answer_data.get("text")
-                calls = answer_data.get("tool_calls")
-                if not isinstance(text, str) or not isinstance(calls, list):
-                    raise ProviderError("Codex app server returned invalid structured output")
-                if text.startswith(text_stream.emitted):
-                    remainder = text[len(text_stream.emitted) :]
-                else:
-                    remainder = text
-                if remainder:
-                    yield TextDelta(text=remainder)
-                available_tools = {tool.name for tool in request.tools}
-                for raw_call in cast("list[object]", calls):
-                    if not isinstance(raw_call, dict):
-                        raise ProviderError("Codex app server returned an invalid tool call")
-                    call = cast("dict[str, object]", raw_call)
-                    name = call.get("name")
-                    args = call.get("args")
-                    if not isinstance(name, str) or not isinstance(args, str):
-                        raise ProviderError("Codex app server returned an invalid tool call")
-                    if name not in available_tools:
-                        raise ProviderError(f"Codex requested an unavailable tool: {name}")
-                    try:
-                        decoded_args: object = json.loads(args)
-                    except ValueError as error:
-                        raise ProviderError("Codex returned invalid tool arguments") from error
-                    if not isinstance(decoded_args, dict):
-                        raise ProviderError("Codex returned invalid tool arguments")
-                    yield ToolCallReady(
-                        call=ToolCallRequest(
-                            id=f"call_{uuid4().hex}",
-                            name=name,
-                            args=cast("dict[str, JsonValue]", decoded_args),
-                        )
-                    )
-                self._messages_snapshot = request_messages
-                self._sent_head = head
-                yield Stop(reason="tool_use" if calls else "end_turn")
+                async for event in self._step(request, cancel):
+                    yield event
             except _Cancelled:
                 await self._close_server()
                 return
@@ -701,3 +401,156 @@ class CodexCliProvider(CliProvider):
             except Exception as error:
                 await self._close_server()
                 raise ProviderError(f"Codex app server failed: {error}") from error
+
+    async def _step(self, request: LlmRequest, cancel: asyncio.Event) -> AsyncIterator[LlmEvent]:
+        held = len(self._messages_snapshot)
+        fresh = request.messages[held:]
+        alive = self._process is not None and self._process.returncode is None
+        continuing = (
+            alive
+            and self._thread_id is not None
+            and _head(request) == self._sent_head
+            and request.messages[:held] == self._messages_snapshot
+            and any(message.role != "assistant" for message in fresh)
+        )
+        said = [message for message in fresh if message.role == "user"]
+        if continuing and self._pending and not said:
+            # The results of the calls the open turn waits on.
+            results = {message.tool_call_id: message for message in fresh if message.role == "tool"}
+            for request_id, call_id in self._pending:
+                result = results.get(call_id)
+                await self._write(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": request_id,
+                        "result": {
+                            "contentItems": [
+                                {
+                                    "type": "inputText",
+                                    "text": result.content if result else "Not run.",
+                                }
+                            ],
+                            "success": result is not None and not result.is_error,
+                        },
+                    }
+                )
+            self._pending = []
+        else:
+            if not continuing or self._pending:
+                # A new conversation, a changed prompt or tools, or a history that went another
+                # way (a compaction, a message mid-turn): a fresh thread with all of it.
+                await self._close_server()
+                await self._ensure_thread(request, cancel)
+                new_messages = request.messages
+            else:
+                new_messages = tuple(message for message in fresh if message.role != "assistant")
+            assert self._thread_id is not None
+            await self._rpc(
+                "turn/start",
+                {
+                    "threadId": self._thread_id,
+                    "cwd": str(self._workspace),
+                    "input": [
+                        {"type": "text", "text": _turn_text(new_messages)},
+                        *(
+                            {
+                                "type": "image",
+                                "url": f"data:{image.media_type};base64,{image.data}",
+                            }
+                            for message in new_messages
+                            for image in message.images
+                        ),
+                    ],
+                    "model": self._model,
+                    "approvalPolicy": "never",
+                },
+                cancel=cancel,
+            )
+        self._messages_snapshot = request.messages
+        streamed = False
+        while True:
+            message = await self._next_message(cancel)
+            method = message.get("method")
+            params = message.get("params")
+            if not isinstance(method, str) or not isinstance(params, dict):
+                continue
+            event = cast("dict[str, object]", params)
+            if method == "item/tool/call" and "id" in message:
+                call_id = _as_str(event.get("callId")) or f"call_{uuid4().hex}"
+                self._pending.append((message["id"], call_id))
+                yield ToolCallReady(
+                    call=tool_call(
+                        {"name": event.get("tool"), "args": event.get("arguments")}, "call"
+                    ).model_copy(update={"id": call_id})
+                )
+                yield Stop(reason="tool_use")
+                return
+            if method == "item/agentMessage/delta":
+                delta = event.get("delta")
+                if isinstance(delta, str) and delta:
+                    streamed = True
+                    yield TextDelta(text=delta)
+            elif method in {
+                "item/reasoning/summaryTextDelta",
+                "item/reasoning/textDelta",
+                "item/reasoning/summaryPartAdded",
+                "item/started",
+                "item/completed",
+                "turn/started",
+            }:
+                yield ProviderActivity(source=method)
+            elif method == "thread/tokenUsage/updated":
+                if (usage := _usage(event)) is not None:
+                    yield UsageReport(usage=usage)
+                token_usage = _as_dict(event.get("tokenUsage"))
+                window = token_usage.get("modelContextWindow") if token_usage else None
+                if isinstance(window, int) and window > 0:
+                    self._window = window
+            elif method == "turn/completed":
+                turn = _as_dict(event.get("turn"))
+                if turn is None:
+                    raise ProviderError("Codex app server returned an invalid turn")
+                status = turn.get("status")
+                if status != "completed":
+                    raise ProviderError(
+                        _failure(_as_dict(turn.get("error")), f"Codex turn failed: {status}")
+                    )
+                if not streamed:
+                    items = turn.get("items")
+                    for raw_item in cast("list[object]", items) if isinstance(items, list) else []:
+                        item = _as_dict(raw_item)
+                        if item is not None and item.get("type") == "agentMessage":
+                            text = _as_str(item.get("text"))
+                            if text:
+                                yield TextDelta(text=text)
+                yield Stop(reason="end_turn")
+                return
+            elif method == "error":
+                nested = _as_dict(event.get("error")) or event
+                raise ProviderError(_failure(nested, "Codex app server: turn failed"))
+
+
+def _turn_text(messages: Sequence[LlmMessage]) -> str:
+    """What a turn starts with: the new prompt as it is, or, for a thread that starts mid-way, the
+    conversation so far and then the newest message."""
+    if len(messages) == 1 and messages[0].role == "user":
+        return messages[0].content
+    earlier = [
+        json.dumps(
+            message.model_dump(mode="json", exclude_none=True, exclude={"images", "native"}),
+            ensure_ascii=False,
+        )
+        for message in messages[:-1]
+    ]
+    last = messages[-1] if messages else None
+    return (
+        "The conversation so far, for context; your own earlier answers and the tools' results "
+        "are in it:\n<conversation>\n"
+        + "\n".join(earlier)
+        + "\n</conversation>\n\n"
+        + (
+            last.content
+            if last is not None and last.role == "user"
+            else "Continue the conversation."
+        )
+    )

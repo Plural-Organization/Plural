@@ -55,6 +55,7 @@ class ToolRegistry:
         self._allowed: frozenset[str] | None = None
         self._loaded: set[str] = set()
         self._pinned: frozenset[str] = frozenset()
+        self._hidden: frozenset[str] = frozenset()
         self._revision = 0
 
     def subset(self, names: Iterable[str]) -> "ToolRegistry":
@@ -63,6 +64,7 @@ class ToolRegistry:
         view._tools = self._tools
         view._sources = self._sources
         view._allowed = frozenset(names)
+        view._hidden = self._hidden
         return view
 
     def register(self, tool: Tool, *, exposure: Exposure = Exposure.CORE) -> None:
@@ -81,6 +83,14 @@ class ToolRegistry:
         """Declare these tools, or every tool of these groups, as if they were core."""
         self._pinned = frozenset(names)
 
+    def hide(self, names: Iterable[str]) -> None:
+        """Keep these tools from the model: they are not declared, found or run, from the next
+        model call on. Calling again replaces the set; an empty one shows every tool."""
+        hidden = frozenset(names)
+        if hidden != self._hidden:
+            self._hidden = hidden
+            self._revision += 1
+
     @property
     def revision(self) -> int:
         """Grows each time a deferred tool is loaded, so a run knows to declare it."""
@@ -98,6 +108,11 @@ class ToolRegistry:
             self._loaded.update(fresh)
             self._revision += 1
         return fresh
+
+    def builtin(self, name: str) -> Tool | None:
+        """The tool registered under this name itself, even when a source replaces it."""
+        entry = self._tools.get(name)
+        return entry.tool if entry is not None else None
 
     def get(self, name: str) -> Tool:
         entry = self._entries().get(name)
@@ -138,15 +153,20 @@ class ToolRegistry:
         return tool.prepare(call.args)
 
     def _entries(self) -> dict[str, Entry]:
-        dynamic = {
-            tool.name: Entry(tool, exposure)
-            for source, exposure in self._sources
-            for tool in source.tools()
-            if tool.name not in self._tools
-        }
+        dynamic: dict[str, Entry] = {}
+        for source, exposure in self._sources:
+            for tool in source.tools():
+                registered = self._tools.get(tool.name)
+                if registered is None:
+                    dynamic[tool.name] = Entry(tool, exposure)
+                elif getattr(tool, "replaces", False):
+                    # A tool that runs a registered one its own way keeps that one's exposure.
+                    dynamic[tool.name] = Entry(tool, registered.exposure)
         return {**self._tools, **dynamic}
 
     def _allowed_name(self, name: str) -> bool:
+        if name in self._hidden:
+            return False
         return (
             self._allowed is None
             or name in self._allowed

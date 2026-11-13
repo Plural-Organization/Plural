@@ -1,4 +1,5 @@
 import asyncio
+import re
 from collections import deque
 from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass, field, replace
@@ -17,6 +18,7 @@ from plural.agent.context.compaction import (
 from plural.agent.context.context import ContextBuilder, system_text
 from plural.agent.context.meter import Sections, context_parts, estimate_tokens, signature
 from plural.agent.context.telemetry import RequestDump, hit_rate
+from plural.agent.context.trimming import trimmed
 from plural.agent.loop.events import (
     AgentEvent,
     Compacted,
@@ -32,7 +34,9 @@ from plural.agent.loop.events import (
     ToolsLoaded,
 )
 from plural.agent.loop.gate import PolicyGate
+from plural.agent.loop.hooks import LoopHooks, NoHooks
 from plural.agent.loop.messages import (
+    HARNESS_SOURCE,
     PLUGIN_SOURCE,
     AssistantTurn,
     Message,
@@ -68,6 +72,7 @@ from plural.agent.providers.base import (
 from plural.agent.providers.resilient import ResilientProvider
 from plural.agent.tools.base import ToolCtx, ToolResult
 from plural.agent.tools.registry import ToolRegistry
+from plural.agent.tracing import INPUT_CHARS, OUTPUT_CHARS, Span, Tracer, clip
 from plural.core.ports import IdGenerator
 from plural.core.provenance import merge
 from plural.protocol.models import (
@@ -76,10 +81,35 @@ from plural.protocol.models import (
     Provenance,
     Role,
     RunEndReason,
+    SpanKind,
+    SpanStatus,
     Usage,
 )
 
 log = structlog.get_logger(__name__)
+
+
+# How often in a row a run reminds the model that it stopped at a promise; a turn with tool
+# calls starts the count again, so a model that keeps going is never cut off by an old count.
+MAX_NUDGES = 2
+NUDGE = (
+    "Your last answer had no tool calls, so nothing ran: saying a call was made does not make "
+    "it. Put each call you need in tool_calls now, with its name and args. If the work is "
+    "already done, give your final answer with no tool calls."
+)
+# A short reply that ends on what the model is about to do: "I'll read pages.py next."
+_PROMISE = re.compile(
+    r"(?:^|[.!?:\n]\s*)(?:I['’]ll|I will|I am going to|I['’]m going to|Let me|Next,? I|"
+    r"Now I['’]ll|I['’]m waiting|I am waiting)\b",
+    re.IGNORECASE,
+)
+
+
+def promises(text: str) -> bool:
+    """A reply that announces work instead of reporting it. A long reply is a report even when
+    it says what comes next, so only short ones count."""
+    reply = text.strip()
+    return 0 < len(reply) <= 600 and _PROMISE.search(reply[-300:]) is not None
 
 
 class BriefingFailed(Exception):
@@ -94,7 +124,9 @@ SHARED = Provenance(initiator_id="shared-context", initiator_role=Role.VIEWER, o
 
 @dataclass(frozen=True, slots=True)
 class LoopLimits:
-    max_turns: int = 50
+    # Model calls in one run. A model that calls tools one at a time, as Codex does, needs one
+    # call per tool: a change across 40 files is 40 calls and more.
+    max_turns: int = 150
     repeat_limit: int = 3
     tool_timeout_s: float = 600.0
     first_token_timeout_s: float = 120.0
@@ -141,14 +173,22 @@ class AgentLoop:
         limits: LoopLimits | None = None,
         helper: LLMProvider | None = None,
         dump: RequestDump | None = None,
+        tracer: Tracer | None = None,
+        span: Span | None = None,
+        role: str = "main",
+        hooks: LoopHooks | None = None,
     ) -> None:
         self._tools = tools
         self._gate = gate
+        self._hooks = hooks or NoHooks()
         self._context = context
         self._tool_ctx = tool_ctx
         self._ids = ids
         self._limits = limits or LoopLimits()
-        self._models = Models(provider, helper, wrap=self._resilient, dump=dump)
+        self._models = Models(provider, helper, wrap=self._resilient, dump=dump, main_role=role)
+        self._tracer = tracer or Tracer()
+        # A sub-agent's loop works under the span of the call that started it.
+        self._under = span
         self._prompt: tuple[Sections, tuple[ToolSchema, ...]] | None = None
         self._conversation: list[Message] = []
         self._notes: list[NotesTurn] = []
@@ -166,7 +206,11 @@ class AgentLoop:
         self._compaction_failed = False
         self._verify_compaction = False
         self._runner = ToolRunner(
-            tools=tools, gate=gate, tool_ctx=tool_ctx, timeout_s=self._limits.tool_timeout_s
+            tools=tools,
+            gate=gate,
+            tool_ctx=tool_ctx,
+            timeout_s=self._limits.tool_timeout_s,
+            hooks=hooks,
         )
         # The registry's revision the run's tool list was taken at.
         self._revision = tools.revision
@@ -247,14 +291,44 @@ class AgentLoop:
     async def compact(self, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         """Summarize the conversation now, outside a prompt, so everyone sees it happen."""
         self._usage = Usage()
+        span = self._begin("compact", "")
         yield Compacting(self._tokens())
         try:
             yield await self._compact(None, cancel, "manual")
         except CompactionFailed as error:
+            self._end(span, RunEndReason.ERROR, str(error))
             yield RunEnd(RunEndReason.ERROR, self._usage, f"compaction failed: {error}")
             return
         yield self.fill()
-        yield RunEnd(RunEndReason.ABORTED if cancel.is_set() else RunEndReason.STOP, self._usage)
+        reason = RunEndReason.ABORTED if cancel.is_set() else RunEndReason.STOP
+        self._end(span, reason, "")
+        yield RunEnd(reason, self._usage)
+
+    @property
+    def tracer(self) -> Tracer:
+        return self._tracer
+
+    def _begin(self, name: str, detail: str) -> Span:
+        """Open the run's span, the one its model and tool calls go under."""
+        span = self._under or self._tracer.start(SpanKind.RUN, name, detail=detail)
+        self._models.span = span
+        self._runner.span = span
+        return span
+
+    def _end(self, span: Span, reason: RunEndReason | None, error: str | None) -> None:
+        self._models.span = None
+        self._runner.span = None
+        if span is self._under:
+            return
+        status = (
+            SpanStatus.OK
+            if reason is RunEndReason.STOP
+            else SpanStatus.CANCELLED
+            if reason is RunEndReason.ABORTED or reason is None
+            else SpanStatus.ERROR
+        )
+        span.end(status, error=(error or "")[:300])
+        self._tracer.settle()
 
     def mark_shared(self) -> None:
         self._shared = True
@@ -311,6 +385,24 @@ class AgentLoop:
 
     async def run(self, prompt: UserTurn, *, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         """One run: model turns and their tool calls, until the model stops or a limit ends it."""
+        span = self._begin("run", " ".join(prompt.text.split())[:200])
+        if span is not self._under:
+            span.set(input=clip(prompt.text, INPUT_CHARS))
+        ending: RunEnd | None = None
+        try:
+            async for event in self._run(prompt, cancel):
+                if isinstance(event, MessageEnd) and event.text.strip() and span is not self._under:
+                    span.set(output=clip(event.text, OUTPUT_CHARS))
+                if isinstance(event, RunEnd):
+                    # Closed before the event goes out, so whoever sees the run end sees it whole.
+                    ending = event
+                    self._end(span, event.reason, event.error)
+                yield event
+        finally:
+            if ending is None:
+                self._end(span, None, None)
+
+    async def _run(self, prompt: UserTurn, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         provenance = merge(prompt.provenance, SHARED) if self._shared else prompt.provenance
         self._conversation.extend(self._notes)
         self._notes.clear()
@@ -323,6 +415,7 @@ class AgentLoop:
         self._compaction_failed = False
         self._verify_compaction = False
         recovering = False
+        nudges = 0
         recent: deque[str] = deque(maxlen=self._limits.repeat_limit)
         try:
             for _ in range(self._limits.max_turns):
@@ -393,12 +486,27 @@ class AgentLoop:
                     yield ToolsLoaded(fresh)
                 # Tools that all ask to terminate hand the turn back without another model call.
                 has_tool_calls = bool(ended) and not all(result.terminate for result in ended)
+                if has_tool_calls:
+                    nudges = 0
                 if (has_tool_calls or self._steer or self._follow_up) and (
                     limit := self._gate.turn_limit(usage=self._usage, provenance=provenance)
                 ):
                     yield RunEnd(RunEndReason.LIMIT, self._usage, limit)
                     return
                 queued = self._next_input(has_tool_calls=has_tool_calls)
+                if (
+                    not has_tool_calls
+                    and not queued
+                    and nudges < MAX_NUDGES
+                    and promises(assistant.text)
+                ):
+                    # The model said what it would do and called nothing: a small model behind a
+                    # JSON answer does this, thinking the tools run on their own. One reminder
+                    # instead of ending the run on a promise.
+                    nudges += 1
+                    log.info("agent.nudged", text=assistant.text[:200])
+                    self._conversation.append(NotesTurn(source=HARNESS_SOURCE, text=NUDGE))
+                    continue
                 if not has_tool_calls and not queued:
                     yield RunEnd(RunEndReason.STOP, self._usage)
                     return
@@ -428,7 +536,8 @@ class AgentLoop:
     async def _model_turn(self, turn: _Turn, cancel: asyncio.Event) -> AsyncIterator[AgentEvent]:
         """One model call: its text and thinking go out as deltas, the rest is kept in `turn`."""
         measured = len(self._conversation)
-        async for event in self._models.stream(self._request(), cancel):
+        request = await self._hooks.request(self._request())
+        async for event in self._models.stream(request, cancel):
             match event:
                 case TextDelta(text=text):
                     turn.text.append(text)
@@ -553,13 +662,17 @@ class AgentLoop:
         budget = min(self._limits.keep_recent, threshold // 2 if threshold else 1 << 62)
         end = cut(self._conversation, start, budget) or len(self._conversation)
         history = self._conversation[start:end]
-        request = LlmRequest(
-            system=SUMMARY_SYSTEM,
-            messages=(LlmMessage(role="user", content=summary_request(history, previous)),),
-        )
-        summary, role = await self._models.tagged(
-            request, cancel, tag="summary", purpose="compact", counted=self._count
-        )
+        written = await self._hooks.summary(history, previous)
+        if written is not None:
+            summary, role = written, "hook"
+        else:
+            request = LlmRequest(
+                system=SUMMARY_SYSTEM,
+                messages=(LlmMessage(role="user", content=summary_request(history, previous)),),
+            )
+            summary, role = await self._models.tagged(
+                request, cancel, tag="summary", purpose="compact", counted=self._count
+            )
         summary = with_files(summary, history, previous)
         tail = self._conversation[end:]
         before = self._tokens()
@@ -643,9 +756,16 @@ class AgentLoop:
         sections, tools = self._prompt_parts()
         return LlmRequest(
             system=system_text(sections),
-            messages=to_llm(self._conversation),
+            messages=to_llm(self._sent_conversation()),
             tools=tools,
         )
+
+    def _sent_conversation(self) -> list[Message]:
+        """The conversation as the model is sent it: old tool results shortened, unless the
+        provider keeps the history itself and must be sent the same messages as before."""
+        if getattr(self.provider, "keeps_history", False):
+            return list(self._conversation)
+        return trimmed(self._conversation)
 
     def _answer(self, call: ToolCallRequest, result: ToolResult) -> None:
         self._conversation.append(

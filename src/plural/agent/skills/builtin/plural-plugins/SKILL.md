@@ -1,16 +1,26 @@
 ---
 name: plural-plugins
-description: Write, fix or explain a Plural plugin, a Python file that adds slash commands to the room or tools for the agent. Use when someone asks for a custom /command, a plugin, a plugin tool, or why a plugin failed to load.
+description: Only for Plural plugins, Python code that extends Plural itself (commands, agent tools, hooks on prompts, tool calls and context, replaced built-in tools, MCP servers, model providers, sessions); write, fix or explain one, or why it failed to load.
 ---
 
 # Plural plugins
 
-A plugin is one Python file in the host's plugin folder, `~/.plural/plugins/<name>.py` (under
-`PLURAL_DATA_DIR` when the host set it; `/plugins` shows each plugin's path). The host imports every
-file there at start and on `/plugins reload`, and calls its `setup(plural)` function. A plugin can add:
+A plugin is one Python file in the host's plugin folder, `~/.plural/plugins/<name>.py`, or a folder
+`<name>/` that starts from `plugin.py` (under `PLURAL_DATA_DIR` when the host set it; `/plugins` shows
+each plugin's path). The host imports every plugin there at start and on `/plugins reload`, and calls
+its `setup(plural)` function. A plugin can add:
 
-- **commands**: `/name` typed by a person in the room, handled by an async function;
-- **tools**: functions the agent calls like any other tool, through the host's approvals.
+- **commands**: `/name` typed by a person in the room, with an optional keyboard shortcut;
+- **tools**: functions the agent calls like any other tool, through the host's approvals, or a
+  built-in tool such as bash run its own way;
+- **hooks**: rewrite a prompt (`input`), add notes before a run (`before_run`), change a tool call's
+  arguments (`tool_args`) or result (`tool_result`), guard a call (`tool_call`), change what the model
+  is sent (`context`), write the compaction summary (`summary`), act after a run (`run_end`) or watch
+  the agent work (`tool_start`, `tool_end`, `message_end`, `compaction`);
+- **settings for the agent**: text in its system prompt, hidden tools, MCP servers, model providers,
+  and from a host's command a model switch, a fork of the session or a switch to another one.
+
+Look up the section for what the user asks for; most plugins need one or two of these.
 
 Plugins run inside the host process with the host's permissions. Only the host installs them, and they
 are never loaded from the workspace.
@@ -103,6 +113,17 @@ exception becomes an error result the model reads, so raise with a clear message
 an error string. Every call goes through the host's policy: a tool without a rule asks the host, and
 the host can allow it for good with `/policy allow <tool> *`.
 
+## Running a built-in tool your own way
+
+`@plural.override("bash")` (also `read`, `write`, `edit`, `multi_edit`, `grep`, `glob`, `ls`,
+`web_fetch`) runs the built-in tool with your async function `(args, ctx)`. The model, the policy and
+the room still see the built-in: its schema, risk, subject and approvals. Return the result text, or
+nothing to let the built-in run; `await ctx.original()` runs it and returns its text. One plugin per
+tool. Use it to run commands in a container or on another machine, or to post-process a tool.
+
+A tool's `subject=lambda args: ...` sets how its calls read in the room, approval cards and `/policy`
+rules, such as `ticket PLR-1`; name what the call acts on.
+
 ## Keeping state
 
 `plural.store.get(key, default)`, `.set(key, value)`, `.delete(key)` and `.all()` keep JSON values in
@@ -115,6 +136,46 @@ module variables for anything that must survive `/plugins reload`.
 the side panel that the whole room sees, at most 80 characters and one change a second; `""` removes it.
 Use it for state that matters while people work, such as `tests 3/3 ✓` after a `run_end` hook.
 
+## MCP servers
+
+`plural.mcp(name, command=..., args=[...], env={...})` or `plural.mcp(name, url=..., headers={...})` in
+`setup` connects an MCP server for as long as the plugin is loaded, without writing it to the MCP
+config; its tools load on demand like any MCP server's. Read tokens from the environment, never
+hard-code them.
+
+## Model providers
+
+`plural.provider(id, base_url=..., models=[...], label=None, kind="openai", key_env=None)` offers an
+OpenAI-compatible (or `kind="anthropic"`) API in the host's model settings next to the built-in
+presets, its key read from the environment variable `key_env`. `ctx.set_model(model, provider=id)`
+switches to it.
+
+## Switching the model
+
+`await ctx.set_model(model, provider=None)` in a command switches the agent's model, as the host would in
+settings: the same provider unless a preset is named. Only a command the host ran may, and not while
+the agent works; it returns the new label and raises `PluginError` otherwise. Make such commands
+`host_only=True`.
+
+## Forking and switching sessions
+
+In a command the host ran, `await ctx.fork(title=None, before_prompt_id=None, switch=False)` copies the
+session into a new one and returns its id (`switch=True` moves the host's terminal client there), and
+`await ctx.switch(room)` moves it to another session the host keeps. Make such commands `host_only`.
+
+## Which tools the agent has
+
+`plural.hide_tools(names)` keeps those tools from the agent from its next model call on (not declared,
+not found by tool_search, not run); calling it again replaces the plugin's set and `[]` shows them all.
+Use it for modes, such as read-only: `plural.hide_tools(["write", "edit", "multi_edit", "bash"])`.
+
+## Instructions for the agent
+
+`plural.instructions(text)` (on the `plural` object, in `setup` or later) puts the text in the agent's
+system prompt as `<plugin name="…">`, from its next run on; `""` removes it. All plugins together get
+4,000 characters. Use it for what the agent should always know while the plugin is loaded, such as how
+to use the plugin's tools; use a `before_run` hook for facts that change between runs.
+
 ## Hooks
 
 `@plural.on("tool_call")` runs before the policy on every tool call the agent makes. The handler gets
@@ -123,8 +184,31 @@ returns `plural.deny(reason)`, `plural.ask(reason)` or nothing. There is no allo
 ("never push to main", "ask before touching migrations/"), not to skip approvals. Keep it fast: after 5
 seconds, or if it raises, the call needs the host's approval.
 
+`@plural.on("tool_args")` runs first on every tool call and may change its arguments: it gets `(call,
+ctx)` (`call.name`, `call.args`, `call.author_id`, `call.role`) and returns the new arguments as a dict,
+or nothing to leave them. The changed call is then validated and put to `tool_call` hooks and the policy
+like any other. 5 seconds; a hook that fails changes nothing. Use it to fix commands (`pip` → `uv pip`),
+add flags, or point paths elsewhere.
+
+`@plural.on("tool_result")` runs after a tool call that ran and may replace what the model gets back:
+it gets `(result, ctx)` (`result.name`, `result.risk`, `result.subject`, `result.args`,
+`result.content`, `result.is_error`, `result.author_id`, `result.role`) and returns the new text, or
+nothing. 5 seconds; a hook that fails changes nothing. Use it to hide secrets, shorten noisy output or
+add a hint to an error.
+
+`@plural.on("context")` runs before every model call with `(context, ctx)`: `context.system` (read only)
+and `context.messages`, each with `role` (`user`, `assistant`, `tool`), `content` and, for tool
+results, `tool`. Set a message's `content` to change what the model is sent; messages cannot be added
+or removed, and the session's history keeps the original. 5 seconds; a hook that fails changes
+nothing. Changing older messages costs the provider's cache, and with the Claude Code, Codex or Grok CLI
+restarts their session, so prefer the latest messages.
+
 `@plural.on("session_start")` gets `(session, ctx)` (`session.room`, `session.workspace`) after the
 plugins load, at start and on every reload.
+
+`@plural.on("input")` gets `(prompt, ctx)` when a run starts and may return new text for the prompt
+the agent gets, such as a macro expanded; nothing leaves it. The room still shows what the person
+typed. 5 seconds; it runs before `before_run`, which sees the new text.
 
 `@plural.on("before_run")` gets `(prompt, ctx)` (`prompt.text`, `prompt.author_id`, `prompt.role`) when
 a run starts and returns text the agent reads as a note right before the prompt, or nothing. 5 seconds,
@@ -136,6 +220,34 @@ tests, ticket.
 `run.input_tokens`, `run.output_tokens`. `ctx.reply`, `ctx.run` and `ctx.prompt(text)` (as the host) work;
 the run a hook prompt starts does not fire `run_end` again. Good for running tests or a linter after the
 agent changed files.
+
+### Writing the compaction summary
+
+`@plural.on("summary")` runs when the conversation is compacted, with `(event, ctx)`:
+`event.conversation` (the part being summarized as text), `event.previous` (the last summary or
+`None`) and `event.messages`. Return the summary text to use it in place of the model's, or nothing.
+The first hook that answers wins; 120 seconds.
+
+### Watching the agent work
+
+`tool_start` (`call.run_id`, `call.call_id`, `call.name`, `call.risk`, `call.subject`, `call.args`),
+`tool_end` (`result.run_id`, `result.call_id`, `result.name`, `result.content`, `result.is_error`),
+`message_end` (`message.run_id`, `message.message_id`, `message.text`, `message.thinking`) and
+`compaction` (`event.run_id`, `event.summary`, `event.tokens_before`) only watch: they get each event
+in order, in the background, and their return value is ignored. 5 seconds each. Use them to log, count,
+mirror the session elsewhere or update `plural.status`.
+
+## Bigger plugins
+
+A plugin can be a folder `~/.plural/plugins/<name>/` starting from `plugin.py`, importing its other
+modules relatively (`from .client import Tracker`), with PyPI packages in `requirements.txt`. The host
+installs one with `plural-host plugins install <git URL | folder | file> [--name N]`, which puts the
+requirements in the folder's own `.deps` with uv. Prefer a single file until it grows.
+
+## Shortcuts
+
+`plural.command(name, ..., shortcut="f5")` binds a key in the terminal client that runs the command with
+no arguments: `ctrl+<letter>` or `f5`–`f12`, not one the client uses (ctrl+o, ctrl+f, ctrl+b, ...).
 
 ## Good plugins
 

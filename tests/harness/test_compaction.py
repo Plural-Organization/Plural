@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Sequence
 from pathlib import Path
 
 from tests.doubles import STALL, FakeProvider, ScriptedProvider, reply, use_tool
@@ -6,9 +7,11 @@ from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.context.compaction import SUMMARY_PROMPT, SUMMARY_SYSTEM, extract_summary
 from plural.agent.loop.events import AgentEvent, Compacted, MessageEnd, RunEnd
+from plural.agent.loop.hooks import NoHooks
 from plural.agent.loop.loop import FALLBACK_WINDOW, AgentLoop, LoopLimits
 from plural.agent.loop.messages import (
     AssistantTurn,
+    Message,
     SummaryTurn,
     ToolResultTurn,
     UserTurn,
@@ -359,3 +362,26 @@ async def test_a_summary_cut_off_at_the_output_limit_is_not_used(tmp_path: Path)
     loop = make_loop(tmp_path, main, StubGate(), LIMITS, helper=fast)
     events = await collect(loop, turn("go"))
     assert [event.summary for event in compacted(events)] == ["whole summary"]
+
+
+class Summarizer(NoHooks):
+    def __init__(self) -> None:
+        self.seen: list[tuple[int, str | None]] = []
+
+    async def summary(self, history: Sequence[Message], previous: str | None) -> str | None:
+        self.seen.append((len(history), previous))
+        return "the hook's own summary"
+
+
+async def test_a_hook_writes_the_summary_in_place_of_the_model(tmp_path: Path) -> None:
+    provider = FakeProvider([used(use_tool("ls", "c1", path="."), 900), reply("finished")])
+    hooks = Summarizer()
+    loop = make_loop(tmp_path, provider, StubGate(), LIMITS, hooks=hooks)
+    events = await collect(loop, turn("go"))
+
+    [event] = compacted(events)
+    assert event.summary.startswith("the hook's own summary")
+    assert hooks.seen == [(3, None)]
+    # No model call went to the summary: the run went straight on.
+    assert len(provider.requests) == 2
+    assert last(events).reason is RunEndReason.STOP

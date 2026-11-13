@@ -89,6 +89,7 @@ class Host:
     conflicts: ConflictBoard | None = None
     import_url: str | None = None
     chat_link: McpLink | None = None
+    plugins: PluginHost | None = None
 
     async def serve(self) -> None:
         async with asyncio.TaskGroup() as group:
@@ -247,6 +248,9 @@ async def _assemble(
         workspace=workspace.root,
         inbox=inbox,
         reserved_tools=tools.registered,
+        builtin_tool=tools.builtin,
+        hide_tools=tools.hide,
+        mcp=mcp,
     )
     tools.add_source(plugins.tools_source(Exposure.CORE))
     tools.add_source(plugins.tools_source(Exposure.DEFERRED), exposure=Exposure.DEFERRED)
@@ -285,10 +289,12 @@ async def _assemble(
             project_notes=await _project_notes(workspace),
             skills=skills,
             agents=agents,
+            plugins=plugins,
             tool_rules=tools.guidelines(),
         ),
         tool_ctx=ToolCtx(workspace=workspace, backend=LocalBackend()),
         ids=ids,
+        hooks=plugins,
         dump=RequestDump(state_dir / "logs" / "requests" / room)
         if settings.dump_requests
         else None,
@@ -362,6 +368,7 @@ async def _assemble(
         mcp=mcp,
         agents=agents,
         plugins=plugins,
+        data_dir=settings.state_dir,
         typing_ttl_s=settings.typing_ttl_s,
         agent_label=settings.agent_label(),
         fast_label=helper.label if helper else "",
@@ -406,6 +413,7 @@ async def _assemble(
         conflicts=board,
         import_url=import_url,
         chat_link=chat_link,
+        plugins=plugins,
     )
 
 

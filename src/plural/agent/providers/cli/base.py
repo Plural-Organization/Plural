@@ -24,6 +24,9 @@ class CliProvider(ABC):
     # The models offered in settings; the first is the default. None leaves the CLI's own default.
     models: ClassVar[tuple[str, ...]] = ()
     hint: ClassVar[str] = ""
+    # The CLI keeps the conversation in its own session and is sent only what is new, so what
+    # it was sent before must not change: old tool results are not shortened for it.
+    keeps_history: ClassVar[bool] = True
 
     def __init__(self, *, model: str = "", workspace: Path, cli: str | None = None) -> None:
         path = cli or shutil.which(self.binary)

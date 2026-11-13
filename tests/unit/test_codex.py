@@ -8,7 +8,16 @@ from tests.loop_support import StubGate, collect, make_loop, turn
 
 from plural.agent.loop.events import MessageEnd, RunEnd
 from plural.agent.loop.loop import LoopLimits
-from plural.agent.providers.base import LlmImage, LlmMessage, LlmRequest, UsageReport
+from plural.agent.providers.base import (
+    LlmImage,
+    LlmMessage,
+    LlmRequest,
+    Stop,
+    TextDelta,
+    ToolCallReady,
+    ToolSchema,
+    UsageReport,
+)
 from plural.agent.providers.cli import codex as codex_cli
 from plural.agent.providers.cli.codex import CodexCliProvider
 from plural.protocol.models import RunEndReason, Usage
@@ -35,7 +44,7 @@ def fake_codex(tmp_path: Path, *, progress: str) -> Path:
         "    if progress == 'initial':\n"
         "        emit('item/started', {'item': {'type': 'reasoning'}})\n"
         "        time.sleep(0.25)\n"
-        "    emit('item/agentMessage/delta', {'delta': '{\"text\":\"Working\"'})\n"
+        "    emit('item/agentMessage/delta', {'delta': 'Working'})\n"
         "    for _ in range(6):\n"
         "        time.sleep(0.12 if progress == 'long_silent' else 0.04)\n"
         "        if progress in {'reasoning', 'initial'}:\n"
@@ -43,10 +52,10 @@ def fake_codex(tmp_path: Path, *, progress: str) -> Path:
         "        elif progress == 'raw_reasoning':\n"
         "            emit('item/reasoning/textDelta', {'delta': 'Still working.'})\n"
         "        elif progress == 'structured':\n"
-        "            emit('item/agentMessage/delta', {'delta': ' '})\n"
+        "            emit('item/agentMessage/delta', {'delta': ''})\n"
+        "            emit('item/started', {'item': {'type': 'agentMessage'}})\n"
         "    emit('turn/completed', {'turn': {'status': 'completed', 'items': [\n"
-        "        {'type': 'agentMessage', 'text': json.dumps(\n"
-        "            {'text': 'Working', 'tool_calls': []})}\n"
+        "        {'type': 'agentMessage', 'text': 'Working'}\n"
         "    ]}})\n"
     )
     cli.chmod(0o755)
@@ -126,7 +135,7 @@ async def test_codex_receives_the_new_messages_images(tmp_path: Path) -> None:
         "    print(json.dumps({'id': msg['id'], 'result': result}), flush=True)\n"
         "    if msg['method'] != 'turn/start': continue\n"
         f"    open({str(record)!r}, 'a').write(json.dumps(msg['params']['input']) + '\\n')\n"
-        "    answer = json.dumps({'text': 'red', 'tool_calls': []})\n"
+        "    answer = 'red'\n"
         "    last = {'inputTokens': 50, 'cachedInputTokens': 40, 'outputTokens': 3}\n"
         "    print(json.dumps({'method': 'thread/tokenUsage/updated', 'params': {\n"
         "        'tokenUsage': {'last': last, 'modelContextWindow': 475000}}}), flush=True)\n"
@@ -157,10 +166,8 @@ async def test_codex_receives_the_new_messages_images(tmp_path: Path) -> None:
     turns = [json.loads(line) for line in record.read_text().splitlines()]
     assert turns[0][1] == {"type": "image", "url": "data:image/png;base64,cmVk"}
     assert [item["type"] for item in turns[1]] == ["text"]
-    # The thread keeps the system instructions and tools, so only the first turn sends them.
-    first_input, second_input = (json.loads(t[0]["text"].split("\n", 1)[1]) for t in turns)
-    assert set(first_input) == {"system", "tools", "messages"}
-    assert set(second_input) == {"messages"}
+    # The thread keeps the conversation: a turn starts with the new message only.
+    assert (turns[0][0]["text"], turns[1][0]["text"]) == ("what color?", "sure?")
 
 
 def test_codex_turn_usage_counts_the_cached_prompt_apart() -> None:
@@ -228,3 +235,73 @@ async def test_codex_adds_none_of_its_own_prompt(tmp_path: Path) -> None:
     assert "--disable" not in argv
     start = next(line for line in lines[1:] if line.get("method") == "thread/start")
     assert start["params"]["baseInstructions"] == codex_cli.BASE_INSTRUCTIONS
+
+
+async def test_codex_calls_plurals_tools_natively_and_gets_their_results(tmp_path: Path) -> None:
+    record = tmp_path / "codex.jsonl"
+    cli = tmp_path / "codex"
+    cli.write_text(
+        f"#!{sys.executable}\n"
+        "import json, sys\n"
+        "if sys.argv[1:3] == ['login', 'status'] or '--help' in sys.argv:\n"
+        "    sys.exit(0)\n"
+        f"log = open({str(record)!r}, 'a')\n"
+        "def emit(message):\n"
+        "    print(json.dumps(message), flush=True)\n"
+        "for line in sys.stdin:\n"
+        "    msg = json.loads(line)\n"
+        "    log.write(json.dumps(msg) + '\\n'); log.flush()\n"
+        "    if 'method' not in msg and msg.get('id') == 'tool-1':\n"
+        "        text = msg['result']['contentItems'][0]['text']\n"
+        "        delta = {'delta': 'It says ' + text}\n"
+        "        emit({'method': 'item/agentMessage/delta', 'params': delta})\n"
+        "        emit({'method': 'turn/completed', 'params': {'turn': {'status': 'completed'}}})\n"
+        "        continue\n"
+        "    if 'id' not in msg: continue\n"
+        "    result = {'thread': {'id': 't'}} if msg['method'] == 'thread/start' else {}\n"
+        "    emit({'id': msg['id'], 'result': result})\n"
+        "    if msg['method'] == 'turn/start':\n"
+        "        emit({'id': 'tool-1', 'method': 'item/tool/call', 'params': {\n"
+        "            'threadId': 't', 'turnId': 'u', 'callId': 'call-9', 'tool': 'read',\n"
+        "            'arguments': {'path': 'a.txt'}}})\n"
+    )
+    cli.chmod(0o755)
+    provider = CodexCliProvider(workspace=tmp_path, cli=str(cli))
+    tools = (ToolSchema(name="read", description="Read a file", parameters={"type": "object"}),)
+    asked = (LlmMessage(role="user", content="what is in a.txt?"),)
+    try:
+        first = [
+            event
+            async for event in provider.stream(
+                LlmRequest(system="Be brief.", messages=asked, tools=tools), cancel=asyncio.Event()
+            )
+        ]
+        (call,) = [event.call for event in first if isinstance(event, ToolCallReady)]
+        assert (call.id, call.name, call.args) == ("call-9", "read", {"path": "a.txt"})
+        assert first[-1] == Stop(reason="tool_use")
+        answered = (
+            *asked,
+            LlmMessage(role="assistant", content="", tool_calls=(call,)),
+            LlmMessage(role="tool", content="alpha", tool_call_id="call-9"),
+        )
+        second = [
+            event
+            async for event in provider.stream(
+                LlmRequest(system="Be brief.", messages=answered, tools=tools),
+                cancel=asyncio.Event(),
+            )
+        ]
+    finally:
+        await provider.close()
+    assert "".join(e.text for e in second if isinstance(e, TextDelta)) == "It says alpha"
+    assert second[-1] == Stop(reason="end_turn")
+    sent = [json.loads(line) for line in record.read_text().splitlines()]
+    initialize = next(m for m in sent if m.get("method") == "initialize")
+    assert initialize["params"]["capabilities"] == {"experimentalApi": True}
+    start = next(m for m in sent if m.get("method") == "thread/start")
+    assert [tool["name"] for tool in start["params"]["dynamicTools"]] == ["read"]
+    assert "Be brief." in start["params"]["baseInstructions"]
+    # The result went back into the open turn; no second turn was started.
+    assert sum(m.get("method") == "turn/start" for m in sent) == 1
+    reply = next(m for m in sent if m.get("id") == "tool-1" and "result" in m)
+    assert reply["result"]["success"] is True

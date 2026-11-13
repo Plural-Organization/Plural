@@ -1,0 +1,1 @@
+prompt = """`node test.js` fails. Fix `slug.js` so it passes, without changing `test.js`."""

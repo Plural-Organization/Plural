@@ -89,9 +89,11 @@ export interface CommandsSchema {
     | ParticipantSetRole
     | ParticipantRevoke
     | ContextCompact
+    | SessionFork
     | PromptModeSet
     | PermissionModeSet
     | SkillsSearch
+    | TraceGet
     | SkillsInstall
     | SkillsRemove
     | McpAdd
@@ -331,6 +333,17 @@ export interface ContextCompact {
   type?: "context.compact";
 }
 /**
+ * Copy this session into a new one: all of it, or what came before one prompt.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "SessionFork".
+ */
+export interface SessionFork {
+  before_prompt_id?: string | null;
+  title?: string | null;
+  type?: "session.fork";
+}
+/**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "PromptModeSet".
  */
@@ -353,6 +366,18 @@ export interface PermissionModeSet {
 export interface SkillsSearch {
   query: string;
   type?: "skills.search";
+}
+/**
+ * Ask for what a run did, as spans. Without a run, the latest one; `everything` asks for
+ * the spans of every run instead, for a picture of the whole session.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "TraceGet".
+ */
+export interface TraceGet {
+  everything?: boolean;
+  run_id?: string | null;
+  type?: "trace.get";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

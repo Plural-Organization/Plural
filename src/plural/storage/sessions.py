@@ -1,5 +1,7 @@
 import re
+import shutil
 import sqlite3
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import Final
@@ -104,3 +106,80 @@ def delete_session(data_dir: Path, room: str) -> bool:
             target.unlink()
             removed = True
     return removed
+
+
+# Meta a fork leaves behind: its own link, title and start are its own.
+_NOT_FORKED: Final = ("room_link", "title", "created_at")
+
+
+def fork_session(
+    data_dir: Path,
+    room: str,
+    new_room: str,
+    *,
+    before_seq: int | None = None,
+    title: str | None = None,
+    now: datetime,
+) -> Path:
+    """Copy session `room` into a new session `new_room`: its whole history, or only what came
+    before event `before_seq`. The copy gets its own room link, title and start time, and
+    remembers which session it came from. The original is left as it is."""
+    # The source is a session this machine already keeps, under whatever id it was given.
+    source = sessions_dir(data_dir) / f"{Path(room).name}.db"
+    target = session_path(data_dir, new_room)
+    if not source.exists():
+        raise ValueError(f"there is no session {room}")
+    if target.exists():
+        raise ValueError(f"session {new_room} already exists")
+    reader = sqlite3.connect(f"file:{source}?mode=ro", uri=True)
+    writer = sqlite3.connect(target)
+    try:
+        # The backup API copies a database another connection may be writing to.
+        reader.backup(writer)
+        if before_seq is not None:
+            cut = _scalar(writer, "SELECT ts FROM events WHERE seq = ?", before_seq)
+            writer.execute("DELETE FROM events WHERE seq >= ?", (before_seq,))
+            writer.execute("DELETE FROM snapshots WHERE seq >= ?", (before_seq,))
+            if isinstance(cut, str):
+                # The trace of what ran from the cut on goes with it.
+                since = int(datetime.fromisoformat(cut).timestamp() * 1000)
+                # A session written before traces were kept has no spans table yet.
+                with suppress(sqlite3.OperationalError):
+                    writer.execute("DELETE FROM spans WHERE started_ms >= ?", (since,))
+        writer.executemany("DELETE FROM meta WHERE key = ?", [(key,) for key in _NOT_FORKED])
+        writer.executemany(
+            "INSERT INTO meta (key, value) VALUES (?, ?)",
+            [
+                ("forked_from", room),
+                ("created_at", now.isoformat()),
+                *([("title", title[:TITLE_CHARS])] if title else []),
+            ],
+        )
+        writer.commit()
+    except sqlite3.Error:
+        writer.close()
+        delete_session(data_dir, new_room)
+        raise
+    finally:
+        reader.close()
+    writer.close()
+    # Files people attached are kept beside the session, and the copied history refers to them.
+    attachments = data_dir.expanduser() / "attachments"
+    if (attachments / Path(room).name).is_dir():
+        shutil.copytree(attachments / Path(room).name, attachments / new_room)
+    return target
+
+
+def prompt_seq(data_dir: Path, room: str, prompt_id: str) -> int | None:
+    """Where prompt `prompt_id` was accepted in session `room`, for a fork before it."""
+    db = sqlite3.connect(f"file:{session_path(data_dir, room)}?mode=ro", uri=True)
+    try:
+        seq = _scalar(
+            db,
+            "SELECT seq FROM events WHERE type = 'prompt.accepted' "
+            "AND json_extract(payload, '$.prompt_id') = ?",
+            prompt_id,
+        )
+    finally:
+        db.close()
+    return seq if isinstance(seq, int) else None

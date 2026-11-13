@@ -3,11 +3,12 @@ import base64
 import binascii
 import hashlib
 import json
+import sqlite3
 from collections.abc import Coroutine, Sequence
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
-from pathlib import PurePath
+from pathlib import Path, PurePath
 
 import structlog
 from pydantic import ValidationError
@@ -139,11 +140,13 @@ from plural.protocol.commands import (
     QueueCancel,
     RunAbort,
     SelectionSet,
+    SessionFork,
     SessionHello,
     SkillsInstall,
     SkillsRemove,
     SkillsSearch,
     TeamProof,
+    TraceGet,
     TypingSet,
 )
 from plural.protocol.envelope import Envelope, ErrorCode, ErrorInfo
@@ -202,7 +205,9 @@ from plural.protocol.events import (
     ProposalApproved,
     RunEnded,
     RunStarted,
+    SessionForked,
     SessionSnapshot,
+    SessionSwitch,
     SessionWelcome,
     SkillsChanged,
     SkillsFound,
@@ -210,6 +215,7 @@ from plural.protocol.events import (
     ToolOutput,
     ToolsLoaded,
     ToolStarted,
+    TraceFound,
     UsageRecorded,
 )
 from plural.protocol.models import (
@@ -241,10 +247,13 @@ from plural.protocol.models import (
     RunEndReason,
     SessionState,
     SkillScope,
+    Span,
+    SpanKind,
     Usage,
     UsageLine,
 )
 from plural.security.secrets import Redactor, is_denied_path
+from plural.storage.sessions import fork_session, read_session, session_path
 
 log = structlog.get_logger(__name__)
 
@@ -301,6 +310,8 @@ class SessionActor:
         mcp: McpHub | None = None,
         agents: AgentLibrary | None = None,
         plugins: PluginHost | None = None,
+        # Where sessions are kept, for forking this one; None on a host that cannot fork.
+        data_dir: Path | None = None,
         typing_ttl_s: float = 6.0,
         agent_label: str = "",
         fast_label: str = "",
@@ -344,6 +355,8 @@ class SessionActor:
         self._max_participants = max_participants
         self._knocking: dict[str, Knock] = {}
         self._agent = agent_run
+        # The run the spans being stored belong to, kept for those that close after it ends.
+        self._span_run = ""
         self._registry = approval_registry
         self._gate = gate
         self._vault = vault
@@ -359,6 +372,7 @@ class SessionActor:
         self._mcp = mcp
         self._agents = agents
         self._plugins = plugins
+        self._data_dir = data_dir
         self._jobs: set[asyncio.Task[None]] = set()
         self._typing_ttl_s = typing_ttl_s
         self._agent_label = agent_label
@@ -484,6 +498,8 @@ class SessionActor:
                 await self._on_disconnect(connection)
             case AgentOutput(run_id=run_id, event=event):
                 await self._on_agent(run_id, event)
+                if self._plugins is not None:
+                    self._plugins.observe(run_id, event)
             case ApprovalNeeded(approval=approval):
                 if self._conflicts is not None:
                     warnings = self._conflicts.warnings_for(approval.call, self._clock.now())
@@ -514,6 +530,10 @@ class SessionActor:
             case Reconfigure() as change:
                 await self._reconfigure(change)
             case McpUpdated():
+                # A server a plugin connected brings its own env and headers to mask.
+                if self._mcp is not None:
+                    for secret in self._mcp.secrets():
+                        self._redactor.add(secret)
                 await self._sync_mcp()
             case SkillsUpdated(connection=connection, error=error):
                 await self._sync_skills()
@@ -635,6 +655,8 @@ class SessionActor:
                 if self._state.run is None:
                     raise Conflict("no active run")
                 self._agent.abort()
+            case SessionFork(title=title, before_prompt_id=before):
+                await self.fork(title=title, before_prompt_id=before, actor_id=participant.id)
             case ContextCompact():
                 if self._state.run is not None:
                     self._agent.request_compaction()
@@ -656,6 +678,21 @@ class SessionActor:
                 await self._agents_command(command, actor_id=participant.id)
             case McpAdd() | McpRemove() | McpToggle() | McpRestart() | McpImport():
                 await self._mcp_command(command, actor_id=participant.id)
+            case TraceGet(run_id=wanted, everything=everything):
+                await self._record_spans()
+                runs = await self._store.trace_runs()
+                chosen = None if everything else wanted or (runs[0].run_id if runs else None)
+                spans = await self._store.read_spans(chosen) if chosen or everything else []
+                if participant.role is not Role.HOST:
+                    # What a model was sent holds the host's system prompt and notes; a guest sees
+                    # the answers, the tool calls and the numbers.
+                    spans = [
+                        span.model_copy(update={"input": ""}) if span.kind is SpanKind.LLM else span
+                        for span in spans
+                    ]
+                self._publisher.deliver(
+                    connection, TraceFound(run_id=chosen, spans=tuple(spans), runs=tuple(runs))
+                )
             case SkillsSearch():
                 self._background(self._search_skills(connection, command.query))
             case SkillsInstall():
@@ -1292,6 +1329,40 @@ class SessionActor:
         if servers != self._state.mcp:
             await self._emit(McpChanged(servers=servers), actor_id=actor_id or self._host.id)
 
+    async def _record_spans(self) -> None:
+        """Store what the run did since the last look, named by this host's run, models and
+        people: the loop knows roles and spans, not who prompted or which model a role is."""
+        spans = self._agent.take_spans()
+        if not spans:
+            return
+        run = self._state.run
+        run_id = run.id if run is not None else self._span_run
+        self._span_run = run_id
+        models = {"main": self._agent_label, "fast": self._fast_label or self._agent_label}
+        prompter = run.provenance.initiator_id if run is not None else None
+        named: list[Span] = []
+        for span in spans:
+            actor = (
+                self._host.id
+                if span.kind is SpanKind.APPROVAL
+                else prompter
+                if span.parent_id is None
+                else None
+            )
+            named.append(
+                span.model_copy(
+                    update={
+                        "run_id": run_id,
+                        "model": models.get(span.model, span.model),
+                        "actor_id": actor or span.actor_id,
+                        # What went in and out is stored as the room would see it: no secrets.
+                        "input": self._redactor.redact(span.input),
+                        "output": self._redactor.redact(span.output),
+                    }
+                )
+            )
+        await self._store.save_spans(named)
+
     async def _record_usage(self) -> None:
         models = {"main": self._agent_label, "fast": self._fast_label or self._agent_label}
         lines = tuple(
@@ -1369,6 +1440,8 @@ class SessionActor:
             workspace=self._require_plugins().workspace,
             inbox=self._inbox,
             asker=self._plugin_ask,
+            switcher=self._require_plugins().switch_model,
+            sessions=_PluginSessions(self, participant.id),
         )
         self._background(self._invoke_plugin(found, context))
 
@@ -1536,31 +1609,100 @@ class SessionActor:
         else:
             self._agent.steer(turn)
 
+    async def fork(
+        self,
+        *,
+        title: str | None,
+        before_prompt_id: str | None,
+        actor_id: str,
+        switch: bool = False,
+    ) -> SessionForked:
+        """Copy this session into a new one and tell the room. Returns what it announced."""
+        if self._data_dir is None:
+            raise Conflict("this host cannot fork its session")
+        before_seq: int | None = None
+        if before_prompt_id is not None:
+            records = await self._store.read()
+            before_seq = next(
+                (
+                    record.seq
+                    for record in records
+                    if isinstance(record.event, PromptAccepted)
+                    and record.event.prompt_id == before_prompt_id
+                ),
+                None,
+            )
+            if before_seq is None:
+                raise NotFound(f"no prompt {before_prompt_id} in this session")
+        room = self._ids.new("r_")
+        name = (title or "").strip() or None
+        try:
+            await asyncio.to_thread(
+                fork_session,
+                self._data_dir,
+                self._publisher.room,
+                room,
+                before_seq=before_seq,
+                title=name,
+                now=self._clock.now(),
+            )
+        except (ValueError, sqlite3.Error) as error:
+            raise Conflict(f"could not fork the session: {error}") from None
+        info = await asyncio.to_thread(read_session, session_path(self._data_dir, room))
+        forked = SessionForked(
+            room=room,
+            title=info.title if info is not None else (name or room),
+            before_prompt_id=before_prompt_id,
+            switch=switch,
+        )
+        await self._emit(forked, actor_id=actor_id)
+        return forked
+
+    async def open_session(self, room: str, *, actor_id: str) -> SessionSwitch:
+        """Ask the host's client to switch to another session this host keeps."""
+        if self._data_dir is None:
+            raise Conflict("this host cannot switch sessions")
+        try:
+            info = await asyncio.to_thread(read_session, session_path(self._data_dir, room))
+        except ValueError:
+            info = None
+        if info is None:
+            raise NotFound(f"no session {room}")
+        switch = SessionSwitch(room=room, title=info.title)
+        await self._emit(switch, actor_id=actor_id)
+        return switch
+
     async def _start_run(self, turn: UserTurn) -> None:
         run_id = self._ids.new("run_")
         if self._plugins is not None and self._plugins.hooks("run_end"):
             self._run_changes = ChangeLedger(self._plugins.workspace)
         await self._emit(RunStarted(run_id=run_id, prompt_id=turn.id, provenance=turn.provenance))
         plugins = self._plugins
-        if plugins is None or not plugins.hooks("before_run"):
+        if plugins is None or not (plugins.hooks("before_run") or plugins.hooks("input")):
             self._agent.start(run_id, turn)
             return
 
-        async def prepare(prompt: UserTurn) -> list[tuple[str, str]]:
+        async def prepare(prompt: UserTurn) -> tuple[UserTurn, list[tuple[str, str]]]:
             info = PromptInfo(
                 prompt_id=prompt.id,
                 text=prompt.text,
                 author_id=prompt.provenance.initiator_id,
                 role=prompt.provenance.initiator_role.value,
             )
+            text = await plugins.rewrite_input(info)
+            if text != prompt.text:
+                prompt = prompt.model_copy(update={"text": text})
+                info = replace(info, text=text)
             added = await plugins.before_run(info)
-            return [(name, self._redactor.redact(text)) for name, text in added]
+            return prompt, [(name, self._redactor.redact(note)) for name, note in added]
 
         self._agent.start(run_id, turn, prepare)
 
     async def _on_agent(self, run_id: str, event: agent.AgentEvent) -> None:
         if self._state.run is None or self._state.run.id != run_id:
             return
+        if not isinstance(event, agent.MessageDelta):
+            await self._record_spans()
         match event:
             case agent.MessageStart(message_id=message_id):
                 self._streaming[message_id] = ""
@@ -1618,6 +1760,7 @@ class SessionActor:
             self._registry.resolve(resolved.approval_id, ApprovalDecision.REJECT)
             await self._emit(resolved)
         self._streaming.clear()
+        await self._record_spans()
         await self._record_usage()
         run = self._state.run
         await self._emit(RunEnded(run_id=run_id, reason=reason, usage=usage, error=error))
@@ -1822,3 +1965,20 @@ class SessionActor:
     def _sync_policy(self) -> None:
         self._gate.use_session_rules(policies.to_rules(self._state.policy))
         self._gate.use_mode(self._state.permission_mode)
+
+
+class _PluginSessions:
+    """What a plugin command reaches of the sessions: forking this one and opening another."""
+
+    def __init__(self, actor: SessionActor, actor_id: str) -> None:
+        self._actor = actor
+        self._actor_id = actor_id
+
+    async def fork(self, title: str | None, before_prompt_id: str | None, switch: bool) -> str:
+        forked = await self._actor.fork(
+            title=title, before_prompt_id=before_prompt_id, actor_id=self._actor_id, switch=switch
+        )
+        return forked.room
+
+    async def open(self, room: str) -> None:
+        await self._actor.open_session(room, actor_id=self._actor_id)

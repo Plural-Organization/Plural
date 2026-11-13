@@ -56,6 +56,9 @@ export function parseSlash(text: string, plugins: ReadonlySet<string> = new Set(
       return { type: "show.usage" };
     case "context":
       return { type: "show.context" };
+    case "trace":
+      // What a run did, as a tree: the latest run, or with "all" every run of the session.
+      return { type: "trace.get", run_id: null, everything: argument === "all" };
     case "agents": {
       const [verb, name] = argument.split(/\s+/).filter(Boolean);
       if (verb === undefined) {

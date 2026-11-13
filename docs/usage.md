@@ -54,6 +54,23 @@ plural rm <id>            # delete one
 
 A resumed session works in the folder it was started in, even when you are somewhere else; `--workspace` chooses another one. The conversation continues where it stopped, the people who were in the room come back with their old links while those are valid, and new invites work as usual. The title is the first prompt unless you named it with `--title`.
 
+### Fork a session
+
+A fork copies a session into a new one, to try another way from the same point and keep the original
+as it was. In the terminal client, `/fork [title]` forks the session you host and goes on in the fork
+at once; `/resume <id or title>` switches to another of your sessions the same way, without quitting
+plural. A session that is not running is forked with the host program:
+
+```bash
+plural-host fork <id>                       # the whole conversation
+plural-host fork <id> --before <prompt id>  # only what came before that prompt
+plural-host fork <id> --title "plan B"
+```
+
+The fork gets a new id, its own room link and the title you give it, and `plural -r <new id>`
+continues it. Its history, attached files and trace are the original's up to the fork point. The
+fork has a new room link, so share its invite again to bring people in.
+
 The chooser also lists the rooms you joined as a guest. Choosing one takes you back in without a new invite, as long as the link you were given is still valid (a token lasts 24 hours) and the host is running.
 
 ## Use it from a script

@@ -21,7 +21,8 @@ from plural.agent.providers.base import (
     UsageReport,
 )
 from plural.agent.providers.resilient import ResilientProvider
-from plural.protocol.models import Usage
+from plural.agent.tracing import Span
+from plural.protocol.models import SpanKind, Usage
 
 log = structlog.get_logger(__name__)
 
@@ -38,9 +39,13 @@ class Models:
         *,
         wrap: Callable[[LLMProvider], ResilientProvider],
         dump: RequestDump | None,
+        main_role: str = "main",
     ) -> None:
         self._wrap = wrap
+        self._main_role = main_role
         self.dump = dump
+        # The span model calls open under: the run's, while one is going.
+        self.span: Span | None = None
         self.main = wrap(main)
         self.helper = wrap(helper) if helper is not None else None
         self._spending: dict[tuple[str, str], Spend] = {}
@@ -93,12 +98,17 @@ class Models:
         """One request to a model, the main one unless named, dumped and logged."""
         chosen = provider or self.main
         dumped = self.dump.write(request, purpose) if self.dump is not None else None
+        role = self.role(chosen)
+        # A sub-agent's own main model may be its parent's fast one.
+        model = self._main_role if role == "main" else role
+        span = self.span.child(SpanKind.LLM, purpose, model=model) if self.span else None
         return observed(
             chosen.stream(request, cancel=cancel),
             request,
             purpose=purpose,
-            role=self.role(chosen),
+            role=role,
             dumped=dumped,
+            span=span,
         )
 
     async def tagged(

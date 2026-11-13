@@ -1,4 +1,21 @@
-import { cacheHitLabel, contextLines, label, missedCache, ruleLine, type Projection, type Role } from "@plural/client";
+import {
+  cacheHitLabel,
+  cachedShare,
+  callGraph,
+  compactDuration,
+  compactTokens,
+  contextLines,
+  label,
+  missedCache,
+  ruleLine,
+  totalTokens,
+  traceLines,
+  traceTree,
+  type Projection,
+  type Role,
+  type Span,
+  type SpanStatus,
+} from "@plural/client";
 import { visibleCommands, type CommandHint } from "./commands";
 import type { Row } from "./components/Tray";
 import { colorFor, theme } from "./theme";
@@ -192,4 +209,105 @@ export function contextRows(projection: Projection): Row[] {
         ]),
     [{ text: "parts are estimated from their length and scaled to the provider's count", fg: theme.dim }],
   ];
+}
+
+const BAR = 8;
+const BLOCKS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "▉"];
+
+/** A share of 0..1 as a bar of `BAR` cells, in eighths of a cell. */
+function bar(share: number): string {
+  const eighths = Math.round(Math.min(Math.max(share, 0), 1) * BAR * 8);
+  return ("█".repeat(Math.floor(eighths / 8)) + (BLOCKS[eighths % 8] ?? "")).padEnd(BAR);
+}
+
+function statusColor(status: SpanStatus): string {
+  return status === "error" || status === "denied" ? theme.danger : status === "running" ? theme.warn : status === "cancelled" ? theme.dim : theme.text;
+}
+
+const STATUS_MARK: Record<SpanStatus, string> = { ok: "", running: "…", error: "✕", denied: "⊘", cancelled: "■" };
+
+function who(projection: Projection, actorId: string | null): string {
+  return actorId === null ? "" : (projection.state.participants[actorId]?.name ?? "someone");
+}
+
+/** One run as a tree: each step, what it and everything under it spent, and how long it took. */
+export function traceRows(projection: Projection, spans: readonly Span[], width: number): { title: string; rows: Row[] } {
+  const roots = traceTree(spans);
+  const root = roots[0];
+  if (root === undefined) {
+    return { title: "trace", rows: [[{ text: "no run has been traced yet: ask the agent something first", fg: theme.dim }]] };
+  }
+  const lines = traceLines(roots);
+  // The tree and its details take what the numbers on the right leave.
+  const left = Math.max(24, Math.min(width - (7 + BAR + 2 + 8 + 14), 72));
+  const rows = lines.map((line): Row => {
+    const span = line.node.span;
+    const head = `${line.branch}${line.title}`;
+    const detail = line.detail === "" ? "" : `  ${line.detail}`;
+    const room = Math.max(0, left - head.length);
+    const shown = detail.length > room ? `${detail.slice(0, Math.max(0, room - 1))}…` : detail;
+    const cached = span.kind === "llm" ? cachedShare(line.node.totals) : null;
+    const note = [
+      STATUS_MARK[line.status],
+      cached !== null && cached > 0 ? `${Math.round(cached * 100)}% cached` : "",
+      span.kind === "approval" ? who(projection, span.actor_id) : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    return [
+      { text: line.branch, fg: theme.dim },
+      { text: line.title, fg: span.kind === "llm" ? theme.accent : span.kind === "agent" ? theme.info : statusColor(line.status), bold: line.node.depth === 0 },
+      { text: shown.padEnd(room), fg: theme.dim },
+      { text: line.tokens.padStart(7), fg: theme.text },
+      { text: ` ${bar(line.share)} `, fg: span.kind === "llm" ? theme.accent : theme.dim },
+      { text: line.duration.padStart(7), fg: span.kind === "approval" ? theme.warn : theme.dim },
+      { text: note === "" ? "" : `  ${note}`, fg: statusColor(line.status) === theme.text ? theme.dim : statusColor(line.status) },
+    ];
+  });
+  const by = who(projection, root.span.actor_id);
+  const totals = root.totals;
+  const title = [
+    "trace",
+    by === "" ? "" : `run by ${by}`,
+    `${compactTokens(totalTokens(totals))} tokens`,
+    `${totals.models} model calls`,
+    `${totals.tools} tool calls`,
+    compactDuration(root.durationMs),
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  return { title, rows };
+}
+
+/** Every run of the session added up: who called what, how often, and what it cost. */
+export function callGraphRows(projection: Projection, spans: readonly Span[]): { title: string; rows: Row[] } {
+  const graph = callGraph(spans, (id) => who(projection, id));
+  if (graph.edges.length === 0) {
+    return { title: "trace · session", rows: [[{ text: "no run has been traced yet", fg: theme.dim }]] };
+  }
+  const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
+  const name = (id: string): string => nodes.get(id)?.label ?? id;
+  const kind = (id: string): string => nodes.get(id)?.kind ?? "tool";
+  const color = (id: string): string =>
+    kind(id) === "person" ? theme.text : kind(id) === "agent" ? theme.info : kind(id) === "model" ? theme.accent : theme.dim;
+  const from = Math.max(...graph.edges.map((edge) => name(edge.from).length));
+  const to = Math.max(...graph.edges.map((edge) => name(edge.to).length));
+  const most = Math.max(...graph.edges.map((edge) => edge.tokens), 1);
+  const rows = graph.edges
+    .slice()
+    .sort((a, b) => b.tokens - a.tokens || b.calls - a.calls)
+    .map((edge): Row => {
+      const target = nodes.get(edge.to);
+      return [
+        { text: name(edge.from).padEnd(from), fg: color(edge.from) },
+        { text: "  →  ", fg: theme.dim },
+        { text: name(edge.to).padEnd(to + 2), fg: color(edge.to) },
+        { text: `${edge.calls}×`.padStart(5), fg: theme.dim },
+        { text: (edge.tokens > 0 ? compactTokens(edge.tokens) : "").padStart(8), fg: theme.text },
+        { text: ` ${bar(edge.tokens / most)} `, fg: color(edge.to) },
+        { text: target !== undefined && target.failed > 0 ? `${target.failed} failed` : "", fg: theme.danger },
+      ];
+    });
+  const runs = traceTree(spans).length;
+  return { title: `trace · session · ${runs} run${runs === 1 ? "" : "s"} · who called what`, rows };
 }

@@ -4,6 +4,7 @@ from pathlib import Path
 from plural.agent.context.context import ContextBuilder
 from plural.agent.loop.events import AgentEvent
 from plural.agent.loop.gate import FolderResult, GateResult
+from plural.agent.loop.hooks import LoopHooks
 from plural.agent.loop.loop import AgentLoop, LoopLimits
 from plural.agent.loop.messages import UserTurn
 from plural.agent.providers.base import LLMProvider
@@ -62,6 +63,7 @@ def make_loop(
     gate: StubGate,
     limits: LoopLimits | None = None,
     helper: LLMProvider | None = None,
+    hooks: LoopHooks | None = None,
 ) -> AgentLoop:
     (tmp_path / "a.txt").write_text("alpha\n")
     return AgentLoop(
@@ -73,6 +75,7 @@ def make_loop(
         ids=UlidGenerator(),
         limits=limits,
         helper=helper,
+        hooks=hooks,
     )
 
 

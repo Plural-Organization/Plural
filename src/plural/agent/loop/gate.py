@@ -9,6 +9,8 @@ from plural.protocol.models import Provenance, ToolCallView, Usage
 class GateResult:
     allowed: bool
     reason: str
+    # The host was asked and the call waited for the answer.
+    asked: bool = False
 
 
 @dataclass(frozen=True, slots=True)

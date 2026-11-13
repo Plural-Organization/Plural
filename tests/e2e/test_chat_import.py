@@ -7,7 +7,6 @@ from typing import Any
 
 from websockets.asyncio.server import ServerConnection, serve
 
-from plural.agent.providers.fake import FakeProvider
 from plural.protocol.commands import ApprovalRespond, ImportLink
 from plural.protocol.events import ApprovalRequested, BriefingImported, ImportLinkShown
 from plural.protocol.models import ApprovalDecision

@@ -1,5 +1,5 @@
-import { Avatar, AvatarGroup, Button, Chip, ProgressBar, Spinner, Tooltip } from "@heroui/react";
-import { SidebarSimple, SignOut } from "@phosphor-icons/react";
+import { Avatar, AvatarGroup, Button, Chip, Kbd, ProgressBar, Spinner, Tooltip } from "@heroui/react";
+import { Graph, SidebarSimple, SignOut } from "@phosphor-icons/react";
 import { contextMeter, type ConnectionStatus, type Projection } from "@plural/client";
 import { orbFor, PersonAvatar } from "./PersonAvatar";
 import { AgentLogo } from "./AgentLogo";
@@ -18,11 +18,14 @@ interface TopBarProps {
   onLeave: () => void;
   // Shows or hides the list of sessions; a narrow screen slides it over the room.
   onToggleRail: () => void;
+  // Opens or closes what the agent's runs did, step by step.
+  traceOpen?: boolean;
+  onToggleTrace?: () => void;
 }
 
 const METER_COLOR = { ok: "accent", warn: "warning", danger: "danger" } as const;
 
-export function TopBar({ room, projection, connection, panelOpen, panelShown = false, railOpen, onCopyRoom, onTogglePanel, onLeave, onToggleRail }: TopBarProps) {
+export function TopBar({ room, projection, connection, panelOpen, panelShown = false, railOpen, onCopyRoom, onTogglePanel, onLeave, onToggleRail, traceOpen = false, onToggleTrace }: TopBarProps) {
   const state = projection.state;
   const meter = contextMeter(state);
   const people = Object.values(state.participants);
@@ -86,6 +89,16 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
           <Chip.Label>{connection === "connecting" ? "Connecting" : "Reconnecting"}</Chip.Label>
         </Chip>
       )}
+      {onToggleTrace ? (
+        <Tooltip delay={300}>
+          <Button isIconOnly variant={traceOpen ? "secondary" : "ghost"} size="sm" aria-label="Trace" aria-pressed={traceOpen} onPress={onToggleTrace}>
+            <Graph size={18} />
+          </Button>
+          <Tooltip.Content>
+            Trace: what each run did and spent <Kbd className="ml-1 h-5 px-1 text-[11px]"><Kbd.Content>t</Kbd.Content></Kbd>
+          </Tooltip.Content>
+        </Tooltip>
+      ) : null}
       <Tooltip delay={300}>
         <Button isIconOnly variant="ghost" size="sm" className={panelOpen ? "min-[981px]:hidden" : ""} aria-label="The room panel" aria-expanded={panelShown} onPress={onTogglePanel}>
           <SidebarSimple size={18} className="-scale-x-100" />

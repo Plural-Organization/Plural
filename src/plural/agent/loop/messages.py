@@ -13,7 +13,13 @@ def summary_message(text: str) -> str:
     return f"{prompt('summary_note')}\n{tag('summary', text)}"
 
 
+# A note from the harness itself, which goes to the model as it is.
+HARNESS_SOURCE = "plural:harness"
+
+
 def notes_message(source: str, text: str) -> str:
+    if source == HARNESS_SOURCE:
+        return text
     if source.startswith(PLUGIN_SOURCE):
         plugin = source.removeprefix(PLUGIN_SOURCE)
         note = prompt("plugin_note").format(plugin=plugin)

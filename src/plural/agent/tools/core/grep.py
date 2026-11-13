@@ -51,6 +51,9 @@ class GrepTool(TypedTool[GrepArgs]):
             raise ToolError(f"invalid pattern: {error}") from error
         base = ctx.workspace.resolve(args.path)
         matches: list[str] = []
+        # Every match is counted, the first ones shown: a model shown 200 of 5,000 without a word
+        # takes them for all, and answers from the wrong part of a log.
+        found = 0
         for file in await ctx.backend.walk(base, limit=WALK_LIMIT):
             if ctx.workspace.is_denied(file):
                 continue
@@ -62,7 +65,13 @@ class GrepTool(TypedTool[GrepArgs]):
                 continue
             for number, line in enumerate(data.decode(errors="replace").splitlines(), 1):
                 if regex.search(line):
-                    matches.append(f"{relative}:{number}: {line[:MAX_LINE_CHARS]}")
-                    if len(matches) >= MAX_MATCHES:
-                        return ToolResult(truncate_head("\n".join(matches)))
-        return ToolResult(truncate_head("\n".join(matches)) or "(no matches)")
+                    found += 1
+                    if found <= MAX_MATCHES:
+                        matches.append(f"{relative}:{number}: {line[:MAX_LINE_CHARS]}")
+        shown = truncate_head("\n".join(matches))
+        if found > MAX_MATCHES:
+            shown += (
+                f"\n[the first {MAX_MATCHES} of {found} matches; narrow the pattern, path or "
+                "include, or run a shell command that filters and sorts them]"
+            )
+        return ToolResult(shown or "(no matches)")

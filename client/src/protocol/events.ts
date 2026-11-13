@@ -50,6 +50,11 @@ export type PermissionMode = "default" | "accept_edits" | "plan" | "auto";
 export type SkillScope = "project" | "global";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "SpanKind".
+ */
+export type SpanKind = "run" | "llm" | "tool" | "approval" | "agent";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "AdmissionMode".
  */
 export type AdmissionMode = "approve" | "open";
@@ -109,6 +114,7 @@ export type ContextPartKind =
   | "project_notes"
   | "skills"
   | "agents"
+  | "plugins"
   | "tools"
   | "messages"
   | "tool_results"
@@ -154,6 +160,11 @@ export type BoardShape = "pen" | "line" | "arrow" | "rect" | "ellipse" | "text" 
  * via the `definition` "CursorSurface".
  */
 export type CursorSurface = "board" | "preview";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "SpanStatus".
+ */
+export type SpanStatus = "running" | "ok" | "error" | "denied" | "cancelled";
 
 export interface EventsSchema {
   envelope: Envelope;
@@ -166,6 +177,7 @@ export interface EventsSchema {
     | PermissionModeChanged
     | SkillsChanged
     | SkillsFound
+    | TraceFound
     | AgentChanged
     | AdmissionChanged
     | JoinRequested
@@ -205,6 +217,8 @@ export interface EventsSchema {
     | MessageDelta
     | MessageEnded
     | ContextCompacting
+    | SessionForked
+    | SessionSwitch
     | ContextCompacted
     | ContextUsage
     | McpChanged
@@ -358,6 +372,53 @@ export interface SkillHit {
   installs: number;
   name: string;
   package: string;
+}
+/**
+ * The answer to `trace.get`: the spans asked for, and the newest runs to choose from.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "TraceFound".
+ */
+export interface TraceFound {
+  run_id: string | null;
+  runs: Span[];
+  spans: Span[];
+  type: "trace.found";
+}
+/**
+ * One thing a run did: a model call, a tool call, a wait for approval, a sub-agent.
+ *
+ * Spans of a run form a tree through `parent_id`. `usage` is what the span itself spent, not
+ * its children; a client adds the children up.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "Span".
+ */
+export interface Span {
+  actor_id: string | null;
+  chars: number;
+  context_tokens: number;
+  detail: string;
+  ended_ms: number | null;
+  error: string;
+  first_ms: number | null;
+  id: string;
+  input: string;
+  kind: SpanKind;
+  model: string;
+  name: string;
+  output: string;
+  parent_id: string | null;
+  run_id: string;
+  started_ms: number;
+  status: "running" | "ok" | "error" | "denied" | "cancelled";
+  usage: Usage;
+}
+export interface Usage {
+  cache_read_tokens: number;
+  cache_write_tokens: number;
+  input_tokens: number;
+  output_tokens: number;
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -823,9 +884,9 @@ export interface RunEnded {
   reason: RunEndReason;
   run_id: string;
   type: "run.ended";
-  usage: Usage;
+  usage: Usage1;
 }
-export interface Usage {
+export interface Usage1 {
   cache_read_tokens: number;
   cache_write_tokens: number;
   input_tokens: number;
@@ -869,6 +930,30 @@ export interface ContextCompacting {
   run_id: string;
   tokens_before: number;
   type: "context.compacting";
+}
+/**
+ * The host copied this session into a new one, which `plural -r <room>` continues.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "SessionForked".
+ */
+export interface SessionForked {
+  before_prompt_id: string | null;
+  room: string;
+  switch: boolean;
+  title: string;
+  type: "session.forked";
+}
+/**
+ * The host's client is asked to leave this session for another one it keeps, by a plugin.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "SessionSwitch".
+ */
+export interface SessionSwitch {
+  room: string;
+  title: string;
+  type: "session.switch";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -945,10 +1030,10 @@ export interface UsageLine {
   agent: string;
   model: string;
   role: string;
-  usage: Usage1;
+  usage: Usage2;
   uses: number;
 }
-export interface Usage1 {
+export interface Usage2 {
   cache_read_tokens: number;
   cache_write_tokens: number;
   input_tokens: number;
@@ -1000,6 +1085,7 @@ export interface PluginCommandView {
   host_only: boolean;
   name: string;
   plugin: string;
+  shortcut: string | null;
   usage: string;
 }
 /**
@@ -1372,6 +1458,7 @@ export interface EventRecord {
     | PermissionModeChanged
     | SkillsChanged
     | SkillsFound
+    | TraceFound
     | AgentChanged
     | AdmissionChanged
     | JoinRequested
@@ -1411,6 +1498,8 @@ export interface EventRecord {
     | MessageDelta
     | MessageEnded
     | ContextCompacting
+    | SessionForked
+    | SessionSwitch
     | ContextCompacted
     | ContextUsage
     | McpChanged
@@ -1443,7 +1532,7 @@ export interface EventRecord {
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "Usage".
  */
-export interface Usage2 {
+export interface Usage3 {
   cache_read_tokens: number;
   cache_write_tokens: number;
   input_tokens: number;

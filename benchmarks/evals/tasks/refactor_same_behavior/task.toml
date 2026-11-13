@@ -1,0 +1,3 @@
+prompt = """The three exporters in `exporters.py` repeat the same filtering and sorting. Move that into one
+helper they all use, without changing what they output. Each exporter should keep its name and
+signature."""
