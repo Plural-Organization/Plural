@@ -418,6 +418,7 @@ def no_system_opener(monkeypatch: pytest.MonkeyPatch) -> None:
         return None
 
     monkeypatch.setattr("plural.cli.account._start_daemon", skip)
+    monkeypatch.setattr("plural.cli.account.stop_daemon", lambda: 0)
 
 
 def test_the_system_opener_is_not_waited_for(monkeypatch: pytest.MonkeyPatch) -> None:

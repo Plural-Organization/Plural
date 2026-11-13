@@ -19,6 +19,7 @@ from plural import __version__
 from plural.cli.account import login, logout, whoami
 from plural.cli.agent import agent_app
 from plural.cli.format import ago
+from plural.cli.stop import stop
 from plural.cli.team import ls, team_app
 from plural.host.config import DEFAULT_MCP_URL, DEFAULT_RELAY_URL, HostSettings
 from plural.host.team import TeamStore
@@ -38,6 +39,7 @@ app.add_typer(team_app, name="team")
 app.add_typer(agent_app, name="agent")
 app.command(name="ls")(ls)
 app.command(name="login")(login)
+app.command(name="stop")(stop)
 app.command(name="logout")(logout)
 app.command(name="whoami")(whoami)
 console = Console()

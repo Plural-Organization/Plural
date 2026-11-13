@@ -11,6 +11,7 @@ import typer
 from rich.console import Console
 from rich.markup import escape
 
+from plural.cli.stop import stop_daemon
 from plural.host.account import AccountError, AccountStore, claim, device_login
 from plural.host.config import DEFAULT_ACCOUNTS_URL, HostSettings
 
@@ -142,6 +143,7 @@ def logout() -> None:
         console.print("This computer is not linked to an account.")
         return
     store.clear()
+    stop_daemon()
     console.print("Forgot the account on this computer. Remove it on the web to end its access.")
 
 

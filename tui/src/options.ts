@@ -34,7 +34,7 @@ export type Parsed =
 // A script or a help request wants the host command alone, not a session after it.
 const SCRIPT_FLAGS = new Set(["--json", "--help", "-h"]);
 
-const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm", "team", "ls", "login", "logout", "whoami", "daemon"]);
+const PASSTHROUGH = new Set(["relay", "doctor", "export", "sessions", "rm", "team", "ls", "login", "logout", "whoami", "daemon", "stop"]);
 
 const HOST_VALUES: Record<string, string> = {
   "--workspace": "--workspace",
