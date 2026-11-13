@@ -14,7 +14,7 @@ from plural.host.config import DEFAULT_MCP_URL, DEFAULT_RELAY_URL, HostSettings
 from plural.host.team import TeamProfile, TeamStore
 from plural.protocol.envelope import PROTOCOL_VERSION
 from plural.protocol.events import ParticipantLeft
-from plural.protocol.models import PromptMode
+from plural.protocol.models import ChatMode, PromptMode
 from plural.protocol.team import MemberView, TeamRole
 from plural.relay import app as relay_app
 from plural.relay.limits import RelayLimits
@@ -93,6 +93,27 @@ def test_host_passes_the_prompt_mode_flag(
     result = runner.invoke(app, ["host", "--workspace", str(tmp_path), *arguments])
     assert result.exit_code == 0
     assert [settings.prompt_mode for settings in seen] == [expected]
+
+
+@pytest.mark.parametrize(
+    ("arguments", "expected"),
+    [([], None), (["--chat", "all"], ChatMode.ALL), (["--chat", "mention"], ChatMode.MENTION)],
+)
+def test_host_passes_the_chat_mode_flag(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    arguments: list[str],
+    expected: ChatMode | None,
+) -> None:
+    seen: list[HostSettings] = []
+
+    async def fake_host(settings: HostSettings, *, machine: bool) -> None:
+        seen.append(settings)
+
+    monkeypatch.setattr(main, "_host", fake_host)
+    result = runner.invoke(app, ["host", "--workspace", str(tmp_path), *arguments])
+    assert result.exit_code == 0
+    assert [settings.chat_mode for settings in seen] == [expected]
 
 
 def test_ready_line_is_one_json_object() -> None:

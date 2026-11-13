@@ -15,7 +15,7 @@ from pydantic import ValidationError
 
 from plural.agent.loop import events as agent
 from plural.agent.loop.loop import BriefingFailed
-from plural.agent.loop.messages import Message, NotesTurn, UserTurn
+from plural.agent.loop.messages import Message, NotesTurn, UserTurn, chat_lines
 from plural.agent.loop.models import AskFailed
 from plural.agent.mcp import McpError, McpHub, ServerSpec
 from plural.agent.prompts import prompt
@@ -33,7 +33,7 @@ from plural.core.errors import (
     Unauthorized,
 )
 from plural.core.ports import Clock, EventStore, IdGenerator
-from plural.core.provenance import direct, from_proposal
+from plural.core.provenance import direct, from_proposal, merge
 from plural.core.roles import authorize
 from plural.core.state import reduce
 from plural.host import history
@@ -107,6 +107,7 @@ from plural.protocol.commands import (
     BriefingImport,
     BriefingRequest,
     BriefingSharingSet,
+    ChatModeSet,
     ChatSend,
     Command,
     CommandRun,
@@ -165,6 +166,7 @@ from plural.protocol.events import (
     BriefingImported,
     BriefingResolved,
     BriefingSharingChanged,
+    ChatModeChanged,
     CommandInvoked,
     CommandReplied,
     ContextCompacted,
@@ -233,6 +235,7 @@ from plural.protocol.models import (
     BriefingImportView,
     BriefingRequestView,
     BriefingSharing,
+    ChatMode,
     ContextView,
     Delivery,
     DequeueReason,
@@ -305,6 +308,7 @@ class SessionActor:
         max_attachment_bytes: int,
         max_image_bytes: int,
         prompt_mode: PromptMode | None = None,
+        chat_mode: ChatMode | None = None,
         admission: AdmissionMode | None = None,
         skills: SkillLibrary | None = None,
         mcp: McpHub | None = None,
@@ -367,6 +371,9 @@ class SessionActor:
         self._max_attachment_bytes = max_attachment_bytes
         self._max_image_bytes = max_image_bytes
         self._initial_mode = prompt_mode
+        self._initial_chat = chat_mode
+        # Room chat posted for the agent since its last run: who wrote it, and what.
+        self._unheard: list[tuple[Participant, str]] = []
         self._initial_admission = admission
         self._skills = skills
         self._mcp = mcp
@@ -400,6 +407,12 @@ class SessionActor:
         if self._state.preview is not None:
             await self._emit(PreviewChanged(preview=None))
         self._sync_policy()
+        # Chat the agent had not read yet still goes with the next prompt, as its author's words.
+        self._unheard = [
+            (author, posted.text)
+            for posted in history.unheard(records)
+            if (author := self._state.participants.get(posted.author_id)) is not None
+        ]
         if conversation := await self._history(records):
             self._agent.restore(conversation)
         self._agent.load_tools(self._state.loaded_tools)
@@ -443,6 +456,11 @@ class SessionActor:
             )
         if self._initial_mode is not None:
             await self._set_prompt_mode(self._initial_mode, actor_id=self._host.id)
+        if self._initial_chat is not None or not records:
+            # A new session starts in mention mode; one resumed keeps the mode it had.
+            await self._set_chat_mode(
+                self._initial_chat or ChatMode.MENTION, actor_id=self._host.id
+            )
         if self._initial_admission is not None:
             changed = joins.set_admission(self._state, self._initial_admission)
             if changed is not None:
@@ -617,15 +635,15 @@ class SessionActor:
             case PromptSubmit():
                 await self._submit(participant, command)
             case ChatSend():
-                await self._emit(
-                    chat.post(
-                        self._state,
-                        message_id=self._ids.new("c_"),
-                        author=participant,
-                        command=command,
-                    ),
-                    actor_id=participant.id,
+                posted = chat.post(
+                    self._state,
+                    message_id=self._ids.new("c_"),
+                    author=participant,
+                    command=command,
                 )
+                await self._emit(posted, actor_id=participant.id)
+                if posted.agent_sees:
+                    self._unheard.append((participant, posted.text))
             case ProposalDecide():
                 await self._decide(participant, command)
             case ApprovalRespond():
@@ -674,6 +692,8 @@ class SessionActor:
                 await self._set_prompt_mode(command.mode, actor_id=participant.id)
             case PermissionModeSet():
                 await self._set_permission_mode(command.mode, actor_id=participant.id)
+            case ChatModeSet():
+                await self._set_chat_mode(command.mode, actor_id=participant.id)
             case AgentsCreate() | AgentsRemove():
                 await self._agents_command(command, actor_id=participant.id)
             case McpAdd() | McpRemove() | McpToggle() | McpRestart() | McpImport():
@@ -1227,6 +1247,10 @@ class SessionActor:
         if mode is not self._state.prompt_mode:
             await self._emit(PromptModeChanged(mode=mode), actor_id=actor_id)
 
+    async def _set_chat_mode(self, mode: ChatMode, *, actor_id: str) -> None:
+        if mode is not self._state.chat_mode:
+            await self._emit(ChatModeChanged(mode=mode), actor_id=actor_id)
+
     async def _set_permission_mode(self, mode: PermissionMode, *, actor_id: str) -> None:
         if mode is not self._state.permission_mode:
             await self._emit(PermissionModeChanged(mode=mode), actor_id=actor_id)
@@ -1595,12 +1619,14 @@ class SessionActor:
         body, images = await self._with_attachments(text, attachments)
         if self._state.permission_mode is PermissionMode.PLAN:
             body = f"{body}\n\n{PLAN_NOTE}"
-        turn = UserTurn(
-            id=prompt_id,
-            author=Actor(id=author.id, kind=ActorKind.HUMAN, name=author.name),
-            provenance=provenance,
-            text=body,
-            images=images,
+        turn = self._with_unheard(
+            UserTurn(
+                id=prompt_id,
+                author=Actor(id=author.id, kind=ActorKind.HUMAN, name=author.name),
+                provenance=provenance,
+                text=body,
+                images=images,
+            )
         )
         if self._state.run is None:
             await self._start_run(turn)
@@ -1671,6 +1697,20 @@ class SessionActor:
         switch = SessionSwitch(room=room, title=info.title)
         await self._emit(switch, actor_id=actor_id)
         return switch
+
+    def _with_unheard(self, turn: UserTurn) -> UserTurn:
+        """The prompt carrying the room's chat since the agent's last turn, read just before it.
+
+        A guest's words in that chat make it a guest's prompt.
+        """
+        if not self._unheard:
+            return turn
+        provenance = turn.provenance
+        for author, _ in self._unheard:
+            provenance = merge(provenance, direct(author.id, author.role))
+        chat = chat_lines((author.name, text) for author, text in self._unheard)
+        self._unheard.clear()
+        return turn.model_copy(update={"provenance": provenance, "chat": chat})
 
     async def _start_run(self, turn: UserTurn) -> None:
         run_id = self._ids.new("run_")

@@ -44,6 +44,14 @@ export type PromptMode = "open" | "review";
  */
 export type PermissionMode = "default" | "accept_edits" | "plan" | "auto";
 /**
+ * Which messages the agent answers. mention: only those that tag @plrl, it reads the rest of
+ * the room's chat as context; all: every message, /team writes to people only.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ChatMode".
+ */
+export type ChatMode = "mention" | "all";
+/**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "SkillScope".
  */
@@ -175,6 +183,7 @@ export interface EventsSchema {
     | ParticipantRevoked
     | PromptModeChanged
     | PermissionModeChanged
+    | ChatModeChanged
     | SkillsChanged
     | SkillsFound
     | TraceFound
@@ -333,6 +342,14 @@ export interface PromptModeChanged {
 export interface PermissionModeChanged {
   mode: PermissionMode;
   type: "session.permission_mode_changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ChatModeChanged".
+ */
+export interface ChatModeChanged {
+  mode: ChatMode;
+  type: "session.chat_mode_changed";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -796,6 +813,7 @@ export interface BoardCleared {
  * via the `definition` "ChatPosted".
  */
 export interface ChatPosted {
+  agent_sees: boolean;
   author_id: string;
   mentions: string[];
   message_id: string;
@@ -1322,6 +1340,11 @@ export interface SessionState {
   briefing_sharing: "off" | "ask" | "team";
   briefings_imported: BriefingImportView[];
   chat: ChatEntry[];
+  /**
+   * Which messages the agent answers. mention: only those that tag @plrl, it reads the rest of
+   * the room's chat as context; all: every message, /team writes to people only.
+   */
+  chat_mode: "mention" | "all";
   commands: PluginCommandView[];
   context: ContextView | null;
   fast_agent: string;
@@ -1363,6 +1386,7 @@ export interface BoardView {
  * via the `definition` "ChatEntry".
  */
 export interface ChatEntry {
+  agent_sees: boolean;
   author_id: string;
   id: string;
   mentions: string[];
@@ -1456,6 +1480,7 @@ export interface EventRecord {
     | ParticipantRevoked
     | PromptModeChanged
     | PermissionModeChanged
+    | ChatModeChanged
     | SkillsChanged
     | SkillsFound
     | TraceFound

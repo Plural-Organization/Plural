@@ -17,6 +17,7 @@ export type {
   BoardStroke,
   BoardView,
   ChatEntry,
+  ChatMode,
   AccessRequestView,
   BriefingRequestView,
   JoinRequestView,

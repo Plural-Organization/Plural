@@ -500,6 +500,30 @@
       ],
       "type": "object"
     },
+    "ChatMode": {
+      "description": "Which messages the agent answers. mention: only those that tag @plrl, it reads the rest of\nthe room's chat as context; all: every message, /team writes to people only.",
+      "enum": [
+        "mention",
+        "all"
+      ],
+      "type": "string"
+    },
+    "ChatModeSet": {
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/ChatMode"
+        },
+        "type": {
+          "const": "session.set_chat_mode",
+          "default": "session.set_chat_mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "type": "object"
+    },
     "ChatSend": {
       "properties": {
         "mentions": {
@@ -1614,6 +1638,7 @@
           "session.fork": "#/$defs/SessionFork",
           "session.hello": "#/$defs/SessionHello",
           "session.set_briefing_sharing": "#/$defs/BriefingSharingSet",
+          "session.set_chat_mode": "#/$defs/ChatModeSet",
           "session.set_permission_mode": "#/$defs/PermissionModeSet",
           "session.set_prompt_mode": "#/$defs/PromptModeSet",
           "skills.install": "#/$defs/SkillsInstall",
@@ -1695,6 +1720,9 @@
         },
         {
           "$ref": "#/$defs/PermissionModeSet"
+        },
+        {
+          "$ref": "#/$defs/ChatModeSet"
         },
         {
           "$ref": "#/$defs/SkillsSearch"

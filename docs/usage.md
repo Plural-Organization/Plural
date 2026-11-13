@@ -17,6 +17,7 @@ plural
 | `-p`, `--print` | Answer once and exit, see [Use it from a script](#use-it-from-a-script) |
 | `--workspace <dir>` | Directory the agent works in, default is the current one |
 | `--prompts open\|review` | Who may prompt directly, see below |
+| `--chat mention\|all` | Whether the agent answers only `@plrl` or every message, see [Talking to the team](#talking-to-the-team) |
 | `--name <name>` | Your display name |
 | `--model <id>`, `--provider <name>`, `--effort <level>` | Model, provider (`anthropic`, `openai`, `gemini`, `ollama`…) and effort for this run only |
 | `--permission-mode default\|acceptEdits\|plan\|auto` | Start in that permission mode |
@@ -150,14 +151,20 @@ A teammate can also join from a browser: open the web client, paste the link and
 
 ## Talking to the team
 
-Not everything you type is for the agent. Two forms stay between people, and the agent never receives them:
+The input is a group chat. A new session starts in **mention mode**: what you type goes to everyone in the room, and the agent answers only a message that tags it with `@plrl`.
 
-| You type | Who reads it |
-|---|---|
-| `/team lunch at one` (also `/to-team`, `/chat`) | everyone in the room |
-| `@alia can you review this?` at the start of a line | only Alia, and you see your own copy |
+| You type | Who reads it | Does the agent answer |
+|---|---|---|
+| `lunch at one?` | everyone in the room, and the agent as context | no |
+| `@plrl why does the login test fail?` | everyone in the room | yes |
+| a quoted message, then `@plrl what does this mean?` | everyone in the room | yes, about the quote |
+| `@alia can you review this?` at the start of a line | only Alia, and you see your own copy | no, the agent never sees it |
 
-Typing `@` lists the people in the room, `tab` completes the name. A tag inside a team message (`/team @alia look at this`) is read by everyone and also alerts Alia. An `@` that names no one in the room, such as `@src/app.ts`, is still a prompt for the agent.
+The agent sees the whole room chat: the messages since its last turn are put in front of the next `@plrl` message, each under its author's name and marked as conversation between people, not instructions to the agent. A private message never reaches it. When a guest's chat is part of what the agent reads, the run is treated like a guest's prompt, so tool calls ask the host the way they do for a participant. Images and files go only with a message that tags `@plrl`.
+
+The host can switch back to the older mode, where **the agent answers every message** and only `/team <message>` (also `/to-team`, `/chat`) stays between people, unseen by the agent. Switch with `/replies mention|all`, in `F2` → Session → *Agent answers*, or in the browser's room settings and side panel, or at start with `plural --chat mention|all`. A prompt given on the command line, `plural "fix the tests"`, is always for the agent. The mode is kept with the session, so a resumed session stays in the mode it had. Everyone sees the current one: `replies @plrl` or `replies all` at the top of the terminal, a chip in the browser's top bar, and the line above the input (`→ room` or `→ agent`).
+
+Typing `@` lists `@plrl` and the people in the room, `tab` completes the name. A tag inside a message (`look at this @alia`, or `/team @alia look at this`) is read by everyone and also alerts Alia; `@alia` at the start of a line stays private, even with `@plrl` later in it. In the older mode an `@` that names no one in the room, such as `@src/app.ts`, is still a prompt for the agent.
 
 The person you write to hears the terminal bell and sees a short message at the top right. The browser plays a short sound and marks the tab title when the page is in the background. Turn the bell off in `F2` → Session → *Bell on mentions*.
 
@@ -323,7 +330,7 @@ The agent can search the catalog on its own and suggest a skill. It can install 
 
 The conversation is on the left. The panel on the right shows who is in the room and who is typing, what needs the host, the prompt queue and the state of the agent. `ctrl+b` hides it, and it hides itself on narrow terminals.
 
-The line above the input says who will see what you type: `→ agent` (the whole room sees the prompt), `→ room` after `/team` and `→ @name` for a private message, where the agent does not see it. If a message does not reach the host, the text comes back into the input with the reason, and `↑` recalls it even if you started typing something else.
+The line above the input says who will see what you type: `→ agent` (the whole room sees the prompt), `→ room` for a chat message (in mention mode anything without `@plrl`, otherwise after `/team`) and `→ @name` for a private message, where the agent does not see it. If a message does not reach the host, the text comes back into the input with the reason, and `↑` recalls it even if you started typing something else.
 
 When you scroll up, a line above the input counts what arrived meanwhile (`↓ 3 new · ✉ 1` with the chat messages), and a click on it or `end` takes you back down. A reply longer than 40 lines is folded; click it or press `ctrl+o` to open. Code blocks and tool output have a `copy` button. The terminal title shows `⚠ waiting for you`, `● working` or `✓ done`, and a run longer than 15 seconds rings the bell when it ends.
 
@@ -404,7 +411,8 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | Command | What it does |
 |---|---|
 | `/help` | Commands and keys |
-| `/team <message>` | Write to the room, the agent does not see it. `@name <message>` writes to one person |
+| `/team <message>` | Write to the room; in mention mode the agent reads it, otherwise it does not see it. `@name <message>` writes to one person |
+| `/replies mention\|all` | The agent answers only `@plrl` and reads the rest as chat, or answers every message (host) |
 | `/who` | Participants |
 | `/invite [link\|once\|viewer\|revoke\|open\|approve]` | Copy the room link, make a one-time invite, or change who may join (host) |
 | `/mode open\|review` | Who may prompt directly (host) |

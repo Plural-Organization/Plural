@@ -41,6 +41,14 @@ export type PromptMode = "open" | "review";
  */
 export type PermissionMode = "default" | "accept_edits" | "plan" | "auto";
 /**
+ * Which messages the agent answers. mention: only those that tag @plrl, it reads the rest of
+ * the room's chat as context; all: every message, /team writes to people only.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "ChatMode".
+ */
+export type ChatMode = "mention" | "all";
+/**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "PolicyAction".
  */
@@ -92,6 +100,7 @@ export interface CommandsSchema {
     | SessionFork
     | PromptModeSet
     | PermissionModeSet
+    | ChatModeSet
     | SkillsSearch
     | TraceGet
     | SkillsInstall
@@ -358,6 +367,14 @@ export interface PromptModeSet {
 export interface PermissionModeSet {
   mode: PermissionMode;
   type?: "session.set_permission_mode";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "ChatModeSet".
+ */
+export interface ChatModeSet {
+  mode: ChatMode;
+  type?: "session.set_chat_mode";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

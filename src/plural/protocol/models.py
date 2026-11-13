@@ -33,6 +33,14 @@ class PromptMode(StrEnum):
     REVIEW = "review"
 
 
+class ChatMode(StrEnum):
+    """Which messages the agent answers. mention: only those that tag @plrl, it reads the rest of
+    the room's chat as context; all: every message, /team writes to people only."""
+
+    MENTION = "mention"
+    ALL = "all"
+
+
 class PermissionMode(StrEnum):
     DEFAULT = "default"
     ACCEPT_EDITS = "accept_edits"
@@ -491,6 +499,8 @@ class ChatEntry(Model):
     ts: datetime
     to: str | None = None
     mentions: tuple[str, ...] = ()
+    # Posted in mention mode to the whole room: the agent reads it before its next run.
+    agent_sees: bool = False
 
 
 class JoinRequestView(Model):
@@ -550,6 +560,8 @@ class SessionState(Model):
     preview: PreviewView | None = None
     last_seq: int = 0
     prompt_mode: PromptMode = PromptMode.OPEN
+    # A session from before mention mode keeps answering every message; a new one starts in it.
+    chat_mode: ChatMode = ChatMode.ALL
     permission_mode: PermissionMode = PermissionMode.DEFAULT
     admission: AdmissionMode = AdmissionMode.APPROVE
     join_requests: dict[str, JoinRequestView] = Field(default_factory=dict[str, JoinRequestView])

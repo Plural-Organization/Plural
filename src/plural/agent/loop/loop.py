@@ -36,6 +36,7 @@ from plural.agent.loop.events import (
 from plural.agent.loop.gate import PolicyGate
 from plural.agent.loop.hooks import LoopHooks, NoHooks
 from plural.agent.loop.messages import (
+    CHAT_SOURCE,
     HARNESS_SOURCE,
     PLUGIN_SOURCE,
     AssistantTurn,
@@ -363,7 +364,9 @@ class AgentLoop:
     def restore(self, conversation: Sequence[Message]) -> None:
         self._conversation = list(conversation)
         self._shared = any(
-            isinstance(message, NotesTurn) and not message.source.startswith(PLUGIN_SOURCE)
+            isinstance(message, NotesTurn)
+            and not message.source.startswith(PLUGIN_SOURCE)
+            and message.source != CHAT_SOURCE
             for message in conversation
         )
         self._context_tokens = 0
@@ -406,7 +409,7 @@ class AgentLoop:
         provenance = merge(prompt.provenance, SHARED) if self._shared else prompt.provenance
         self._conversation.extend(self._notes)
         self._notes.clear()
-        self._conversation.append(prompt)
+        self._append_prompt(prompt)
         self._usage = Usage()
         self.spend("main", "", Usage(), uses=1)
         self._gate.begin_run()
@@ -514,11 +517,18 @@ class AgentLoop:
                     yield Delivered(tuple(message.id for message in queued))
                 for message in queued:
                     provenance = merge(provenance, message.provenance)
-                    self._conversation.append(message)
+                    self._append_prompt(message)
             yield RunEnd(RunEndReason.LIMIT, self._usage, "max turns reached")
         finally:
             self._prompt = None
             self._settle()
+
+    def _append_prompt(self, prompt: UserTurn) -> None:
+        """A prompt, after the room's chat it came with, as its own note."""
+        if prompt.chat:
+            self._conversation.append(NotesTurn(source=CHAT_SOURCE, text=prompt.chat))
+            prompt = prompt.model_copy(update={"chat": ""})
+        self._conversation.append(prompt)
 
     async def _compact_when_due(
         self, prompt: UserTurn, cancel: asyncio.Event

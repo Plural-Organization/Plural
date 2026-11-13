@@ -119,9 +119,11 @@ async def test_a_newcomer_gets_the_team_chat_but_not_what_was_private(room: Sess
     assert [entry.text for entry in cleo.client.projection.state.chat] == ["for the room"]
 
 
-async def test_the_model_never_gets_the_chat(tmp_path: Path) -> None:
+async def test_in_the_old_mode_the_model_never_gets_the_chat(tmp_path: Path) -> None:
     provider = FakeProvider([reply("noted")])
-    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+    async with running_session(
+        tmp_path, relayed=False, provider=provider, overrides={"chat_mode": "all"}
+    ) as session:
         owner = await session.owner()
         alia = await session.guest("Alia")
         alia_id = alia.client.projection.me_id
