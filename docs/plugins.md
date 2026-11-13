@@ -219,7 +219,12 @@ import os
 
 
 def setup(plural):
-    plural.mcp("tracker", command="npx", args=["-y", "tracker-mcp"], env={"TOKEN": os.environ["TRACKER_TOKEN"]})
+    plural.mcp(
+        "tracker",
+        command="npx",
+        args=["-y", "tracker-mcp"],
+        env={"TOKEN": os.environ["TRACKER_TOKEN"]},
+    )
     plural.mcp("docs", url="https://docs.example.com/mcp", headers={"Authorization": "Bearer …"})
 ```
 
@@ -324,7 +329,9 @@ as the plugin is loaded: how to use the plugin's tools, a convention of the team
 
 ```python
 def setup(plural):
-    plural.instructions("Tickets look like PLR-123. Read one with the ticket tool before you work on it.")
+    plural.instructions(
+        "Tickets look like PLR-123. Read one with the ticket tool before you work on it."
+    )
 ```
 
 The agent reads it as `<plugin name="tickets">…</plugin>` from the start of its next run; a run that is
