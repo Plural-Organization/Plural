@@ -312,6 +312,24 @@ The agent's file tools (`read`, `ls`, `glob`, `grep`, `write`, `edit`, `multi_ed
 - The filesystem root, the home folder or a folder that holds it is marked on the card as broad.
 - Shell commands are not covered. `bash` is not opened to other folders by this, it asks the host as before, and it is not sandboxed: a command can reach any path the host's user can. Treat a command that is approved as running with the host's full rights.
 
+## Run the host in a container
+
+`bash` is not sandboxed on your machine (see above). To keep the agent's commands away from the rest of your computer, run the host in Docker:
+
+```bash
+cd your-project
+ANTHROPIC_API_KEY=... path/to/plural/scripts/plural-sandbox --local
+plural join "<the host link it prints>"
+```
+
+The script builds the host image from `deploy/host.Dockerfile` and starts it with only the project folder mounted at `/workspace`. Commands the agent runs, `bash` included, then reach that folder and nothing else of this machine: not your home folder, SSH keys, cloud credentials or other projects. The container runs as an unprivileged user with every Linux capability dropped, no privilege escalation, at most 512 processes and 4 GB of memory.
+
+- Without `--local` the host goes through the relay as usual, and the room link works from anywhere.
+- The network stays open, because the agent needs its model's API. A command can still send what it reads in the project to the internet; approvals still apply inside the container.
+- The model's key comes from `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` and the other provider variables, and `PLURAL_PRESET` / `PLURAL_MODEL` pick the model. Agent CLIs (Claude Code, Codex) are not in the image.
+- The host's data (sessions, keys) lives in the `plural-sandbox-data` volume, not in `~/.plural`.
+- `PLURAL_SANDBOX_DIR` names another project folder, `PLURAL_SANDBOX_MEMORY` the memory limit, and `PLURAL_SANDBOX_UV_IMAGE=astral/uv:0.9.11` builds from Docker Hub where `ghcr.io` is blocked.
+
 ## Skills
 
 A skill is a folder with a `SKILL.md`: a name and a description up top, instructions below, and any files it refers to next to it. It is the same format Claude Code, Codex and the [skills.sh](https://skills.sh) catalog use, so skills from Vercel, Anthropic or any public GitHub repository work as they are.
