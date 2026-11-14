@@ -73,6 +73,8 @@ class HostSettings(BaseSettings):
     max_pending_joins: int = Field(default=5, gt=0)
     max_participants: int = Field(default=20, gt=1)
     browser: str = "launch"
+    # An experiment: the file tools become Python functions the model calls from `run_code`.
+    code_mode: bool = False
     web_search: bool = True
     web_search_model: str | None = None
     web_search_context_size: Literal["low", "medium", "high"] = "medium"

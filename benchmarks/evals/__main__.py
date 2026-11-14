@@ -35,6 +35,7 @@ from plural.protocol.events import (
     RunEnded,
     SessionWelcome,
     ToolEnded,
+    ToolOutput,
     ToolStarted,
     UsageRecorded,
 )
@@ -86,6 +87,10 @@ class Outcome:
     context_window: int = 0
     context_parts: dict[str, int] = field(default_factory=dict[str, int])
     tools: dict[str, int] = field(default_factory=dict[str, int])
+    # Calls the code of `run_code` made, which are not tool calls of the model's.
+    nested_calls: int = 0
+    nested: dict[str, int] = field(default_factory=dict[str, int])
+    run_code_ids: list[str] = field(default_factory=list[str])
 
 
 def load_tasks(only: list[str] | None) -> list[Task]:
@@ -133,6 +138,9 @@ def check(task: Task, workspace: Path, reply: Path) -> tuple[bool, str]:
     return done.returncode == 0, (done.stdout + done.stderr).strip()[-500:]
 
 
+NESTED = frozenset({"read", "grep", "glob", "ls", "edit", "write"})
+
+
 def tally(outcome: Outcome, event: Event) -> None:
     match event:
         case MessageStarted():
@@ -140,6 +148,14 @@ def tally(outcome: Outcome, event: Event) -> None:
         case ToolStarted(call=call):
             outcome.tool_calls += 1
             outcome.tools[call.name] = outcome.tools.get(call.name, 0) + 1
+            if call.name == "run_code":
+                outcome.run_code_ids.append(call.id)
+        case ToolOutput(call_id=call_id, chunk=chunk) if call_id in outcome.run_code_ids:
+            # A call the code makes shows as a line of the name and what it works on.
+            name = chunk.split(" ", 1)[0]
+            if name in NESTED and chunk.endswith("\n") and chunk.count("\n") == 1:
+                outcome.nested_calls += 1
+                outcome.nested[name] = outcome.nested.get(name, 0) + 1
         case ToolEnded(ok=False):
             outcome.tool_errors += 1
         case ContextCompacted():
@@ -575,6 +591,7 @@ def summary(outcomes: list[Outcome]) -> dict[str, float]:
         "seconds_per_task": round(sum(o.seconds for o in judged) / count, 1),
         "turns_per_task": round(sum(o.model_turns for o in judged) / count, 1),
         "tools_per_task": round(sum(o.tool_calls for o in judged) / count, 1),
+        "nested_per_task": round(sum(o.nested_calls for o in judged) / count, 1),
         "tool_error_rate": round(
             sum(o.tool_errors for o in judged) / max(sum(o.tool_calls for o in judged), 1), 3
         ),
@@ -646,6 +663,7 @@ def main() -> int:
         "--base-url",
         help="an OpenAI-compatible endpoint in place of the preset's, for a local server",
     )
+    parser.add_argument("--label", default="", help="a word for the results folder's name")
     parser.add_argument("--list", action="store_true", help="print the tasks and stop")
     args = parser.parse_args()
     if args.list:
@@ -663,7 +681,8 @@ def main() -> int:
     global kept, base_url
     base_url = args.base_url
     stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-    kept = RESULTS / f"{stamp}-{args.harness}-{model.replace('/', '_')}"
+    label = f"-{args.label}" if args.label else ""
+    kept = RESULTS / f"{stamp}-{args.harness}-{model.replace('/', '_')}{label}"
     kept.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="plural-eval-home-") as home:
         if not args.keep_home:

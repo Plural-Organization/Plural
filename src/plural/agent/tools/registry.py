@@ -56,6 +56,7 @@ class ToolRegistry:
         self._loaded: set[str] = set()
         self._pinned: frozenset[str] = frozenset()
         self._hidden: frozenset[str] = frozenset()
+        self._folded: frozenset[str] = frozenset()
         self._revision = 0
 
     def subset(self, names: Iterable[str]) -> "ToolRegistry":
@@ -91,6 +92,11 @@ class ToolRegistry:
             self._hidden = hidden
             self._revision += 1
 
+    def fold(self, names: Iterable[str]) -> None:
+        """Keep these tools runnable but never declared or found: another tool calls them."""
+        self._folded = frozenset(names)
+        self._revision += 1
+
     @property
     def revision(self) -> int:
         """Grows each time a deferred tool is loaded, so a run knows to declare it."""
@@ -102,7 +108,9 @@ class ToolRegistry:
         fresh = tuple(
             name
             for name in dict.fromkeys(names)
-            if name not in self._loaded and not (name in entries and self._declared(entries[name]))
+            if name not in self._loaded
+            and not self._is_folded(name)
+            and not (name in entries and self._declared(entries[name]))
         )
         if fresh:
             self._loaded.update(fresh)
@@ -143,7 +151,9 @@ class ToolRegistry:
         return tuple(
             entry
             for entry in self._entries().values()
-            if self._allowed_name(entry.tool.name) and not self._declared(entry)
+            if self._allowed_name(entry.tool.name)
+            and not self._declared(entry)
+            and not self._is_folded(entry.tool.name)
         )
 
     def prepare(self, call: ToolCallRequest) -> PreparedCall:
@@ -173,8 +183,14 @@ class ToolRegistry:
             or ("mcp" in self._allowed and name.startswith("mcp__"))
         )
 
+    def _is_folded(self, name: str) -> bool:
+        # A sub-agent's view names its tools and calls them itself.
+        return self._allowed is None and name in self._folded
+
     def _declared(self, entry: Entry) -> bool:
         name = entry.tool.name
+        if self._is_folded(name):
+            return False
         return (
             self._allowed is not None
             or entry.exposure is Exposure.CORE

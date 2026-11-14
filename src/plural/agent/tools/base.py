@@ -91,6 +91,8 @@ class ToolCtx:
     cancel: asyncio.Event | None = None
     # The span of the call being run, for a tool that does traced work of its own.
     span: Span | None = None
+    # Runs another tool as a call of its own, for a tool that works through other tools.
+    call: "Callable[[str, Mapping[str, JsonValue]], Awaitable[ToolResult]] | None" = None
 
 
 @dataclass(frozen=True, slots=True)

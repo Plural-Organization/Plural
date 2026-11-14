@@ -5,7 +5,7 @@ import secrets
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import cast
+from typing import Protocol, cast
 
 import structlog
 
@@ -25,7 +25,7 @@ from plural.agent.tools.extra.agent import AgentTool
 from plural.agent.tools.extra.board import board_tools
 from plural.agent.tools.extra.search import Searcher, WebSearchSlot
 from plural.agent.tools.extra.skills import skill_tools
-from plural.agent.tools.registry import Exposure, builtin_tools
+from plural.agent.tools.registry import Exposure, ToolRegistry, builtin_tools
 from plural.core.policy.engine import Policy
 from plural.host.account import AccountStore
 from plural.host.actor import SessionActor
@@ -72,6 +72,10 @@ from plural.storage.sqlite_store import SqliteEventStore
 log = structlog.get_logger(__name__)
 
 
+class Closable(Protocol):
+    async def close(self) -> None: ...
+
+
 @dataclass(slots=True)
 class Host:
     room: str
@@ -90,6 +94,7 @@ class Host:
     import_url: str | None = None
     chat_link: McpLink | None = None
     plugins: PluginHost | None = None
+    code_mode: Closable | None = None
 
     async def serve(self) -> None:
         async with asyncio.TaskGroup() as group:
@@ -102,7 +107,20 @@ class Host:
         if self.mcp is not None:
             await self.mcp.close()
         await self.agent_run.close()
+        if self.code_mode is not None:
+            await self.code_mode.close()
         await self.store.close()
+
+
+async def _code_mode(tools: ToolRegistry) -> Closable:
+    """Fold the file tools into `run_code`. The import is here because the sandbox is an extra."""
+    from plural.agent.providers.code_mode import FOLDED, CodeMode
+
+    code_mode = CodeMode(tools)
+    await code_mode.start()
+    tools.fold(FOLDED)
+    tools.add_source(code_mode)
+    return code_mode
 
 
 def build_web_search(
@@ -278,6 +296,7 @@ async def _assemble(
     for tool in board_tools(desk):
         tools.register(tool, exposure=Exposure.DEFERRED)
     tools.register(ToolSearchTool(tools))
+    code_mode = await _code_mode(tools) if settings.code_mode else None
     tools.pin(name.strip() for name in settings.pinned_tools.split(",") if name.strip())
     loop = AgentLoop(
         provider=agent,
@@ -410,6 +429,7 @@ async def _assemble(
         host_token=host_token,
         host_link=f"{room_url}?token={host_token}",
         mcp=mcp,
+        code_mode=code_mode,
         web_search=web_search,
         conflicts=board,
         import_url=import_url,
