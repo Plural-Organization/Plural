@@ -1,4 +1,5 @@
 import json
+import os
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
@@ -61,8 +62,9 @@ def test_find_looks_in_the_folders_project_newest_first(tmp_path: Path) -> None:
     project = tmp_path / "home" / "projects" / claude.project_folder(folder.resolve())
     old = write(project / "old.jsonl", SESSION)
     new = write(project / "new.jsonl", [user("second"), assistant({"type": "text", "text": "ok"})])
-    old.touch()
-    new.touch()
+    # Explicit times: two touches in a row can land on the same mtime.
+    os.utime(old, (1_000_000, 1_000_000))
+    os.utime(new, (2_000_000, 2_000_000))
     found = claude.find(folder, home=tmp_path / "home")
     assert [c.id for c in found] == ["new", "old"]
     assert claude.find(tmp_path / "elsewhere", home=tmp_path / "home") == []
