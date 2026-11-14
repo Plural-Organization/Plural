@@ -30,11 +30,24 @@ from plural.host.preview import (
         "/app/@fs/etc/passwd",
         "/app/__open-in-editor?file=a",
         "/x#fragment",
+        "/.vite/deps/react.js",
+        "/node_modules/.vite/../.env",
+        "/node_modules/.vite/deps/%2e%2e/%2e%2e/.env",
+        "/node_modules/.cache/x.js",
+        "/other/.vite/deps/react.js",
     ],
 )
 def test_preview_rejects_authorities_controls_and_private_paths(path: str) -> None:
     with pytest.raises(PreviewError):
         resource_path(path)
+
+
+def test_preview_serves_the_libraries_vite_bundles_for_the_browser() -> None:
+    path = "/node_modules/.vite/deps/react.js?v=ab12"
+    assert resource_path(path) == path
+    assert resource_path("/app/node_modules/.vite/deps/_metadata.json") == (
+        "/app/node_modules/.vite/deps/_metadata.json"
+    )
 
 
 def test_preview_keeps_encoded_paths_and_queries() -> None:

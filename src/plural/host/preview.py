@@ -91,7 +91,10 @@ def resource_path(path: str) -> str:
         raise PreviewError("invalid preview path")
     segments = unquote(parts.path).lower().split("/")
     # Dot-files hold secrets (.env, .git, .npmrc) and are matched without case: macOS ignores it.
-    if any(part.startswith(".") and part != ".well-known" for part in segments):
+    if any(
+        part.startswith(".") and part != ".well-known" and not _is_vite_deps(segments, index)
+        for index, part in enumerate(segments)
+    ):
         raise PreviewError("private paths are not available in previews")
     # Dev servers act on these GETs, opening files in the host's editor or serving the whole disk,
     # under a base path too.
@@ -102,6 +105,12 @@ def resource_path(path: str) -> str:
     except UnicodeEncodeError:
         raise PreviewError("preview paths must be URL encoded") from None
     return path
+
+
+def _is_vite_deps(segments: list[str], index: int) -> bool:
+    """Vite serves the libraries it bundled for the browser from `node_modules/.vite/deps/`, and a
+    page cannot start without them. That one folder is public code, unlike the other dot-files."""
+    return segments[index] == ".vite" and index > 0 and segments[index - 1] == "node_modules"
 
 
 def _refusal(status: int, text: str) -> Reply:
