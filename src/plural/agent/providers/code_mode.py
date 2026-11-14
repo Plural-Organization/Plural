@@ -51,6 +51,8 @@ NOT_CALLABLE = frozenset({RUN_CODE, "tool_search"})
 INLINE_BUDGET = 3000
 SEARCH_LIMIT = 8
 SUBJECT_CHARS = 80
+# How the tool runner begins the result of a call it did not run.
+DID_NOT_RUN = ("Denied:", "Invalid tool call", "Not executed", "Tool timed out")
 GUIDELINE = (
     "Do file work in `run_code`: read, search and edit several files in one call, in parallel "
     "with `asyncio.gather`, and return only what you need rather than whole files"
@@ -58,9 +60,10 @@ GUIDELINE = (
 PROSE = """\
 Run Python in a sandbox (Monty, a subset of Python) that calls tools as async functions. Use it \
 to read, search and change many files in one call, to run calls side by side with \
-`await asyncio.gather(...)`, and to return only what you need.
+`await asyncio.gather(...)` (import asyncio first), and to return only what you need.
 - Functions take keyword arguments only and return text. A failed or denied call raises where \
-it is awaited; each call still needs the usual approval.
+it is awaited, except that bash returns a failed command's output ending in `[exit N]`. Each \
+call still needs the usual approval.
 - The last expression is the result, and print() output is returned with it. Variables persist \
 between calls; `restart: true` resets them.
 - Only standard modules import (asyncio, json, re, math, collections, itertools, functools, \
@@ -256,7 +259,10 @@ class CodeMode:
             if nested is None:
                 raise ToolError(f"{name} cannot be called here")
             result = await nested(name, kwargs)
-            if result.is_error:
+            # A command that exits non-zero still ran: the code reads its output and `[exit N]`,
+            # as pi's bash resolves with the exit code. A call that did not run raises.
+            ran = name == "bash" and not result.content.startswith(DID_NOT_RUN)
+            if result.is_error and not ran:
                 raise CallFailed(result.content)
             return result.content
 

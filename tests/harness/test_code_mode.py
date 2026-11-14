@@ -115,3 +115,15 @@ async def test_the_code_finds_and_calls_a_tool_the_model_was_never_shown(tmp_pat
     description = next(s for s in provider.requests[0].tools if s.name == "run_code").description
     assert "async def multi_edit(" not in description
     assert "search_tools()" in description
+
+
+async def test_a_failing_command_returns_its_output_to_the_code(tmp_path: Path) -> None:
+    code = 'out = await bash(command="echo broken; exit 3")\n"[exit 3]" in out and "broken" in out'
+    provider = FakeProvider([use_tool("run_code", code=code), reply("done")])
+    loop, code_mode = await folded_loop(tmp_path, provider, StubGate())
+    try:
+        events = await collect(loop, turn("go"))
+    finally:
+        await code_mode.close()
+    end = next(event for event in events if isinstance(event, ToolEnd))
+    assert end.result.content == "true"
