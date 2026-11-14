@@ -20,3 +20,9 @@ test("everyone sees whether a plain message reaches the agent", () => {
   projection.state = { ...projection.state, chat_mode: "all" };
   expect(render()).toContain("agent answers all");
 });
+
+test("the trace button says what it is, not only a graph icon", () => {
+  const projection = new Projection();
+  const html = renderToStaticMarkup(<TopBar room="r_test" projection={projection} connection="online" panelOpen={false} railOpen onToggleRail={() => undefined} onCopyRoom={() => undefined} onTogglePanel={() => undefined} onLeave={() => undefined} onToggleTrace={() => undefined} />);
+  expect(html).toContain(">Trace<");
+});
