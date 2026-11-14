@@ -6,7 +6,7 @@
 
 **the shared room for your coding agent.**
 
-[web app](https://plrl.host/app) · [install](#install) · [quick start](#quick-start) · [docs](#docs) · [security](SECURITY.md) · [contributing](CONTRIBUTING.md)
+[web app](https://plrl.host/app) · [install](#install) · [quick start](#quick-start) · [docs](https://plrl.host/docs) · [security](SECURITY.md) · [contributing](CONTRIBUTING.md)
 
 [![License](https://img.shields.io/badge/license-GPL--3.0--or--later-666666?labelColor=333333)](LICENSE)
 [![Release](https://img.shields.io/github/v/release/Plural-Organization/Plural?label=release&labelColor=333333&color=666666)](https://github.com/Plural-Organization/Plural/releases/latest)
@@ -63,7 +63,7 @@ the first line in the conversation is the room link. send it to a teammate, now 
 plural join "ws://…"
 ```
 
-come back to a session with `plural -r` (or `plural -c` for the latest of this folder), and ask once from a script with `plural -p "…"`. teams: `plural team list`, `plural team use <name>`. stuck or done: `plural stop` ends the daemon, rooms, relays and agents (`--dry-run` lists them first). see [usage](docs/usage.md).
+come back to a session with `plural -r` (or `plural -c` for the latest of this folder), and ask once from a script with `plural -p "…"`. teams: `plural team list`, `plural team use <name>`. stuck or done: `plural stop` ends the daemon, rooms, relays and agents (`--dry-run` lists them first). see [usage](https://plrl.host/docs/usage).
 
 without a key the host runs a scripted demo agent. pick a real one in `F2` → Model, or in the web app: Claude Code (`claude auth login`), Codex (`codex login`), `ANTHROPIC_API_KEY=… plural`, or a local model. details and the Claude OAuth caveats are in [configuration](docs/configuration.md).
 
@@ -71,7 +71,9 @@ without a key the host runs a scripted demo agent. pick a real one in `F2` → M
 
 ## docs
 
-[usage](docs/usage.md) · [configuration](docs/configuration.md) · [plugins](docs/plugins.md) · [running on a server](docs/self-hosting.md) · [wire protocol](docs/protocol.md) · [threat model](docs/threat-model.md) · [design decisions](docs/adr/) · [development](docs/development.md)
+the full docs are at **[plrl.host/docs](https://plrl.host/docs)**: [getting started](https://plrl.host/docs/getting-started) · [usage](https://plrl.host/docs/usage) · [configuration](https://plrl.host/docs/configuration) · [teams](https://plrl.host/docs/teams) · [MCP](https://plrl.host/docs/mcp) · [skills](https://plrl.host/docs/skills) · [sub-agents](https://plrl.host/docs/sub-agents) · [plugins](https://plrl.host/docs/plugins) · [security](https://plrl.host/docs/security) · [reference](https://plrl.host/docs/reference).
+
+for contributors and self-hosters, in this repo: [running on a server](docs/self-hosting.md) · [wire protocol](docs/protocol.md) · [threat model](docs/threat-model.md) · [design decisions](docs/adr/) · [development](docs/development.md)
 
 ## acknowledgements
 
