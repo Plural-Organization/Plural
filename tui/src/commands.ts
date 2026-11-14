@@ -1,52 +1,11 @@
-import { mentionCompletions, mentionNote, type Mentionable, type PluginCommandView, type Role, type SkillView } from "@plural/client";
+import { listedCommands, mentionCompletions, mentionNote, pluginHints, skillHints, suggestCommands, visibleCommands as visibleOn, type CommandHint, type Mentionable, type PluginCommandView, type Role } from "@plural/client";
 
-export interface CommandHint {
-  name: string;
-  usage: string;
-  description: string;
-  hostOnly?: boolean;
-  insert?: string;
-}
+// What the commands are lives in @plural/client, once, for this client and the web one; this file is the terminal client's view of it.
+export type { CommandHint };
+export { pluginHints, skillHints };
 
-export const COMMANDS: CommandHint[] = [
-  { name: "help", usage: "/help", description: "show commands and keys" },
-  { name: "who", usage: "/who", description: "list participants" },
-  { name: "team", usage: "/team <message>", description: "write to the room; the agent reads it only in mention mode" },
-  { name: "import", usage: "/import", description: "the address that lets Claude, ChatGPT or Grok send a chat's context to this session", hostOnly: true },
-  { name: "invite", usage: "/invite [link|once|viewer|revoke|open|approve]", description: "copy the room link, or a one-time invite, or change who may join", hostOnly: true },
-  { name: "ask", usage: "/ask @name <question> · /ask give", description: "ask a teammate's agent about their session, then hand the answer to yours (host: /ask share off|ask|team)" },
-  { name: "access", usage: "/access [note]", description: "ask the host for the right to write (host: allow|deny|revoke <name>)" },
-  { name: "preview", usage: "/preview <port> [title] | off", description: "show a server running on this machine in the web canvas", hostOnly: true },
-  { name: "kick", usage: "/kick <name>", description: "remove someone from the session; a team member stays out", hostOnly: true },
-  { name: "mode", usage: "/mode open|review", description: "who may prompt directly", hostOnly: true },
-  { name: "replies", usage: "/replies mention|all", description: "the agent answers only @plrl, or every message", hostOnly: true },
-  { name: "danger", usage: "/danger on|off", description: "danger zone: guests' edits and commands run without asking you", hostOnly: true },
-  { name: "policy", usage: "/policy [allow|ask|deny <tool> <pattern> | rm <id>]", description: "show or edit permission rules", hostOnly: true },
-  { name: "skills", usage: "/skills [search <q> | add <owner/repo@skill> [--global] | rm <name>]", description: "list, find and install skills" },
-  { name: "mcp", usage: "/mcp [add <name> <command|url> [--global] | on|off|restart|rm <name> | import]", description: "connect MCP servers and their tools" },
-  { name: "agents", usage: "/agents [rm <name>]", description: "sub-agents the agent can hand work to; create your own" },
-  { name: "usage", usage: "/usage", description: "tokens spent per model and agent in this session" },
-  { name: "context", usage: "/context", description: "what fills the agent's context, and whether the cache was used" },
-  { name: "trace", usage: "/trace [all]", description: "what the last run did and what each step spent; all: who called what in the session" },
-  { name: "plugins", usage: "/plugins [new <name> | reload]", description: "the host's plugins and their commands" },
-  { name: "fork", usage: "/fork [title]", description: "copy this session into a new one and go on there", hostOnly: true },
-  { name: "resume", usage: "/resume <id|title>", description: "switch to another session of yours", hostOnly: true },
-  { name: "compact", usage: "/compact", description: "summarize the context before the next prompt", hostOnly: true },
-  { name: "abort", usage: "/abort", description: "stop the current run", hostOnly: true },
-  { name: "cancel", usage: "/cancel <n>", description: "remove a queued prompt (yours, or any as host)" },
-  { name: "settings", usage: "/settings", description: "theme, prompt mode and other preferences" },
-  { name: "copy", usage: "/copy", description: "copy the last reply to the clipboard" },
-  { name: "quit", usage: "/quit", description: "leave the session" },
-];
-
-export function pluginHints(commands: readonly PluginCommandView[]): CommandHint[] {
-  return commands.map((command) => ({
-    name: command.name,
-    usage: command.usage ?? `/${command.name}`,
-    description: command.description || `from the ${command.plugin} plugin`,
-    hostOnly: command.host_only ?? false,
-  }));
-}
+/** Everything the terminal client offers, for any role. */
+export const COMMANDS: CommandHint[] = listedCommands("tui");
 
 /** The plugin command whose shortcut is this key, such as ctrl+r or f5, that this person may run. */
 export function shortcutCommand(
@@ -58,17 +17,8 @@ export function shortcutCommand(
   return commands.find((command) => command.shortcut === pressed && (!command.host_only || role === "host"));
 }
 
-/** `/skill:<name>` for every skill, the only way to run one the model does not see. */
-export function skillHints(skills: readonly SkillView[]): CommandHint[] {
-  return skills.map((skill) => ({
-    name: `skill:${skill.name}`,
-    usage: `/skill:${skill.name} [request]`,
-    description: skill.description || "run this skill",
-  }));
-}
-
 export function visibleCommands(role: Role | undefined, plugins: CommandHint[] = []): CommandHint[] {
-  return [...COMMANDS, ...plugins].filter((command) => !command.hostOnly || role === "host");
+  return visibleOn("tui", role, plugins);
 }
 
 export function mentionHints(value: string, people: Mentionable[]): CommandHint[] {
@@ -105,8 +55,7 @@ export function suggestions(
   targets: AskTarget[] = [],
 ): CommandHint[] {
   if (value.startsWith("/") && !value.includes(" ") && !value.includes("\n")) {
-    const prefix = value.slice(1).toLowerCase();
-    return visibleCommands(role, plugins).filter((command) => command.name.startsWith(prefix));
+    return suggestCommands("tui", value, role, plugins);
   }
   return askHints(value, targets) ?? mentionHints(value, people);
 }

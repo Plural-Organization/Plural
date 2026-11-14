@@ -73,7 +73,7 @@ src/plural/
 ├── relay/      relay router
 ├── client/     connection and projection, used by tests
 └── cli/        plural-host entry point
-client/         @plural/client, the TypeScript protocol client
+client/         @plural/client, the TypeScript protocol client. `client/src/commands.ts` lists every slash command once, for both clients: add a command there, and for a `local` one TypeScript then asks each client that has it for a handler
 tui/            the terminal client
 web/            the browser client: screens, components, hooks and lib in web/src
 ```
