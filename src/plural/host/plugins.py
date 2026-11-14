@@ -131,7 +131,7 @@ MAX_OUTPUT_CHARS: Final = 64_000
 TEMPLATE: Final = '''\
 """Plural plugin /{name}. Edit it, then run /plugins reload.
 
-Plugins run inside the host with the host's permissions. See docs/plugins.md.
+Plugins run inside the host with the host's permissions. See https://plrl.host/docs/plugins.
 """
 
 
