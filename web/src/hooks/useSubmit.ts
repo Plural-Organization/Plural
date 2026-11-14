@@ -1,4 +1,4 @@
-import { cacheHitLabel, findPerson, isSkillCommand, label, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
+import { assertNever, cacheHitLabel, findPerson, isSkillCommand, label, localCommand, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
 import { commandName, helpText, isHostOnly, pluginHints } from "../lib/commands";
 import { contextText } from "../lib/context";
@@ -21,7 +21,12 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
 
   const local = (text: string): boolean => {
     const [, ...rest] = text.slice(1).split(/\s+/);
-    switch (commandName(text)) {
+    // The registry says which commands the web client carries out itself; a new one without a case here does not compile.
+    const found = localCommand("web", commandName(text));
+    if (found === undefined) {
+      return false;
+    }
+    switch (found.name) {
       case "help":
         notify("accent", helpText(projection.me?.role, plugins));
         return true;
@@ -145,7 +150,7 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
         onDraw();
         return true;
       default:
-        return false;
+        return assertNever(found.name);
     }
   };
 

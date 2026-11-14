@@ -1,5 +1,6 @@
 export * from "./ask";
 export * from "./chat";
+export * from "./commands";
 export * from "./decode";
 export * from "./diff";
 export * from "./feed";

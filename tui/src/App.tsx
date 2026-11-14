@@ -15,6 +15,8 @@ import {
   forAgent,
   AGENT_HANDLE,
   isSkillCommand,
+  assertNever,
+  localCommand,
   parseSlash,
   routeOf,
   SlashError,
@@ -1142,7 +1144,12 @@ export function App({
 
   const local = (text: string): boolean => {
     const [name = "", ...rest] = text.slice(1).split(/\s+/);
-    switch (name) {
+    // The registry says which commands the terminal client carries out itself; a new one without a case here does not compile.
+    const found = localCommand("tui", name);
+    if (found === undefined) {
+      return false;
+    }
+    switch (found.name) {
       case "help":
         show("help", helpRows(me?.role, pluginCommands));
         return true;
@@ -1301,7 +1308,7 @@ export function App({
         }
         return true;
       default:
-        return false;
+        return assertNever(found.name);
     }
   };
 
