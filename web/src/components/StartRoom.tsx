@@ -111,19 +111,23 @@ export function StartRoom({ account, onBack, onOpen, team = null }: StartRoomPro
     }
   };
 
-  const choose = () => {
+  // Asks the system's own dialog for a folder; resolves with it, or null when the person closed the dialog.
+  const pick = (): Promise<PickedFolder | null> => {
     setProblem(null);
     setBusy("folder");
-    pickFolder()
-      .then((picked) => picked !== null && setFolder(picked))
-      .catch(fail)
+    return pickFolder()
+      .catch((error: unknown) => {
+        fail(error);
+        return null;
+      })
       .finally(() => setBusy(null));
   };
 
-  const start = () => {
-    if (folder === null) {
-      return;
-    }
+  const choose = () => {
+    void pick().then((picked) => picked !== null && setFolder(picked));
+  };
+
+  const start = (target: PickedFolder) => {
     setProblem(null);
     setBusy("room");
     // An outdated daemon starts the room with the agent it is set to, as before agent setup.
@@ -131,7 +135,7 @@ export function StartRoom({ account, onBack, onOpen, team = null }: StartRoomPro
       await saveAgent(choice);
       return choice;
     }))
-      .then((choice) => startRoom(folder.folder, title, { ...(choice === undefined ? {} : { agent: choice }), ...(relay === null || agent.outdated ? {} : { relay }), ...(showTo === null || agent.outdated ? {} : { team: showTo }) }))
+      .then((choice) => startRoom(target.folder, title, { ...(choice === undefined ? {} : { agent: choice }), ...(relay === null || agent.outdated ? {} : { relay }), ...(showTo === null || agent.outdated ? {} : { team: showTo }) }))
       .then((room) => onOpen(parseLink(room.host_link), account.name !== "" ? account.name : (account.email.split("@")[0] ?? "host")))
       .catch((error: unknown) => {
         if (error instanceof Error && !(error instanceof DaemonError)) {
@@ -233,8 +237,24 @@ export function StartRoom({ account, onBack, onOpen, team = null }: StartRoomPro
               </Alert.Content>
             </Alert>
           )}
-          <Button fullWidth size="lg" onPress={start} isDisabled={folder === null || busy !== null || (!agent.outdated && agent.blocker !== null) || relayWrong !== null}>
-            {busy === "room" ? "Starting…" : "Start room"}
+          {/* One press does the whole thing: with no folder yet it opens the folder dialog and starts the room in that folder. */}
+          <Button
+            fullWidth
+            size="lg"
+            onPress={() => {
+              if (folder !== null) {
+                start(folder);
+                return;
+              }
+              void pick().then((picked) => {
+                if (picked === null) return;
+                setFolder(picked);
+                start(picked);
+              });
+            }}
+            isDisabled={busy !== null || (!agent.outdated && agent.blocker !== null) || relayWrong !== null}
+          >
+            {busy === "room" ? "Starting…" : busy === "folder" ? "Choose a folder…" : folder === null ? "Choose a folder and start" : "Start room"}
           </Button>
         </div>
       ) : phase === "checking" ? (

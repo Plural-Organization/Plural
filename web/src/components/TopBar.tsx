@@ -1,5 +1,5 @@
 import { Avatar, AvatarGroup, Button, Chip, Kbd, ProgressBar, Spinner, Tooltip } from "@heroui/react";
-import { Graph, SidebarSimple, SignOut } from "@phosphor-icons/react";
+import { ListMagnifyingGlass, SidebarSimple, SignOut } from "@phosphor-icons/react";
 import { contextMeter, type ConnectionStatus, type Projection } from "@plural/client";
 import { orbFor, PersonAvatar } from "./PersonAvatar";
 import { AgentLogo } from "./AgentLogo";
@@ -98,8 +98,9 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
       )}
       {onToggleTrace ? (
         <Tooltip delay={300}>
-          <Button isIconOnly variant={traceOpen ? "secondary" : "ghost"} size="sm" aria-label="Trace" aria-pressed={traceOpen} onPress={onToggleTrace}>
-            <Graph size={18} />
+          <Button variant={traceOpen ? "secondary" : "ghost"} size="sm" className="px-2 sm:px-3" aria-label="Trace" aria-pressed={traceOpen} onPress={onToggleTrace}>
+            <ListMagnifyingGlass size={18} />
+            <span className="hidden sm:inline">Trace</span>
           </Button>
           <Tooltip.Content>
             Trace: what each run did and spent <Kbd className="ml-1 h-5 px-1 text-[11px]"><Kbd.Content>t</Kbd.Content></Kbd>

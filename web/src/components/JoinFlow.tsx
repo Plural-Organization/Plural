@@ -42,6 +42,36 @@ function readShared(raw: string): Read {
   }
 }
 
+// Signing in leaves the page for Google and comes back to a fresh one, so the wish to start a room is kept across the trip:
+// the person lands in the room form, not on the first page asking again. It expires, so an old one never fires later.
+const START_INTENT = "plural.intent.start";
+const INTENT_TTL_MS = 10 * 60 * 1000;
+
+function rememberStartIntent(): void {
+  try {
+    sessionStorage.setItem(START_INTENT, String(Date.now()));
+  } catch {
+    // Without storage the person just taps Start a room again.
+  }
+}
+
+function startIntent(): boolean {
+  try {
+    const at = Number(sessionStorage.getItem(START_INTENT));
+    return Number.isFinite(at) && at > 0 && Date.now() - at < INTENT_TTL_MS;
+  } catch {
+    return false;
+  }
+}
+
+function clearStartIntent(): void {
+  try {
+    sessionStorage.removeItem(START_INTENT);
+  } catch {
+    // Nothing to clear.
+  }
+}
+
 function sharedOnLoad(): string {
   const query = new URLSearchParams(window.location.search).get("join");
   if (query !== null) {
@@ -72,7 +102,9 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined, onStep, onCreate
     const read = readShared(shared);
     return "target" in read ? read.target : null;
   });
-  const [starting, setStarting] = useState(false);
+  const [starting, setStarting] = useState(() => startIntent() && account.loginError === null && sharedOnLoad() === "");
+  // The wish is spent once the room form (or the sign-in step) is up, so Back does not bring it back.
+  useEffect(() => clearStartIntent(), []);
   const [problem, setProblem] = useState<string | null>(null);
   const [name, setName] = useState(savedName);
   const [busy, setBusy] = useState(false);
@@ -143,6 +175,18 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined, onStep, onCreate
     return <StartRoom account={account.account} onBack={() => setStarting(false)} onOpen={onJoin} />;
   }
 
+  // Coming back from signing in, the account answer is still on its way: hold the step instead of flashing the sign-in.
+  if (starting && account.status === "loading") {
+    return (
+      <div className="pl-step">
+        {back}
+        <img src={ROOM_ART} alt="" className="pl-step-art" />
+        <h1 className="pl-step-title">Start a room</h1>
+        <p className="pl-step-text" role="status">Signing you in…</p>
+      </div>
+    );
+  }
+
   // Starting needs an account, so this page can reach Plural on the person's computer: sign in first.
   if (starting && account.enabled) {
     const here = `${window.location.origin}${window.location.pathname}`;
@@ -155,7 +199,10 @@ export function JoinFlow({ team, account, onJoin, onTeamJoined, onStep, onCreate
           <p className="pl-step-text">Sign in so this page can set up the room on your computer.</p>
         </div>
         <div className="flex flex-col gap-2.5">
-          <button type="button" className="pl-pill pl-pill-primary pl-pill-tall w-full" disabled={account.status === "loading"} onClick={() => window.location.assign(signInUrl(here))}>
+          <button type="button" className="pl-pill pl-pill-primary pl-pill-tall w-full" disabled={account.status === "loading"} onClick={() => {
+              rememberStartIntent();
+              window.location.assign(signInUrl(here));
+            }}>
             <GoogleLogo size={18} weight="bold" aria-hidden="true" />
             Continue with Google
           </button>
