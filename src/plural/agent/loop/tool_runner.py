@@ -100,7 +100,12 @@ class ToolRunner:
                 raise outcome
 
     async def _execute(
-        self, call: ToolCallRequest, provenance: Provenance, cancel: asyncio.Event
+        self,
+        call: ToolCallRequest,
+        provenance: Provenance,
+        cancel: asyncio.Event,
+        *,
+        nested: bool = False,
     ) -> AsyncIterator[AgentEvent]:
         if call.parse_error is not None:
             for event in self.skip(call, f"Invalid tool call: {call.parse_error}"):
@@ -109,7 +114,7 @@ class ToolRunner:
         # The host may change the arguments; what it changes still goes through every check.
         call = await self._hooks.tool_args(call, provenance)
         try:
-            prepared = self._tools.prepare(call)
+            prepared = self._tools.prepare(call, load=not nested)
         except (UnknownTool, ValidationError) as error:
             for event in self.skip(call, f"Invalid tool call: {error}"):
                 yield event
@@ -237,7 +242,7 @@ class ToolRunner:
         self._nested_calls += 1
         request = ToolCallRequest(id=f"{parent}.{self._nested_calls}", name=name, args=dict(args))
         result = ToolResult(ABORTED, is_error=True)
-        async for event in self._execute(request, provenance, cancel):
+        async for event in self._execute(request, provenance, cancel, nested=True):
             match event:
                 case ToolStart(call=view):
                     emit(f"{view.name} {view.subject}\n")

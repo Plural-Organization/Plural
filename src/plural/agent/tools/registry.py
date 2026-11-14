@@ -156,10 +156,18 @@ class ToolRegistry:
             and not self._is_folded(entry.tool.name)
         )
 
-    def prepare(self, call: ToolCallRequest) -> PreparedCall:
+    def runnable(self) -> tuple[Entry, ...]:
+        """Every tool that can run, declared or not: what code calls as functions."""
+        return tuple(
+            entry for entry in self._entries().values() if self._allowed_name(entry.tool.name)
+        )
+
+    def prepare(self, call: ToolCallRequest, *, load: bool = True) -> PreparedCall:
         tool = self.get(call.name)
         # Calling a deferred tool by its exact name loads it: the gate still decides the call.
-        self.load((call.name,))
+        # A call made from code leaves it where it was: the model reaches it through the code.
+        if load:
+            self.load((call.name,))
         return tool.prepare(call.args)
 
     def _entries(self) -> dict[str, Entry]:

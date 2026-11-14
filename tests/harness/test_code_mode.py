@@ -86,3 +86,32 @@ async def test_a_failed_call_raises_in_the_code_and_a_denied_one_changes_nothing
     first, second = [event for event in events if isinstance(event, ToolEnd)]
     assert first.result.content == "caught"
     assert second.result.is_error
+
+
+FIND = """
+found = await search_tools(query="edit several places in one file")
+names = [tool["name"] for tool in found]
+described = await describe_tool(name="multi_edit")
+await multi_edit(path="a.txt", edits=[{"old": "alpha", "new": "omega"}])
+{"found": "multi_edit" in names, "described": "async def multi_edit(" in described}
+"""
+
+
+async def test_the_code_finds_and_calls_a_tool_the_model_was_never_shown(tmp_path: Path) -> None:
+    provider = FakeProvider(
+        [use_tool("run_code", code=FIND), use_tool("run_code", code="1"), reply("done")]
+    )
+    loop, code_mode = await folded_loop(tmp_path, provider, StubGate())
+    try:
+        events = await collect(loop, turn("go"))
+    finally:
+        await code_mode.close()
+
+    first = next(event for event in events if isinstance(event, ToolEnd))
+    assert first.result.content == '{"found": true, "described": true}'
+    assert (tmp_path / "a.txt").read_text() == "omega\n"
+    # Called from code, the deferred tool is still not declared to the model.
+    assert "multi_edit" not in {schema.name for schema in provider.requests[-1].tools}
+    description = next(s for s in provider.requests[0].tools if s.name == "run_code").description
+    assert "async def multi_edit(" not in description
+    assert "search_tools()" in description
