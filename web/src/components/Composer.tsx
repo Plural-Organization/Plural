@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type 
 import { mentionCompletions, mentionNote, type Mentionable, type ProposalView, type Role } from "@plural/client";
 import type { Attachment } from "../hooks/useAttachments";
 import { suggestions, type CommandHint } from "../lib/commands";
+import { loadHistory, newer, NOT_BROWSING, older, remember, saveHistory, type Browsing } from "../lib/promptHistory";
 import { withQuote } from "../lib/quote";
 import styles from "./Composer.module.css";
 
@@ -34,6 +35,9 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
   const area = useRef<HTMLTextAreaElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  // What was sent, for the up and down keys; loaded once, kept in this browser.
+  const history = useRef<string[]>(loadHistory());
+  const browsing = useRef<Browsing>(NOT_BROWSING);
   const commandHints = suggestions(value, role, commands);
   const mentions = commandHints.length === 0 ? mentionCompletions(value, people) : [];
   const hints = [
@@ -85,8 +89,37 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
     if (text === "" && attachments.length === 0) {
       return;
     }
+    history.current = remember(history.current, text);
+    saveHistory(history.current);
+    browsing.current = NOT_BROWSING;
     onSubmit(text);
     setValue("");
+  };
+
+  // Up on the first line goes back through what was sent, down on the last line comes forward again; elsewhere the keys move the caret.
+  const recall = (event: KeyboardEvent<HTMLTextAreaElement>): boolean => {
+    if ((event.key !== "ArrowUp" && event.key !== "ArrowDown") || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey || event.nativeEvent.isComposing) {
+      return false;
+    }
+    const element = event.currentTarget;
+    if (element.selectionStart !== element.selectionEnd) {
+      return false;
+    }
+    const up = event.key === "ArrowUp";
+    const onEdge = up ? !value.slice(0, element.selectionStart).includes("\n") : !value.slice(element.selectionEnd).includes("\n");
+    if (!onEdge) {
+      return false;
+    }
+    const step = up ? older(history.current, browsing.current, value) : newer(history.current, browsing.current);
+    if (step.value === null) {
+      return false;
+    }
+    event.preventDefault();
+    browsing.current = step.browsing;
+    setValue(step.value);
+    // After the new text is in the box, with the caret at its end, so the next key press goes on from there.
+    requestAnimationFrame(() => area.current?.setSelectionRange(step.value?.length ?? 0, step.value?.length ?? 0));
+    return true;
   };
 
   const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -98,6 +131,9 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
       } else {
         setPick((current) => (current + (event.key === "ArrowDown" ? 1 : hints.length - 1)) % hints.length);
       }
+      return;
+    }
+    if (hints.length === 0 && !editing && recall(event)) {
       return;
     }
     if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -194,6 +230,8 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
           disabled={disabled !== null}
           placeholder={disabled ?? placeholder}
           onChange={(event) => {
+            // Typing over a recalled message makes it a new line of its own; the next up starts from the newest again.
+            browsing.current = NOT_BROWSING;
             setValue(event.target.value);
             onActivity(event.target.value);
           }}
