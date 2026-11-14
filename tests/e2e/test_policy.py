@@ -5,6 +5,7 @@ import pytest
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import (
     ApprovalRespond,
+    PermissionModeSet,
     PolicyAdd,
     PolicyRemove,
     PromptSubmit,
@@ -17,7 +18,7 @@ from plural.protocol.events import (
     RunEnded,
     ToolEnded,
 )
-from plural.protocol.models import ApprovalDecision, PolicyAction
+from plural.protocol.models import ApprovalDecision, PermissionMode, PolicyAction
 from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import Session, running_session
 
@@ -144,3 +145,24 @@ async def test_allow_rule_cannot_override_a_built_in_deny(tmp_path: Path) -> Non
         assert not ended.ok
         assert "denied by policy rule" in ended.output
         assert not any(isinstance(e, ApprovalRequested) for e in owner.events)
+
+
+async def test_danger_mode_runs_a_guests_command_without_asking_the_host(tmp_path: Path) -> None:
+    async with running_session(tmp_path, relayed=False, provider=echo_provider()) as session:
+        owner = await session.owner()
+        guest = await session.guest("Alia")
+        await owner.client.send(PermissionModeSet(mode=PermissionMode.DANGER))
+
+        await guest.client.send(PromptSubmit(text="say hello"))
+        ended = await owner.next(ToolEnded)
+        await owner.next(RunEnded)
+        assert ended.ok
+        assert not any(isinstance(e, ApprovalRequested) for e in owner.events)
+
+
+async def test_only_the_host_can_switch_danger_mode_on(tmp_path: Path) -> None:
+    async with running_session(tmp_path, relayed=False, provider=echo_provider()) as session:
+        guest = await session.guest("Alia")
+        with pytest.raises(CommandRejected) as rejected:
+            await guest.client.send(PermissionModeSet(mode=PermissionMode.DANGER))
+        assert rejected.value.error.code is ErrorCode.FORBIDDEN

@@ -264,7 +264,7 @@ How it goes: your client joins her session for a moment as a viewer, you ask, **
 
 A briefing has two parts. The first is facts from alia's host, not from the model: the repository, the branch, the commit, how many files are uncommitted, and every file her agent changed this session with `+added −removed`. The second is the model's account: the goal, what was done and why, what was tried and dropped, the state, what is open, and exact names and commands. It is capped at about 450 words and 20,000 characters, secrets are redacted, and file contents are not pasted. `--update` sends the model what you already have and asks only for the difference.
 
-Your agent treats it as notes from a colleague that nobody checked, not as instructions. Because the text came from someone else's session, **once you have given an answer to your agent, every run of that session asks you before it writes or runs anything**, even in auto mode, until you start a new session. The same briefing is not accepted twice, and it survives a restart. You wait a minute between requests, and one is open at a time.
+Your agent treats it as notes from a colleague that nobody checked, not as instructions. Because the text came from someone else's session, **once you have given an answer to your agent, every run of that session asks you before it writes or runs anything**, even in auto mode (the danger zone lifts this too), until you start a new session. The same briefing is not accepted twice, and it survives a restart. You wait a minute between requests, and one is open at a time.
 
 ### Asking to write
 
@@ -292,9 +292,14 @@ The host decides how much the agent may do without asking. `shift+tab` cycles th
 | ask before changes (default) | Reads freely; every edit and command waits for the host, unless a rule allows it |
 | accept edits | Edits files without asking; commands still ask |
 | plan mode | Only reads and researches, then replies with a plan. Edits and commands are refused |
-| auto mode | Edits and runs commands without asking |
+| auto mode | Edits and runs commands without asking, as long as the run is yours |
+| danger zone | Edits and runs commands without asking, also when a guest started the run |
 
 Deny rules hold in every mode, and a run that contains a participant's prompt still asks before edits and commands, even in auto mode. When a plan is ready the host picks how to start it: `a` in auto mode, `e` accepting edits, `y` asking before changes, or `n` to keep planning. A restarted host always comes back in the default mode.
+
+### The danger zone
+
+Hosts who tire of answering for every command a guest's prompt starts can turn on the **danger zone**: in the room settings (**What the agent may do**, after a warning you confirm) or with `/danger on` (`/danger off` turns it off). From then on the edits and commands a guest or a person with write access asks the agent for run on your computer without asking you, and everyone in the room sees a red *Danger zone* mark. A command can do anything your account can, so you answer for everything that runs while it is on. It does **not** open what lies outside the project: a folder outside the session, or a file the built-in protections cover, still asks you or is refused, deny rules still hold, and plan mode still refuses changes. It is never one key away (`shift+tab` skips it, and there is no command-line flag for it) and it switches off when the room restarts.
 
 ## Folders outside the session
 

@@ -2,10 +2,10 @@ import { contextMeter, label, PERMISSION_LABELS, type ConnectionStatus, type Par
 import { theme } from "../theme";
 import { Spinner } from "./Spinner";
 
-const MARKS: Record<PermissionMode, string> = { default: "⏵", accept_edits: "⏵⏵", plan: "⏸", auto: "⏵⏵⏵" };
+const MARKS: Record<PermissionMode, string> = { default: "⏵", accept_edits: "⏵⏵", plan: "⏸", auto: "⏵⏵⏵", danger: "⚠" };
 
 function modeColor(mode: PermissionMode): string {
-  return mode === "plan" ? theme.info : mode === "auto" ? theme.danger : mode === "accept_edits" ? theme.warn : theme.dim;
+  return mode === "plan" ? theme.info : mode === "auto" || mode === "danger" ? theme.danger : mode === "accept_edits" ? theme.warn : theme.dim;
 }
 
 interface StatusBarProps {

@@ -20,6 +20,7 @@ export const COMMANDS: CommandHint[] = [
   { name: "kick", usage: "/kick <name>", description: "remove someone from the session; a team member stays out", hostOnly: true },
   { name: "mode", usage: "/mode open|review", description: "who may prompt directly", hostOnly: true },
   { name: "replies", usage: "/replies mention|all", description: "the agent answers only @plrl, or every message", hostOnly: true },
+  { name: "danger", usage: "/danger on|off", description: "danger zone: guests' edits and commands run without asking you", hostOnly: true },
   { name: "policy", usage: "/policy [allow|ask|deny <tool> <pattern> | rm <id>]", description: "show or edit permission rules", hostOnly: true },
   { name: "skills", usage: "/skills [search <q> | add <owner/repo@skill> [--global] | rm <name>]", description: "list, find and install skills" },
   { name: "mcp", usage: "/mcp [add <name> <command|url> [--global] | on|off|restart|rm <name> | import]", description: "connect MCP servers and their tools" },

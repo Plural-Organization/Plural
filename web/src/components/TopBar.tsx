@@ -60,6 +60,14 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
         </Chip>
         <Tooltip.Content>{mention ? "A plain message is chat the agent reads; it answers messages that tag @plrl" : "Every message goes to the agent; /team writes to people only"}</Tooltip.Content>
       </Tooltip>
+      {state.permission_mode === "danger" ? (
+        <Tooltip delay={300}>
+          <Chip size="sm" variant="soft" color="danger">
+            <Chip.Label>Danger zone</Chip.Label>
+          </Chip>
+          <Tooltip.Content>Guests&apos; edits and commands run on the host&apos;s computer without asking. Folders outside the project still ask.</Tooltip.Content>
+        </Tooltip>
+      ) : null}
       <span className="grow" />
       {meter ? (
         <Tooltip delay={300}>

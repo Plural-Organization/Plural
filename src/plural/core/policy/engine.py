@@ -14,6 +14,7 @@ GUEST_BUDGET: Final = "the token budget for a run started by a guest is used up"
 UNLOCKED: Final[dict[PermissionMode, frozenset[ToolRisk]]] = {
     PermissionMode.ACCEPT_EDITS: frozenset({ToolRisk.WRITE}),
     PermissionMode.AUTO: frozenset({ToolRisk.WRITE, ToolRisk.EXEC}),
+    PermissionMode.DANGER: frozenset({ToolRisk.WRITE, ToolRisk.EXEC}),
 }
 
 
@@ -57,7 +58,11 @@ def evaluate(policy: Policy, invocation: ToolInvocation, provenance: Provenance)
     if action is PolicyAction.ASK and unlocked:
         action, reason = PolicyAction.ALLOW, f"{policy.mode} mode"
     if action is PolicyAction.ALLOW:
-        if invocation.risk in policy.guest_taint and is_guest_originated(provenance):
+        if (
+            invocation.risk in policy.guest_taint
+            and is_guest_originated(provenance)
+            and policy.mode is not PermissionMode.DANGER
+        ):
             action, reason = PolicyAction.ASK, "guest-originated turn"
         elif (
             invocation.risk is ToolRisk.EXEC

@@ -8,6 +8,8 @@
 .head { display: flex; justify-content: space-between; gap: 12px; font-size: 15px; flex-wrap: wrap; align-items: baseline; }
 .head b { font-weight: 600; }
 .subject { margin: 0; font: 13px/1.5 var(--font-mono); background: var(--bg); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 160px; }
+/* What a long command or pattern fills scrolls inside the card; the buttons below it stay in view. */
+.body { display: grid; gap: 12px; max-height: min(50vh, 420px); overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
 .why { margin: 0; font-size: 13px; color: var(--muted); }
 .args summary { font: 12px var(--font-mono); color: var(--dim); cursor: pointer; }
 .args pre { font-size: 12px; margin: 6px 0 0; color: var(--muted); overflow: auto; max-height: 200px; }

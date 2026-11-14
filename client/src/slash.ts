@@ -4,6 +4,7 @@ const USAGE =
   "usage: /policy | /policy allow|ask|deny <tool> <pattern> | /policy rm <rule id>";
 const MODE_USAGE = "usage: /mode open|review";
 const REPLIES_USAGE = "usage: /replies mention|all";
+const DANGER_USAGE = "usage: /danger on|off";
 
 export class SlashError extends Error {}
 
@@ -49,6 +50,8 @@ export function parseSlash(text: string, plugins: ReadonlySet<string> = new Set(
       return mode(argument);
     case "replies":
       return replies(argument);
+    case "danger":
+      return danger(argument);
     case "policy":
       return policy(argument);
     case "skills":
@@ -109,6 +112,14 @@ function replies(argument: string): Command {
     throw new SlashError(REPLIES_USAGE);
   }
   return { type: "session.set_chat_mode", mode: argument satisfies ChatMode };
+}
+
+/** on: guests' edits and commands run without asking the host; off: back to asking. Typed out on purpose, never on a key. */
+function danger(argument: string): Command {
+  if (argument !== "on" && argument !== "off") {
+    throw new SlashError(DANGER_USAGE);
+  }
+  return { type: "session.set_permission_mode", mode: argument === "on" ? "danger" : "default" };
 }
 
 function policy(argument: string): Slash {

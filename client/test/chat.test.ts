@@ -9,8 +9,10 @@ import {
   mentionsAgent,
   mentionsIn,
   mentionsMe,
+  nextPermissionMode,
   parseChat,
   parseSlash,
+  PERMISSION_MODES,
   routeOf,
   SlashError,
   type SessionState,
@@ -213,6 +215,20 @@ describe("mention mode", () => {
     expect(parseSlash("/replies all")).toEqual({ type: "session.set_chat_mode", mode: "all" });
     expect(parseSlash("/replies mention")).toEqual({ type: "session.set_chat_mode", mode: "mention" });
     expect(() => parseSlash("/replies")).toThrow(/usage: \/replies/);
+  });
+});
+
+describe("the danger zone", () => {
+  test("/danger on and off set the permission mode, and nothing else turns it on", () => {
+    expect(parseSlash("/danger on")).toEqual({ type: "session.set_permission_mode", mode: "danger" });
+    expect(parseSlash("/danger off")).toEqual({ type: "session.set_permission_mode", mode: "default" });
+    expect(() => parseSlash("/danger")).toThrow(/usage: \/danger/);
+    expect(() => parseSlash("/danger yes")).toThrow(/usage: \/danger/);
+  });
+  test("a key press never cycles into it, and cycling out of it lands on ask", () => {
+    expect(PERMISSION_MODES).not.toContain("danger");
+    expect(nextPermissionMode("auto")).toBe("default");
+    expect(nextPermissionMode("danger")).toBe("default");
   });
 });
 

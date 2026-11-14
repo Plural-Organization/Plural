@@ -39,7 +39,7 @@ export type PromptMode = "open" | "review";
  * This interface was referenced by `CommandsSchema`'s JSON-Schema
  * via the `definition` "PermissionMode".
  */
-export type PermissionMode = "default" | "accept_edits" | "plan" | "auto";
+export type PermissionMode = "default" | "accept_edits" | "plan" | "auto" | "danger";
 /**
  * Which messages the agent answers. mention: only those that tag @plrl, it reads the rest of
  * the room's chat as context; all: every message, /team writes to people only.
