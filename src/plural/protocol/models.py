@@ -46,6 +46,8 @@ class PermissionMode(StrEnum):
     ACCEPT_EDITS = "accept_edits"
     PLAN = "plan"
     AUTO = "auto"
+    # Like auto, and also for turns a guest started: the host is not asked for each edit or command.
+    DANGER = "danger"
 
 
 HOST_PARTICIPANT_ID: Final = "p_host"

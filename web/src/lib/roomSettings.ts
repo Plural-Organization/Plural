@@ -9,6 +9,8 @@ export interface Option<T extends string> {
   id: T;
   label: string;
   says: string;
+  // Drawn in the danger colour: the choice hands something over that is hard to take back.
+  danger?: boolean;
 }
 
 export const PROMPTS: Option<PromptMode>[] = [
@@ -25,8 +27,15 @@ export const PERMISSIONS: Option<PermissionMode>[] = [
   { id: "default", label: "Ask", says: "The agent asks you before it edits a file or runs a command." },
   { id: "accept_edits", label: "Edits", says: "File edits go through; commands still ask." },
   { id: "plan", label: "Plan", says: "The agent only reads and replies with a plan. Nothing is changed." },
-  { id: "auto", label: "Auto", says: "Edits and commands go through. Deny rules still hold." },
+  { id: "auto", label: "Auto", says: "Your own edits and commands go through. What a guest starts still asks you. Deny rules still hold." },
+  { id: "danger", label: "Danger zone", danger: true, says: "What a guest starts runs without asking you. Other folders and files still ask. Ends when the room restarts." },
 ];
+
+// Said once, before the host turns the danger zone on: it is the one setting that hands the host's machine to other people.
+export const DANGER_TITLE = "Turn on the danger zone?";
+export const DANGER_WARNING =
+  "Commands and file edits that guests ask the agent for will run on your computer without asking you first, and a command can do anything your account can: delete files, send data out, install software. " +
+  "You are responsible for everything that runs while this is on. Folders outside the project, protected files and your deny rules still ask or refuse, and it switches off when the room restarts.";
 
 export const ADMISSION: Option<AdmissionMode>[] = [
   { id: "approve", label: "I approve", says: "You are asked to let in each person who uses the room link." },

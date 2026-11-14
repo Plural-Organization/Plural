@@ -945,7 +945,8 @@
         "default",
         "accept_edits",
         "plan",
-        "auto"
+        "auto",
+        "danger"
       ],
       "type": "string"
     },

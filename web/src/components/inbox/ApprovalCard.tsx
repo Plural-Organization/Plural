@@ -20,6 +20,14 @@ const FOLDER_BUTTONS: { decision: Decision; key: string; label: string; tone?: s
   { decision: "reject", key: "n", label: "refuse", tone: "primary" },
 ];
 
+// A command can be a whole script, and so can the pattern "for the session" would allow. Only its first line is said in a sentence,
+// the full text sits in the scrollable box above, so the buttons never move out of sight.
+const PATTERN_CHARS = 72;
+function clip(text: string): string {
+  const line = (text.split("\n")[0] ?? "").trim();
+  return line.length > PATTERN_CHARS || text.includes("\n") ? `${line.slice(0, PATTERN_CHARS)}…` : line;
+}
+
 function timeLeft(timeoutAt: string, now: number): string {
   const seconds = Math.max(0, Math.round((Date.parse(timeoutAt) - now) / 1000));
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -78,7 +86,8 @@ export function ApprovalCard({ approval, state, now, send }: ApprovalCardProps) 
   const why = guest
     ? `${nameOf(state, approval.provenance.initiator_id)}'s prompt started this run, so it asks you whatever the rules say.`
     : `${call.risk} actions ask the host.`;
-  const session = approval.suggested_patterns.length > 0 ? ` "for the session" allows ${approval.suggested_patterns.join(", ")}.` : "";
+  const patterns = approval.suggested_patterns;
+  const session = patterns.length > 0 ? ` "for the session" allows ${clip(patterns[0] ?? "")}${patterns.length > 1 ? ` and ${patterns.length - 1} more` : ""}.` : "";
 
   return (
     <div className={styles.card}>
@@ -88,22 +97,24 @@ export function ApprovalCard({ approval, state, now, send }: ApprovalCardProps) 
         </span>
         <span className="muted mono">{timeLeft(approval.timeout_at, now)}</span>
       </div>
-      <pre className={styles.subject}>{call.subject || JSON.stringify(call.args, null, 2)}</pre>
-      {extra.length > 0 && call.subject ? (
-        <details className={styles.args}>
-          <summary>arguments</summary>
-          <pre>{JSON.stringify(Object.fromEntries(extra), null, 2)}</pre>
-        </details>
-      ) : null}
-      {(approval.warnings ?? []).map((warning) => (
-        <p key={warning} className={styles.warning} role="alert">
-          ⚠ {warning}
+      <div className={styles.body}>
+        <pre className={styles.subject}>{call.subject || JSON.stringify(call.args, null, 2)}</pre>
+        {extra.length > 0 && call.subject ? (
+          <details className={styles.args}>
+            <summary>arguments</summary>
+            <pre>{JSON.stringify(Object.fromEntries(extra), null, 2)}</pre>
+          </details>
+        ) : null}
+        {(approval.warnings ?? []).map((warning) => (
+          <p key={warning} className={styles.warning} role="alert">
+            ⚠ {warning}
+          </p>
+        ))}
+        <p className={styles.why}>
+          {why}
+          {session}
         </p>
-      ))}
-      <p className={styles.why}>
-        {why}
-        {session}
-      </p>
+      </div>
       <div className={styles.actions}>
         {BUTTONS.map((button) => (
           <Action key={button.decision} hint={button.key} tone={button.tone} onPress={() => send({ type: "approval.respond", approval_id: approval.id, decision: button.decision })}>

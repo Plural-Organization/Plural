@@ -1,11 +1,12 @@
 import { Alert, Button, Card, Description, Label, Modal, Radio, RadioGroup, Spinner } from "@heroui/react";
-import type { Command, Projection } from "@plural/client";
+import type { Command, PermissionMode, Projection } from "@plural/client";
 import { useEffect, useState } from "react";
 import { useAgentSetup } from "../hooks/useAgentSetup";
 import { useDaemon } from "../hooks/useDaemon";
 import { runningRooms, setRoomAgent } from "../lib/agent";
 import { DaemonError, daemonMessage } from "../lib/daemon";
-import { type Option, ADMISSION, BRIEFINGS, PERMISSIONS, PROMPTS, REPLIES } from "../lib/roomSettings";
+import { type Option, ADMISSION, BRIEFINGS, DANGER_TITLE, DANGER_WARNING, PERMISSIONS, PROMPTS, REPLIES } from "../lib/roomSettings";
+import { Confirm } from "./Confirm";
 import { AgentSetup } from "./AgentSetup";
 import { AgentLogo } from "./AgentLogo";
 
@@ -27,7 +28,7 @@ function Choice<T extends string>({ title, options, value, onChange }: ChoicePro
             <Radio.Control>
               <Radio.Indicator />
             </Radio.Control>
-            <Label>{option.label}</Label>
+            <Label className={option.danger ? "text-danger" : undefined}>{option.label}</Label>
           </Radio.Content>
           <Description>{option.says}</Description>
         </Radio>
@@ -118,7 +119,11 @@ interface RoomSettingsProps {
 // What the host can change while the room runs.
 export function RoomSettings({ room, projection, send, onClose }: RoomSettingsProps) {
   const { state, agentLabel } = projection;
+  // The danger zone is the one choice that is asked twice: turning it off is one tap, turning it on is a warning first.
+  const [warning, setWarning] = useState(false);
+  const setPermission = (mode: PermissionMode) => (mode === "danger" && state.permission_mode !== "danger" ? setWarning(true) : send({ type: "session.set_permission_mode", mode }));
   return (
+    <>
     <Modal.Backdrop isOpen onOpenChange={(open) => !open && onClose()}>
       <Modal.Container scroll="inside">
         <Modal.Dialog className="sm:max-w-[34rem]">
@@ -130,7 +135,7 @@ export function RoomSettings({ room, projection, send, onClose }: RoomSettingsPr
             <AgentSection room={room} label={agentLabel} />
             <Choice title="Who may prompt" options={PROMPTS} value={state.prompt_mode} onChange={(mode) => send({ type: "session.set_prompt_mode", mode })} />
             <Choice title="When the agent answers" options={REPLIES} value={state.chat_mode} onChange={(mode) => send({ type: "session.set_chat_mode", mode })} />
-            <Choice title="What the agent may do" options={PERMISSIONS} value={state.permission_mode} onChange={(mode) => send({ type: "session.set_permission_mode", mode })} />
+            <Choice title="What the agent may do" options={PERMISSIONS} value={state.permission_mode} onChange={setPermission} />
             <Choice title="Who gets in with the room link" options={ADMISSION} value={state.admission} onChange={(mode) => send({ type: "link.set_admission", mode })} />
             <Choice title="Briefings of this session" options={BRIEFINGS} value={state.briefing_sharing} onChange={(mode) => send({ type: "session.set_briefing_sharing", mode })} />
           </Modal.Body>
@@ -140,5 +145,15 @@ export function RoomSettings({ room, projection, send, onClose }: RoomSettingsPr
         </Modal.Dialog>
       </Modal.Container>
     </Modal.Backdrop>
+    {warning ? (
+      <Confirm
+        title={DANGER_TITLE}
+        body={DANGER_WARNING}
+        action="I take responsibility"
+        onConfirm={async () => send({ type: "session.set_permission_mode", mode: "danger" })}
+        onClose={() => setWarning(false)}
+      />
+    ) : null}
+    </>
   );
 }

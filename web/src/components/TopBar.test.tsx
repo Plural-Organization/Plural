@@ -26,3 +26,11 @@ test("the trace button says what it is, not only a graph icon", () => {
   const html = renderToStaticMarkup(<TopBar room="r_test" projection={projection} connection="online" panelOpen={false} railOpen onToggleRail={() => undefined} onCopyRoom={() => undefined} onTogglePanel={() => undefined} onLeave={() => undefined} onToggleTrace={() => undefined} />);
   expect(html).toContain(">Trace<");
 });
+
+test("everyone in the room sees when the danger zone is on", () => {
+  const projection = new Projection();
+  const render = () => renderToStaticMarkup(<TopBar room="r_test" projection={projection} connection="online" panelOpen={false} railOpen onToggleRail={() => undefined} onCopyRoom={() => undefined} onTogglePanel={() => undefined} onLeave={() => undefined} />);
+  expect(render()).not.toContain("Danger zone");
+  projection.state = { ...projection.state, permission_mode: "danger" };
+  expect(render()).toContain("Danger zone");
+});

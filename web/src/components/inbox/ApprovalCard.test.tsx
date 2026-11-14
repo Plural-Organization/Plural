@@ -49,3 +49,12 @@ test("a folder card says when the whole disk or home is asked for, and when a ch
   expect(html).toContain("whole disk or your home folder");
   expect(html).toContain("CHANGE");
 });
+
+test("a long script does not push the buttons away: its pattern is cut to one line and the box scrolls", () => {
+  const script = `cat >> .gitignore <<'EOF'\n${"# line\n".repeat(200)}EOF`;
+  const html = render({ ...approval, call: { ...approval.call, name: "bash", risk: "exec", subject: script }, suggested_patterns: [script], provenance: { initiator_id: "p_1", initiator_role: "participant", origin: "direct" } });
+  const sentence = html.slice(html.indexOf('<p class="'), html.indexOf("</p>", html.indexOf("for the session")));
+  expect(sentence.length).toBeLessThan(400);
+  expect(sentence).toContain("…");
+  expect(html).toContain("allow once");
+});

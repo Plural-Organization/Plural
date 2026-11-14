@@ -1,6 +1,7 @@
 import type { Projection } from "./projection";
 import type { Participant, PermissionMode, PolicyRuleView, SessionState } from "./protocol";
 
+// The modes a key press cycles through. "danger" is left out on purpose: it is turned on by name, with a warning, never by one key.
 export const PERMISSION_MODES: readonly PermissionMode[] = ["default", "accept_edits", "plan", "auto"];
 
 export const PERMISSION_LABELS: Record<PermissionMode, string> = {
@@ -8,6 +9,7 @@ export const PERMISSION_LABELS: Record<PermissionMode, string> = {
   accept_edits: "accept edits",
   plan: "plan mode",
   auto: "auto mode",
+  danger: "danger mode",
 };
 
 export function nextPermissionMode(mode: PermissionMode): PermissionMode {
