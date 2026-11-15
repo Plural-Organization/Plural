@@ -415,3 +415,28 @@ def test_an_invite_code_is_signed_the_way_the_web_client_signs_it() -> None:
     assert normalize_code("abcde 12345") == "abcde12345"
     assert key_proof_message(normalize_code("tm-abcde-12345")) == b"plural-team-key:abcde12345"
     assert account_proof_message(1700000000, "n-1") == b"plural-teams:1700000000:n-1"
+
+
+async def test_a_relay_that_requires_accounts_creates_teams_only_for_a_signed_in_person(
+    clock: Clock,
+) -> None:
+    strict = await TeamDirectory.open(
+        Path(":memory:"), clock=clock, accounts=Accounts(), require_account=True
+    )
+    try:
+        key = person().public_b64
+        message = await refused(
+            strict.create(TeamCreate(name="Backend", member_name="Vlad", key=key)), 401
+        )
+        assert "signed in" in message
+        team = await strict.create(
+            TeamCreate(name="Backend", member_name="Vlad", key=key, proof=as_account("a_1"))
+        )
+        assert team.team_name == "Backend"
+        # Joining with an invite is not creating one: the invite is the gate.
+        joined = await strict.join(
+            TeamJoin(code=team.invite or "", name="Bek", key=person().public_b64)
+        )
+        assert joined.team_id == team.team_id
+    finally:
+        await strict.close()

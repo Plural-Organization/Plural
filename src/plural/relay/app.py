@@ -49,17 +49,26 @@ def create_app(
     web_origins: Collection[str] = (),
     accounts_url: str | None = None,
     entitlements: EntitlementWatch | None = None,
+    require_account: bool = False,
 ) -> Starlette:
     # With an accounts service named, the relay reads each host's certificate and logs what it
     # finds. It turns no one away.
     if entitlements is None and accounts_url:
         entitlements = EntitlementWatch(accounts_url)
+    # Refusing hosts without an account needs an accounts service to judge their certificates.
+    if require_account and entitlements is None:
+        raise ValueError("require_account needs an accounts service (accounts_url)")
     rooms = Rooms(
-        limits or RelayLimits(), proxy_hops=proxy_hops, clock=clock, entitlements=entitlements
+        limits or RelayLimits(),
+        proxy_hops=proxy_hops,
+        clock=clock,
+        entitlements=entitlements,
+        require_account=require_account,
     )
 
     async def healthz(_: Request) -> JSONResponse:
-        return JSONResponse({"ok": True})
+        # A client asks before it opens a room, so it can say "sign in" instead of failing later.
+        return JSONResponse({"ok": True, **({"accounts": "required"} if require_account else {})})
 
     async def metrics(_: Request) -> JSONResponse:
         counts: dict[str, Any] = {"rooms": rooms.room_count, "guests": rooms.guest_count}
@@ -98,7 +107,9 @@ def create_app(
                 if watch is None
                 else AccountProofs(lambda: watch.verifier, suspect=watch.suspect)
             )
-            opened = await TeamDirectory.open(teams, limits=team_limits, accounts=proofs)
+            opened = await TeamDirectory.open(
+                teams, limits=team_limits, accounts=proofs, require_account=require_account
+            )
             directory.append(opened)
             app.router.routes[:0] = team_routes(opened, Presence(), proxy_hops=proxy_hops)
         if entitlements is not None:

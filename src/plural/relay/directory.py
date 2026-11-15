@@ -136,9 +136,11 @@ class TeamDirectory:
         limits: TeamLimits | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         accounts: AccountCheck | None = None,
+        require_account: bool = False,
     ) -> None:
         self._db = db
         self._accounts = accounts
+        self._require_account = require_account
         self._limits = limits or TeamLimits()
         self._clock = clock
         self._replays = ReplayGuard(timedelta(seconds=2 * self._limits.clock_skew_s))
@@ -162,6 +164,7 @@ class TeamDirectory:
         limits: TeamLimits | None = None,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         accounts: AccountCheck | None = None,
+        require_account: bool = False,
     ) -> Self:
         if str(path) != ":memory:":
             path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -178,7 +181,9 @@ class TeamDirectory:
             # A connection left open keeps its thread, and the relay could never exit.
             await db.close()
             raise
-        return cls(db, limits=limits, clock=clock, accounts=accounts)
+        return cls(
+            db, limits=limits, clock=clock, accounts=accounts, require_account=require_account
+        )
 
     @staticmethod
     async def _migrate_members(db: aiosqlite.Connection) -> None:
@@ -241,6 +246,8 @@ class TeamDirectory:
         return self._accounts.account_of(proof, self._clock())
 
     async def create(self, request: TeamCreate) -> TeamGrant:
+        if self._require_account and request.proof is None:
+            raise DirectoryError(401, "creating a team on this relay needs you signed in")
         account = self._account(request.proof)
         async with self._transaction():
             if not valid_public_key(request.key):
