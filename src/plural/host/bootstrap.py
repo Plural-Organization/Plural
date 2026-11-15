@@ -114,7 +114,13 @@ class Host:
 
 async def _code_mode(tools: ToolRegistry) -> Closable:
     """Fold the file tools into `run_code`. The import is here because the sandbox is an extra."""
-    from plural.agent.providers.code_mode import FOLDED, CodeMode
+    try:
+        from plural.agent.providers.code_mode import FOLDED, CodeMode
+    except ModuleNotFoundError as error:
+        raise ConfigError(
+            "PLURAL_CODE_MODE needs the codemode extra: "
+            "uv tool install --force 'plural-agent[codemode]'"
+        ) from error
 
     code_mode = CodeMode(tools)
     await code_mode.start()

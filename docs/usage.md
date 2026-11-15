@@ -312,6 +312,16 @@ The agent's file tools (`read`, `ls`, `glob`, `grep`, `write`, `edit`, `multi_ed
 - The filesystem root, the home folder or a folder that holds it is marked on the card as broad.
 - Shell commands are not covered. `bash` is not opened to other folders by this, it asks the host as before, and it is not sandboxed: a command can reach any path the host's user can. Treat a command that is approved as running with the host's full rights.
 
+## Code mode (experimental)
+
+```bash
+PLURAL_CODE_MODE=1 plural
+```
+
+With code mode the agent gets one tool, `run_code`, in place of `read`, `grep`, `glob`, `ls`, `edit` and `write`. It writes a short Python snippet that calls those tools as functions, so it can read several files, loop and filter in one step instead of one tool call each. Every call the snippet makes is still checked like a call of its own: the folder boundary, the permission rules and the host's approval all apply, and the room sees each one. `bash` stays a tool of its own and can also be called from the snippet.
+
+The snippet runs in [Monty](https://github.com/pydantic/monty), a small Python interpreter in its own process with no files, network or environment of its own: all it can do is compute and call Plural's tools. It is off by default and needs the `codemode` extra (`uv tool install --force 'plural-agent[codemode]'`).
+
 ## Run the host in a container
 
 `bash` is not sandboxed on your machine (see above). To keep the agent's commands away from the rest of your computer, run the host in Docker:
