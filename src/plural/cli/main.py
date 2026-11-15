@@ -142,6 +142,7 @@ def host(
             settings = settings.model_copy(update={"mcp_url": DEFAULT_MCP_URL})
         if _wants_relay(settings):
             settings = settings.model_copy(update={"relay_url": _default_relay(settings)})
+    from plural.host.account_gate import AccountRequired
     from plural.host.providers import ConfigError
     from plural.host.team_presence import PresenceUnavailable
 
@@ -149,6 +150,10 @@ def host(
         asyncio.run(_host(settings, machine=machine))
     except (ConfigError, PresenceUnavailable) as error:
         console.print(f"[red]{error}[/red]")
+        raise typer.Exit(1) from error
+    except AccountRequired as error:
+        # On stderr, where the web client's daemon reads why a host stopped at start.
+        Console(stderr=True).print(f"[red]{error}[/red]", highlight=False)
         raise typer.Exit(1) from error
 
 
@@ -213,10 +218,12 @@ def plain_links(room: str, guest_link: str, host_link: str) -> str:
 
 
 async def _host(settings: HostSettings, *, machine: bool) -> None:
+    from plural.host.account_gate import ensure_signed_in
     from plural.host.bootstrap import build_host
     from plural.host.team_presence import TeamPresence, ensure_ready
 
     _configure_logging(settings.state_dir / "logs" / "host.log" if machine else None)
+    await ensure_signed_in(settings)
     if settings.team:
         ensure_ready(settings, TeamStore(settings.state_dir, settings.team_id))
     plural_host = await build_host(settings)
