@@ -18,6 +18,7 @@ from rich.table import Table
 from plural import __version__
 from plural.cli.account import login, logout, whoami
 from plural.cli.agent import agent_app
+from plural.cli.copies import copies_of
 from plural.cli.format import ago
 from plural.cli.stop import stop
 from plural.cli.team import ls, team_app
@@ -573,6 +574,15 @@ def doctor(
     table = Table("check", "status", "detail")
     for title, ok, detail in checks:
         table.add_row(title, "[green]ok[/green]" if ok else "[red]fail[/red]", detail)
+    for program in ("plural", "plural-host"):
+        # Not a failure: an older copy that comes first runs instead of the one just installed.
+        found = copies_of(program)
+        if len(found) > 1:
+            table.add_row(
+                f"copies of {program}",
+                "[yellow]note[/yellow]",
+                escape("; ".join(str(copy) for copy in found) + " (the first one runs)"),
+            )
     console.print(table)
     if not all(ok for _, ok, _ in checks):
         raise typer.Exit(1)

@@ -32,6 +32,19 @@ def port_state(port: int) -> PortState:
     return PortState.BUSY
 
 
+def daemon_version(port: int) -> str | None:
+    """The version the daemon on this loopback port says it is, or None if it does not say."""
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/v1/status", timeout=1.5) as answer:
+            body = json.loads(answer.read(4096))
+    except (OSError, ValueError, urllib.error.URLError):
+        return None
+    if not isinstance(body, dict):
+        return None
+    version = cast("dict[str, object]", body).get("version")
+    return version if isinstance(version, str) else None
+
+
 def daemon_command(port: int) -> list[str]:
     """The command that runs the daemon with the program that is running now."""
     if getattr(sys, "frozen", False):

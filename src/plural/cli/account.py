@@ -11,6 +11,7 @@ import typer
 from rich.console import Console
 from rich.markup import escape
 
+from plural import __version__
 from plural.cli.stop import stop_daemon
 from plural.host.account import AccountError, AccountStore, claim, device_login
 from plural.host.config import DEFAULT_ACCOUNTS_URL, HostSettings
@@ -78,7 +79,7 @@ def login(
 
 def _start_daemon(port: int) -> None:
     """Leaves the daemon running, so the web page finds this computer without another command."""
-    from plural.daemon.port import PortState, start_daemon
+    from plural.daemon.port import PortState, daemon_version, start_daemon
 
     log = HostSettings().state_dir / "daemon.log"
     state = start_daemon(port, log)
@@ -86,6 +87,15 @@ def _start_daemon(port: int) -> None:
         console.print(
             "The Plural daemon is running. Go back to the web page: it finds this computer."
         )
+        running = daemon_version(port)
+        if running is not None and running != __version__:
+            # One that started before an update keeps running the old code; starting another cannot
+            # take its port. Stopping it ends its rooms, so the person decides when.
+            console.print(
+                f"[yellow]It is version {escape(running)} and this is {__version__}, so the page "
+                "is talking to the older one. Run `plural stop` (it ends open rooms; a session "
+                "can be continued from the page), then `plural login` again.[/yellow]"
+            )
     elif state is PortState.BUSY:
         console.print(
             f"[yellow]Port {port} is used by something else, so the daemon did not start.[/yellow]"
