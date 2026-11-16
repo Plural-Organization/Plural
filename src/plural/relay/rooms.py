@@ -144,6 +144,9 @@ class Rooms:
         entitlements: EntitlementWatch | None = None,
         require_account: bool = False,
     ) -> None:
+        # Requiring accounts with nothing to judge a certificate by would let everyone in, quietly.
+        if require_account and entitlements is None:
+            raise ValueError("require_account needs an EntitlementWatch")
         self._entitlements = entitlements
         self._require_account = require_account
         self._limits = limits
@@ -289,7 +292,7 @@ class Rooms:
         )
         if not self._require_account or outcome is Outcome.VALID:
             return None
-        return REFUSALS[outcome]
+        return REFUSALS.get(outcome, REFUSALS[Outcome.FORGED])
 
     async def _serve_guest(self, socket: WebSocket, room_id: str) -> None:
         self._sweep()

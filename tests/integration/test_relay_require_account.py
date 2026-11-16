@@ -181,3 +181,11 @@ async def test_the_relay_says_before_a_host_opens_a_room_that_it_needs_an_accoun
 def test_requiring_accounts_without_an_accounts_service_is_refused_at_start() -> None:
     with pytest.raises(ValueError, match="accounts"):
         create_app(require_account=True)
+
+
+def test_rooms_that_require_accounts_cannot_be_built_without_a_way_to_judge() -> None:
+    from plural.relay.limits import RelayLimits
+    from plural.relay.rooms import Rooms
+
+    with pytest.raises(ValueError, match="EntitlementWatch"):
+        Rooms(RelayLimits(), require_account=True)
