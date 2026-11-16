@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { computerTeams, DaemonError, daemonMessage, daemonStatus, pickFolder, relayProblem, startRoom } from "./daemon";
+import { computerSessions, computerTeams, DaemonError, daemonMessage, daemonStatus, pickFolder, relayProblem, resumeSession, startRoom } from "./daemon";
 
 // The build under test has no accounts address, so the accounts service is reached at a bare path.
 const TICKETS = "/tickets";
@@ -124,4 +124,26 @@ test("a relay address is checked the way the computer checks it", () => {
   expect(relayProblem("https://relay.example.org")).toContain("wss://");
   expect(relayProblem("relay.example.org")).toContain("not an address");
   expect(relayProblem("wss://u:p@relay.example.org")).toContain("no password");
+});
+
+describe("kept sessions", () => {
+  const kept = { room: "r_one1", title: "Login loop", folder: "acme", available: true, prompts: 2, people: 1, team: null, updated_at: "2026-11-16T10:00:00Z", running: false };
+
+  test("the list is what the computer keeps, and an older daemon without one gives null", async () => {
+    wire(() => json({ sessions: [kept] }));
+    expect(await computerSessions(DAEMON)).toEqual([kept]);
+    wire(() => json({ error: { code: "not_found", message: "no" } }, 404));
+    expect(await computerSessions(DAEMON)).toBeNull();
+  });
+
+  test("continuing asks for that session by id, with a ticket and no body", async () => {
+    const sent = wire(() => json({ room: "r_one1", guest_link: "wss://r/r_one1", host_link: "wss://r/r_one1?token=t", folder: "acme", title: null, agent: "" }, 201));
+    expect((await resumeSession("r_one1", DAEMON)).room).toBe("r_one1");
+    expect(sent[0]).toMatchObject({ path: "/v1/sessions/r_one1/resume", auth: "Bearer ticket-1", body: null });
+  });
+
+  test("a session that cannot be continued says why in words", async () => {
+    wire(() => json({ error: { code: "folder_missing", message: "x" } }, 409));
+    await expect(resumeSession("r_one1", DAEMON)).rejects.toSatisfy((error: unknown) => error instanceof DaemonError && daemonMessage(error).includes("folder"));
+  });
 });

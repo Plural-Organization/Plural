@@ -53,6 +53,8 @@ plural sessions --json    # the same for a script
 plural rm <id>            # delete one
 ```
 
+In the web client, Start a room lists the sessions this computer keeps under Continue a session, with the folder, how many prompts and when it was last used; Continue opens it again with the whole conversation, in the same folder (it is the same as `plural -r` from the terminal). A session stays on the computer when its room stops or you leave, until you delete it with `plural-host rm`.
+
 A resumed session works in the folder it was started in, even when you are somewhere else; `--workspace` chooses another one. The conversation continues where it stopped, the people who were in the room come back with their old links while those are valid, and new invites work as usual. The title is the first prompt unless you named it with `--title`.
 
 ### Fork a session

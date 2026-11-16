@@ -51,6 +51,9 @@ export async function daemonStatus(base: string = DAEMON_URL): Promise<DaemonSta
 }
 
 const REASONS: Record<string, string> = {
+  no_session: "This computer no longer has that session.",
+  folder_missing: "The folder this session worked in is gone, so it cannot be continued here.",
+  unknown_team: "This computer is not in the team this session belongs to.",
   no_ticket: "Sign in again, then retry.",
   ticket_used: "Try again.",
   not_linked: "Plural on this computer is not signed in. Run plural login.",
@@ -132,6 +135,37 @@ export async function computerTeams(base?: string): Promise<ComputerTeam[] | nul
 export function startRoom(folder: string, title: string, options: RoomOptions = {}, base?: string): Promise<StartedRoom> {
   const body = { folder, title: title.trim() === "" ? null : title.trim(), ...(options.agent === undefined ? {} : { agent: options.agent }), ...(options.relay === undefined ? {} : { relay: options.relay.trim() }), ...(options.team === undefined ? {} : { team: options.team }) };
   return ask<StartedRoom>("/v1/rooms", { method: "POST", body: JSON.stringify(body) }, base);
+}
+
+// A session this computer keeps after its host stopped, which the person can pick up again.
+export interface SavedSession {
+  room: string;
+  title: string;
+  /** The folder's name only, never its path. */
+  folder: string | null;
+  /** False when the folder it worked in is gone, so it cannot be continued here. */
+  available: boolean;
+  prompts: number;
+  people: number;
+  team: string | null;
+  updated_at: string;
+  /** Already running on this computer; continuing it opens it again. */
+  running: boolean;
+}
+
+// The sessions this computer keeps, newest first. An older daemon has no list to offer: null.
+export async function computerSessions(base?: string): Promise<SavedSession[] | null> {
+  try {
+    return (await ask<{ sessions: SavedSession[] }>("/v1/sessions", {}, base)).sessions;
+  } catch (error) {
+    if (error instanceof DaemonError && error.status === 404) return null;
+    throw error;
+  }
+}
+
+// The same history, in the folder it worked in, on this computer's relay or its team's.
+export function resumeSession(room: string, base?: string): Promise<StartedRoom> {
+  return ask<StartedRoom>(`/v1/sessions/${encodeURIComponent(room)}/resume`, { method: "POST" }, base);
 }
 
 // What this computer starts rooms with when the page says nothing.

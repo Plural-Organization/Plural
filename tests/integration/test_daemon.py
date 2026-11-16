@@ -23,12 +23,16 @@ from plural.daemon.terminal import TerminalUnavailable
 from plural.host.account import AccountStore, Entitlement
 from plural.host.team import TeamError, TeamProfile, TeamStore
 from plural.protocol.entitlement import EntitlementClaims
+from plural.protocol.events import ParticipantJoined
+from plural.protocol.models import Participant, Role
 from plural.protocol.team import MemberView, TeamRole
 from plural.protocol.ticket import TicketClaims
 from plural.security.accounts_key import AccountsKey
 from plural.security.entitlement import EntitlementVerifier
 from plural.security.identity import Identity
 from plural.security.tokens import b64encode
+from plural.storage.sessions import session_path
+from plural.storage.sqlite_store import SqliteEventStore
 
 WEB = "https://web.example.com"
 
@@ -38,6 +42,8 @@ if "break_it" in " ".join(sys.argv):
     sys.stderr.write("no provider configured")
     sys.exit(3)
 room = "r_" + sys.argv[sys.argv.index("--workspace") + 1][-6:].replace("/", "")
+if "--room" in sys.argv:
+    room = sys.argv[sys.argv.index("--room") + 1]
 print(json.dumps({
     "type": "ready", "room": room, "guest_link": "wss://relay.example/r_x",
     "host_link": "wss://relay.example/r_x?token=t", "import_url": None,
@@ -812,3 +818,108 @@ async def test_a_team_room_starts_on_its_team_and_ignores_a_relay(tmp_path: Path
             body={"folder": folder, "team": "t_unknown"},
         )
         assert (status, body["error"]["code"]) == (400, "unknown_team")
+
+
+async def keep_session(
+    state: Path, room: str, *, workspace: Path | None, team: str | None = None, title: str = "Fix"
+) -> None:
+    """A session this computer already keeps, as a host that has stopped leaves it."""
+    store = await SqliteEventStore.open(session_path(state, room))
+    try:
+        await store.set_meta("title", title)
+        await store.set_meta("team", team or "")
+        if workspace is not None:
+            await store.set_meta("workspace", str(workspace))
+        await store.append(
+            ParticipantJoined(
+                participant=Participant(id="p_host", name="alia", role=Role.HOST, connected=True)
+            ),
+            event_id=f"{room}-j",
+            ts=datetime.now(UTC),
+            actor_id="p_host",
+        )
+    finally:
+        await store.close()
+
+
+async def test_the_sessions_a_computer_keeps_are_offered_and_one_is_continued(
+    tmp_path: Path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    state = tmp_path / "state"
+    await keep_session(state, "r_kept1", workspace=project, title="Login loop")
+    await keep_session(state, "r_gone1", workspace=tmp_path / "deleted", title="Old")
+    async with running_daemon(tmp_path) as daemon:
+        status, listing, _ = await daemon.call(
+            "GET", "/v1/sessions", ticket=daemon.ticket(nonce="a")
+        )
+        assert status == 200
+        by_room = {item["room"]: item for item in listing["sessions"]}
+        assert by_room["r_kept1"]["title"] == "Login loop"
+        assert (by_room["r_kept1"]["folder"], by_room["r_kept1"]["available"]) == ("project", True)
+        assert by_room["r_kept1"]["running"] is False
+        assert by_room["r_gone1"]["available"] is False
+        # What the page gets is a folder's name, never its path.
+        assert str(tmp_path) not in json.dumps(listing)
+
+        status, room, _ = await daemon.call(
+            "POST", "/v1/sessions/r_kept1/resume", ticket=daemon.ticket(nonce="b")
+        )
+        assert status == 201, room
+        assert room["room"] == "r_kept1"
+        arguments = daemon.host_arguments()[-1]
+        assert arguments[arguments.index("--room") + 1] == "r_kept1"
+        assert arguments[arguments.index("--workspace") + 1] == str(project)
+        _, listing, _ = await daemon.call("GET", "/v1/sessions", ticket=daemon.ticket(nonce="c"))
+        assert {i["room"]: i["running"] for i in listing["sessions"]}["r_kept1"] is True
+        # Asking again while it runs gives the same room back and starts nothing.
+        status, again, _ = await daemon.call(
+            "POST", "/v1/sessions/r_kept1/resume", ticket=daemon.ticket(nonce="d")
+        )
+        assert (status, again["room"]) == (200, "r_kept1")
+        assert len(daemon.host_arguments()) == 1
+
+
+async def test_a_session_that_cannot_be_continued_says_why_and_starts_nothing(
+    tmp_path: Path,
+) -> None:
+    state = tmp_path / "state"
+    await keep_session(state, "r_gone1", workspace=tmp_path / "deleted")
+    await keep_session(state, "r_team01", workspace=tmp_path, team="t_unknown")
+    async with running_daemon(tmp_path) as daemon:
+        cases = {
+            "r_nothere": (404, "no_session"),
+            "r_gone1": (409, "folder_missing"),
+            "r_team01": (400, "unknown_team"),
+            "not-a-room": (400, "bad_session"),
+        }
+        for index, (room, (expected, code)) in enumerate(cases.items()):
+            status, body, _ = await daemon.call(
+                "POST", f"/v1/sessions/{room}/resume", ticket=daemon.ticket(nonce=f"n{index}")
+            )
+            assert (status, body["error"]["code"]) == (expected, code), room
+        assert daemon.host_arguments() == []
+
+
+async def test_a_team_session_is_continued_on_its_team(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    await keep_session(state, "r_team01", workspace=tmp_path, team="t_1")
+    async with running_daemon(tmp_path) as daemon:
+        daemon.teams.keep(team("t_1", "Backend"))
+        status, room, _ = await daemon.call(
+            "POST", "/v1/sessions/r_team01/resume", ticket=daemon.ticket(nonce="a")
+        )
+        assert status == 201, room
+        arguments = daemon.host_arguments()[-1]
+        assert arguments[arguments.index("--team-id") + 1] == "t_1"
+        assert "--relay" not in arguments
+
+
+@pytest.mark.parametrize(
+    ("method", "path"), [("GET", "/v1/sessions"), ("POST", "/v1/sessions/r_kept1/resume")]
+)
+async def test_sessions_need_a_ticket(tmp_path: Path, method: str, path: str) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        status, _, _ = await daemon.call(method, path)
+        assert status == 401

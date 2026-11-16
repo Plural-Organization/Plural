@@ -7,9 +7,10 @@ import { useDaemon } from "../hooks/useDaemon";
 import type { Account } from "../lib/accounts";
 import { saveAgent } from "../lib/agent";
 import { daemonPrompt, manualSteps } from "../lib/agentPrompt";
-import { type ComputerTeam, computerTeams, DaemonError, daemonMessage, type PickedFolder, pickFolder, relayProblem, roomDefaults, startRoom } from "../lib/daemon";
+import { type ComputerTeam, computerSessions, computerTeams, DaemonError, daemonMessage, type PickedFolder, pickFolder, relayProblem, resumeSession, roomDefaults, type SavedSession, startRoom } from "../lib/daemon";
 import { AgentCard } from "./AgentCard";
 import { CopyBox } from "./CopyBox";
+import { SessionsToContinue } from "./SessionsToContinue";
 
 interface StartRoomProps {
   account: Account;
@@ -92,6 +93,20 @@ export function StartRoom({ account, onBack, onOpen, team = null }: StartRoomPro
     };
   }, [phase]);
 
+  // What this computer kept from rooms that have stopped: a session is not lost when its host stops.
+  const [kept, setKept] = useState<SavedSession[]>([]);
+  const [opening, setOpening] = useState<string | null>(null);
+  useEffect(() => {
+    if (phase !== "ready") return;
+    let alive = true;
+    computerSessions()
+      .then((found) => alive && setKept(found ?? []))
+      .catch(() => alive && setKept([]));
+    return () => {
+      alive = false;
+    };
+  }, [phase]);
+
   // The relay this computer already uses, so a self-hosted relay is kept without typing it again.
   useEffect(() => {
     if (phase !== "ready" || relay !== null) return;
@@ -125,6 +140,17 @@ export function StartRoom({ account, onBack, onOpen, team = null }: StartRoomPro
 
   const choose = () => {
     void pick().then((picked) => picked !== null && setFolder(picked));
+  };
+
+  const continueSession = (session: SavedSession) => {
+    setProblem(null);
+    setOpening(session.room);
+    resumeSession(session.room)
+      .then((room) => onOpen(parseLink(room.host_link), account.name !== "" ? account.name : (account.email.split("@")[0] ?? "host")))
+      .catch((error: unknown) => {
+        fail(error);
+        setOpening(null);
+      });
   };
 
   const start = (target: PickedFolder) => {
@@ -165,6 +191,7 @@ export function StartRoom({ account, onBack, onOpen, team = null }: StartRoomPro
           <Chip color="success" variant="soft" className="self-start">
             <Chip.Label>Plural is running on this computer</Chip.Label>
           </Chip>
+          <SessionsToContinue sessions={kept} opening={opening} onContinue={continueSession} />
           <Card variant="secondary">
             <Card.Content className="flex-row items-center gap-3">
               {folder === null ? <Folder size={20} className="flex-none text-muted" /> : <FolderOpen size={20} weight="fill" className="flex-none" />}

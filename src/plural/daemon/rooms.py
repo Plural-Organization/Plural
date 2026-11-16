@@ -125,6 +125,9 @@ class Rooms:
     def listing(self) -> list[dict[str, object]]:
         return [room.public() for room in self._rooms.values()]
 
+    def running(self, room: str) -> Room | None:
+        return self._rooms.get(room)
+
     async def start(
         self,
         folder: Path,
@@ -134,12 +137,14 @@ class Rooms:
         agent: AgentConfig | None = None,
         relay: str | None = None,
         team: str | None = None,
+        resume: str | None = None,
     ) -> Room:
+        """A new room in `folder`, or with `resume` the saved session of that id, continued."""
         if len(self._rooms) + self._starting >= self._limit:
             raise RoomError("too_many_rooms", f"at most {self._limit} rooms at once")
         self._starting += 1
         try:
-            return await self._launch(folder, title, name, agent, relay, team)
+            return await self._launch(folder, title, name, agent, relay, team, resume)
         finally:
             self._starting -= 1
 
@@ -151,8 +156,11 @@ class Rooms:
         agent: AgentConfig | None,
         relay: str | None,
         team: str | None = None,
+        resume: str | None = None,
     ) -> Room:
         arguments = [*self._command, "host", "--json", "--workspace", str(folder)]
+        if resume:
+            arguments += ["--room", resume]
         if title:
             arguments += ["--title", title]
         if name:
