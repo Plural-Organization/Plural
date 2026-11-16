@@ -24,7 +24,7 @@ export function Working({ status, verb, canAbort, queued }: { status: string; ve
         </span>
         {` (${elapsed}s`}
         {canAbort ? " · esc to interrupt" : ""}
-        {detail && !GENERIC.test(detail) ? ` · ${detail}` : ""}
+        {detail && !GENERIC.test(detail) ? <span fg={theme.muted}> · {detail}</span> : null}
         {")"}
         {queued > 0 ? <span fg={theme.warn}> · {queued} queued</span> : null}
       </text>

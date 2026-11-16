@@ -5,7 +5,7 @@ import { Spinner } from "./Spinner";
 const MARKS: Record<PermissionMode, string> = { default: "⏵", accept_edits: "⏵⏵", plan: "⏸", auto: "⏵⏵⏵", danger: "⚠" };
 
 function modeColor(mode: PermissionMode): string {
-  return mode === "plan" ? theme.info : mode === "auto" || mode === "danger" ? theme.danger : mode === "accept_edits" ? theme.warn : theme.dim;
+  return mode === "plan" ? theme.info : mode === "auto" || mode === "danger" ? theme.danger : mode === "accept_edits" ? theme.warn : theme.muted;
 }
 
 interface StatusBarProps {
@@ -39,20 +39,21 @@ export function StatusBar({ mode, canCycle, me, state, connection, inbox, focuse
     <box flexDirection="row" justifyContent="space-between" gap={2} paddingX={2} height={1} flexShrink={0} backgroundColor={theme.panel}>
       <text fg={theme.dim} flexShrink={1} wrapMode="none">
         {showMode ? (
-          <span fg={modeColor(mode)}>
+          <span fg={modeColor(mode)} bg={theme.bubble}>
+            {" "}
             {MARKS[mode]} {PERMISSION_LABELS[mode]}
-            {mode === "default" ? "" : " on"}
-            <span fg={theme.dim}> · </span>
+            {mode === "default" ? "" : " on"}{" "}
           </span>
         ) : null}
-        {loading ? <Spinner color={dot} /> : <span fg={dot}>●</span>} {who} · <span fg={state.prompt_mode === "review" ? theme.warn : theme.dim}>{state.prompt_mode}</span>
+        {showMode ? "  " : ""}
+        {loading ? <Spinner color={dot} /> : <span fg={dot}>●</span>} <span fg={theme.muted}>{who}</span> · <span fg={state.prompt_mode === "review" ? theme.warn : theme.dim}>{state.prompt_mode}</span>
         {names.length > 0 ? ` · with ${names.join(", ")}${extra > 0 ? ` +${extra}` : ""}` : ""}
       </text>
       <box flexDirection="row" flexShrink={0}>
         <ContextMeterView state={state} />
         <text fg={theme.dim}>
           {contextMeter(state) !== null ? "  ·  " : ""}
-          {right}
+          <span fg={hint !== null ? theme.text : inbox > 0 ? theme.warn : theme.dim}>{right}</span>
         </text>
       </box>
     </box>
@@ -70,8 +71,8 @@ export function ContextMeterView({ state, width = METER }: { state: SessionState
   const filled = Math.min(width, Math.round((meter.percent / 100) * width));
   return (
     <text fg={theme.dim}>
-      context <span fg={color}>{"▰".repeat(filled)}</span>
-      <span fg={theme.line}>{"▱".repeat(width - filled)}</span> <span fg={color}>{meter.percent}%</span>
+      context <span fg={color}>{"━".repeat(filled)}</span>
+      <span fg={theme.line}>{"━".repeat(width - filled)}</span> <span fg={color}>{meter.percent}%</span>
       {` · ${meter.tokens}/${meter.window}`}
     </text>
   );

@@ -14,9 +14,9 @@ export const SIDEBAR_WIDTH = 30;
 function Section({ title, count, children }: { title: string; count?: number; children?: ReactNode }) {
   return (
     <box flexDirection="column" marginBottom={1}>
-      <text fg={theme.dim}>
-        {title.toUpperCase()}
-        {count !== undefined ? `  ${count}` : ""}
+      <text selectable={false} fg={theme.muted}>
+        <b>{title.toUpperCase()}</b>
+        <span fg={theme.dim}>{count !== undefined ? `  ${count}` : ""}</span>
       </text>
       {children}
     </box>
@@ -27,13 +27,13 @@ function ParticipantRow({ participant, name, me, typing }: { participant: Partic
   const online = participant.connected;
   return (
     <box flexDirection="row">
-      <text fg={online ? theme.ok : theme.dim}>● </text>
-      <text fg={online ? colorFor(participant.id) : theme.dim}>{name}</text>
-      <text fg={theme.dim}>
+      <text selectable={false} fg={online ? colorFor(participant.id) : theme.dim}>{online ? "● " : "○ "}</text>
+      <text selectable={false} fg={online ? theme.text : theme.dim}>{me ? <b>{name}</b> : name}</text>
+      <text selectable={false} fg={theme.dim}>
         {me ? " (you)" : ""}
         {participant.role === "host" ? "  host" : participant.role === "viewer" ? "  view" : ""}
       </text>
-      {typing ? <text fg={theme.accent}>  typing…</text> : null}
+      {typing ? <text selectable={false} fg={theme.accent}>  typing…</text> : null}
     </box>
   );
 }
@@ -42,14 +42,29 @@ const STATUS_MARK = { running: "●", waiting: "◆", idle: "○" } as const;
 
 function SpacesSection({ rows, name, error, onOpen, onShare, onLeave }: { rows: SpaceRow[]; name: string; error: string | null; onOpen?: (id: string) => void; onShare?: () => void; onLeave?: { label: string; press: () => void } }) {
   return (
-    <Section title={`spaces · ${truncate(name, 12)}`} count={rows.length}>
-      {rows.slice(0, 8).map((row) => {
+    <box flexDirection="column" flexGrow={1} minHeight={0}>
+      <text selectable={false} fg={theme.muted} flexShrink={0} marginLeft={1}>
+        <b>{`spaces · ${truncate(name, 12)}`.toUpperCase()}</b>
+        <span fg={theme.dim}>{`  ${rows.length}`}</span>
+      </text>
+      {/* The list takes the room that is left and scrolls; the session on screen carries the accent bar. */}
+      <scrollbox flexGrow={1} flexShrink={1} minHeight={0} scrollbarOptions={{ showArrows: false, trackOptions: { foregroundColor: theme.line, backgroundColor: theme.panel } }}>
+      {rows.map((row) => {
         const color = row.offline ? theme.line : row.status === "running" ? theme.ok : row.status === "waiting" ? theme.warn : theme.dim;
         return (
-          <box key={row.id} flexDirection="column" backgroundColor={row.active ? theme.bg : undefined} onMouseDown={() => onOpen?.(row.id)}>
-            <text>
+          <box
+            key={row.id}
+            flexDirection="column"
+            flexShrink={0}
+            border={["left"]}
+            borderStyle="heavy"
+            borderColor={row.active ? theme.accent : theme.panel}
+            backgroundColor={row.active ? theme.bubble : undefined}
+            onMouseDown={() => onOpen?.(row.id)}
+          >
+            <text selectable={false}>
               <span fg={color}>{STATUS_MARK[row.status]} </span>
-              <span fg={row.active ? theme.accent : row.mine ? theme.text : colorFor(row.title)}>
+              <span fg={row.mine || row.active ? theme.text : colorFor(row.title)}>
                 <b>{truncate(row.title, 14)}</b>
               </span>
               <span fg={theme.dim}>{row.mine ? " (you)" : ""}</span>
@@ -57,9 +72,9 @@ function SpacesSection({ rows, name, error, onOpen, onShare, onLeave }: { rows: 
               <span fg={theme.dim}>{row.viewers > 0 ? `  👁 ${row.viewers}` : ""}</span>
               <span fg={theme.warn}>{row.clash ? "  ⚠" : ""}</span>
             </text>
-            <text fg={row.active ? theme.info : theme.dim}>  {truncate(row.detail, SIDEBAR_WIDTH - 8)}</text>
+            <text selectable={false} fg={row.active ? theme.muted : theme.dim}>  {truncate(row.detail, SIDEBAR_WIDTH - 9)}</text>
             {row.warning !== null ? (
-              <text fg={theme.warn} wrapMode="word">
+              <text selectable={false} fg={theme.warn} wrapMode="word">
                 {"  ⚠ "}
                 {row.warning}
               </text>
@@ -67,16 +82,18 @@ function SpacesSection({ rows, name, error, onOpen, onShare, onLeave }: { rows: 
           </box>
         );
       })}
-      {rows.length > 8 ? <text fg={theme.dim}>  +{rows.length - 8} more</text> : null}
-      {onShare ? <PanelButton onPress={onShare}>{(hover) => (hover ? "▸ share my host" : "+ share my host")}</PanelButton> : null}
-      {rows.length <= 1 && error === null ? <text fg={theme.dim}>nobody else is sharing a session yet</text> : null}
-      {error !== null ? (
-        <text fg={theme.warn} wrapMode="word">
-          team offline: {error}
-        </text>
-      ) : null}
-      {onLeave ? <PanelButton onPress={onLeave.press}>{(hover) => (hover ? `▸ ${onLeave.label}` : `× ${onLeave.label}`)}</PanelButton> : null}
-    </Section>
+      </scrollbox>
+      <box flexDirection="column" flexShrink={0} paddingLeft={1}>
+        {onShare ? <PanelButton onPress={onShare}>{(hover) => (hover ? "▸ share my host" : "+ share my host")}</PanelButton> : null}
+        {rows.length <= 1 && error === null ? <text selectable={false} fg={theme.dim}>nobody else is sharing a session yet</text> : null}
+        {error !== null ? (
+          <text selectable={false} fg={theme.warn} wrapMode="word">
+            team offline: {error}
+          </text>
+        ) : null}
+        {onLeave ? <PanelButton onPress={onLeave.press}>{(hover) => (hover ? `▸ ${onLeave.label}` : `× ${onLeave.label}`)}</PanelButton> : null}
+      </box>
+    </box>
   );
 }
 
@@ -99,7 +116,7 @@ interface SidebarProps {
 
 function Divider() {
   return (
-    <text fg={theme.line} flexShrink={0} wrapMode="none">
+    <text selectable={false} fg={theme.line} flexShrink={0} wrapMode="none">
       {"─".repeat(SIDEBAR_WIDTH - 1)}
     </text>
   );
@@ -109,7 +126,7 @@ function PanelButton({ onPress, children }: { onPress: () => void; children: (ho
   const [hover, setHover] = useState(false);
   return (
     <box onMouseDown={onPress} onMouseOver={() => setHover(true)} onMouseOut={() => setHover(false)}>
-      <text fg={hover ? theme.accent : theme.dim}>{children(hover)}</text>
+      <text selectable={false} fg={hover ? theme.accent : theme.muted}>{children(hover)}</text>
     </box>
   );
 }
@@ -117,7 +134,7 @@ function PanelButton({ onPress, children }: { onPress: () => void; children: (ho
 function ActionRow({ onInvite, onSettings, update }: { onInvite?: () => void; onSettings: () => void; update?: UpdateState | null }) {
   return (
     <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
-      {onInvite ? <PanelButton onPress={onInvite}>{() => "+ invite"}</PanelButton> : <text> </text>}
+      {onInvite ? <PanelButton onPress={onInvite}>{() => "+ invite"}</PanelButton> : <text selectable={false}> </text>}
       <PanelButton onPress={onSettings}>
         {() => (
           <>
@@ -145,7 +162,9 @@ export function Sidebar({ projection, room: _room, inbox, running, status, space
   const isHost = projection.me?.role === "host";
   return (
     <box width={SIDEBAR_WIDTH} flexShrink={0} flexDirection="column" backgroundColor={theme.panel} border={["left"]} borderColor={theme.line}>
-      <box flexGrow={1} flexBasis={0} flexDirection="column" paddingX={2} paddingY={1}>
+      <box flexGrow={1} flexBasis={0} minHeight={0} flexDirection="column" paddingX={2} paddingY={1}>
+        {/* People, the agent, the inbox and the queue scroll together when the panel is short; the buttons stay put. */}
+        <scrollbox flexGrow={1} flexShrink={1} minHeight={0} scrollbarOptions={{ showArrows: false, trackOptions: { foregroundColor: theme.line, backgroundColor: theme.panel } }}>
         <Section title="participants" count={online}>
           {people.map((participant) => (
             <ParticipantRow
@@ -156,14 +175,16 @@ export function Sidebar({ projection, room: _room, inbox, running, status, space
               typing={projection.typing.has(participant.id) && participant.id !== projection.meId}
             />
           ))}
-          <text fg={theme.dim}>{truncate(briefAgent(projection.agentLabel || "agent"), SIDEBAR_WIDTH - 4)}</text>
-          <text>
-            {running ? <Spinner color={theme.info} /> : null}
-            <span fg={running ? theme.info : theme.dim}>{running ? ` working ${elapsed}s` : "idle"}</span>
+        </Section>
+        <Section title="agent">
+          <text selectable={false} fg={theme.text}>{truncate(briefAgent(projection.agentLabel || "agent"), SIDEBAR_WIDTH - 4)}</text>
+          <text selectable={false}>
+            {running ? <Spinner color={theme.accent} /> : <span fg={theme.dim}>○</span>}
+            <span fg={running ? theme.accent : theme.dim}>{running ? ` working ${elapsed}s` : " idle"}</span>
           </text>
-          {running ? <text fg={theme.dim}>{truncate(brief(status), SIDEBAR_WIDTH - 4)}</text> : null}
+          {running ? <text selectable={false} fg={brief(status) === "needs approval" ? theme.warn : theme.muted}>{truncate(brief(status), SIDEBAR_WIDTH - 4)}</text> : null}
           {state.mcp.length > 0 ? (
-            <text fg={theme.dim}>
+            <text selectable={false} fg={theme.dim}>
               mcp{" "}
               <span fg={state.mcp.some((server) => server.status === "failed") ? theme.warn : theme.text}>
                 {state.mcp.filter((server) => server.status === "ready").length}/{state.mcp.length}
@@ -172,7 +193,7 @@ export function Sidebar({ projection, room: _room, inbox, running, status, space
             </text>
           ) : null}
           {state.plugin_lines.map((line) => (
-            <text key={line.plugin} fg={theme.dim}>
+            <text selectable={false} key={line.plugin} fg={theme.dim}>
               {truncate(line.plugin, 10)} <span fg={theme.text}>{truncate(line.text, SIDEBAR_WIDTH - 15)}</span>
             </text>
           ))}
@@ -182,32 +203,32 @@ export function Sidebar({ projection, room: _room, inbox, running, status, space
             {inbox.slice(0, 4).map((item) =>
               item.kind === "join" ? (
                 <box key={item.id} flexDirection="column">
-                  <text fg={theme.warn}>+ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
-                  <text fg={theme.dim}>  wants to join</text>
+                  <text selectable={false} fg={theme.warn}>+ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
+                  <text selectable={false} fg={theme.dim}>  wants to join</text>
                 </box>
               ) : item.kind === "briefing" ? (
                 <box key={item.id} flexDirection="column">
-                  <text fg={theme.warn}>✉ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
-                  <text fg={theme.dim}>  wants a briefing</text>
+                  <text selectable={false} fg={theme.warn}>✉ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
+                  <text selectable={false} fg={theme.dim}>  wants a briefing</text>
                 </box>
               ) : item.kind === "access" ? (
                 <box key={item.id} flexDirection="column">
-                  <text fg={theme.warn}>✎ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
-                  <text fg={theme.dim}>  wants to write</text>
+                  <text selectable={false} fg={theme.warn}>✎ {truncate(item.request.name, SIDEBAR_WIDTH - 8)}</text>
+                  <text selectable={false} fg={theme.dim}>  wants to write</text>
                 </box>
               ) : item.kind === "approval" ? (
                 <box key={item.id} flexDirection="column">
-                  <text fg={theme.warn}>! {truncate(`${item.approval.call.name} ${item.approval.call.subject}`, SIDEBAR_WIDTH - 8)}</text>
-                  <text fg={theme.dim}>  from {nameOf(projection, item.approval.provenance.initiator_id)}</text>
+                  <text selectable={false} fg={theme.warn}>! {truncate(`${item.approval.call.name} ${item.approval.call.subject}`, SIDEBAR_WIDTH - 8)}</text>
+                  <text selectable={false} fg={theme.dim}>  from {nameOf(projection, item.approval.provenance.initiator_id)}</text>
                 </box>
               ) : item.kind === "plan" ? (
-                <text key={item.id} fg={theme.info}>
+                <text selectable={false} key={item.id} fg={theme.info}>
                   ⏸ the plan is ready to start
                 </text>
               ) : (
                 <box key={item.id} flexDirection="column">
-                  <text fg={theme.warn}>? {nameOf(projection, item.proposal.author_id)} proposes</text>
-                  <text fg={theme.dim}>  {truncate(item.proposal.text, SIDEBAR_WIDTH - 8)}</text>
+                  <text selectable={false} fg={theme.warn}>? {nameOf(projection, item.proposal.author_id)} proposes</text>
+                  <text selectable={false} fg={theme.dim}>  {truncate(item.proposal.text, SIDEBAR_WIDTH - 8)}</text>
                 </box>
               ),
             )}
@@ -217,25 +238,25 @@ export function Sidebar({ projection, room: _room, inbox, running, status, space
           <Section title="queue" count={state.queue.length}>
             {state.queue.slice(0, 3).map((entry, index) => (
               <box key={entry.prompt_id} flexDirection="column">
-                <text>
+                <text selectable={false}>
                   <span fg={theme.dim}>{index + 1} </span>
                   <span fg={colorFor(entry.author_id)}>{truncate(nameOf(projection, entry.author_id), 14)}</span>
                   {entry.delivery === "follow_up" ? <span fg={theme.dim}>  after</span> : null}
                 </text>
-                <text fg={theme.text}>  {truncate(entry.text.replace(/\s+/g, " "), SIDEBAR_WIDTH - 8)}</text>
+                <text selectable={false} fg={theme.text}>  {truncate(entry.text.replace(/\s+/g, " "), SIDEBAR_WIDTH - 8)}</text>
               </box>
             ))}
-            {state.queue.length > 3 ? <text fg={theme.dim}>  +{state.queue.length - 3} more</text> : null}
+            {state.queue.length > 3 ? <text selectable={false} fg={theme.dim}>  +{state.queue.length - 3} more</text> : null}
           </Section>
         ) : null}
-        <box flexGrow={1} />
-        {update?.phase === "ready" ? <text fg={theme.accent}>update {update.version} ready</text> : null}
+        </scrollbox>
+        {update?.phase === "ready" ? <text selectable={false} fg={theme.accent}>update {update.version} ready</text> : null}
         <ActionRow onInvite={isHost ? onInvite : undefined} onSettings={onSettings} update={update} />
       </box>
       {inTeam ? (
         <>
           <Divider />
-          <box flexGrow={1} flexBasis={0} flexDirection="column" paddingX={2} paddingY={1}>
+          <box flexGrow={1} flexBasis={0} minHeight={0} flexDirection="column" paddingLeft={1} paddingRight={2} paddingY={1}>
             <SpacesSection rows={spaces ?? []} name={teamName ?? ""} error={teamError ?? null} onOpen={onOpenSpace} onShare={onShare} onLeave={onLeaveTeam} />
           </box>
         </>

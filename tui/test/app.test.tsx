@@ -804,18 +804,18 @@ describe("App", () => {
     await frame(setup, "● Model");
     await setup.mockInput.pressTab();
     await setup.mockInput.pressTab();
-    await frame(setup, "Tokyo Night");
+    await frame(setup, "Plural");
     await setup.mockInput.pressArrow("down");
     await setup.mockInput.pressEnter();
     await tick(100);
-    for (let step = 0; step < 3; step += 1) {
+    for (let step = 0; step < 4; step += 1) {
       await setup.mockInput.pressArrow("down");
     }
     await setup.mockInput.pressEnter();
     await tick(100);
     expect(saved.map((value) => [value.theme, value.panel])).toEqual([
-      ["light", true],
-      ["light", false],
+      ["tokyo", true],
+      ["tokyo", false],
     ]);
     await setup.mockInput.pressEscape();
     await tick(100);

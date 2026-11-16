@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DEFAULT_SETTINGS, loadSettings, parseSettings, saveSettings, settingsPath } from "../src/settings";
 import { THEME_NAMES, THEMES, colorFor, setTheme, theme } from "../src/theme";
 
-afterEach(() => setTheme("tokyo"));
+afterEach(() => setTheme("plural"));
 
 describe("settings", () => {
   test("missing, broken or foreign files fall back to the defaults", () => {
@@ -79,7 +79,7 @@ describe("settings", () => {
 
 describe("themes", () => {
   test("every theme defines every colour as a hex value", () => {
-    const keys = Object.keys(THEMES.tokyo.colors).sort();
+    const keys = Object.keys(THEMES.plural.colors).sort();
     for (const name of THEME_NAMES) {
       const colors = THEMES[name].colors;
       expect(Object.keys(colors).sort()).toEqual(keys);
@@ -98,7 +98,7 @@ describe("themes", () => {
     setTheme("light");
     expect(theme.bg).toBe(THEMES.light.colors.bg);
     expect(colorFor("p_alia")).not.toBe(before);
-    setTheme("tokyo");
+    setTheme("plural");
     expect(colorFor("p_alia")).toBe(before);
   });
 });

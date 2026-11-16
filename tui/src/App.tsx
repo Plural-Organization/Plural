@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useSelectionHandler, useTerminalDimensions } from "@opentui/react";
-import { useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   label,
   mentionable,
@@ -33,7 +33,7 @@ import {
 import { COMMANDS, pluginHints, shortcutCommand, skillHints, type AskTarget } from "./commands";
 import { listSessions, resolveSession } from "./sessions";
 import { parseAsk } from "./lib/ask";
-import { feedId, FeedItemView, PinnedPrompt, pinId } from "./components/Cards";
+import { feedId, FeedRow, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
 import { SearchBar } from "./components/SearchBar";
@@ -184,16 +184,19 @@ export function App({
   const [extrasPrompt, setExtrasPrompt] = useState<{ preselect: string | null; reason: string | null; back: boolean } | null>(null);
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
   const [allOpen, setAllOpen] = useState(false);
-  const toggle = (id: string): void =>
-    setOpened((current) => {
-      const next = new Set(current);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  const toggle = useCallback(
+    (id: string): void =>
+      setOpened((current) => {
+        const next = new Set(current);
+        if (next.has(id)) {
+          next.delete(id);
+        } else {
+          next.add(id);
+        }
+        return next;
+      }),
+    [],
+  );
   const { width, height } = useTerminalDimensions();
   // The room a trace has in the tray, read when one arrives: beside the side panel when it shows.
   const traceWidth = useRef(width);
@@ -227,6 +230,7 @@ export function App({
   useEffect(() => updater?.subscribe(setUpdate), [updater]);
   const [behind, setBehind] = useState({ away: false, fresh: 0, chat: 0 });
   const anchor = useRef(0);
+  const watched = useRef<{ items: unknown; top: number; height: number; view: number }>({ items: null, top: -1, height: -1, view: -1 });
   const [finished, setFinished] = useState(false);
   const [verb, setVerb] = useState(0);
   const runClock = useRef<{ at: number; verb: number } | null>(null);
@@ -485,8 +489,15 @@ export function App({
       if (!box) {
         return;
       }
+      // Finding each prompt on screen walks the whole feed, so it is done only after a scroll or a change.
+      const entries = feedRef.current.items;
+      const at = watched.current;
+      if (at.items === entries && at.top === box.scrollTop && at.height === box.scrollHeight && at.view === box.viewport.height) {
+        return;
+      }
+      watched.current = { items: entries, top: box.scrollTop, height: box.scrollHeight, view: box.viewport.height };
       let above: string | null = null;
-      for (const item of feedRef.current.items) {
+      for (const item of entries) {
         if (item.kind !== "user") {
           continue;
         }
@@ -498,7 +509,6 @@ export function App({
         }
       }
       setPinned((current) => (current === above ? current : above));
-      const entries = feedRef.current.items;
       const atBottom = box.scrollTop + box.viewport.height >= box.scrollHeight - 1;
       if (atBottom) {
         anchor.current = entries.length;
@@ -532,7 +542,11 @@ export function App({
     }
   };
 
-  useEffect(() => onCodeCopy((text) => copy(text, "Copied", `${text.length} characters`)), []);
+  // One function for the life of the app, so a feed entry is not redrawn for a new callback.
+  const copyRef = useRef(copy);
+  copyRef.current = copy;
+  const copyText = useCallback((text: string): void => copyRef.current(text, "Copied", `${text.length} characters`), []);
+  useEffect(() => onCodeCopy(copyText), []);
 
   const phase = isHost && items.length > 0 ? "waiting" : running ? "running" : finished ? "done" : "idle";
   useEffect(() => onSummary?.({ phase }), [phase]);
@@ -750,6 +764,10 @@ export function App({
       warn("ask", "an answer goes to your own agent: ask for it from your own session, or from a teammate's");
     }
   };
+  // One function for the life of the app, like copyText: a feed entry is not redrawn for a new callback.
+  const giveRef = useRef(giveBriefing);
+  giveRef.current = giveBriefing;
+  const giveText = useCallback((item: Extract<FeedItem, { kind: "briefing" }>): void => giveRef.current(item), []);
 
   const install = (global: boolean): void => {
     const current = trayRef.current;
@@ -1651,33 +1669,24 @@ export function App({
           paddingTop={1}
           scrollbarOptions={{ showArrows: false, trackOptions: { foregroundColor: theme.line, backgroundColor: theme.bg } }}
         >
-          {feed.items.map((item) => {
-            const active = item.id === current;
-            const marked = active || hitSet.has(item.id);
-            return (
-              <box
-                key={`${item.id}:${settings.theme}`}
-                id={feedId(item.id)}
-                flexDirection="column"
-                flexShrink={0}
-                paddingLeft={marked ? 0 : 1}
-                {...(marked ? { border: ["left"] as ["left"], borderStyle: active ? ("heavy" as const) : ("single" as const), borderColor: active ? theme.warn : theme.line } : {})}
-              >
-                <FeedItemView
-                  item={item}
-                  syntax={syntax}
-                  width={width - (showPanel ? SIDEBAR_WIDTH : 0) - 9}
-                  expanded={allOpen || opened.has(item.id)}
-                  queued={queuedIds.get(item.id) ?? null}
-                  runs={runs}
-                  started={chatting}
-                  onToggle={toggle}
-                  onCopy={(text) => copy(text, "Copied", `${text.length} characters`)}
-                  onGive={giveBriefing}
-                />
-              </box>
-            );
-          })}
+          {feed.items.map((item, index) => (
+            <FeedRow
+              key={`${item.id}:${settings.theme}`}
+              item={item}
+              gap={item.kind !== "notice" && feed.items[index - 1]?.kind === "notice"}
+              active={item.id === current}
+              marked={item.id === current || hitSet.has(item.id)}
+              syntax={syntax}
+              width={width - (showPanel ? SIDEBAR_WIDTH : 0) - 9}
+              expanded={allOpen || opened.has(item.id)}
+              queued={queuedIds.get(item.id) ?? null}
+              run={runs.get(item.id)}
+              started={chatting}
+              onToggle={toggle}
+              onCopy={copyText}
+              onGive={giveText}
+            />
+          ))}
         </scrollbox>
         {behind.away ? (
           <box flexShrink={0} height={1} paddingX={2} onMouseDown={latest}>

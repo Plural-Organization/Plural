@@ -1,6 +1,7 @@
 import { decodePasteBytes } from "@opentui/core";
 import { useKeyboard, usePaste } from "@opentui/react";
-import { useReducer, useRef } from "react";
+import type { ScrollBoxRenderable } from "@opentui/core";
+import { useEffect, useReducer, useRef } from "react";
 import type { Role } from "@plural/client";
 import type { AgentControl } from "../control";
 import { missingFor, type ExtraStatus } from "../extras";
@@ -27,7 +28,30 @@ import {
 import { THEME_NAMES, theme, type ThemeName } from "../theme";
 import type { UpdateState } from "../update";
 
-export const DIALOG_WIDTH = 72;
+export const DIALOG_WIDTH = 84;
+// The explanation of a radio row sits under its label, this far in.
+const DETAIL_INDENT = 6;
+// Rows of the dialog that are not the list: frame, title, tabs, rule, status and the two lines of help.
+const CHROME_ROWS = 12;
+
+// How many screen rows a row of the list takes; a section title after the first has a blank line above it.
+// A note that names the group of choices under it.
+const isTitle = (row: Row): boolean => row.kind === "note" && row.id.endsWith("-title");
+
+// Wrapped text is counted a little narrower than the row, because words do not break where characters would.
+function rowHeight(row: Row, first: boolean, inner: number): number {
+  const lines = (text: string, width: number): number => Math.max(1, Math.ceil(text.length / Math.max(8, width - 2)));
+  if (isTitle(row)) {
+    return first ? 1 : 2;
+  }
+  if (row.kind === "radio") {
+    return 1 + lines(row.description ?? "", inner - DETAIL_INDENT);
+  }
+  if (row.kind === "note") {
+    return lines(row.label, inner);
+  }
+  return row.kind === "header" && !first ? 2 : 1;
+}
 
 type Tone = "ok" | "error" | "info";
 
@@ -77,9 +101,11 @@ export interface DialogProps {
   onClose: () => void;
 }
 
-const TONE = { ok: theme.ok, error: theme.danger, info: theme.dim } as const;
+// Read at draw time: the palette changes when the theme does.
+const toneColor = (tone: Tone): string => ({ ok: theme.ok, error: theme.danger, info: theme.dim })[tone];
 
 export function SettingsDialog(props: DialogProps) {
+  const listBox = useRef<ScrollBoxRenderable>(null);
   const [, redraw] = useReducer((value: number) => value + 1, 0);
   const local = useRef<Local>({
     tab: props.initialTab,
@@ -362,7 +388,24 @@ export function SettingsDialog(props: DialogProps) {
   const { tab, editing, status } = local.current;
   const index = landing(list, local.current.index);
   const selected = list[index];
-  void height;
+  const narrow = boxWidth < 70;
+  // The list is as tall as its rows until the terminal runs out, then it scrolls and follows the selection.
+  const heights = list.map((row, position) => rowHeight(row, position === 0, boxWidth - (narrow ? 5 : 7)));
+  const total = heights.reduce((sum, value) => sum + value, 0);
+  const listHeight = Math.max(3, Math.min(total, height - CHROME_ROWS));
+  const top = heights.slice(0, index).reduce((sum, value) => sum + value, 0);
+  const bottom = top + (heights[index] ?? 1);
+  useEffect(() => {
+    const box = listBox.current;
+    if (!box) {
+      return;
+    }
+    if (top < box.scrollTop) {
+      box.scrollTo(index === list.findIndex((row) => row.kind !== "header") ? 0 : top);
+    } else if (bottom > box.scrollTop + listHeight) {
+      box.scrollTo(bottom - listHeight);
+    }
+  }, [tab, top, bottom, listHeight]);
 
   return (
     <box
@@ -381,56 +424,64 @@ export function SettingsDialog(props: DialogProps) {
         flexDirection="column"
         border
         borderStyle="rounded"
-        borderColor={theme.accent}
+        borderColor={theme.dim}
         backgroundColor={theme.panel}
-        paddingX={2}
+        paddingX={narrow ? 1 : 2}
         onMouseDown={(event) => event.stopPropagation()}
       >
-        <box flexDirection="row" justifyContent="space-between">
-          <text>
-            <span fg={theme.accent}>
-              <b>⚙ settings</b>
-            </span>
+        <box flexDirection="row" justifyContent="space-between" flexShrink={0}>
+          <text selectable={false} fg={theme.text}>
+            <b>⚙ settings</b>
           </text>
           <box onMouseDown={props.onClose}>
-            <text fg={theme.dim}>✕ esc</text>
+            <text selectable={false} fg={theme.dim}>✕ esc</text>
           </box>
         </box>
-        <text>{" "}</text>
-        <box flexDirection="row">
+        <box flexDirection="row" flexShrink={0} marginTop={1}>
           {TABS.map((entry) => (
-            <box key={entry.id} marginRight={3} onMouseDown={() => switchTab(entry.id)}>
-              <text fg={entry.id === tab ? theme.accent : theme.dim}>
+            <box key={entry.id} marginRight={narrow ? 0 : 1} backgroundColor={entry.id === tab ? theme.bubble : undefined} paddingX={1} onMouseDown={() => switchTab(entry.id)}>
+              <text selectable={false} fg={entry.id === tab ? theme.text : theme.dim} wrapMode="none">
                 {entry.id === tab ? "● " : "○ "}
                 {entry.id === tab ? <b>{entry.label}</b> : entry.label}
               </text>
             </box>
           ))}
         </box>
-        <text fg={theme.line}>{"─".repeat(Math.max(10, boxWidth - 6))}</text>
-        {tab === "model" && props.control !== null && props.role === "host" ? <ReadyLine choice={local.current.choice} apiKey={currentKey()} settings={props.settings} /> : null}
-        {list.map((row, position) => (
-          <RowView
-            key={row.id}
-            row={row}
-            active={position === index}
-            first={position === 0}
-            editing={editing?.id === row.id ? editing.buffer : null}
-            onClick={() => {
-              set({ index: position });
-              activate(row);
-            }}
-          />
-        ))}
-        {editing?.id === "oauth_code" ? (
-          <text fg={theme.accent}>Authorization code: {"•".repeat(Math.min(editing.buffer.length, 24))}▏</text>
-        ) : null}
-        <text>{" "}</text>
-        {status ? <text fg={TONE[status.tone]}>{status.text}</text> : <text fg={theme.dim}>{selected?.hint ?? ""}</text>}
-        <text fg={theme.dim}>
-          {editing ? "type or paste · enter to keep · esc to cancel" : "tab next tab · ↑↓ select · ←→ change · enter apply · esc close"}
+        <text selectable={false} fg={theme.line} flexShrink={0} wrapMode="none">
+          {"─".repeat(Math.max(10, boxWidth - (narrow ? 4 : 6)))}
         </text>
-        <text fg={theme.dim}>agent: {props.agent || "unknown"}</text>
+        {tab === "model" && props.control !== null && props.role === "host" ? <ReadyLine choice={local.current.choice} apiKey={currentKey()} settings={props.settings} /> : null}
+        <scrollbox ref={listBox} height={listHeight} flexShrink={0} scrollbarOptions={{ showArrows: false, trackOptions: { foregroundColor: theme.line, backgroundColor: theme.panel } }}>
+          {list.map((row, position) => (
+            <RowView
+              key={row.id}
+              row={row}
+              active={position === index}
+              first={position === 0}
+              editing={editing?.id === row.id ? editing.buffer : null}
+              onClick={() => {
+                set({ index: position });
+                activate(row);
+              }}
+            />
+          ))}
+        </scrollbox>
+        {editing?.id === "oauth_code" ? (
+          <text selectable={false} fg={theme.accent}>Authorization code: {"•".repeat(Math.min(editing.buffer.length, 24))}▏</text>
+        ) : null}
+        <box flexDirection="column" flexShrink={0} marginTop={1}>
+          {status ? <text selectable={false} fg={toneColor(status.tone)}>{status.text}</text> : <text selectable={false} fg={theme.muted}>{selected?.hint ?? ""}</text>}
+          <text selectable={false} fg={theme.dim} wrapMode="none">
+            {editing
+              ? "type or paste · enter to keep · esc to cancel"
+              : narrow
+                ? "tab · ↑↓ · ←→ · enter · esc close"
+                : "tab next tab · ↑↓ select · ←→ change · enter apply · esc close"}
+          </text>
+          <text selectable={false} fg={theme.dim} wrapMode="none">
+            agent: {props.agent || "unknown"}
+          </text>
+        </box>
       </box>
     </box>
   );
@@ -440,14 +491,14 @@ function Value({ row, editing }: { row: Row; editing: string | null }) {
   if (editing !== null) {
     const shown = row.kind === "secret" ? maskKey(editing === "" ? "" : editing).replace("not set", "") : editing;
     return (
-      <text fg={theme.accent}>
+      <text selectable={false} fg={theme.accent}>
         {shown}▏
       </text>
     );
   }
   const chevrons = row.kind === "choice" && row.enabled;
   return (
-    <text fg={row.enabled ? theme.text : theme.dim}>
+    <text selectable={false} fg={row.enabled ? theme.text : theme.dim}>
       {chevrons ? "‹ " : ""}
       {row.value}
       {chevrons ? " ›" : ""}
@@ -456,50 +507,62 @@ function Value({ row, editing }: { row: Row; editing: string | null }) {
 }
 
 function RowView({ row, active, editing, first, onClick }: { row: Row; active: boolean; editing: string | null; first: boolean; onClick: () => void }) {
+  if (isTitle(row)) {
+    return (
+      <box marginTop={first ? 0 : 1} flexShrink={0}>
+        <text selectable={false} fg={theme.muted}>
+          <b>{row.label}</b>
+        </text>
+      </box>
+    );
+  }
   if (row.kind === "header") {
     return (
-      <box marginTop={first ? 0 : 1}>
-        <text fg={theme.dim}>{row.label.toUpperCase()}</text>
+      <box marginTop={first ? 0 : 1} flexShrink={0}>
+        <text selectable={false} fg={theme.muted}>
+          <b>{row.label.toUpperCase()}</b>
+        </text>
       </box>
     );
   }
   return (
-    <box flexDirection="column" backgroundColor={active ? theme.bg : undefined}>
+    <box flexDirection="column" flexShrink={0} backgroundColor={active ? theme.bubble : undefined}>
       <RowBody row={row} active={active} editing={editing} onClick={onClick} />
     </box>
   );
 }
 
 function RowBody({ row, active, editing, onClick }: { row: Row; active: boolean; editing: string | null; onClick: () => void }) {
-  const color = !row.enabled ? theme.dim : active ? theme.accent : theme.text;
+  const color = !row.enabled ? theme.dim : active ? theme.text : theme.muted;
   const marker = active ? "› " : "  ";
   if (row.kind === "note") {
-    return <text fg={theme.dim}>{row.label}</text>;
+    return <text selectable={false} fg={theme.dim}>{row.label}</text>;
   }
   if (row.kind === "radio") {
     return (
       <box flexDirection="column" onMouseDown={onClick}>
-        <text fg={color}>
+        <text selectable={false} fg={color}>
           {marker}
           {row.selected ? "(●) " : "( ) "}
           {row.label}
         </text>
-        <text fg={theme.dim}>
-          {"      "}
-          {row.description}
-        </text>
+        <box paddingLeft={DETAIL_INDENT}>
+          <text selectable={false} fg={theme.dim} wrapMode="word">
+            {row.description}
+          </text>
+        </box>
       </box>
     );
   }
   if (row.kind === "swatch") {
     return (
       <box flexDirection="row" justifyContent="space-between" onMouseDown={onClick}>
-        <text fg={color}>
+        <text selectable={false} fg={color}>
           {marker}
           {row.selected ? "(●) " : "( ) "}
           {row.label}
         </text>
-        <text>
+        <text selectable={false}>
           {(row.colors ?? []).map((value, position) => (
             <span key={position} fg={value}>
               ██
@@ -512,7 +575,7 @@ function RowBody({ row, active, editing, onClick }: { row: Row; active: boolean;
   if (row.kind === "action") {
     return (
       <box onMouseDown={onClick}>
-        <text fg={color}>
+        <text selectable={false} fg={color}>
           {marker}
           {row.enabled ? "[ " : "  "}
           {row.label}
@@ -523,7 +586,7 @@ function RowBody({ row, active, editing, onClick }: { row: Row; active: boolean;
   }
   return (
     <box flexDirection="row" justifyContent="space-between" onMouseDown={onClick}>
-      <text fg={color}>
+      <text selectable={false} fg={color}>
         {marker}
         {row.label}
       </text>
@@ -536,11 +599,11 @@ function ReadyLine({ choice, apiKey, settings }: { choice: AgentChoice; apiKey: 
   const preset = presetOf(choice.preset);
   const step = stepFor(preset, apiKey, hasOAuth(), settings.agentChoices);
   if (preset.provider === "fake") {
-    return <text fg={theme.dim}>○ the demo agent follows a script. Pick a provider to use a real model</text>;
+    return <text selectable={false} fg={theme.dim}>○ the demo agent follows a script. Pick a provider to use a real model</text>;
   }
   if (step.kind === "use") {
     return (
-      <text>
+      <text selectable={false}>
         <span fg={theme.ok}>● </span>
         <span fg={theme.text}>{preset.label} is ready</span>
         <span fg={theme.dim}> · Save and use switches to it</span>
@@ -548,7 +611,7 @@ function ReadyLine({ choice, apiKey, settings }: { choice: AgentChoice; apiKey: 
     );
   }
   return (
-    <text>
+    <text selectable={false}>
       <span fg={theme.warn}>○ </span>
       <span fg={theme.text}>{preset.label} needs a step: </span>
       <span fg={theme.warn}>{actionFor(preset, step).label}</span>

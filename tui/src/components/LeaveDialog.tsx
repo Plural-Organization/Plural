@@ -71,62 +71,62 @@ export function LeaveDialog({ width, height, teamName, owner, onConfirm, onClose
         onMouseDown={(event) => event.stopPropagation()}
       >
         <box flexDirection="row" justifyContent="space-between">
-          <text fg={theme.warn}>
+          <text selectable={false} fg={theme.warn}>
             <b>{`${verb} team · ${truncate(teamName, boxWidth - 24)}`}</b>
           </text>
           <box onMouseDown={onClose}>
-            <text fg={theme.dim}>✕ esc</text>
+            <text selectable={false} fg={theme.dim}>✕ esc</text>
           </box>
         </box>
-        <text>{" "}</text>
+        <text selectable={false}>{" "}</text>
         {owner ? (
           <>
-            <text fg={theme.text} wrapMode="word">
+            <text selectable={false} fg={theme.text} wrapMode="word">
               {`Delete ${teamName} for everyone?`}
             </text>
-            <text>{" "}</text>
-            <text fg={theme.dim} wrapMode="word">
+            <text selectable={false}>{" "}</text>
+            <text selectable={false} fg={theme.dim} wrapMode="word">
               • every member is removed and their invite codes stop working
             </text>
-            <text fg={theme.dim} wrapMode="word">
+            <text selectable={false} fg={theme.dim} wrapMode="word">
               • all shared sessions disappear from the team's spaces
             </text>
-            <text fg={theme.dim} wrapMode="word">
+            <text selectable={false} fg={theme.dim} wrapMode="word">
               • this cannot be undone
             </text>
           </>
         ) : (
           <>
-            <text fg={theme.text} wrapMode="word">
+            <text selectable={false} fg={theme.text} wrapMode="word">
               {`Leave ${teamName}?`}
             </text>
-            <text>{" "}</text>
-            <text fg={theme.dim} wrapMode="word">
+            <text selectable={false}>{" "}</text>
+            <text selectable={false} fg={theme.dim} wrapMode="word">
               • you stop seeing the team's sessions
             </text>
-            <text fg={theme.dim} wrapMode="word">
+            <text selectable={false} fg={theme.dim} wrapMode="word">
               • your own sessions stay, but are no longer shared with it
             </text>
-            <text fg={theme.dim} wrapMode="word">
+            <text selectable={false} fg={theme.dim} wrapMode="word">
               • to come back you need a new invite from the owner
             </text>
           </>
         )}
-        <text>{" "}</text>
+        <text selectable={false}>{" "}</text>
         <box flexDirection="row" gap={2}>
           <box border borderStyle="rounded" borderColor={agree ? theme.warn : theme.line} paddingX={2} onMouseDown={confirm}>
-            <text fg={agree ? theme.warn : theme.dim}>{busy ? `${verb === "leave" ? "leaving" : "deleting"}…` : `${verb} (y)`}</text>
+            <text selectable={false} fg={agree ? theme.warn : theme.dim}>{busy ? `${verb === "leave" ? "leaving" : "deleting"}…` : `${verb} (y)`}</text>
           </box>
           <box border borderStyle="rounded" borderColor={agree ? theme.line : theme.ok} paddingX={2} onMouseDown={onClose}>
-            <text fg={agree ? theme.dim : theme.ok}>cancel (n)</text>
+            <text selectable={false} fg={agree ? theme.dim : theme.ok}>cancel (n)</text>
           </box>
         </box>
         {error !== null ? (
-          <text fg={theme.danger} wrapMode="word">
+          <text selectable={false} fg={theme.danger} wrapMode="word">
             {error}
           </text>
         ) : null}
-        <text fg={theme.dim}>←→ choose · enter confirms · esc cancels</text>
+        <text selectable={false} fg={theme.dim}>←→ choose · enter confirms · esc cancels</text>
       </box>
     </box>
   );

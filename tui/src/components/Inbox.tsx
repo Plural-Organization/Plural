@@ -81,7 +81,8 @@ export function Inbox({ items, state, selected, focused, now, approvalChoice }: 
       flexDirection="column"
       border
       borderStyle={isFolderRequest(item) ? "heavy" : "rounded"}
-      borderColor={isFolderRequest(item) ? theme.danger : focused ? theme.warn : theme.dim}
+      borderColor={isFolderRequest(item) ? theme.danger : focused ? theme.warn : theme.line}
+      backgroundColor={theme.panel}
       paddingX={1}
       marginX={2}
       flexShrink={0}
@@ -146,7 +147,7 @@ function BriefingBody({ request, now, focused }: { request: BriefingRequestView;
         </span>
         <span fg={theme.dim}> · asks your agent to brief them{request.update ? " (an update)" : ""} · {seconds}s ago</span>
       </text>
-      {request.focus ? <text>{request.focus}</text> : null}
+      {request.focus ? <text fg={theme.text}>{request.focus}</text> : null}
       {focused ? <Keys items={[["y", "write it"], ["n", "not now"]]} /> : <text fg={theme.dim}>tab to answer</text>}
     </>
   );
@@ -162,7 +163,7 @@ function AccessBody({ request, now, focused }: { request: AccessRequestView; now
         </span>
         <span fg={theme.dim}> · watching · asked {seconds}s ago</span>
       </text>
-      {request.note ? <text>{request.note}</text> : null}
+      {request.note ? <text fg={theme.text}>{request.note}</text> : null}
       {focused ? <Keys items={[["y", "let them write"], ["n", "not now"]]} /> : <text fg={theme.dim}>tab to answer</text>}
     </>
   );
@@ -240,7 +241,7 @@ function ApprovalBody({ approval, state, now, focused, selected, place }: { appr
   const risk = call.risk === "exec" ? theme.danger : call.risk === "write" ? theme.warn : theme.dim;
   return (
     <>
-      <text wrapMode="word">
+      <text wrapMode="word" fg={theme.text}>
         <b>Approve </b>
         <span fg={theme.warn}>
           <b>{what}</b>
@@ -252,7 +253,7 @@ function ApprovalBody({ approval, state, now, focused, selected, place }: { appr
             {index > 0 ? "  " : ""}
             {focused && index === selected ? (
               <span fg={theme.bg} bg={theme.text}>
-                {` ${decision} `}
+                <b>{` ${decision} `}</b>
               </span>
             ) : (
               <span fg={focused ? theme.text : theme.dim}>{decision}</span>
@@ -286,7 +287,7 @@ function ProposalBody({ proposal, state, focused }: { proposal: ProposalView; st
         </span>
         <span fg={theme.dim}> {author?.role ?? ""} proposes</span>
       </text>
-      <text>{proposal.text}</text>
+      <text fg={theme.text}>{proposal.text}</text>
       {focused ? (
         <Keys items={[["y", "approve"], ["e", "edit first"], ["n", "reject"]]} />
       ) : (
@@ -299,7 +300,7 @@ function ProposalBody({ proposal, state, focused }: { proposal: ProposalView; st
 function PlanBody({ focused }: { focused: boolean }) {
   return (
     <>
-      <text>The agent finished planning. Start the work?</text>
+      <text fg={theme.text}>The agent finished planning. Start the work?</text>
       {focused ? (
         <Keys items={[["a", "yes, auto mode"], ["e", "yes, accept edits"], ["y", "yes, ask before changes"], ["n", "keep planning"]]} />
       ) : (

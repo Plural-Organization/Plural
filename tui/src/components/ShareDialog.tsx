@@ -121,18 +121,18 @@ export function ShareDialog({ width, height, teamName, folders, onShare, onClose
         onMouseDown={(event) => event.stopPropagation()}
       >
         <box flexDirection="row" justifyContent="space-between">
-          <text fg={theme.accent}>
+          <text selectable={false} fg={theme.accent}>
             <b>{chosen === null ? "share my host · choose a folder" : "share my host · confirm"}</b>
           </text>
           <box onMouseDown={onClose}>
-            <text fg={theme.dim}>✕ esc</text>
+            <text selectable={false} fg={theme.dim}>✕ esc</text>
           </box>
         </box>
-        <text>{" "}</text>
+        <text selectable={false}>{" "}</text>
         {chosen === null ? (
           <>
-            <text fg={theme.dim}>Which repository should the host open?</text>
-            <text>{" "}</text>
+            <text selectable={false} fg={theme.dim}>Which repository should the host open?</text>
+            <text selectable={false}>{" "}</text>
             {folders.map((folder, position) => {
               const selected = typed === "" && position === index;
               return (
@@ -146,36 +146,36 @@ export function ShareDialog({ width, height, teamName, folders, onShare, onClose
                     setChosen(folder.path);
                   }}
                 >
-                  <text fg={selected ? theme.accent : theme.text}>
+                  <text selectable={false} fg={selected ? theme.accent : theme.text}>
                     {selected ? "› " : "  "}
                     <b>{truncate(folder.name, inner - 2)}</b>
                   </text>
-                  <text fg={theme.dim}>{`  ${truncate(folder.detail, inner - 2)}`}</text>
+                  <text selectable={false} fg={theme.dim}>{`  ${truncate(folder.detail, inner - 2)}`}</text>
                 </box>
               );
             })}
-            <text>{" "}</text>
-            <text fg={typed === "" ? theme.dim : theme.text}>{`path: ${typed === "" ? "or type a path here" : truncate(typed, inner - 8)}`}</text>
+            <text selectable={false}>{" "}</text>
+            <text selectable={false} fg={typed === "" ? theme.dim : theme.text}>{`path: ${typed === "" ? "or type a path here" : truncate(typed, inner - 8)}`}</text>
           </>
         ) : (
           <>
-            <text fg={theme.text} wrapMode="word">
+            <text selectable={false} fg={theme.text} wrapMode="word">
               {`Share ${truncate(chosen, inner)} with ${team}?`}
             </text>
-            <text>{" "}</text>
-            <text fg={theme.dim} wrapMode="word">
+            <text selectable={false}>{" "}</text>
+            <text selectable={false} fg={theme.dim} wrapMode="word">
               • everyone in {team} sees this session in their spaces
             </text>
-            <text fg={theme.dim} wrapMode="word">
+            <text selectable={false} fg={theme.dim} wrapMode="word">
               • they can read the chat and the agent's work, not write
             </text>
-            <text fg={theme.dim} wrapMode="word">
+            <text selectable={false} fg={theme.dim} wrapMode="word">
               • anyone asking for write access waits for your approval
             </text>
-            <text fg={theme.dim} wrapMode="word">
+            <text selectable={false} fg={theme.dim} wrapMode="word">
               • the host stops when you quit plural
             </text>
-            <text>{" "}</text>
+            <text selectable={false}>{" "}</text>
             <box flexDirection="row" gap={2}>
               <box
                 border
@@ -187,20 +187,20 @@ export function ShareDialog({ width, height, teamName, folders, onShare, onClose
                   confirm(true);
                 }}
               >
-                <text fg={agree ? theme.ok : theme.dim}>{busy ? "starting…" : "I agree · share (y)"}</text>
+                <text selectable={false} fg={agree ? theme.ok : theme.dim}>{busy ? "starting…" : "I agree · share (y)"}</text>
               </box>
               <box border borderStyle="rounded" borderColor={agree ? theme.line : theme.warn} paddingX={2} onMouseDown={onClose}>
-                <text fg={agree ? theme.dim : theme.warn}>cancel (n)</text>
+                <text selectable={false} fg={agree ? theme.dim : theme.warn}>cancel (n)</text>
               </box>
             </box>
           </>
         )}
         {error !== null ? (
-          <text fg={theme.danger} wrapMode="word">
+          <text selectable={false} fg={theme.danger} wrapMode="word">
             {error}
           </text>
         ) : null}
-        <text fg={theme.dim}>{chosen === null ? "↑↓ choose · enter next · type a path · esc closes" : "←→ choose · enter confirms · esc goes back"}</text>
+        <text selectable={false} fg={theme.dim}>{chosen === null ? "↑↓ choose · enter next · type a path · esc closes" : "←→ choose · enter confirms · esc goes back"}</text>
       </box>
     </box>
   );

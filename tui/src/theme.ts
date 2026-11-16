@@ -1,4 +1,4 @@
-export type ThemeName = "tokyo" | "light" | "gruvbox" | "mono";
+export type ThemeName = "plural" | "tokyo" | "light" | "gruvbox" | "mono";
 
 export interface Palette {
   bg: string;
@@ -7,6 +7,8 @@ export interface Palette {
   you: string;
   line: string;
   text: string;
+  /** Secondary text: quieter than text, still easy to read. */
+  muted: string;
   dim: string;
   accent: string;
   ok: string;
@@ -23,6 +25,32 @@ export interface Palette {
 }
 
 export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
+  // The web client's colours (web/src/styles/tokens.css); the line is lighter there because a terminal border is one cell thick.
+  plural: {
+    label: "Plural",
+    colors: {
+      bg: "#0e0f11",
+      panel: "#16171a",
+      bubble: "#1d1e22",
+      you: "#23233a",
+      line: "#2e3037",
+      text: "#ecebe7",
+      muted: "#9a9ca2",
+      dim: "#63656c",
+      accent: "#b9b4ff",
+      ok: "#8fdca6",
+      warn: "#ecc47e",
+      danger: "#ff9a9a",
+      info: "#9fd8ff",
+      code: "#d6a8ff",
+      diffBg: "#131417",
+      addBg: "#1e2823",
+      removeBg: "#2b2021",
+      addMark: "#354d3e",
+      removeMark: "#56393a",
+      people: ["#9fd8ff", "#ffc48a", "#a6e3b4", "#ff9fc4", "#e3d27a", "#c7b5ff", "#8fe0d6", "#ffb3a1"],
+    },
+  },
   tokyo: {
     label: "Tokyo Night",
     colors: {
@@ -32,6 +60,7 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       you: "#1e2d4d",
       line: "#2a2e42",
       text: "#c0caf5",
+      muted: "#9aa5ce",
       dim: "#565f89",
       accent: "#7aa2f7",
       ok: "#9ece6a",
@@ -56,6 +85,7 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       you: "#d9e4ff",
       line: "#d3d5e0",
       text: "#2a2b3d",
+      muted: "#5b5e75",
       dim: "#82859b",
       accent: "#2f5bea",
       ok: "#2e8b3d",
@@ -80,6 +110,7 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       you: "#2b3a3a",
       line: "#3c3836",
       text: "#ebdbb2",
+      muted: "#bdae93",
       dim: "#928374",
       accent: "#83a598",
       ok: "#b8bb26",
@@ -104,6 +135,7 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
       you: "#1f1f4a",
       line: "#4a4a4a",
       text: "#ffffff",
+      muted: "#d0d0d0",
       dim: "#a0a0a0",
       accent: "#ffffff",
       ok: "#00ff87",
@@ -123,7 +155,7 @@ export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
 
 export const THEME_NAMES = Object.keys(THEMES) as ThemeName[];
 
-export const theme: Palette = { ...THEMES.tokyo.colors };
+export const theme: Palette = { ...THEMES.plural.colors };
 
 export function setTheme(name: ThemeName): void {
   Object.assign(theme, THEMES[name].colors);

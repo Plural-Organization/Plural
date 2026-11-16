@@ -139,37 +139,37 @@ export function ExtrasDialog(props: ExtrasDialogProps) {
         backgroundColor={theme.panel}
         paddingX={2}
       >
-        <text>
+        <text selectable={false}>
           <span fg={theme.accent}>
             <b>◆ model SDKs</b>
           </span>
         </text>
-        <text fg={theme.dim}>{props.reason ?? "Plural installs without them to stay small."}</text>
-        <text fg={theme.dim}>Claude Code and Codex CLI work without any. Install the ones you will use:</text>
-        <text>{" "}</text>
+        <text selectable={false} fg={theme.dim}>{props.reason ?? "Plural installs without them to stay small."}</text>
+        <text selectable={false} fg={theme.dim}>Claude Code and Codex CLI work without any. Install the ones you will use:</text>
+        <text selectable={false}>{" "}</text>
         {list().map((extra, position) => {
           const on = position === index;
           const box = extra.installed ? "[✓]" : chosen.has(extra.id) ? "[x]" : "[ ]";
           return (
             <box key={extra.id} flexDirection="row" justifyContent="space-between">
-              <text fg={extra.installed ? theme.dim : on ? theme.accent : theme.text}>
+              <text selectable={false} fg={extra.installed ? theme.dim : on ? theme.accent : theme.text}>
                 {on ? "› " : "  "}
                 {box} {extra.label}
               </text>
-              <text fg={theme.dim}>{extra.installed ? "installed" : ""}</text>
+              <text selectable={false} fg={theme.dim}>{extra.installed ? "installed" : ""}</text>
             </box>
           );
         })}
-        <text>{" "}</text>
-        <text fg={index === installRow() ? theme.accent : theme.text}>
+        <text selectable={false}>{" "}</text>
+        <text selectable={false} fg={index === installRow() ? theme.accent : theme.text}>
           {index === installRow() ? "› " : "  "}[ Install selected ]
         </text>
-        <text fg={index === skipRow() ? theme.accent : theme.text}>
+        <text selectable={false} fg={index === skipRow() ? theme.accent : theme.text}>
           {index === skipRow() ? "› " : "  "}[ Skip for now ]
         </text>
-        <text>{" "}</text>
-        {status ? <text fg={TONE[status.tone]}>{status.text}</text> : <text fg={theme.dim}>Skipped SDKs can be added later: pick the provider in settings (F2).</text>}
-        <text fg={theme.dim}>{busy ? "installing, please wait" : "↑↓ select · space tick · enter confirm · esc skip"}</text>
+        <text selectable={false}>{" "}</text>
+        {status ? <text selectable={false} fg={TONE[status.tone]}>{status.text}</text> : <text selectable={false} fg={theme.dim}>Skipped SDKs can be added later: pick the provider in settings (F2).</text>}
+        <text selectable={false} fg={theme.dim}>{busy ? "installing, please wait" : "↑↓ select · space tick · enter confirm · esc skip"}</text>
       </box>
     </box>
   );
