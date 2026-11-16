@@ -1,24 +1,30 @@
-import type { ApprovalView, Command, SessionState } from "@plural/client";
+import { approvalChoices, type ApprovalDecision, type ApprovalView, type Command, type SessionState } from "@plural/client";
 import { cx } from "../../lib/cx";
 import { nameOf } from "./items";
 import { Action } from "./Action";
 import styles from "./Inbox.module.css";
 
-type Decision = "once" | "always" | "reject" | "block" | "read" | "write";
+// The answers and their keys come from @plural/client; here is only how each one reads and looks on a button.
+type Look = Partial<Record<ApprovalDecision, { label: string; tone?: string }>>;
 
-const BUTTONS: { decision: Decision; key: string; label: string; tone?: string }[] = [
-  { decision: "once", key: "y", label: "allow once", tone: "primary" },
-  { decision: "always", key: "a", label: "for the session" },
-  { decision: "reject", key: "n", label: "reject" },
-  { decision: "block", key: "b", label: "block", tone: "danger" },
-];
+const LOOK: Look = {
+  once: { label: "allow once", tone: "primary" },
+  always: { label: "for the session" },
+  reject: { label: "reject" },
+  block: { label: "block", tone: "danger" },
+};
 
 // A folder outside the session is answered with how far it opens, or not at all.
-const FOLDER_BUTTONS: { decision: Decision; key: string; label: string; tone?: string }[] = [
-  { decision: "read", key: "r", label: "read" },
-  { decision: "write", key: "w", label: "read + write", tone: "danger" },
-  { decision: "reject", key: "n", label: "refuse", tone: "primary" },
-];
+const FOLDER_LOOK: Look = {
+  read: { label: "read" },
+  write: { label: "read + write", tone: "danger" },
+  reject: { label: "refuse", tone: "primary" },
+};
+
+function buttons(approval: ApprovalView): { decision: ApprovalDecision; key: string; label: string; tone?: string }[] {
+  const look = approval.folder ? FOLDER_LOOK : LOOK;
+  return approvalChoices(approval).map((choice) => ({ ...choice, label: choice.decision, ...look[choice.decision] }));
+}
 
 // A command can be a whole script, and so can the pattern "for the session" would allow. Only its first line is said in a sentence,
 // the full text sits in the scrollable box above, so the buttons never move out of sight.
@@ -66,7 +72,7 @@ function FolderCard({ approval, state, now, send }: ApprovalCardProps) {
       ) : null}
       <p className={styles.why}>Asked every time, nothing is remembered. “read” opens it for this one call only; “read + write” also lets the agent change files here.</p>
       <div className={styles.actions}>
-        {FOLDER_BUTTONS.map((button) => (
+        {buttons(approval).map((button) => (
           <Action key={button.decision} hint={button.key} tone={button.tone} onPress={() => send({ type: "approval.respond", approval_id: approval.id, decision: button.decision })}>
             {button.label}
           </Action>
@@ -116,7 +122,7 @@ export function ApprovalCard({ approval, state, now, send }: ApprovalCardProps) 
         </p>
       </div>
       <div className={styles.actions}>
-        {BUTTONS.map((button) => (
+        {buttons(approval).map((button) => (
           <Action key={button.decision} hint={button.key} tone={button.tone} onPress={() => send({ type: "approval.respond", approval_id: approval.id, decision: button.decision })}>
             {button.label}
           </Action>

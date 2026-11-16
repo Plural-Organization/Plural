@@ -1,28 +1,10 @@
-import { label, type AccessRequestView, type BriefingRequestView, type ApprovalView, type JoinRequestView, type PluginAsked, type ProposalView, type SessionState } from "@plural/client";
+import { inboxRequests, participantName, type InboxRequest, type PluginAsked } from "@plural/client";
 
-export type InboxItem =
-  | { kind: "plugin"; id: string; ask: PluginAsked }
-  | { kind: "join"; id: string; request: JoinRequestView }
-  | { kind: "access"; id: string; request: AccessRequestView }
-  | { kind: "briefing"; id: string; request: BriefingRequestView }
-  | { kind: "approval"; id: string; approval: ApprovalView }
-  | { kind: "proposal"; id: string; proposal: ProposalView };
+// What waits for the host lives in @plural/client, for this client and the terminal one; the web adds a plugin's question.
+export type InboxItem = InboxRequest | { kind: "plugin"; id: string; ask: PluginAsked };
 
-export function inboxItems(state: SessionState): InboxItem[] {
-  return [
-    ...Object.values(state.join_requests).map((request): InboxItem => ({ kind: "join", id: request.id, request })),
-    ...Object.values(state.access_requests).map((request): InboxItem => ({ kind: "access", id: request.participant_id, request })),
-    ...Object.values(state.briefing_requests).map((request): InboxItem => ({ kind: "briefing", id: request.id, request })),
-    ...Object.values(state.approvals).map((approval): InboxItem => ({ kind: "approval", id: approval.id, approval })),
-    ...Object.values(state.proposals).map((proposal): InboxItem => ({ kind: "proposal", id: proposal.id, proposal })),
-  ];
-}
+export { inboxRequests as inboxItems, participantName as nameOf };
 
 export function askItems(asks: PluginAsked[]): InboxItem[] {
   return asks.map((ask): InboxItem => ({ kind: "plugin", id: ask.ask_id, ask }));
-}
-
-export function nameOf(state: SessionState, participantId: string): string {
-  const participant = state.participants[participantId];
-  return participant ? label(state, participant) : participantId;
 }

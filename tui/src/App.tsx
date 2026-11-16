@@ -3,6 +3,10 @@ import type { ScrollBoxRenderable } from "@opentui/core";
 import { useKeyboard, useRenderer, useSelectionHandler, useTerminalDimensions } from "@opentui/react";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
+  approvalChoices,
+  approvalDecisionFor,
+  defaultApprovalChoice,
+  inboxRequests,
   label,
   mentionable,
   mentionsMe,
@@ -37,7 +41,7 @@ import { feedId, FeedRow, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
 import { Composer, type Delivery } from "./components/Composer";
 import { SearchBar } from "./components/SearchBar";
-import { Inbox, decisionsOf, defaultChoice, inboxItems, type InboxItem } from "./components/Inbox";
+import { Inbox, type InboxItem } from "./components/Inbox";
 import { ExtrasDialog } from "./components/ExtrasDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { SetupDialog } from "./components/SetupDialog";
@@ -421,7 +425,7 @@ export function App({
   const mode = state.permission_mode;
   const running = state.run !== null;
   const items = useMemo(
-    (): InboxItem[] => (isHost ? [...inboxItems(state), ...(planReady ? [{ kind: "plan", id: "plan" } as const] : [])] : []),
+    (): InboxItem[] => (isHost ? [...inboxRequests(state), ...(planReady ? [{ kind: "plan", id: "plan" } as const] : [])] : []),
     [isHost, state.approvals, state.proposals, state.join_requests, state.access_requests, state.briefing_requests, planReady],
   );
   const approvals = Object.keys(state.approvals).length;
@@ -1522,7 +1526,7 @@ export function App({
       const direction = key.name === "left" ? -1 : 1;
       setApprovalChoice((current) => ({
         id: item.id,
-        index: Math.max(0, Math.min(decisionsOf(item.approval).length - 1, (current?.id === item.id ? current.index : defaultChoice(item.approval)) + direction)),
+        index: Math.max(0, Math.min(approvalChoices(item.approval).length - 1, (current?.id === item.id ? current.index : defaultApprovalChoice(item.approval)) + direction)),
       }));
     } else if (key.name === "up" || key.name === "k") {
       setApprovalChoice(null);
@@ -1549,11 +1553,12 @@ export function App({
         send({ type: "access.decide", participant_id: item.id, decision: "deny" });
       }
     } else if (item?.kind === "approval") {
-      const decisions: Record<string, "once" | "always" | "reject" | "block" | "read" | "write"> = item.approval.folder
-        ? { r: "read", w: "write", n: "reject", x: "reject" }
-        : { y: "once", a: "always", n: "reject", b: "block" };
-      const index = approvalChoice?.id === item.id ? approvalChoice.index : defaultChoice(item.approval);
-      const decision = key.name === "return" ? (decisionsOf(item.approval)[index] as "once" | "always" | "reject" | "block" | "read" | "write" | undefined) : decisions[key.name];
+      const index = approvalChoice?.id === item.id ? approvalChoice.index : defaultApprovalChoice(item.approval);
+      // x refuses a folder as well as n, as it does for every other request in the terminal.
+      const decision =
+        key.name === "return"
+          ? approvalChoices(item.approval)[index]?.decision
+          : approvalDecisionFor(item.approval, key.name === "x" && item.approval.folder ? "n" : key.name);
       if (decision) {
         send({ type: "approval.respond", approval_id: item.id, decision });
       }
