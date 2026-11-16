@@ -1,7 +1,9 @@
+import asyncio
 import json
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -27,10 +29,12 @@ from plural.security.entitlement import InvalidEntitlement
 from plural.security.identity import Identity
 from plural.security.replay import ReplayGuard
 from plural.security.tokens import b64decode
+from plural.storage.sessions import ROOM_ID, list_sessions, read_session, session_path
 
 DEFAULT_PORT = 47831
 DEFAULT_ORIGINS = ("https://plrl.host", "https://www.plrl.host")
 TICKET_WINDOW = timedelta(minutes=5)
+MAX_SESSIONS_LISTED = 50
 
 
 TeamFetch = Callable[[str, Identity, str, Callable[[bytes], str]], Awaitable[list[TeamProfile]]]
@@ -328,6 +332,48 @@ class Daemon:
             raise Problem(409, "no_terminal", str(error), command=spec.login) from error
         return JSONResponse({"command": spec.login})
 
+    async def list_sessions(self, request: Request) -> Response:
+        """The sessions this computer keeps, newest first, to offer to continue."""
+        self.authorize(request)
+        state = self._accounts.path.parent
+        running = {item["room"] for item in self._rooms.listing()}
+        return JSONResponse({"sessions": await asyncio.to_thread(_sessions_view, state, running)})
+
+    async def resume_session(self, request: Request) -> Response:
+        """Continue a saved session: the same history, in the folder it worked in."""
+        email = self.authorize(request)
+        room = str(request.path_params["room"])
+        if ROOM_ID.fullmatch(room) is None:
+            raise Problem(400, "bad_session", "that is not a session id")
+        running = self._rooms.running(room)
+        if running is not None:
+            return JSONResponse(running.public())
+        info = await asyncio.to_thread(read_session, session_path(self._accounts.path.parent, room))
+        if info is None:
+            raise Problem(404, "no_session", "this computer has no such session")
+        folder = await asyncio.to_thread(_existing_folder, info.workspace)
+        if folder is None:
+            raise Problem(409, "folder_missing", "the folder of this session is gone")
+        try:
+            config = self._agent.config(self._agent.store.current())
+        except AgentSetupError as error:
+            raise Problem(409, "agent_not_ready", str(error)) from error
+        team = self._team(info.team)
+        relay = None if team is not None else (self._relay(None) or None)
+        try:
+            started = await self._rooms.start(
+                folder,
+                None,
+                name=email.split("@")[0],
+                agent=config,
+                relay=relay,
+                team=team,
+                resume=room,
+            )
+        except RoomError as error:
+            raise Problem(409, error.code, str(error)) from error
+        return JSONResponse(started.public(), 201)
+
     async def list_rooms(self, request: Request) -> Response:
         self.authorize(request)
         return JSONResponse({"rooms": self._rooms.listing()})
@@ -337,6 +383,28 @@ class Daemon:
         if not await self._rooms.stop(str(request.path_params["room"])):
             raise Problem(404, "no_room", "no such room")
         return Response(status_code=204)
+
+
+def _existing_folder(workspace: str | None) -> Path | None:
+    folder = Path(workspace) if workspace else None
+    return folder if folder is not None and folder.is_dir() else None
+
+
+def _sessions_view(state: Path, running: set[object]) -> list[dict[str, object]]:
+    return [
+        {
+            "room": info.room,
+            "title": info.title,
+            "folder": Path(info.workspace).name if info.workspace else None,
+            "available": _existing_folder(info.workspace) is not None,
+            "prompts": info.prompts,
+            "people": info.people,
+            "team": info.team,
+            "updated_at": info.updated_at.isoformat(),
+            "running": info.room in running,
+        }
+        for info in list_sessions(state)[:MAX_SESSIONS_LISTED]
+    ]
 
 
 async def _body[T: BaseModel](request: Request, model: type[T]) -> T:
@@ -403,6 +471,8 @@ def create_app(
             Route("/v1/status", _guarded(daemon.status)),
             Route("/v1/account", _guarded(daemon.account)),
             Route("/v1/folders/pick", _guarded(daemon.pick_folder), methods=["POST"]),
+            Route("/v1/sessions", _guarded(daemon.list_sessions)),
+            Route("/v1/sessions/{room}/resume", _guarded(daemon.resume_session), methods=["POST"]),
             Route("/v1/rooms", _guarded(daemon.list_rooms)),
             Route("/v1/rooms", _guarded(daemon.start_room), methods=["POST"]),
             Route("/v1/rooms/{room}", _guarded(daemon.stop_room), methods=["DELETE"]),

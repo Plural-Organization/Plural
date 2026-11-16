@@ -47,6 +47,14 @@ on request. It starts nothing by itself and holds no state a host does not alrea
   as a child, waits for its `ready` line and returns `{room, guest_link, host_link}`. `GET /v1/rooms`
   lists the rooms the daemon started; `DELETE /v1/rooms/{room}` closes the child's stdin. When the
   daemon stops, its hosts stop. At most 5 rooms at once.
+- **Sessions.** A session outlives its host: its history stays in the computer's session store. `GET
+  /v1/sessions` lists them (id, title, the folder's *name*, whether the folder still exists, prompts,
+  team, last use, whether it runs now) and `POST /v1/sessions/{room}/resume` starts `plural-host host
+  --json --room <id> --workspace <the folder it was saved with>` (with `--team-id` for a team session,
+  on this computer's relay otherwise). The folder is the one the person chose when the session began,
+  read from the saved session and checked to exist, so the browser still never sends a path. Asking for
+  a session that is already running returns that room. A session whose folder is gone, one of a team
+  this computer is not in, or an unknown id is refused with a reason.
 - **No account, no daemon.** `plural daemon` refuses to start without a certificate from
   `plural login`; it renews the certificate the way a host does.
 - **Starting it.** `plural daemon` runs in the foreground. A launch agent (macOS) and a user service
