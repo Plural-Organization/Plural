@@ -27,6 +27,10 @@ log = structlog.get_logger(__name__)
 
 # Raw bytes per reply part, kept well under the relay's message limit once in base64.
 REPLY_CHUNK_BYTES = 512 * 1024
+# Close codes of a relay that requires an account (ADR 0017). The first two will not pass until the
+# person signs in, so the host waits long between tries instead of knocking every few seconds.
+ACCOUNT_REFUSED = frozenset({4402, 4403})
+REFUSED_DELAY_S = 60.0
 # What the relay may send: a guest's message, or a preview request's body in base64 with headers.
 MAX_RELAY_MESSAGE_BYTES = 8 * 1024 * 1024
 
@@ -84,7 +88,12 @@ class RelayLink:
                     delay = 0.5
                     await self._session(socket, inbox)
             except (OSError, WebSocketException) as error:
-                log.warning("relay.disconnected", error=str(error))
+                refused = _account_refusal(error)
+                if refused is not None:
+                    log.error("relay.account_required", reason=refused)
+                    delay = max(delay, REFUSED_DELAY_S)
+                else:
+                    log.warning("relay.disconnected", error=str(error))
             await asyncio.sleep(delay)
             delay = min(delay * 2, self._max_delay_s)
 
@@ -133,6 +142,17 @@ class RelayLink:
                 task.cancel()
             for link in links.values():
                 await inbox.put_external(Disconnected(link))
+
+
+def _account_refusal(error: BaseException) -> str | None:
+    """The relay's reason, when it closed the socket because this host has no valid account."""
+    if (
+        isinstance(error, ConnectionClosed)
+        and error.rcvd is not None
+        and error.rcvd.code in ACCOUNT_REFUSED
+    ):
+        return error.rcvd.reason or "this relay needs you signed in: run plural login"
+    return None
 
 
 async def _answer(

@@ -33,9 +33,14 @@ opens a room.
 
 ## Consequences
 
-- A host that is refused reconnects with a growing delay and says nothing until the host side reads
-  the close code; teaching hosts and clients to ask `/healthz` first and to show the reason is the
-  next change.
+- **The host asks first.** Before it opens a room, `plural-host host` reads the relay's `/healthz`; when
+  the relay says it requires accounts and this computer has no certificate (or an expired one it could
+  not renew), the host stops with "run plural login" on stderr, which the terminal client shows and the
+  local daemon hands to the web client as the reason the room did not start. A relay that cannot be
+  reached, or one that does not say, never stops a host: the relay judges it when the room opens.
+- **A refusal that gets past that** (a certificate that runs out later, a key that was rotated) closes the
+  socket with 4402 or 4403; the host logs `relay.account_required` with the reason and tries again
+  after a minute, not every few seconds. 4503 is retried at the usual pace.
 - A certificate lasts 7 days and renews itself, so a computer that was offline for longer has to sign
   in again before it can host on a relay that requires accounts.
 - The relay still never calls the accounts service while a host is opening a room.
