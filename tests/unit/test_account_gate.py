@@ -2,7 +2,10 @@
 
 import io
 import json
+import threading
+import time
 from datetime import UTC, datetime, timedelta
+from http.client import HTTPException, IncompleteRead
 from pathlib import Path
 from typing import Any
 from urllib.error import URLError
@@ -137,3 +140,39 @@ def test_a_host_tells_an_account_refusal_from_any_other_disconnect() -> None:
     for code in (1011, 4401, 4409, 4429, 4503):
         assert _account_refusal(_closed(code, "x")) is None
     assert _account_refusal(OSError("down")) is None
+
+
+@pytest.mark.parametrize("failure", [HTTPException("bad status line"), IncompleteRead(b"{")])
+async def test_a_broken_http_answer_does_not_stop_a_host(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: Exception
+) -> None:
+    healthz(monkeypatch, failure)
+    await ensure_signed_in(settings(tmp_path))
+
+
+async def test_a_relay_that_never_answers_does_not_hold_a_host_back(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release = threading.Event()
+
+    def hang(_request: Request, *, timeout: float) -> Any:
+        release.wait(5)
+        raise OSError("gave up")
+
+    monkeypatch.setattr(account_gate, "urlopen", hang)
+    monkeypatch.setattr(account_gate, "ASK_TIMEOUT_S", 0.1)
+    started = time.monotonic()
+    try:
+        await ensure_signed_in(settings(tmp_path))
+    finally:
+        release.set()
+    assert time.monotonic() - started < 2
+
+
+async def test_a_damaged_certificate_file_asks_the_person_to_sign_in_again(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    healthz(monkeypatch, {"ok": True, "accounts": "required"})
+    AccountStore(tmp_path).path.write_text("{not json")
+    with pytest.raises(AccountRequired, match="plural login"):
+        await ensure_signed_in(settings(tmp_path))

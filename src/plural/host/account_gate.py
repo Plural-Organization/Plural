@@ -8,11 +8,12 @@ says it needs an account and this computer has none, stops with what to do.
 import asyncio
 import json
 from datetime import UTC, datetime
+from http.client import HTTPException
 from typing import cast
 from urllib.error import URLError
 from urllib.request import Request
 
-from plural.host.account import AccountStore
+from plural.host.account import AccountError, AccountStore
 from plural.host.config import HostSettings
 from plural.host.relay_http import urlopen
 from plural.host.team import TeamError, http_base
@@ -36,7 +37,7 @@ def _needs_account(relay: str) -> bool:
             timeout=ASK_TIMEOUT_S,
         ) as response:
             body: object = json.loads(response.read(4096))
-    except (OSError, URLError, TeamError, ValueError):
+    except (OSError, URLError, HTTPException, TeamError, ValueError):
         return False
     if not isinstance(body, dict):
         return False
@@ -44,14 +45,26 @@ def _needs_account(relay: str) -> bool:
     return answer.get("accounts") == "required"
 
 
+async def _asked_and_needs_account(relay: str) -> bool:
+    """The answer, within a few seconds however long the connection would take to give up: a host
+    that starts while the machine is offline must not wait on a relay it cannot reach."""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(_needs_account, relay), ASK_TIMEOUT_S + 1)
+    except TimeoutError:
+        return False
+
+
 async def ensure_signed_in(settings: HostSettings) -> None:
     relay = settings.relay_url
-    if not relay or not await asyncio.to_thread(_needs_account, relay):
+    if not relay or not await _asked_and_needs_account(relay):
         return
     store = AccountStore(settings.state_dir)
     # `certificate` renews one that is about to run out, so what is left is what the relay will see.
     if await store.certificate() is None:
         raise AccountRequired(SIGN_IN)
-    held = store.load()
+    try:
+        held = store.load()
+    except AccountError as error:
+        raise AccountRequired(SIGN_IN) from error
     if held is None or held.expires_at <= datetime.now(UTC):
         raise AccountRequired(EXPIRED)
