@@ -7,6 +7,7 @@ import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
+from typing import Final
 
 import structlog
 from pydantic import ValidationError
@@ -33,6 +34,11 @@ CLOSE_ROOM_TAKEN = 4409
 CLOSE_TOO_LARGE = 4413
 CLOSE_RATE_LIMITED = 4429
 CLOSE_SLOW = 4408
+# A relay run with --require-account: the host sent no certificate, or one that does not hold.
+CLOSE_ACCOUNT_REQUIRED = 4402
+CLOSE_ACCOUNT_INVALID = 4403
+# The accounts key is not known yet, so no certificate can be judged. The host may try again.
+CLOSE_ACCOUNT_UNAVAILABLE = 4503
 
 log = structlog.get_logger(__name__)
 
@@ -64,6 +70,24 @@ _UNSAFE_PREVIEW_HEADERS = frozenset(
 # troubling the host with.
 _PREVIEW_SECRET = re.compile(r"[A-Za-z0-9_-]{32}(/|$)")
 _FORWARDED_HEADERS = frozenset({"host", "connection", "upgrade", "content-length", "forwarded"})
+
+
+# What a host is told when this relay requires an account and its certificate does not hold.
+# People read the reasons, so they say what to do.
+REFUSALS: Final[dict[Outcome, tuple[int, str]]] = {
+    Outcome.NONE: (CLOSE_ACCOUNT_REQUIRED, "this relay needs you signed in: run plural login"),
+    Outcome.EXPIRED: (CLOSE_ACCOUNT_INVALID, "your sign-in has expired: run plural login"),
+    Outcome.FORGED: (CLOSE_ACCOUNT_INVALID, "your sign-in is not valid here: run plural login"),
+    Outcome.MALFORMED: (CLOSE_ACCOUNT_INVALID, "your sign-in is not valid here: run plural login"),
+    Outcome.OTHER_KEY: (
+        CLOSE_ACCOUNT_INVALID,
+        "your sign-in belongs to another computer: run plural login",
+    ),
+    Outcome.UNVERIFIED: (
+        CLOSE_ACCOUNT_UNAVAILABLE,
+        "this relay cannot check accounts right now, try again shortly",
+    ),
+}
 
 
 class Outbox:
@@ -118,8 +142,13 @@ class Rooms:
         clock: Callable[[], float] = time.monotonic,
         proxy_hops: int = 0,
         entitlements: EntitlementWatch | None = None,
+        require_account: bool = False,
     ) -> None:
+        # Requiring accounts with nothing to judge a certificate by would let everyone in, quietly.
+        if require_account and entitlements is None:
+            raise ValueError("require_account needs an EntitlementWatch")
         self._entitlements = entitlements
+        self._require_account = require_account
         self._limits = limits
         self._clock = clock
         self._proxy_hops = proxy_hops
@@ -186,7 +215,10 @@ class Rooms:
         if opening.room != room_id or not verifier.verify_proof(room_id.encode(), opening.proof):
             await socket.close(CLOSE_BAD_PROOF)
             return
-        self._note_entitlement(opening, room_id, peer)
+        refusal = self._judge(opening, room_id, peer)
+        if refusal is not None:
+            await socket.close(*refusal)
+            return
         self._sweep()
         room = self._rooms.get(room_id)
         if room is None:
@@ -240,21 +272,27 @@ class Rooms:
                 for connection_id in list(room.guests):
                     await self._drop(room, connection_id, CLOSE_NO_HOST)
 
-    def _note_entitlement(self, opening: RelayOpen, room_id: str, peer: str) -> None:
-        """Records what the host's certificate says. It never refuses and never raises."""
+    def _judge(self, opening: RelayOpen, room_id: str, peer: str) -> tuple[int, str] | None:
+        """Records what the host's certificate says and, on a relay that requires accounts, says
+        whether to refuse it: a close code and the reason the host will read. Without that
+        requirement it never refuses and never raises."""
         if self._entitlements is None:
-            return
+            return None
         try:
             outcome, claims = self._entitlements.check(opening)
-            log.info(
-                "relay.entitlement",
-                room=room_id,
-                peer=peer,
-                outcome=outcome.value,
-                account=claims.account if outcome is Outcome.VALID and claims else None,
-            )
         except Exception:
             log.exception("relay.entitlement_check_failed", room=room_id)
+            return REFUSALS[Outcome.UNVERIFIED] if self._require_account else None
+        log.info(
+            "relay.entitlement",
+            room=room_id,
+            peer=peer,
+            outcome=outcome.value,
+            account=claims.account if outcome is Outcome.VALID and claims else None,
+        )
+        if not self._require_account or outcome is Outcome.VALID:
+            return None
+        return REFUSALS.get(outcome, REFUSALS[Outcome.FORGED])
 
     async def _serve_guest(self, socket: WebSocket, room_id: str) -> None:
         self._sweep()

@@ -80,6 +80,8 @@ This is a filter, not authentication: anyone can send the header, so the limits 
 
 `plural-host relay --accounts-url https://accounts.example.com` (or `PLURAL_RELAY_ACCOUNTS_URL`) makes the relay read the certificate a host sends when it opens a room, check it against the accounts service's public key, and log one line, `relay.entitlement`, with the outcome: `valid`, `none` (no certificate), `expired`, `forged`, `malformed`, `other_key` (a genuine certificate for another host key) or `unverified` (the key had not arrived yet). `/metrics` adds the counts since the relay started. The relay refuses no one for any of these and never calls the service while a host is opening a room: it reads the key in the background and again every hour. Without the option nothing changes. See ADR 0013.
 
+`--require-account` (`PLURAL_RELAY_REQUIRE_ACCOUNT=1`, only together with `--accounts-url`) turns the log into a rule: a host that opens a room without a valid certificate is closed with 4402 (no certificate), 4403 (expired, forged, malformed or for another computer) or 4503 (the accounts key has not arrived yet, so try again), each with a reason that tells the person to run `plural login`; and a team can only be created by a signed-in person. Guests are never asked for anything, joining a team with an invite stays open, and `/healthz` says `{"ok": true, "accounts": "required"}` so a client can ask before it opens a room. Nothing else changes: a relay without the option, which is every self-hosted one by default, still lets everyone host. See ADR 0017.
+
 ### Teams
 
 A relay can also keep a team directory: who is in which team and the invite codes. Start it with a file for the data:

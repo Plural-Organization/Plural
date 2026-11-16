@@ -305,6 +305,30 @@ def test_the_relay_can_serve_only_plural_clients(monkeypatch: pytest.MonkeyPatch
     assert seen["web_origins"] == ["https://a.example", "https://b.example"]
 
 
+def test_the_relay_can_require_an_account_to_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    def fake_create_app(_limits: object = None, **options: object) -> object:
+        seen.update(options)
+        return object()
+
+    def fake_run(_app: object, **_options: object) -> None:
+        return None
+
+    monkeypatch.setattr(relay_app, "create_app", fake_create_app)
+    monkeypatch.setattr(uvicorn, "run", fake_run)
+    monkeypatch.setenv("PLURAL_RELAY_REQUIRE_ACCOUNT", "1")
+    # Without an accounts service there is nothing to judge a certificate by, so it does not start.
+    refused = runner.invoke(app, ["relay"])
+    assert refused.exit_code != 0
+    assert seen == {}
+    assert (
+        runner.invoke(app, ["relay", "--accounts-url", "https://accounts.example"]).exit_code == 0
+    )
+    assert seen["require_account"] is True
+    assert seen["accounts_url"] == "https://accounts.example"
+
+
 def test_a_relay_for_one_person_can_own_more_teams_per_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

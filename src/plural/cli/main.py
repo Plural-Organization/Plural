@@ -349,15 +349,28 @@ def relay(
         typer.Option(
             "--accounts-url",
             help="Accounts service whose certificates hosts may open rooms with. The relay "
-            "logs what it finds and refuses no one.",
+            "logs what it finds and, unless --require-account is set, refuses no one.",
             envvar="PLURAL_RELAY_ACCOUNTS_URL",
         ),
     ] = "",
+    require_account: Annotated[
+        bool,
+        typer.Option(
+            "--require-account",
+            help="Refuse to open a room, or create a team, for a host without a valid "
+            "certificate from --accounts-url. Guests are never asked for one.",
+            envvar="PLURAL_RELAY_REQUIRE_ACCOUNT",
+        ),
+    ] = False,
 ) -> None:
     import uvicorn
 
     from plural.relay.app import create_app
 
+    if require_account and not accounts_url.strip():
+        raise typer.BadParameter(
+            "--require-account needs --accounts-url", param_hint="--require-account"
+        )
     limits = RelayLimits(
         max_rooms=max_rooms,
         max_rooms_per_peer=rooms_per_peer,
@@ -372,6 +385,7 @@ def relay(
             clients_only=clients_only,
             web_origins=[item.strip() for item in web_origins.split(",") if item.strip()],
             accounts_url=accounts_url.strip() or None,
+            require_account=require_account,
         ),
         host=bind,
         port=port,
