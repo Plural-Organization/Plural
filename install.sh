@@ -299,6 +299,8 @@ install_binary() {
     mv "$work/$name" "$app_dir/$name.new"
     rm -rf "$app_dir/$name"
     mv "$app_dir/$name.new" "$app_dir/$name"
+    # Before the link: removing the uv install also removes the program it put at this path.
+    [ "$name" != plural-host ] || retire_uv_host
     ln -sf "$app_dir/$name/$name" "$BIN_DIR/$name"
   else
     mv -f "$work/$name" "$BIN_DIR/$name"
@@ -332,12 +334,90 @@ on_path() {
   esac
 }
 
+# Where a path really points, following links, so a copy reached by two names counts once.
+real_path() {
+  target="$1"
+  while [ -L "$target" ]; do
+    link="$(readlink "$target")"
+    case "$link" in
+      /*) target="$link" ;;
+      *) target="$(dirname "$target")/$link" ;;
+    esac
+  done
+  dir="$(cd "$(dirname "$target")" 2>/dev/null && pwd -P)" || return 1
+  printf '%s/%s\n' "$dir" "$(basename "$target")"
+}
+
+# Every program called $1 on the PATH, in the order the shell would find them, each once.
+copies_of() {
+  seen=""
+  old_ifs="$IFS"
+  IFS=:
+  for dir in $PATH; do
+    [ -n "$dir" ] && [ -x "$dir/$1" ] && [ ! -d "$dir/$1" ] || continue
+    here="$(real_path "$dir/$1")" || continue
+    case "
+$seen
+" in
+      *"
+$here
+"*) ;;
+      *) seen="${seen:+$seen
+}$here"; printf '%s\n' "$here" ;;
+    esac
+  done
+  IFS="$old_ifs"
+}
+
+# Says so when another copy of a program is on the PATH: an older one that comes first runs instead of the
+# one just installed. Nothing is deleted; the copies are the person's.
+warn_other_copies() {
+  ours="$(real_path "$BIN_DIR/$1")" || return 0
+  first=""
+  others=""
+  old_ifs="$IFS"
+  old_path="$PATH"
+  # The PATH the person has, not the one this script put $BIN_DIR first on for its own checks.
+  PATH="${ORIGINAL_PATH:-$PATH}"
+  listing="$(copies_of "$1")"
+  PATH="$old_path"
+  IFS="
+"
+  for found in $listing; do
+    [ -n "$first" ] || first="$found"
+    [ "$found" = "$ours" ] || others="${others:+$others, }$found"
+  done
+  IFS="$old_ifs"
+  [ -n "$others" ] || return 0
+  if [ "$first" != "$ours" ]; then
+    say "${RED}warning:${RESET} $1 resolves to $first, not the one just installed ($ours)."
+    say "  Remove the other copy or put $BIN_DIR first in your PATH. Other copies: $others"
+  else
+    say "note: other copies of $1 are on your PATH ($others). They are not used; you can delete them."
+  fi
+}
+
+# Hosts installed by an older installer with uv are a whole Python environment. The frozen host replaces the
+# program, so that environment is left behind unless it is removed here.
+retire_uv_host() {
+  command -v uv >/dev/null 2>&1 || return 0
+  uv tool list 2>/dev/null | awk '$1 == "plural-agent" { found = 1 } END { exit !found }' || return 0
+  step "Removing the old uv install of the host (the frozen host replaces it)"
+  uv tool uninstall plural-agent >/dev/null 2>&1 || true
+}
+
+# Downloads of releases that were never finished are kept so a run can continue them. A week old is not going to be.
+prune_cache() {
+  find "$CACHE" -mindepth 1 -maxdepth 1 -type d ! -name install.lock -mtime +7 -exec rm -rf {} + >/dev/null 2>&1 || true
+}
+
 if [ "${PLURAL_INSTALL_SOURCE_ONLY:-}" = 1 ]; then
   return 0 2>/dev/null || exit 0
 fi
 
 need curl
 need tar
+ORIGINAL_PATH="$PATH"
 
 if [ "$VERSION" = "latest" ]; then
   resolved="$(latest_version || true)"
@@ -347,6 +427,7 @@ if [ "$VERSION" = "latest" ]; then
 fi
 
 acquire_lock
+prune_cache
 
 # The client and the host each wait on the network, so they download side by side.
 client_log="$(mktemp)"
@@ -389,6 +470,14 @@ fi
 PATH="$BIN_DIR:$PATH"
 export PATH
 installed="$("$BIN_DIR/plural" --version)" || fail "the installed client does not run"
+# The first start of a new install is the slow one: the system looks over every file of the host before it
+# lets it run, which can take many seconds on macOS. Do it here, where the person is waiting for an install
+# anyway, instead of in the middle of `plural login`.
+step "Starting the host once (the first start of a new install is slow)"
+"$BIN_DIR/plural-host" --help >/dev/null 2>&1 || true
+
+warn_other_copies plural
+warn_other_copies plural-host
 
 say ""
 say "${BOLD}plural $installed is installed${RESET}"

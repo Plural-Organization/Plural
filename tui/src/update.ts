@@ -63,11 +63,31 @@ export function runInstaller(url: string = INSTALLER_URL, stdio: "inherit" | "ig
     });
 }
 
+/** The version the background daemon on this computer says it is, or null when none answers. */
+export async function daemonVersion(fetcher: typeof fetch = fetch, port = 47831): Promise<string | null> {
+  try {
+    const response = await fetcher(`http://127.0.0.1:${port}/v1/status`, { signal: AbortSignal.timeout(1500) });
+    const body = (await response.json()) as { daemon?: unknown; version?: unknown };
+    return body.daemon === true && typeof body.version === "string" ? body.version : null;
+  } catch {
+    return null;
+  }
+}
+
+export function daemonNote(running: string | null, installed: string): string | null {
+  if (running === null || parseVersion(running) === null || compareVersions(running, installed) >= 0) {
+    return null;
+  }
+  return `the background daemon still runs ${running}, so the web page talks to the older one. Run plural stop (it ends open rooms; a session can be continued from the page), then plural login\n`;
+}
+
 export interface UpdateDeps {
   current: string;
   execPath: string;
   fetcher?: typeof fetch;
   install?: Installer;
+  /** The version of the daemon that is running, if any. Left out: asked of this computer. */
+  daemon?: () => Promise<string | null>;
   out: { write: (text: string) => void };
   err: { write: (text: string) => void };
 }
@@ -100,6 +120,10 @@ export async function runUpdate(options: { check: boolean }, deps: UpdateDeps): 
     return 1;
   }
   out.write(`plural ${latest} is installed. Start plural again to use it\n`);
+  const note = daemonNote(await (deps.daemon ?? daemonVersion)(), latest);
+  if (note !== null) {
+    out.write(note);
+  }
   return 0;
 }
 

@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs, UsageError } from "../src/options";
-import { compareVersions, isInstalledBinary, latestVersion, runInstaller, runUpdate, skewNote, Updater, type Installer, type UpdateState } from "../src/update";
+import { compareVersions, daemonNote, daemonVersion, isInstalledBinary, latestVersion, runInstaller, runUpdate, skewNote, Updater, type Installer, type UpdateState } from "../src/update";
 
 class Capture {
   text = "";
@@ -213,5 +213,39 @@ describe("the update offer", () => {
     expect(updater.state?.phase).toBe("installed");
     await updater.install();
     expect(runs).toBe(2);
+  });
+});
+
+describe("an update and the daemon that was started before it", () => {
+  const deps = (latest: string, daemon: string | null) => {
+    const out = new Capture();
+    const err = new Capture();
+    const install: Installer = async () => 0;
+    return { out, deps: { current: "0.2.1", execPath: "/home/me/.local/bin/plural", fetcher: release(latest), install, out, err, daemon: async () => daemon } };
+  };
+
+  test("an older daemon is named, with what to do, and is not stopped by the update", async () => {
+    const { deps: given, out } = deps("v0.2.5", "0.2.1");
+    expect(await runUpdate({ check: false }, given)).toBe(0);
+    expect(out.text).toContain("the background daemon still runs 0.2.1");
+    expect(out.text).toContain("plural stop");
+    expect(out.text).toContain("plural login");
+  });
+
+  test("a daemon that is current, or none at all, says nothing", async () => {
+    for (const daemon of ["0.2.5", "0.2.9", null]) {
+      const { deps: given, out } = deps("v0.2.5", daemon);
+      await runUpdate({ check: false }, given);
+      expect(out.text).not.toContain("daemon");
+    }
+  });
+
+  test("the daemon's version is read from its status, and anything else is no daemon", async () => {
+    const answer = (body: unknown) => (async () => new Response(JSON.stringify(body))) as unknown as typeof fetch;
+    expect(await daemonVersion(answer({ daemon: true, version: "0.2.3" }))).toBe("0.2.3");
+    expect(await daemonVersion(answer({ daemon: false, version: "0.2.3" }))).toBeNull();
+    expect(await daemonVersion(answer({ hello: "world" }))).toBeNull();
+    expect(await daemonVersion((async () => { throw new TypeError("refused"); }) as unknown as typeof fetch)).toBeNull();
+    expect(daemonNote("not a version", "0.2.5")).toBeNull();
   });
 });

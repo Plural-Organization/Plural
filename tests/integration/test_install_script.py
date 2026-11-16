@@ -229,3 +229,113 @@ def test_a_lock_left_by_a_dead_run_is_taken_over(tmp_path: Path) -> None:
         )
     assert done.returncode == 0, done.stderr
     assert not lock.exists()
+
+
+# The system's programs only: a Plural installed on the machine running the tests is no "copy".
+SYSTEM_PATH = "/usr/bin:/bin:/usr/sbin:/sbin"
+
+
+def run_installer(home: Path, port: int, **extra: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["sh", str(INSTALLER)],
+        env={**environment(home, port), "PATH": f"{home / 'bin'}:{SYSTEM_PATH}", **extra},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
+def other_copy(folder: Path, name: str) -> Path:
+    folder.mkdir(parents=True, exist_ok=True)
+    path = folder / name
+    path.write_text("#!/bin/sh\necho old\n")
+    path.chmod(0o755)
+    return path
+
+
+def test_the_host_is_started_once_before_the_installer_ends(tmp_path: Path) -> None:
+    with release_server(slow=False) as port:
+        done = run_installer(tmp_path, port)
+    assert done.returncode == 0, done.stderr
+    # The slow first start is paid here, where an install is waited for, not in `plural login`.
+    assert "Starting the host once" in done.stdout
+
+
+def test_an_older_copy_that_comes_first_is_called_out_and_left_alone(tmp_path: Path) -> None:
+    old = other_copy(tmp_path / "usr-local", "plural")
+    with release_server(slow=False) as port:
+        environment_path = f"{tmp_path / 'usr-local'}:{tmp_path / 'bin'}:{SYSTEM_PATH}"
+        done = run_installer(tmp_path, port, PATH=environment_path)
+    assert done.returncode == 0, done.stderr
+    assert f"plural resolves to {old.resolve()}" in done.stdout
+    assert "not the one just installed" in done.stdout
+    assert old.exists()
+
+
+def test_a_copy_that_comes_later_is_only_mentioned(tmp_path: Path) -> None:
+    old = other_copy(tmp_path / "elsewhere", "plural-host")
+    with release_server(slow=False) as port:
+        environment_path = f"{tmp_path / 'bin'}:{tmp_path / 'elsewhere'}:{SYSTEM_PATH}"
+        done = run_installer(tmp_path, port, PATH=environment_path)
+    assert done.returncode == 0, done.stderr
+    assert "other copies of plural-host are on your PATH" in done.stdout
+    assert str(old.resolve()) in done.stdout
+    assert "warning" not in done.stdout
+
+
+def test_a_single_install_says_nothing_about_copies(tmp_path: Path) -> None:
+    with release_server(slow=False) as port:
+        done = run_installer(tmp_path, port)
+    assert "other copies" not in done.stdout
+    assert "resolves to" not in done.stdout
+
+
+def test_old_unfinished_downloads_are_cleared_and_recent_ones_kept(tmp_path: Path) -> None:
+    cache = tmp_path / ".cache" / "plural"
+    old, recent = cache / ("a" * 64), cache / ("b" * 64)
+    for folder in (old, recent):
+        folder.mkdir(parents=True)
+        (folder / "plural-x.tar.gz").write_bytes(b"half")
+    week_ago = time.time() - 8 * 86400
+    os.utime(old, (week_ago, week_ago))
+    with release_server(slow=False) as port:
+        done = run_installer(tmp_path, port, XDG_CACHE_HOME=str(tmp_path / ".cache"))
+    assert done.returncode == 0, done.stderr
+    assert not old.exists()
+    assert recent.exists()
+
+
+def test_an_old_uv_install_of_the_host_is_removed_when_the_frozen_host_takes_over(
+    tmp_path: Path,
+) -> None:
+    tools = tmp_path / "fake-uv"
+    tools.mkdir()
+    marker = tmp_path / "uv-calls"
+    uv = tools / "uv"
+    uv.write_text(
+        "#!/bin/sh\n"
+        f'echo "$@" >> "{marker}"\n'
+        'if [ "$1 $2" = "tool list" ]; then echo "plural-agent v0.2.1"; fi\n'
+    )
+    uv.chmod(0o755)
+    with release_server(slow=False) as port:
+        done = run_installer(tmp_path, port, PATH=f"{tools}:{tmp_path / 'bin'}:{SYSTEM_PATH}")
+    assert done.returncode == 0, done.stderr
+    calls = marker.read_text()
+    assert "tool uninstall plural-agent" in calls
+    assert "Removing the old uv install" in done.stdout
+    # The frozen host is what stays on the path.
+    assert (tmp_path / "bin" / "plural-host").exists()
+
+
+def test_without_an_old_uv_install_uv_is_left_alone(tmp_path: Path) -> None:
+    tools = tmp_path / "fake-uv"
+    tools.mkdir()
+    marker = tmp_path / "uv-calls"
+    uv = tools / "uv"
+    uv.write_text(f'#!/bin/sh\necho "$@" >> "{marker}"\n')
+    uv.chmod(0o755)
+    with release_server(slow=False) as port:
+        done = run_installer(tmp_path, port, PATH=f"{tools}:{tmp_path / 'bin'}:{SYSTEM_PATH}")
+    assert done.returncode == 0, done.stderr
+    assert "uninstall" not in (marker.read_text() if marker.exists() else "")
