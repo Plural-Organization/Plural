@@ -25,30 +25,32 @@ export interface Palette {
 }
 
 export const THEMES: Record<ThemeName, { label: string; colors: Palette }> = {
-  // The web client's colours (web/src/styles/tokens.css); the line is lighter there because a terminal border is one cell thick.
+  // The web client's dark theme (web/src/styles/app.css and tokens.css): a near-black page, white actions, colour
+  // only from the people. The line is lighter than there because a terminal border is a whole cell thick.
   plural: {
     label: "Plural",
     colors: {
-      bg: "#0e0f11",
-      panel: "#16171a",
-      bubble: "#1d1e22",
-      you: "#23233a",
-      line: "#2e3037",
-      text: "#ecebe7",
-      muted: "#9a9ca2",
-      dim: "#63656c",
-      accent: "#b9b4ff",
-      ok: "#8fdca6",
-      warn: "#ecc47e",
-      danger: "#ff9a9a",
-      info: "#9fd8ff",
-      code: "#d6a8ff",
-      diffBg: "#131417",
-      addBg: "#1e2823",
-      removeBg: "#2b2021",
-      addMark: "#354d3e",
-      removeMark: "#56393a",
-      people: ["#9fd8ff", "#ffc48a", "#a6e3b4", "#ff9fc4", "#e3d27a", "#c7b5ff", "#8fe0d6", "#ffb3a1"],
+      bg: "#0a0a0b",
+      panel: "#141415",
+      bubble: "#1b1b1e",
+      you: "#252e3c",
+      line: "#2c2c2d",
+      text: "#fcfcfc",
+      muted: "#97979e",
+      dim: "#68686d",
+      accent: "#f5f5f5",
+      ok: "#7fd4b0",
+      warn: "#f0a080",
+      danger: "#ff6b6e",
+      info: "#5fa1f3",
+      code: "#c9b8f0",
+      diffBg: "#101011",
+      addBg: "#0f221c",
+      removeBg: "#2c1813",
+      addMark: "#164233",
+      removeMark: "#5b2b1d",
+      // The same eight, in the same order, as web/src/lib/colors.ts: a person has one colour in both clients.
+      people: ["#b9b4ff", "#9fd8ff", "#ffc48a", "#a6e3b4", "#ff9fc4", "#e3d27a", "#c7b5ff", "#8fe0d6"],
     },
   },
   tokyo: {
