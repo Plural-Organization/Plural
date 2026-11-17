@@ -17,7 +17,7 @@ The bridge runs on the computer where your sessions run, next to them. It needs 
 3. Start `plural` in a project folder as usual.
 4. Add the bot to a group, or stay in the private chat, and send `/link`. Pick the session from the buttons.
 
-From then on, mention the bot (`@your_bot how does auth work?`), reply to one of its messages or use `/ask <text>`. In a private chat every message goes to the agent.
+From then on, start a message with its name (`plural, how does auth work?`), mention it (`@your_bot …`), reply to one of its messages or use `/ask <text>`. The names are `plural`, `плюрал`, `плурал` and the bot's own first name; `--name` replaces them. In a private chat every message goes to the agent.
 
 ## One bot, many chats and sessions
 

@@ -22,6 +22,14 @@ def telegram(
             show_default=False,
         ),
     ],
+    name: Annotated[
+        list[str] | None,
+        typer.Option(
+            "--name",
+            help="A word that calls the bot when a message starts with it. "
+            "Default: plural, плюрал, плурал and the bot's own name.",
+        ),
+    ] = None,
     pair: Annotated[
         bool, typer.Option("--pair", help="Print a new code to pair one more owner.")
     ] = False,
@@ -29,7 +37,7 @@ def telegram(
     """Connect a Telegram bot to the sessions running on this computer."""
     from plural.bridge.bridge import Bridge
     from plural.bridge.store import BridgeStore
-    from plural.bridge.telegram import Telegram, TelegramApi, TelegramError
+    from plural.bridge.telegram import DEFAULT_NAMES, Telegram, TelegramApi, TelegramError
     from plural.protocol.commands import ClientInfo
     from plural.storage.running import running_rooms
 
@@ -39,7 +47,7 @@ def telegram(
     except ValueError as error:
         console.print(f"[red]{escape(str(error))}[/red]")
         raise typer.Exit(1) from error
-    platform = Telegram(TelegramApi(token.strip()))
+    platform = Telegram(TelegramApi(token.strip()), names=name or DEFAULT_NAMES)
     bridge = Bridge(
         platform,
         store,

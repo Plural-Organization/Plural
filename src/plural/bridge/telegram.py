@@ -18,7 +18,7 @@ import time
 import urllib.error
 import urllib.request
 from collections import OrderedDict
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from typing import Any, Final, cast
 
@@ -51,6 +51,8 @@ REMEMBERED: Final = 500
 STYLE: Final = {Tone.GOOD: "success", Tone.DANGER: "danger", Tone.PRIMARY: "primary"}
 ICON: Final = {StepState.RUNNING: "⏳", StepState.OK: "✓", StepState.FAILED: "✗"}
 _ESCAPED = re.compile(r"([\\`*_~|=\[\]<>#])")
+# A message that starts with one of these, like "plural, what does this do?", is for the bot.
+DEFAULT_NAMES: Final = ("plural", "плюрал", "плурал")
 COMMANDS: Final = (
     ("link", "Pick the session this chat follows"),
     ("unlink", "Stop following the session here"),
@@ -116,10 +118,11 @@ class TelegramApi:
 class Telegram:
     name = PLATFORM
 
-    def __init__(self, api: TelegramApi) -> None:
+    def __init__(self, api: TelegramApi, *, names: Sequence[str] = DEFAULT_NAMES) -> None:
         self._api = api
         self._me_id = 0
         self.username = ""
+        self.names = [name.strip().lower() for name in names if name.strip()]
         self._offset = 0
         self._shown: OrderedDict[tuple[str, str], _Shown] = OrderedDict()
         self._locks: dict[tuple[str, str], asyncio.Lock] = {}
@@ -130,6 +133,9 @@ class Telegram:
         me = await self._api.call("getMe")
         self._me_id = int(me["id"])
         self.username = str(me.get("username", ""))
+        first = str(me.get("first_name", "")).strip().lower()
+        if first and first not in self.names:
+            self.names.append(first)
         try:
             await self._api.call(
                 "setMyCommands",
@@ -207,6 +213,9 @@ class Telegram:
         if mention and mention in text.lower():
             addressed = True
             text = re.sub(re.escape(mention), "", text, flags=re.IGNORECASE).strip()
+        elif (rest := _called(text, self.names)) is not None:
+            addressed = True
+            text = rest
         replied = _obj(message.get("reply_to_message"))
         if _obj(replied.get("from")).get("id") == self._me_id:
             addressed = True
@@ -535,3 +544,12 @@ def _person(user: dict[str, Any]) -> Person:
 
 def _obj(value: object) -> dict[str, Any]:
     return cast(dict[str, Any], value) if isinstance(value, dict) else {}
+
+
+def _called(text: str, names: Sequence[str]) -> str | None:
+    """What is left of a message that starts by calling the bot by name, or None."""
+    lowered = text.lower()
+    for name in sorted(names, key=len, reverse=True):
+        if lowered.startswith(name) and (len(text) == len(name) or not text[len(name)].isalnum()):
+            return text[len(name) :].lstrip(" ,:;!-—–").strip()
+    return None

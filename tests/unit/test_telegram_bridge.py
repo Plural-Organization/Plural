@@ -260,3 +260,19 @@ async def test_a_wrong_token_stops_the_bridge() -> None:
     with pytest.raises(TelegramError):
         async for _ in telegram.incoming():
             pass
+
+
+async def test_a_message_that_starts_with_the_bots_name_is_for_it() -> None:
+    telegram = await bot(FakeApi())
+
+    called = telegram.parse(message("Плюрал, брат, работаешь?"))
+    talk = telegram.parse(message("плюралистичный подход"))
+    about = telegram.parse(message("в plural есть баг"))
+
+    assert isinstance(called, Said)
+    assert called.addressed
+    assert called.text == "брат, работаешь?"
+    assert isinstance(talk, Said)
+    assert not talk.addressed
+    assert isinstance(about, Said)
+    assert not about.addressed

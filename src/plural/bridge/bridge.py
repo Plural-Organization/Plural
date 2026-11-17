@@ -27,7 +27,7 @@ log = structlog.get_logger(__name__)
 
 HELP = """**Plural in this chat**
 
-Mention me or reply to me to talk to the agent of the linked session.
+Start a message with "plural", mention me or reply to me to talk to the agent of the linked session.
 
 /link: pick a session running on the host's computer for this chat
 /unlink: stop following it here
