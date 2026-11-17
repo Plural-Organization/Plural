@@ -295,7 +295,7 @@ class AgentLoop:
         span = self._begin("compact", "")
         yield Compacting(self._tokens())
         try:
-            yield await self._compact(None, cancel, "manual")
+            yield await self._compact(None, cancel, reason="manual")
         except CompactionFailed as error:
             self._end(span, RunEndReason.ERROR, str(error))
             yield RunEnd(RunEndReason.ERROR, self._usage, f"compaction failed: {error}")
