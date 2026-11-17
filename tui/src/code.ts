@@ -71,7 +71,7 @@ export function codeBlockRenderer(context: RenderContext): MarkdownOptions["rend
       border: true,
       borderStyle: "rounded",
       borderColor: theme.line,
-      ...(isDiff ? { backgroundColor: theme.diffBg } : {}),
+      backgroundColor: isDiff ? theme.diffBg : theme.panel,
       paddingX: 1,
       title: language,
       titleColor: theme.dim,

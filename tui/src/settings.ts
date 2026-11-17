@@ -29,7 +29,7 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  theme: "tokyo",
+  theme: "plural",
   panel: true,
   copyOnSelect: true,
   bell: true,

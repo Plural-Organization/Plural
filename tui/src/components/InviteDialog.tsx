@@ -72,14 +72,14 @@ export function InviteDialog({ width, height, canTeam, teamName, onRoom, onTeam,
         onMouseDown={(event) => event.stopPropagation()}
       >
         <box flexDirection="row" justifyContent="space-between">
-          <text fg={theme.accent}>
+          <text selectable={false} fg={theme.accent}>
             <b>+ invite</b>
           </text>
           <box onMouseDown={onClose}>
-            <text fg={theme.dim}>✕ esc</text>
+            <text selectable={false} fg={theme.dim}>✕ esc</text>
           </box>
         </box>
-        <text>{" "}</text>
+        <text selectable={false}>{" "}</text>
         {options.map((option, position) => {
           const selected = position === index;
           return (
@@ -97,21 +97,21 @@ export function InviteDialog({ width, height, canTeam, teamName, onRoom, onTeam,
                 choose(position);
               }}
             >
-              <text fg={selected ? theme.accent : theme.text}>
+              <text selectable={false} fg={selected ? theme.accent : theme.text}>
                 {option.icon} <b>{option.title}</b>
               </text>
-              <text fg={theme.dim} wrapMode="word">
+              <text selectable={false} fg={theme.dim} wrapMode="word">
                 {busy && selected ? "creating the invite…" : option.detail}
               </text>
             </box>
           );
         })}
         {error !== null ? (
-          <text fg={theme.danger} wrapMode="word">
+          <text selectable={false} fg={theme.danger} wrapMode="word">
             {error}
           </text>
         ) : null}
-        <text fg={theme.dim}>↑↓ choose · enter or click copies · esc closes</text>
+        <text selectable={false} fg={theme.dim}>↑↓ choose · enter or click copies · esc closes</text>
       </box>
     </box>
   );

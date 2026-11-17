@@ -1,6 +1,6 @@
 import type { SyntaxStyle } from "@opentui/core";
 import { useRenderer } from "@opentui/react";
-import { useMemo, type ReactNode } from "react";
+import { memo, useMemo, type ReactNode } from "react";
 import { codeBlockRenderer } from "../code";
 import type { FeedItem, Tone } from "../feed";
 import { bodyLines, displayName, kindOf, lastLine, metaOf, oneLine } from "../lib/tools";
@@ -11,13 +11,17 @@ import type { Run } from "../steps";
 import { DiffView } from "./DiffView";
 import { Spinner, useElapsed } from "./Spinner";
 
-const TONES: Record<Tone, { color: string; mark: string }> = {
+// Read at draw time: the palette changes when the theme does.
+const tones = (): Record<Tone, { color: string; mark: string }> => ({
   dim: { color: theme.dim, mark: "·" },
   ok: { color: theme.ok, mark: "✓" },
   warn: { color: theme.warn, mark: "!" },
   danger: { color: theme.danger, mark: "✗" },
   accent: { color: theme.accent, mark: "◆" },
-};
+});
+
+// A dotted bar marks what people say to each other; a solid one marks what goes to the agent.
+const DOTTED = { topLeft: "┊", topRight: "┊", bottomLeft: "┊", bottomRight: "┊", horizontal: "┊", vertical: "┊", topT: "┊", bottomT: "┊", leftT: "┊", rightT: "┊", cross: "┊" };
 
 const table = () => ({ widthMode: "content", cellPaddingY: 0, borderStyle: "rounded", borderColor: theme.line }) as const;
 
@@ -33,8 +37,8 @@ function BannerSection({ title, children }: { title: string; children: ReactNode
 function BannerRow({ label, children }: { label: string; children: ReactNode }) {
   return (
     <box flexDirection="row">
-      <box width={8} flexShrink={0}>
-        <text fg={theme.dim}>{label}</text>
+      <box width={9} flexShrink={0}>
+        <text fg={theme.text}>{label}</text>
       </box>
       <box flexGrow={1} flexShrink={1}>
         {children}
@@ -62,19 +66,19 @@ export function Banner({ item, compact }: { item: Extract<FeedItem, { kind: "ban
     );
   }
   return (
-    <box flexDirection="column" border borderStyle="rounded" borderColor={theme.line} title={` Plural  v${item.version} `} paddingX={2} paddingY={1} marginBottom={1}>
+    <box flexDirection="column" border borderStyle="rounded" borderColor={theme.line} title={` Plural  v${item.version} `} titleColor={theme.text} backgroundColor={theme.panel} paddingX={2} paddingY={1} marginBottom={1}>
       {item.guestLink || item.teamLink ? (
         <BannerSection title="invite">
           {item.guestLink ? (
             <BannerRow label="room">
-              <text fg={theme.info} wrapMode="char">
+              <text fg={theme.text} wrapMode="char">
                 plural join "{item.guestLink}"
               </text>
             </BannerRow>
           ) : null}
           {item.teamLink ? (
             <BannerRow label="team">
-              <text fg={theme.info} wrapMode="char">
+              <text fg={theme.text} wrapMode="char">
                 {item.teamLink}
               </text>
             </BannerRow>
@@ -84,7 +88,7 @@ export function Banner({ item, compact }: { item: Extract<FeedItem, { kind: "ban
       <BannerSection title="keys">
         {KEYS.map(([key, what]) => (
           <BannerRow key={key} label={key}>
-            <text fg={theme.dim}>{what}</text>
+            <text fg={theme.muted}>{what}</text>
           </BannerRow>
         ))}
       </BannerSection>
@@ -100,7 +104,7 @@ export function PinnedPrompt({ item, width, onJump }: { item: Extract<FeedItem, 
   const first = item.text.split("\n")[0] ?? "";
   const room = Math.max(10, width - item.name.length - item.role.length - 16);
   return (
-    <box position="absolute" top={1} left={0} width="100%" zIndex={10} paddingX={2} backgroundColor={theme.bubble} onMouseDown={onJump}>
+    <box position="absolute" top={1} left={0} width="100%" zIndex={10} paddingX={1} border={["left"]} borderStyle="heavy" borderColor={color} backgroundColor={theme.bubble} onMouseDown={onJump}>
       <text wrapMode="none">
         <span fg={color}>
           <b>{item.name}</b>
@@ -119,7 +123,7 @@ export function BriefingCard({ item, expanded, onToggle, onCopy, onGive }: { ite
   const long = item.text.split("\n").length > BRIEFING_LINES;
   const view = long && !expanded ? collapseText(item.text, BRIEFING_LINES) : { text: item.text, hidden: 0 };
   return (
-    <box flexDirection="column" marginY={1} backgroundColor={theme.bubble} paddingX={2} paddingY={1}>
+    <box flexDirection="column" marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={theme.info} backgroundColor={theme.bubble} paddingX={1} paddingY={1}>
       <text>
         <span fg={theme.info}>
           <b>✉ answer from {item.from}</b>
@@ -154,7 +158,7 @@ export function ShownCard({ item, expanded, onToggle, onCopy }: { item: Extract<
   const long = item.text.split("\n").length > BRIEFING_LINES;
   const view = long && !expanded ? collapseText(item.text, BRIEFING_LINES) : { text: item.text, hidden: 0 };
   return (
-    <box flexDirection="column" marginY={1} border={["left"]} borderStyle="heavy" borderColor={theme.accent} backgroundColor={theme.panel} paddingX={1}>
+    <box flexDirection="column" marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={theme.accent} backgroundColor={theme.panel} paddingX={1} paddingY={1}>
       <text>
         <span fg={theme.accent}>
           <b>◆ {item.title}</b>
@@ -183,7 +187,7 @@ export type Queued = "steer" | "follow_up" | null;
 export function UserCard({ item, queued, expanded, onToggle }: { item: Extract<FeedItem, { kind: "user" }>; queued: Queued; expanded: boolean; onToggle: () => void }) {
   const color = colorFor(item.participantId);
   return (
-    <box id={pinId(item.id)} flexDirection="column" marginTop={1} marginBottom={1} backgroundColor={theme.bubble} paddingX={2} paddingY={1}>
+    <box id={pinId(item.id)} flexDirection="column" marginBottom={1} border={["left"]} borderStyle="heavy" borderColor={color} backgroundColor={theme.bubble} paddingX={1} paddingY={1}>
       <text>
         <span fg={color}>
           <b>{item.name}</b>
@@ -224,7 +228,7 @@ export function ChatCard({ item }: { item: Extract<FeedItem, { kind: "chat" }> }
   const forYou = (direct && !item.mine) || item.mentioned;
   const mark = item.mentioned ? theme.accent : direct ? theme.warn : color;
   return (
-    <box flexDirection="column" marginBottom={1} backgroundColor={forYou ? theme.you : theme.bubble} paddingX={2} paddingY={1}>
+    <box flexDirection="column" marginBottom={1} border={["left"]} customBorderChars={DOTTED} borderColor={mark} backgroundColor={forYou ? theme.you : theme.bubble} paddingX={1} paddingY={1}>
       <text>
         <span fg={mark}>✉ </span>
         <span fg={direct ? theme.warn : color}>
@@ -304,9 +308,9 @@ function Body({ item, onCopy, limit, expanded }: { item: Extract<FeedItem, { kin
   const trimmed = running ? { shown: lines.join("\n"), more: 0 } : trimLines(lines, EXPANDED_LINES);
   return (
     <box flexDirection="column">
-      {kind === "bash" ? <text fg={theme.info}>$ {item.call.subject}</text> : null}
+      {kind === "bash" ? <text fg={theme.accent}>$ {item.call.subject}</text> : null}
       {trimmed.shown !== "" ? (
-        <text fg={failed ? theme.danger : theme.text} wrapMode="char">
+        <text fg={failed ? theme.danger : theme.muted} wrapMode="char">
           {trimmed.shown}
         </text>
       ) : (
@@ -365,7 +369,7 @@ export function ToolCard({ item, expanded, onToggle, onRun, onCopy, width, run }
   const diffShown = !running && item.diff !== null && (kind === "edit" || kind === "write");
   const errorTail = failed && !expanded && !diffShown ? bodyLines(item.output).slice(-ERROR_LINES) : [];
   return (
-    <box flexDirection="column" backgroundColor={theme.panel} paddingX={1} marginTop={run.first ? 1 : 0} marginBottom={run.last ? 1 : 0}>
+    <box flexDirection="column" backgroundColor={theme.panel} paddingX={1} marginBottom={run.last ? 1 : 0}>
       {run.earlier > 0 ? (
         <box onMouseDown={() => onRun()}>
           <text fg={theme.accent}>▸ {run.earlier} earlier steps · click to show</text>
@@ -379,7 +383,7 @@ export function ToolCard({ item, expanded, onToggle, onRun, onCopy, width, run }
             <b>{name}</b>
           </span>
           <span fg={theme.dim}>(</span>
-          <span fg={theme.text}>{subject}</span>
+          <span fg={theme.muted}>{subject}</span>
           <span fg={theme.dim}>)</span>
           {meta ? <span fg={failed ? theme.danger : theme.dim}> · {meta}</span> : null}
           {peek && room > 8 ? <span fg={theme.dim}> · {truncate(peek, room)}</span> : null}
@@ -413,7 +417,7 @@ export function NoticeCard({ item }: { item: Extract<FeedItem, { kind: "notice" 
       </box>
     );
   }
-  const tone = TONES[item.tone];
+  const tone = tones()[item.tone];
   return (
     <box flexDirection="row" marginBottom={item.text.includes("\n") ? 1 : 0}>
       <text fg={tone.color}>{tone.mark} </text>
@@ -428,14 +432,14 @@ interface ViewProps {
   width: number;
   expanded: boolean;
   queued?: Queued;
-  runs: Map<string, Run>;
+  run?: Run;
   started: boolean;
   onToggle: (id: string) => void;
   onCopy: (text: string) => void;
   onGive: (item: Extract<FeedItem, { kind: "briefing" }>) => void;
 }
 
-export function FeedItemView({ item, syntax, width, expanded, queued = null, runs, started, onToggle, onCopy, onGive }: ViewProps) {
+export function FeedItemView({ item, syntax, width, expanded, queued = null, run = SOLO, started, onToggle, onCopy, onGive }: ViewProps) {
   switch (item.kind) {
     case "banner":
       return <Banner item={item} compact={started} />;
@@ -446,7 +450,7 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, run
     case "assistant":
       return <AssistantCard item={item} syntax={syntax} expanded={expanded} onToggle={() => onToggle(item.id)} />;
     case "tool":
-      return <ToolCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onRun={() => onToggle(`run:${(runs.get(item.id) ?? SOLO).startId}`)} onCopy={onCopy} width={width} run={runs.get(item.id) ?? SOLO} />;
+      return <ToolCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onRun={() => onToggle(`run:${run.startId}`)} onCopy={onCopy} width={width} run={run} />;
     case "notice":
       return <NoticeCard item={item} />;
     case "briefing":
@@ -455,3 +459,37 @@ export function FeedItemView({ item, syntax, width, expanded, queued = null, run
       return <ShownCard item={item} expanded={expanded} onToggle={() => onToggle(item.id)} onCopy={onCopy} />;
   }
 }
+
+interface RowProps extends ViewProps {
+  /** A blank line above: the entry follows a one-line notice, which leaves none below itself. */
+  gap: boolean;
+  /** A search hit; `active` is the hit the search stands on. */
+  marked: boolean;
+  active: boolean;
+}
+
+function sameRun(a: Run | undefined, b: Run | undefined): boolean {
+  return a === b || (a !== undefined && b !== undefined && (Object.keys(a) as (keyof Run)[]).every((key) => a[key] === b[key]));
+}
+
+// One entry of the conversation. Drawn again only when something it shows changed, so a streaming reply
+// does not redraw the whole history on every frame.
+export const FeedRow = memo(
+  function FeedRow({ marked, active, gap, ...view }: RowProps) {
+    return (
+      <box
+        id={feedId(view.item.id)}
+        flexDirection="column"
+        flexShrink={0}
+        marginTop={gap ? 1 : 0}
+        paddingLeft={marked ? 0 : 1}
+        {...(marked ? { border: ["left"] as ["left"], borderStyle: active ? ("heavy" as const) : ("single" as const), borderColor: active ? theme.warn : theme.line } : {})}
+      >
+        <FeedItemView {...view} />
+      </box>
+    );
+  },
+  (before, after) =>
+    sameRun(before.run, after.run) &&
+    (Object.keys(after) as (keyof RowProps)[]).every((key) => key === "run" || before[key] === after[key]),
+);

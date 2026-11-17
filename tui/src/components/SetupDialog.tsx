@@ -271,18 +271,18 @@ export function SetupDialog(props: SetupDialogProps) {
 
   const detail = (): ReactNode => {
     if (item === undefined) {
-      return <text fg={theme.dim}>No provider matches "{query}".</text>;
+      return <text selectable={false} fg={theme.dim}>No provider matches "{query}".</text>;
     }
     if (item === MORE) {
       return (
         <>
-          <text fg={theme.text}>
+          <text selectable={false} fg={theme.text}>
             <b>More providers</b>
           </text>
-          <text fg={theme.dim} wrapMode="word">
+          <text selectable={false} fg={theme.dim} wrapMode="word">
             Every provider the host supports: API-key services, accounts, local models. Enter or tab shows them all.
           </text>
-          <text> </text>
+          <text selectable={false}> </text>
           <Button label="Show all providers" enabled onPress={() => void perform()} />
         </>
       );
@@ -293,32 +293,32 @@ export function SetupDialog(props: SetupDialogProps) {
     const prompt = editing?.id === "oauth_code" ? "Claude code" : "API key";
     return (
       <>
-        <text fg={theme.text}>
+        <text selectable={false} fg={theme.text}>
           <b>{item.label}</b>
         </text>
-        <text fg={theme.dim} wrapMode="word">
+        <text selectable={false} fg={theme.dim} wrapMode="word">
           {item.hint}
         </text>
-        <text> </text>
+        <text selectable={false}> </text>
         {checklist(item, key, local.current.signedIn).map((requirement) => {
           const mark = markOf(requirement.mark);
           return (
-            <text key={requirement.label} wrapMode="word">
+            <text selectable={false} key={requirement.label} wrapMode="word">
               <span fg={mark.color}>{mark.glyph} </span>
               <span fg={theme.text}>{requirement.label}</span>
               <span fg={theme.dim}>  {requirement.detail}</span>
             </text>
           );
         })}
-        <text> </text>
+        <text selectable={false}> </text>
         {editing ? (
-          <text fg={theme.accent}>
+          <text selectable={false} fg={theme.accent}>
             {prompt}: {"•".repeat(Math.min(editing.buffer.length, 28))}▏
           </text>
         ) : (
           <Button label={action.label} enabled={action.enabled && !busy} onPress={() => void perform()} />
         )}
-        <text fg={theme.dim} wrapMode="word">
+        <text selectable={false} fg={theme.dim} wrapMode="word">
           {editing ? "paste or type, enter to keep, esc to cancel" : key !== "" && item.needsKey ? `${action.hint} · key ${maskKey(key)}` : action.hint}
         </text>
       </>
@@ -328,47 +328,47 @@ export function SetupDialog(props: SetupDialogProps) {
   return (
     <box position="absolute" top={0} left={0} width={props.width} height={props.height} zIndex={30} alignItems="center" justifyContent="center" backgroundColor={theme.bg}>
       <box width={boxWidth} height={boxHeight} flexDirection="column" border borderStyle="rounded" borderColor={theme.accent} backgroundColor={theme.panel} paddingX={2} paddingY={1} onMouseDown={(event) => event.stopPropagation()}>
-        <text flexShrink={0}>
+        <text selectable={false} flexShrink={0}>
           <span fg={theme.accent}>
             <b>{props.first ? "Welcome to Plural" : "Choose a provider"}</b>
           </span>
         </text>
-        <text fg={theme.dim} flexShrink={0}>
+        <text selectable={false} fg={theme.dim} flexShrink={0}>
           {props.first ? "Pick the agent that will do the work. You can change it any time in the menu." : "Plural shows what a provider still needs and sets it up for you."}
         </text>
         {query !== "" ? (
-          <text fg={theme.info} flexShrink={0}>
+          <text selectable={false} fg={theme.info} flexShrink={0}>
             search: {query}
           </text>
         ) : (
-          <text flexShrink={0}> </text>
+          <text selectable={false} flexShrink={0}> </text>
         )}
         <box flexDirection="row" flexGrow={1}>
           <box width={LEFT} flexShrink={0} flexDirection="column" paddingRight={1} border={["right"]} borderStyle="single" borderColor={theme.line}>
             {visible.map((line, position) =>
               line.kind === "header" ? (
-                <text key={`h${position}`} fg={theme.dim}>
+                <text selectable={false} key={`h${position}`} fg={theme.dim}>
                   {line.text.toUpperCase()}
                 </text>
               ) : (
                 <ProviderRow key={line.item === MORE ? MORE : line.item.id} item={line.item} on={line.at === sel} state={line.item === MORE ? null : readiness(stepOf(line.item))} onPress={() => set({ index: line.at })} />
               ),
             )}
-            {lines.length === 0 ? <text fg={theme.dim}>nothing found</text> : null}
+            {lines.length === 0 ? <text selectable={false} fg={theme.dim}>nothing found</text> : null}
           </box>
           <box flexGrow={1} flexShrink={1} flexDirection="column" paddingLeft={2}>
             {detail()}
             {status ? (
               <>
-                <text> </text>
-                <text fg={TONE[status.tone]} wrapMode="word">
+                <text selectable={false}> </text>
+                <text selectable={false} fg={TONE[status.tone]} wrapMode="word">
                   {status.text}
                 </text>
               </>
             ) : null}
           </box>
         </box>
-        <text fg={theme.dim} flexShrink={0}>
+        <text selectable={false} fg={theme.dim} flexShrink={0}>
           {busy ? "working, please wait" : `↑↓ choose · enter continue · tab ${showAll ? "popular" : "all providers"} · type to search · esc ${props.first ? "skip for now" : "close"}`}
         </text>
       </box>
@@ -381,11 +381,11 @@ function ProviderRow({ item, on, state, onPress }: { item: Preset | typeof MORE;
   const label = item === MORE ? "More providers…" : item.label;
   return (
     <box flexDirection="row" justifyContent="space-between" backgroundColor={on ? theme.bg : undefined} onMouseDown={onPress}>
-      <text fg={on ? theme.accent : theme.text}>
+      <text selectable={false} fg={on ? theme.accent : theme.text}>
         {on ? "› " : "  "}
         {truncate(label, LEFT - 8)}
       </text>
-      <text fg={glyph.color}>{glyph.mark}</text>
+      <text selectable={false} fg={glyph.color}>{glyph.mark}</text>
     </box>
   );
 }
@@ -393,7 +393,7 @@ function ProviderRow({ item, on, state, onPress }: { item: Preset | typeof MORE;
 function Button({ label, enabled, onPress }: { label: string; enabled: boolean; onPress: () => void }) {
   return (
     <box alignSelf="flex-start" paddingX={2} backgroundColor={enabled ? theme.accent : theme.line} onMouseDown={onPress}>
-      <text fg={enabled ? theme.bg : theme.dim}>
+      <text selectable={false} fg={enabled ? theme.bg : theme.dim}>
         <b>{label}</b>
       </text>
     </box>

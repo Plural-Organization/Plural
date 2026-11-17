@@ -276,7 +276,7 @@ export function Composer(props: ComposerProps) {
           </box>
         ) : null}
         <box flexDirection="row">
-          <text fg={color}>{focused ? "❯ " : "› "}</text>
+          <text fg={focused ? routeColor : theme.dim}>{focused ? "❯ " : "› "}</text>
           <textarea
             ref={area}
             flexGrow={1}
@@ -322,9 +322,9 @@ export function Composer(props: ComposerProps) {
           {hintWindow.items.map((hint, index) => {
             const on = index === hintWindow.selectedIndex;
             return (
-              <text key={hint.name} fg={on ? theme.accent : theme.dim}>
+              <text key={hint.name} fg={on ? theme.text : theme.muted} bg={on ? theme.bubble : undefined} wrapMode="none">
                 {on ? "› " : "  "}
-                {hint.usage.padEnd(34)} {hint.description}
+                {hint.usage.padEnd(34)} <span fg={on ? theme.text : theme.dim}>{hint.description}</span>
               </text>
             );
           })}
