@@ -1,9 +1,11 @@
 import { afterEach, expect, test } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
 import { App } from "../src/App";
-import { APPROVAL_DECISIONS } from "../src/components/Inbox";
+import { approvalChoices, type ApprovalView } from "@plural/client";
 import { DEFAULT_SETTINGS } from "../src/settings";
 import { CALL, FakeSession, GUEST, HOST } from "./support/fake-session";
+
+const APPROVAL_DECISIONS = approvalChoices({ folder: null } as unknown as ApprovalView).map((choice) => choice.decision);
 
 type Setup = Awaited<ReturnType<typeof testRender>>;
 const open: Setup[] = [];

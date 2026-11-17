@@ -1,8 +1,6 @@
 import { useEffect } from "react";
-import type { Command, ProposalView } from "@plural/client";
+import { approvalDecisionFor, type Command, type ProposalView } from "@plural/client";
 import type { InboxItem } from "../components/inbox/items";
-
-const DECISIONS = { y: "once", a: "always", n: "reject", b: "block" } as const;
 
 interface Hotkeys {
   enabled: boolean;
@@ -37,9 +35,9 @@ export function useHotkeys({ enabled, first, canAbort, send, onEdit, onFocusInpu
       } else if (first?.kind === "access" && (event.key === "y" || event.key === "n")) {
         event.preventDefault();
         send({ type: "access.decide", participant_id: first.id, decision: event.key === "y" ? "allow" : "deny" });
-      } else if (first?.kind === "approval" && event.key in DECISIONS) {
+      } else if (first?.kind === "approval" && approvalDecisionFor(first.approval, event.key) !== undefined) {
         event.preventDefault();
-        send({ type: "approval.respond", approval_id: first.id, decision: DECISIONS[event.key as keyof typeof DECISIONS] });
+        send({ type: "approval.respond", approval_id: first.id, decision: approvalDecisionFor(first.approval, event.key)! });
       } else if (first?.kind === "proposal" && (event.key === "y" || event.key === "n")) {
         event.preventDefault();
         send({ type: "proposal.decide", proposal_id: first.id, decision: event.key === "y" ? "approve" : "reject" });

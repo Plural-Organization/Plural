@@ -1,4 +1,4 @@
-import { label, type Participant, type Projection } from "@plural/client";
+import { label, participantName, type Participant, type Projection } from "@plural/client";
 import { useState, type ReactNode } from "react";
 import { colorFor, theme } from "../theme";
 import { briefAgent } from "../lib/agent";
@@ -266,8 +266,7 @@ export function Sidebar({ projection, room: _room, inbox, running, status, space
 }
 
 function nameOf(projection: Projection, participantId: string): string {
-  const participant = projection.state.participants[participantId];
-  return participant ? label(projection.state, participant) : participantId;
+  return participantName(projection.state, participantId);
 }
 
 function brief(status: string): string {

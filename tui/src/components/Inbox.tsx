@@ -1,43 +1,8 @@
-import { label, type AccessRequestView, type BriefingRequestView, type ApprovalView, type JoinRequestView, type ProposalView, type SessionState } from "@plural/client";
+import { approvalChoices, defaultApprovalChoice, participantName as from, type AccessRequestView, type BriefingRequestView, type ApprovalView, type InboxRequest, type JoinRequestView, type ProposalView, type SessionState } from "@plural/client";
 import { colorFor, theme } from "../theme";
 
-export type InboxItem =
-  | { kind: "join"; id: string; request: JoinRequestView }
-  | { kind: "access"; id: string; request: AccessRequestView }
-  | { kind: "briefing"; id: string; request: BriefingRequestView }
-  | { kind: "approval"; id: string; approval: ApprovalView }
-  | { kind: "proposal"; id: string; proposal: ProposalView }
-  | { kind: "plan"; id: string };
-
-export function inboxItems(state: SessionState): InboxItem[] {
-  return [
-    ...Object.values(state.join_requests).map((request): InboxItem => ({ kind: "join", id: request.id, request })),
-    ...Object.values(state.access_requests).map((request): InboxItem => ({ kind: "access", id: request.participant_id, request })),
-    ...Object.values(state.briefing_requests).map((request): InboxItem => ({ kind: "briefing", id: request.id, request })),
-    ...Object.values(state.approvals).map((approval): InboxItem => ({ kind: "approval", id: approval.id, approval })),
-    ...Object.values(state.proposals).map((proposal): InboxItem => ({ kind: "proposal", id: proposal.id, proposal })),
-  ];
-}
-
-function from(state: SessionState, participantId: string): string {
-  const participant = state.participants[participantId];
-  return participant ? label(state, participant) : participantId;
-}
-
-// What an approval may be answered with, in the order its keys are shown.
-export const APPROVAL_DECISIONS = ["once", "always", "reject", "block"] as const;
-
-// A folder request is answered with how far the folder opens, or not at all.
-export const FOLDER_DECISIONS = ["read", "write", "reject"] as const;
-
-export function decisionsOf(approval: ApprovalView): readonly string[] {
-  return approval.folder ? FOLDER_DECISIONS : APPROVAL_DECISIONS;
-}
-
-// Enter on a folder request refuses until you move to a wider answer, so a stray Enter opens nothing.
-export function defaultChoice(approval: ApprovalView): number {
-  return approval.folder ? FOLDER_DECISIONS.length - 1 : 0;
-}
+// What waits for the host lives in @plural/client, for this client and the web one; the terminal adds a plan that is ready to start.
+export type InboxItem = InboxRequest | { kind: "plan"; id: string };
 
 export function isFolderRequest(item: InboxItem | undefined): boolean {
   return item?.kind === "approval" && Boolean(item.approval.folder);
@@ -105,7 +70,7 @@ export function Inbox({ items, state, selected, focused, now, approvalChoice }: 
       ) : item.kind === "briefing" ? (
         <BriefingBody request={item.request} now={now} focused={focused} />
       ) : item.kind === "approval" ? (
-        <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} selected={approvalChoice?.id === item.id ? approvalChoice.index : defaultChoice(item.approval)} place={items.length > 1 ? `${index + 1}/${items.length}` : ""} />
+        <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} selected={approvalChoice?.id === item.id ? approvalChoice.index : defaultApprovalChoice(item.approval)} place={items.length > 1 ? `${index + 1}/${items.length}` : ""} />
       ) : item.kind === "plan" ? (
         <PlanBody focused={focused} />
       ) : (
@@ -200,7 +165,7 @@ function FolderBody({ approval, state, now, focused, selected, place }: { approv
         </text>
       ) : null}
       <text wrapMode="word">
-        {FOLDER_DECISIONS.map((decision, index) => (
+        {approvalChoices(approval).map(({ decision }, index) => (
           <span key={decision}>
             {index > 0 ? "  " : ""}
             {focused && index === selected ? (
@@ -248,7 +213,7 @@ function ApprovalBody({ approval, state, now, focused, selected, place }: { appr
         </span>
         <b>?</b>
         {"  "}
-        {APPROVAL_DECISIONS.map((decision, index) => (
+        {approvalChoices(approval).map(({ decision }, index) => (
           <span key={decision}>
             {index > 0 ? "  " : ""}
             {focused && index === selected ? (
