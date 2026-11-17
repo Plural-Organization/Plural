@@ -192,3 +192,26 @@ async def test_a_chat_that_follows_no_session_is_told_how_to_link_one(tmp_path: 
 
     assert isinstance(told.view, Notice)
     assert "/link" in told.view.text
+
+
+async def test_talk_not_meant_for_the_bot_reaches_the_agent_with_the_next_question(
+    tmp_path: Path,
+) -> None:
+    provider = FakeProvider([reply("deploy is on Friday")])
+    async with (
+        running_session(tmp_path, relayed=False, provider=provider) as session,
+        bridged(session, tmp_path) as (chat, _),
+    ):
+        await chat.inbox.put(Said(GROUP, GUEST, "we moved the deploy to Friday", addressed=False))
+        async with asyncio.timeout(10):
+            while not session.host.actor.state.chat:
+                await asyncio.sleep(0.02)
+        await chat.inbox.put(said(OWNER, "when is the deploy?", "9"))
+        done = await chat.until(lambda: chat.last("run:", final=True))
+
+    assert isinstance(done.view, Answer)
+    assert done.view.text == "deploy is on Friday"
+    seen = provider.requests[-1].model_dump_json()
+    assert "we moved the deploy to Friday" in seen
+    assert "Askar" in seen
+    assert not [shown for shown in chat.shown if shown.key.startswith("say:")]

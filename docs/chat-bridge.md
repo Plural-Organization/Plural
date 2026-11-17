@@ -41,7 +41,7 @@ A guest's prompt is treated like any guest's: the commands and writes it leads t
 - **A reply** is a rich message. While the agent works, a private chat shows Telegram's own *Thinking…* draft with a stop button; a group shows the message growing, edited every couple of seconds, with a **Stop** button for owners.
 - **Steps** the agent took fold into a block at the top of the reply that opens on a tap.
 - **A request to allow** something is a message of its own with **Allow**, **Always** and **Reject**, or **Read** and **Read and write** for a folder outside the project. Once answered, it says who answered and how.
-- The bot only reads messages meant for it. With Telegram's privacy mode on (the default) a bot in a group receives commands and replies to it; if mentions don't reach it, turn privacy mode off in @BotFather or use `/ask`.
+- **The rest of the group's talk** goes to the session's chat, under each person's name. The agent does not answer it, but reads it before its next answer, so "what did we decide about the deploy?" works. It needs the bot to see every message: make it an admin of the group or turn privacy mode off in @BotFather (`/setprivacy` → Disable). With privacy mode on it sees only commands and replies to it. Like a guest's prompt, a guest's message makes the next run a guest turn, so writes and commands in it wait for an owner.
 
 ## Commands
 

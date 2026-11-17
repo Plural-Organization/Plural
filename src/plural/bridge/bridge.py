@@ -105,6 +105,7 @@ class Bridge:
 
     async def _said(self, said: Said) -> None:
         if not said.addressed:
+            await self._overheard(said)
             return
         command, _, rest = said.text.strip().partition(" ")
         if command.startswith("/"):
@@ -176,6 +177,17 @@ class Bridge:
             )
         except CommandRejected as error:
             await self._say(said, f"The session refused it: {error.error.message}")
+
+    async def _overheard(self, said: Said) -> None:
+        """Talk in a linked chat that is not meant for the bot goes to the room's chat, so the
+        agent knows what the group said when it is next asked. It never answers it."""
+        room = self._store.room_of(said.place)
+        if room is None or said.text.startswith("/"):
+            return
+        try:
+            await self._feed(room).chat(said, as_owner=self._store.is_owner(said.person))
+        except (ConnectionError, TimeoutError, CommandRejected) as error:
+            log.info("bridge.chat_dropped", room=room, error=str(error))
 
     async def _pair(self, said: Said, code: str) -> None:
         if not said.place.private:

@@ -31,7 +31,9 @@ from plural.bridge.platform import ChatPlatform
 from plural.client.connection import CommandRejected
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.protocol.commands import (
+    MAX_CHAT_CHARS,
     ApprovalRespond,
+    ChatSend,
     ClientInfo,
     InviteCreate,
     PromptSubmit,
@@ -190,6 +192,15 @@ class RoomFeed:
         except BaseException:
             self._sent = [sent for sent in self._sent if sent.text != text or sent.author != me]
             raise
+
+    async def chat(self, said: Said, *, as_owner: bool) -> None:
+        """Posts talk from the chat to the room's chat. The agent reads it before its next run
+        (in the room's `mention` chat mode), as a note from the person who wrote it."""
+        text = said.text.strip()[:MAX_CHAT_CHARS]
+        if not text:
+            return
+        client = self._require_host() if as_owner else await self._guest(said.person)
+        await client.send(ChatSend(text=text))
 
     async def decide(self, approval_id: str, decision: ApprovalDecision) -> None:
         await self._require_host().send(ApprovalRespond(approval_id=approval_id, decision=decision))
