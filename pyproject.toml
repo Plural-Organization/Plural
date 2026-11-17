@@ -144,6 +144,12 @@ source_modules = ["plural.relay"]
 forbidden_modules = ["plural.core", "plural.agent", "plural.host", "plural.storage", "plural.client"]
 
 [[tool.importlinter.contracts]]
+name = "a chat bridge is a client of the room"
+type = "forbidden"
+source_modules = ["plural.bridge"]
+forbidden_modules = ["plural.agent", "plural.host", "plural.relay", "plural.storage"]
+
+[[tool.importlinter.contracts]]
 name = "client knows nothing about the host"
 type = "forbidden"
 source_modules = ["plural.client"]
