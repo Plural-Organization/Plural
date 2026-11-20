@@ -62,6 +62,10 @@ class Wire:
             ack = await asyncio.wait_for(future, timeout)
         finally:
             self._pending.pop(envelope.id, None)
+            # The socket can close while the command is still being sent; the reader then fails
+            # a future nobody awaits. Read its exception so asyncio does not log it.
+            if future.done() and not future.cancelled():
+                future.exception()
         if not ack.ok:
             raise CommandRejected(
                 ack.error or ErrorInfo(code=ErrorCode.INTERNAL, message="rejected")
