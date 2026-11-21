@@ -1,4 +1,5 @@
 import type { Role } from "@plural/client";
+import type { BridgeApp, BridgeState } from "./bridges";
 import type { Keys } from "./credentials";
 import { isAgentCli, presetOf, presets, type AgentChoice, type PresetId } from "./presets";
 import type { Settings } from "./settings";
@@ -6,11 +7,12 @@ import type { UpdateState } from "./update";
 import { relayProblem, type ShareMode } from "./share";
 import { THEMES, THEME_NAMES } from "./theme";
 
-export type Tab = "model" | "session" | "appearance";
+export type Tab = "model" | "session" | "apps" | "appearance";
 
 export const TABS: { id: Tab; label: string }[] = [
   { id: "model", label: "Model" },
   { id: "session", label: "Session" },
+  { id: "apps", label: "Chat apps" },
   { id: "appearance", label: "Appearance" },
 ];
 
@@ -41,6 +43,11 @@ export interface ModelState {
   oauthLoggedIn?: boolean;
   update?: UpdateState | null;
   version?: string;
+  /** The chat apps the host offers; null while they are being read. */
+  apps?: BridgeApp[] | null;
+  appsError?: string | null;
+  /** What is typed and not saved yet, by `<app>:<field>`. */
+  drafts?: Record<string, string>;
 }
 
 export function updateRows(update: UpdateState | null | undefined, current?: string): Row[] {
@@ -337,6 +344,84 @@ export function sessionRows(state: ModelState): Row[] {
   ];
 }
 
+const APP_STATE: Record<BridgeState, string> = {
+  running: "● connected",
+  starting: "◌ connecting",
+  failed: "✕ failed",
+  idle: "◌ waiting to start",
+  off: "○ off",
+};
+
+// The draft of one field, or what is saved when nothing is typed.
+export const draftKey = (app: string, field: string): string => `${app}:${field}`;
+
+// Chat apps: one block per service the host offers. Everything here is data from the host.
+export function appsRows(state: ModelState): Row[] {
+  if (state.appsError) {
+    return [{ id: "apps-error", kind: "note", label: state.appsError, value: "", hint: "", enabled: false }];
+  }
+  if (!state.apps) {
+    return [{ id: "apps-wait", kind: "note", label: "reading the chat apps on this computer…", value: "", hint: "", enabled: false }];
+  }
+  const drafts = state.drafts ?? {};
+  const rows: Row[] = [
+    { id: "apps-title", kind: "note", label: "Talk to a session from a chat: mention the bot, then send /link in the chat to pick one.", value: "", hint: "", enabled: false },
+  ];
+  for (const app of state.apps) {
+    const shown = app.configured && !app.enabled ? "off" : app.state;
+    const bot = shown === "running" && app.identity ? ` ${app.identity}` : "";
+    rows.push(header(app.id, `${app.label} · ${APP_STATE[shown]}${bot}`));
+    if (shown === "failed" && app.error) {
+      rows.push({ id: `app:${app.id}:error`, kind: "note", label: `✕ ${app.error}`, value: "", hint: "", enabled: false });
+    }
+    if (!app.configured) {
+      app.steps.forEach((step, at) => rows.push({ id: `app:${app.id}:step${at}`, kind: "note", label: `${at + 1}. ${step}`, value: "", hint: "", enabled: false }));
+    }
+    let ready = true;
+    for (const field of app.fields) {
+      const typed = drafts[draftKey(app.id, field.id)];
+      const saved = app.set.includes(field.id);
+      if (field.required && typed === undefined && !saved) {
+        ready = false;
+      }
+      if (field.required && typed === "" && !saved) {
+        ready = false;
+      }
+      const value = field.secret
+        ? typed !== undefined && typed !== ""
+          ? maskKey(typed)
+          : saved
+            ? "saved"
+            : "not set"
+        : (typed ?? app.values[field.id] ?? "") || "default";
+      rows.push({
+        id: `app:${app.id}:field:${field.id}`,
+        kind: field.secret ? "secret" : "text",
+        label: field.label,
+        value,
+        hint: field.secret && saved ? "a new value replaces the saved one; it is never shown again" : field.help,
+        enabled: true,
+      });
+    }
+    const hasDrafts = app.fields.some((field) => drafts[draftKey(app.id, field.id)] !== undefined);
+    rows.push({ id: `app:${app.id}:save`, kind: "action", label: app.configured ? "Save" : "Save and connect", value: "", hint: ready ? "saved on this computer; it connects at once" : "fill in what is required first", enabled: ready && (hasDrafts || !app.configured) });
+    rows.push({ id: `app:${app.id}:test`, kind: "action", label: "Test", value: "", hint: "connect once and say who the bot is; nothing is saved", enabled: ready });
+    if (app.configured) {
+      rows.push({ id: `app:${app.id}:toggle`, kind: "action", label: app.enabled ? "Turn off" : "Turn on", value: "", hint: "the settings stay", enabled: true });
+      const owners = app.owners.length === 0 ? "nobody yet" : app.owners.map((owner) => owner.name || owner.id).join(", ");
+      rows.push({ id: `app:${app.id}:owners`, kind: "note", label: `owners: ${owners}`, value: "", hint: "", enabled: false });
+      if (app.pairing) {
+        const bot = app.identity || "the bot";
+        rows.push({ id: `app:${app.id}:pair`, kind: "note", label: `send /pair ${app.pairing} to ${bot} in a private chat`, value: "", hint: "", enabled: false });
+      } else {
+        rows.push({ id: `app:${app.id}:renew`, kind: "action", label: "Add another owner", value: "", hint: "shows a new pairing code", enabled: true });
+      }
+      rows.push({ id: `app:${app.id}:remove`, kind: "action", label: "Remove", value: "", hint: "forgets the token and settings", enabled: true });
+    }
+  }
+  return rows;
+}
+
 export function appearanceRows(state: ModelState): Row[] {
   const themes = THEME_NAMES.map((name): Row => {
     const colors = THEMES[name].colors;
@@ -370,6 +455,8 @@ function tabRows(tab: Tab, state: ModelState): Row[] {
       return modelRows(state);
     case "session":
       return sessionRows(state);
+    case "apps":
+      return appsRows(state);
     case "appearance":
       return appearanceRows(state);
   }

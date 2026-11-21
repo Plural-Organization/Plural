@@ -14,16 +14,14 @@ import asyncio
 import hashlib
 import json
 import re
-import time
 import urllib.error
 import urllib.request
-from collections import OrderedDict
 from collections.abc import AsyncIterator, Sequence
-from dataclasses import dataclass
 from typing import Any, Final, cast
 
 import structlog
 
+from plural.bridge.live import LiveMessages, Slot
 from plural.bridge.model import (
     Answer,
     Incoming,
@@ -36,6 +34,7 @@ from plural.bridge.model import (
     StepState,
     Tone,
 )
+from plural.bridge.platform import AuthError, PlatformError
 
 log = structlog.get_logger(__name__)
 
@@ -47,7 +46,6 @@ DRAFT_EVERY_S: Final = 1.0
 MAX_RICH: Final = 30_000
 MAX_PLAIN: Final = 4_000
 MAX_STEPS: Final = 25
-REMEMBERED: Final = 500
 STYLE: Final = {Tone.GOOD: "success", Tone.DANGER: "danger", Tone.PRIMARY: "primary"}
 ICON: Final = {StepState.RUNNING: "⏳", StepState.OK: "✓", StepState.FAILED: "✗"}
 _ESCAPED = re.compile(r"([\\`*_~|=\[\]<>#])")
@@ -63,20 +61,11 @@ COMMANDS: Final = (
 )
 
 
-class TelegramError(Exception):
+class TelegramError(PlatformError):
     def __init__(self, description: str, code: int = 0, retry_after: float | None = None) -> None:
         super().__init__(description)
         self.code = code
         self.retry_after = retry_after
-
-
-@dataclass(slots=True)
-class _Shown:
-    message_id: int | None = None
-    sent: str = ""
-    at: float = 0.0
-    later: asyncio.Task[None] | None = None
-    pending: tuple[Answer | Notice, str | None] | None = None
 
 
 class TelegramApi:
@@ -124,13 +113,27 @@ class Telegram:
         self.username = ""
         self.names = [name.strip().lower() for name in names if name.strip()]
         self._offset = 0
-        self._shown: OrderedDict[tuple[str, str], _Shown] = OrderedDict()
-        self._locks: dict[tuple[str, str], asyncio.Lock] = {}
+        self._live = LiveMessages(
+            self._put,
+            every=lambda place, view: DRAFT_EVERY_S if _drafts(place, view) else EDIT_EVERY_S,
+            retry_after=lambda error: (
+                error.retry_after if isinstance(error, TelegramError) else None
+            ),
+        )
+
+    @property
+    def identity(self) -> str:
+        return f"@{self.username}" if self.username else ""
 
     async def start(self) -> None:
         if self._me_id:
             return
-        me = await self._api.call("getMe")
+        try:
+            me = await self._api.call("getMe")
+        except TelegramError as error:
+            if error.code in (401, 404):
+                raise AuthError("Telegram does not know this token") from None
+            raise
         self._me_id = int(me["id"])
         self.username = str(me.get("username", ""))
         first = str(me.get("first_name", "")).strip().lower()
@@ -158,7 +161,7 @@ class Telegram:
                 delay = 1.0
             except TelegramError as error:
                 if error.code in (401, 404):
-                    raise
+                    raise AuthError("Telegram does not accept this token any more") from None
                 if error.code == 409:
                     raise TelegramError(
                         "another program is reading this bot's updates; run one bridge per bot",
@@ -236,61 +239,13 @@ class Telegram:
         final: bool = True,
         reply_to: str | None = None,
     ) -> None:
-        slot = (place.key, key)
-        lock = self._locks.setdefault(slot, asyncio.Lock())
-        shown = self._shown.get(slot) or _Shown()
-        self._remember(slot, shown)
-        every = DRAFT_EVERY_S if _drafts(place, view) else EDIT_EVERY_S
-        if not final:
-            wait = shown.at + every - time.monotonic()
-            if wait > 0 or lock.locked():
-                shown.pending = (view, reply_to)
-                if shown.later is None or shown.later.done():
-                    shown.later = asyncio.create_task(self._later(place, key, max(wait, 0.2)))
-                return
-        else:
-            shown.pending = None
-            if shown.later is not None:
-                shown.later.cancel()
-                shown.later = None
-        async with lock:
-            if final:
-                wait = shown.at + every - time.monotonic()
-                if wait > 0:
-                    await asyncio.sleep(wait)
-            try:
-                await self._put(place, shown, view, final=final, reply_to=reply_to)
-            except TelegramError as error:
-                if not final:
-                    log.info("telegram.update_skipped", error=str(error))
-                    return
-                if error.retry_after:
-                    await asyncio.sleep(error.retry_after)
-                    await self._put(place, shown, view, final=final, reply_to=reply_to)
-                else:
-                    raise
-            finally:
-                shown.at = time.monotonic()
-        if final and isinstance(view, Answer):
-            self._shown.pop(slot, None)
-            self._locks.pop(slot, None)
-
-    async def _later(self, place: Place, key: str, wait: float) -> None:
-        await asyncio.sleep(wait)
-        shown = self._shown.get((place.key, key))
-        if shown is None or shown.pending is None:
-            return
-        view, reply_to = shown.pending
-        shown.pending = None
-        shown.later = None
-        await self.show(place, key, view, final=False, reply_to=reply_to)
+        await self._live.show(place, key, view, final=final, reply_to=reply_to)
 
     async def _put(
         self,
         place: Place,
-        shown: _Shown,
+        shown: Slot,
         view: Answer | Notice,
-        *,
         final: bool,
         reply_to: str | None,
     ) -> None:
@@ -386,18 +341,7 @@ class Telegram:
             log.info("telegram.answer_failed", error=str(error))
 
     async def close(self) -> None:
-        for shown in self._shown.values():
-            if shown.later is not None:
-                shown.later.cancel()
-
-    def _remember(self, slot: tuple[str, str], shown: _Shown) -> None:
-        self._shown[slot] = shown
-        self._shown.move_to_end(slot)
-        while len(self._shown) > REMEMBERED:
-            old, dropped = self._shown.popitem(last=False)
-            self._locks.pop(old, None)
-            if dropped.later is not None:
-                dropped.later.cancel()
+        await self._live.close()
 
 
 def render(view: Answer | Notice, *, thinking_tag: bool = False) -> str:
@@ -489,7 +433,7 @@ def _drafts(place: Place, view: Answer | Notice) -> bool:
     return place.private and isinstance(view, Answer)
 
 
-def _draft_id(place: Place, shown: _Shown) -> int:
+def _draft_id(place: Place, shown: Slot) -> int:
     digest = hashlib.sha256(f"{place.key}:{id(shown)}".encode()).digest()
     return int.from_bytes(digest[:4]) % 2_000_000_000 + 1
 

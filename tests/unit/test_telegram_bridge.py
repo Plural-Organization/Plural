@@ -14,6 +14,7 @@ from plural.bridge.model import (
     StepState,
     Tone,
 )
+from plural.bridge.platform import AuthError
 from plural.bridge.telegram import MAX_RICH, Telegram, TelegramError, render
 
 
@@ -257,7 +258,7 @@ async def test_a_wrong_token_stops_the_bridge() -> None:
     api = FakeApi({"getUpdates": TelegramError("Unauthorized", 401)})
     telegram = await bot(api)
 
-    with pytest.raises(TelegramError):
+    with pytest.raises(AuthError):
         async for _ in telegram.incoming():
             pass
 

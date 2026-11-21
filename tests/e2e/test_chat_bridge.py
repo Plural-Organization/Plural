@@ -30,6 +30,7 @@ class Shown:
 
 class FakeChat:
     name = "fake"
+    identity = "@fake_bot"
 
     def __init__(self) -> None:
         self.inbox: asyncio.Queue[Incoming] = asyncio.Queue()

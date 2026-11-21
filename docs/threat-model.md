@@ -58,5 +58,6 @@
 | someone in a linked chat answers an approval or links a chat | only owners, paired with a one-time code from a private chat, can press approval buttons, link, unlink or stop; others write through their own participant connection, so their prompts are guest turns (`bridge/bridge.py`, `bridge/room.py`) |
 | a host link left on disk | the running-room file and the bridge store are created owner-only, next to the host key (`storage/running.py`, `bridge/store.py`) |
 | a chat service, or someone with the import link, pushes text into the agent's context | the address carries a secret made by the host and kept in its state directory; the MCP gateway (a separate service, `Plural-Organization/mcp`) keys hosts by its hash, caps size and open offers and stores nothing, and the host connects out to it (`host/mcp_link.py`); what arrives waits for the host's answer on a card and goes to the agent's notes as background with secrets removed, never as instructions (`host/actor.py`) |
+| a chat service's token read back through a screen or the daemon | the bridge configuration is written owner-only and a secret is never returned: the catalog says only that one is set (`bridge/service.py`); the CLI takes it on standard input |
 
 Out of scope for MVP: E2E encryption (relay sees content), Docker isolation.

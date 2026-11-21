@@ -73,7 +73,7 @@ without a key the host runs a scripted demo agent. pick a real one in `F2` → M
 
 the full docs are at **[plrl.host/docs](https://plrl.host/docs)**: [getting started](https://plrl.host/docs/getting-started) · [usage](https://plrl.host/docs/usage) · [configuration](https://plrl.host/docs/configuration) · [teams](https://plrl.host/docs/teams) · [MCP](https://plrl.host/docs/mcp) · [skills](https://plrl.host/docs/skills) · [sub-agents](https://plrl.host/docs/sub-agents) · [plugins](https://plrl.host/docs/plugins) · [security](https://plrl.host/docs/security) · [reference](https://plrl.host/docs/reference).
 
-for contributors and self-hosters, in this repo: [sessions in Telegram](docs/chat-bridge.md) · [running on a server](docs/self-hosting.md) · [wire protocol](docs/protocol.md) · [threat model](docs/threat-model.md) · [design decisions](docs/adr/) · [development](docs/development.md)
+for contributors and self-hosters, in this repo: [sessions in Telegram and Discord](docs/chat-bridge.md) · [running on a server](docs/self-hosting.md) · [wire protocol](docs/protocol.md) · [threat model](docs/threat-model.md) · [design decisions](docs/adr/) · [development](docs/development.md)
 
 ## acknowledgements
 

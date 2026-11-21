@@ -15,6 +15,9 @@ from starlette.routing import Route
 
 from plural import __version__
 from plural.agent_setup import AgentSetup, AgentSetupError, Choice
+from plural.bridge.config import ConfigError as BridgeConfigError
+from plural.bridge.platform import PlatformError
+from plural.bridge.service import BridgeService
 from plural.daemon.folders import FolderPickerUnavailable, Folders
 from plural.daemon.guard import LoopbackGuard
 from plural.daemon.rooms import RoomError, Rooms
@@ -23,12 +26,14 @@ from plural.host import extras, tools
 from plural.host.account import AccountError, AccountStore
 from plural.host.config import DEFAULT_RELAY_URL, HostSettings
 from plural.host.team import TeamError, TeamProfile, TeamStore, account_teams
+from plural.protocol.commands import ClientInfo
 from plural.protocol.entitlement import EntitlementClaims
 from plural.security.accounts_key import AccountsKey
 from plural.security.entitlement import InvalidEntitlement
 from plural.security.identity import Identity
 from plural.security.replay import ReplayGuard
 from plural.security.tokens import b64decode
+from plural.storage.running import running_rooms
 from plural.storage.sessions import ROOM_ID, list_sessions, read_session, session_path
 
 DEFAULT_PORT = 47831
@@ -56,6 +61,15 @@ class StartRoom(BaseModel):
     relay: str | None = None
     # One of this computer's teams to show the room to; the room then uses that team's relay.
     team: str | None = None
+
+
+class BridgeSave(BaseModel):
+    values: dict[str, str] = {}
+    enabled: bool | None = None
+
+
+class BridgeTest(BaseModel):
+    values: dict[str, str] = {}  # typed and not saved yet
 
 
 class SetAgent(BaseModel):
@@ -106,12 +120,14 @@ class Daemon:
         agent: AgentSetup,
         terminal: Terminal,
         teams: TeamStore,
+        bridges: BridgeService,
         *,
         clock: Callable[[], datetime] = lambda: datetime.now(UTC),
         fetch_teams: TeamFetch = account_teams,
         team_relay: str = DEFAULT_RELAY_URL,
     ) -> None:
         self._teams = teams
+        self._bridges = bridges
         self._fetch_teams = fetch_teams
         self._team_relay = team_relay
         self._agent = agent
@@ -332,6 +348,58 @@ class Daemon:
             raise Problem(409, "no_terminal", str(error), command=spec.login) from error
         return JSONResponse({"command": spec.login})
 
+    async def list_bridges(self, request: Request) -> Response:
+        self.authorize(request)
+        return JSONResponse({"providers": self._bridges.catalog()})
+
+    async def save_bridge(self, request: Request) -> Response:
+        self.authorize(request)
+        body = await _body(request, BridgeSave)
+        try:
+            self._bridges.save(
+                str(request.path_params["provider"]), body.values, enabled=body.enabled
+            )
+        except BridgeConfigError as error:
+            raise Problem(400, "bad_bridge", str(error)) from error
+        return Response(status_code=204)
+
+    async def remove_bridge(self, request: Request) -> Response:
+        self.authorize(request)
+        try:
+            self._bridges.remove(str(request.path_params["provider"]))
+        except BridgeConfigError as error:
+            raise Problem(404, "no_bridge", str(error)) from error
+        return Response(status_code=204)
+
+    async def test_bridge(self, request: Request) -> Response:
+        self.authorize(request)
+        body = await _body(request, BridgeTest)
+        try:
+            identity = await self._bridges.test(str(request.path_params["provider"]), body.values)
+        except BridgeConfigError as error:
+            raise Problem(400, "bad_bridge", str(error)) from error
+        except PlatformError as error:
+            raise Problem(409, "bridge_failed", str(error)) from error
+        return JSONResponse({"identity": identity})
+
+    async def renew_bridge_pairing(self, request: Request) -> Response:
+        self.authorize(request)
+        try:
+            code = self._bridges.renew_pairing(str(request.path_params["provider"]))
+        except BridgeConfigError as error:
+            raise Problem(404, "no_bridge", str(error)) from error
+        return JSONResponse({"pairing": code})
+
+    async def unpair_bridge(self, request: Request) -> Response:
+        self.authorize(request)
+        try:
+            self._bridges.unpair(
+                str(request.path_params["provider"]), str(request.path_params["person"])
+            )
+        except BridgeConfigError as error:
+            raise Problem(404, "no_bridge", str(error)) from error
+        return Response(status_code=204)
+
     async def list_sessions(self, request: Request) -> Response:
         """The sessions this computer keeps, newest first, to offer to continue."""
         self.authorize(request)
@@ -438,12 +506,18 @@ def create_app(
     agent: AgentSetup | None = None,
     terminal: Terminal | None = None,
     teams: TeamStore | None = None,
+    bridges: BridgeService | None = None,
     fetch_teams: TeamFetch = account_teams,
     clock: Callable[[], datetime] = lambda: datetime.now(UTC),
 ) -> Starlette:
     rooms = rooms or Rooms()
     state = HostSettings().state_dir
     agent = agent or AgentSetup(state)
+    bridges = bridges or BridgeService(
+        state,
+        rooms=lambda: running_rooms(state),
+        client=ClientInfo(kind="daemon", version=__version__),
+    )
     daemon = Daemon(
         accounts,
         key,
@@ -452,6 +526,7 @@ def create_app(
         agent,
         terminal or SystemTerminal(),
         teams or TeamStore(state),
+        bridges,
         clock=clock,
         fetch_teams=fetch_teams,
     )
@@ -459,9 +534,11 @@ def create_app(
     @asynccontextmanager
     async def lifespan(_: Starlette) -> AsyncGenerator[None]:
         key.start()
+        bridges.start()
         try:
             yield
         finally:
+            await bridges.stop()
             await rooms.close()
             await key.stop()
 
@@ -479,6 +556,20 @@ def create_app(
             Route("/v1/rooms/{room}/agent", _guarded(daemon.set_room_agent), methods=["PUT"]),
             Route("/v1/settings", _guarded(daemon.settings)),
             Route("/v1/teams", _guarded(daemon.list_teams)),
+            Route("/v1/bridges", _guarded(daemon.list_bridges)),
+            Route("/v1/bridges/{provider}", _guarded(daemon.save_bridge), methods=["PUT"]),
+            Route("/v1/bridges/{provider}", _guarded(daemon.remove_bridge), methods=["DELETE"]),
+            Route("/v1/bridges/{provider}/test", _guarded(daemon.test_bridge), methods=["POST"]),
+            Route(
+                "/v1/bridges/{provider}/pairing",
+                _guarded(daemon.renew_bridge_pairing),
+                methods=["POST"],
+            ),
+            Route(
+                "/v1/bridges/{provider}/owners/{person}",
+                _guarded(daemon.unpair_bridge),
+                methods=["DELETE"],
+            ),
             Route("/v1/agent", _guarded(daemon.agent_catalog)),
             Route("/v1/agent", _guarded(daemon.save_agent), methods=["PUT"]),
             Route("/v1/agent/key", _guarded(daemon.save_agent_key), methods=["PUT"]),

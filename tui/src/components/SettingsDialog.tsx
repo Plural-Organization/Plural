@@ -3,6 +3,7 @@ import { useKeyboard, usePaste } from "@opentui/react";
 import type { ScrollBoxRenderable } from "@opentui/core";
 import { useEffect, useReducer, useRef } from "react";
 import type { Role } from "@plural/client";
+import { hostBridgeApi, type BridgeApi, type BridgeApp } from "../bridges";
 import type { AgentControl } from "../control";
 import { missingFor, type ExtraStatus } from "../extras";
 import { beginOAuth, clearOAuth, exchangeCode, hasOAuth, openOAuth, saveOAuth, type OAuthAttempt } from "../anthropicOAuth";
@@ -16,6 +17,7 @@ import {
   maskKey,
   nextFast,
   nextModel,
+  draftKey,
   landing,
   rowsFor,
   switchConnection,
@@ -39,6 +41,12 @@ const CHROME_ROWS = 12;
 const isTitle = (row: Row): boolean => row.kind === "note" && row.id.endsWith("-title");
 
 // Wrapped text is counted a little narrower than the row, because words do not break where characters would.
+// `app:<service>:field:<field>` names a field of a chat app.
+function fieldOf(id: string): { app: string; field: string } | null {
+  const [head, app, kind, field] = id.split(":");
+  return head === "app" && kind === "field" && app !== undefined && field !== undefined ? { app, field } : null;
+}
+
 function rowHeight(row: Row, first: boolean, inner: number): number {
   const lines = (text: string, width: number): number => Math.max(1, Math.ceil(text.length / Math.max(8, width - 2)));
   if (isTitle(row)) {
@@ -70,6 +78,9 @@ interface Local {
   status: { tone: Tone; text: string } | null;
   busy: boolean;
   oauthAttempt: OAuthAttempt | null;
+  apps: BridgeApp[] | null;
+  appsError: string | null;
+  drafts: Record<string, string>;
 }
 
 export interface DialogProps {
@@ -99,6 +110,8 @@ export interface DialogProps {
   version?: string;
   onUpdate?: () => void;
   onClose: () => void;
+  /** How chat apps are read and changed; the host's `bridge` commands unless a test brings its own. */
+  bridgeApi?: BridgeApi;
 }
 
 // Read at draw time: the palette changes when the theme does.
@@ -117,7 +130,11 @@ export function SettingsDialog(props: DialogProps) {
     status: null,
     busy: false,
     oauthAttempt: null,
+    apps: null,
+    appsError: null,
+    drafts: {},
   });
+  const bridgeApi = useRef<BridgeApi>(props.bridgeApi ?? hostBridgeApi());
   const live = useRef(props);
   live.current = props;
 
@@ -133,6 +150,9 @@ export function SettingsDialog(props: DialogProps) {
     oauthLoggedIn: hasOAuth(),
     update: live.current.update,
     version: live.current.version,
+    apps: local.current.apps,
+    appsError: local.current.appsError,
+    drafts: local.current.drafts,
   });
   const rows = (): Row[] => rowsFor(local.current.tab, state());
   const set = (patch: Partial<Local>): void => {
@@ -186,7 +206,10 @@ export function SettingsDialog(props: DialogProps) {
   const commit = (editing: Editing): void => {
     const { choice, keys } = local.current;
     const value = editing.buffer.trim();
-    if (editing.id === "oauth_code") {
+    const field = fieldOf(editing.id);
+    if (field !== null) {
+      set({ editing: null, drafts: { ...local.current.drafts, [draftKey(field.app, field.field)]: value }, status: null });
+    } else if (editing.id === "oauth_code") {
       const attempt = local.current.oauthAttempt;
       if (!attempt) return;
       set({ editing: null, busy: true, status: { tone: "info", text: "finishing Claude sign in…" } });
@@ -245,6 +268,13 @@ export function SettingsDialog(props: DialogProps) {
   };
 
   const startEditing = (row: Row): void => {
+    const field = fieldOf(row.id);
+    if (field !== null) {
+      const app = local.current.apps?.find((entry) => entry.id === field.app);
+      const typed = local.current.drafts[draftKey(field.app, field.field)];
+      set({ editing: { id: row.id, buffer: typed ?? (app?.fields.find((entry) => entry.id === field.field)?.secret ? "" : (app?.values[field.field] ?? "")) } });
+      return;
+    }
     const { choice } = local.current;
     const raw: Record<string, string> = {
       key: currentKey(),
@@ -278,6 +308,82 @@ export function SettingsDialog(props: DialogProps) {
     }
   };
 
+  // What is typed for one chat app, keeping only what it asked for.
+  const typedFor = (app: BridgeApp): Record<string, string> => {
+    const values: Record<string, string> = {};
+    for (const field of app.fields) {
+      const typed = local.current.drafts[draftKey(app.id, field.id)];
+      if (typed !== undefined) {
+        values[field.id] = typed;
+      }
+    }
+    return values;
+  };
+
+  const loadApps = async (): Promise<void> => {
+    try {
+      const apps = await bridgeApi.current.list();
+      set({ apps, appsError: null });
+    } catch (error) {
+      set({ appsError: error instanceof Error ? error.message : "could not read the chat apps" });
+    }
+  };
+
+  const appAction = async (id: string): Promise<void> => {
+    const [, appId, what] = id.split(":");
+    const app = local.current.apps?.find((entry) => entry.id === appId);
+    if (app === undefined || what === undefined || local.current.busy) {
+      return;
+    }
+    const api = bridgeApi.current;
+    set({ busy: true, status: { tone: "info", text: what === "test" ? "connecting…" : "working…" } });
+    const result =
+      what === "save"
+        ? await api.save(app.id, typedFor(app), true)
+        : what === "test"
+          ? await api.test(app.id, typedFor(app))
+          : what === "toggle"
+            ? await api.save(app.id, {}, !app.enabled)
+            : what === "renew"
+              ? await api.renew(app.id)
+              : await api.remove(app.id);
+    set({ busy: false });
+    if (!result.ok) {
+      say("error", result.error ?? "it did not work");
+      return;
+    }
+    if (what === "save") {
+      const drafts = { ...local.current.drafts };
+      for (const field of app.fields) {
+        delete drafts[draftKey(app.id, field.id)];
+      }
+      set({ drafts });
+      say("ok", `✓ saved, ${app.label} is connecting`);
+    } else if (what === "test") {
+      say("ok", `✓ reached ${result.identity ?? app.label}`);
+    } else if (what === "renew") {
+      say("ok", "✓ a new pairing code is shown under the owners");
+    } else {
+      say("ok", what === "toggle" ? (app.enabled ? `✓ ${app.label} is off` : `✓ ${app.label} is on`) : `✓ ${app.label} removed`);
+    }
+    await loadApps();
+  };
+
+  // The chat apps are read when their tab opens and again every few seconds: a bridge connects, fails or is
+  // paired some time after Save.
+  useEffect(() => {
+    if (local.current.tab !== "apps") {
+      return;
+    }
+    void loadApps();
+    const timer = setInterval(() => {
+      if (!local.current.busy && local.current.editing === null) {
+        void loadApps();
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+  }, [local.current.tab]);
+
   const activate = (row: Row): void => {
     if (!row.enabled) {
       return;
@@ -310,7 +416,9 @@ export function SettingsDialog(props: DialogProps) {
         live.current.onSettings({ ...live.current.settings, theme: row.id.slice("theme:".length) as ThemeName });
         break;
       case "action":
-        if (row.id === "update") {
+        if (row.id.startsWith("app:")) {
+          void appAction(row.id);
+        } else if (row.id === "update") {
           live.current.onUpdate?.();
         } else if (row.id === "test" || row.id === "save") {
           void run(row.id);

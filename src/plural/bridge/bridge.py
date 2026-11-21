@@ -11,10 +11,11 @@ import asyncio
 from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
+from typing import cast
 
 import structlog
 
-from plural.bridge.model import Choice, Notice, Place, Pressed, Said, Tone
+from plural.bridge.model import Choice, Incoming, Notice, Place, Pressed, Said, Tone
 from plural.bridge.platform import ChatPlatform
 from plural.bridge.room import ApprovalBook, RoomFeed
 from plural.bridge.store import BridgeStore
@@ -56,6 +57,8 @@ class Bridge:
         self._feeds: dict[str, RoomFeed] = {}
         self._tasks: dict[str, asyncio.Task[None]] = {}
         self._said_count = 0
+        self._handling: set[asyncio.Task[None]] = set()
+        self._locks: dict[str, asyncio.Lock] = {}
 
     async def run(self) -> None:
         await self._platform.start()
@@ -63,18 +66,36 @@ class Bridge:
             self._feed(room)
         try:
             async for item in self._platform.incoming():
-                try:
-                    match item:
-                        case Said():
-                            await self._said(item)
-                        case Pressed():
-                            await self._pressed(item)
-                except Exception:
-                    log.exception("bridge.handle_failed")
+                self._dispatch(item)
         finally:
             await self.close()
 
+    def _dispatch(self, item: Incoming) -> None:
+        """Handles an update on its own task. Talk in one place stays in order, but a slow turn
+        (a guest joining the room takes seconds) never holds up another chat or a button that
+        answers an approval."""
+        lock = (
+            None
+            if isinstance(item, Pressed)
+            else self._locks.setdefault(item.place.key, asyncio.Lock())
+        )
+        task = asyncio.create_task(self._handle(item, lock))
+        self._handling.add(task)
+        task.add_done_callback(self._handling.discard)
+
+    async def _handle(self, item: Incoming, lock: asyncio.Lock | None) -> None:
+        try:
+            if lock is not None:
+                async with lock:
+                    await self._said(cast(Said, item))
+            else:
+                await self._pressed(cast(Pressed, item))
+        except Exception:
+            log.exception("bridge.handle_failed")
+
     async def close(self) -> None:
+        for handling in list(self._handling):
+            handling.cancel()
         for task in self._tasks.values():
             task.cancel()
         for room, task in list(self._tasks.items()):
@@ -83,6 +104,8 @@ class Bridge:
             await self._feeds[room].close()
         self._tasks.clear()
         self._feeds.clear()
+        with suppress(Exception):
+            await self._platform.close()
 
     def _feed(self, room: str) -> RoomFeed:
         feed = self._feeds.get(room)
@@ -311,5 +334,5 @@ class Bridge:
 
 _STRANGER = """This bot connects a chat to a Plural session.
 
-If it is yours, run `plural-host bridge telegram` on the host's computer and send me \
-`/pair <code>` with the code it prints."""
+If it is yours, open Chat apps in Plural's settings on the host's computer (or run \
+`plural-host bridge pair`) and send me `/pair <code>` with the code it shows."""

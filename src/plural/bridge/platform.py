@@ -4,13 +4,26 @@ from typing import Protocol
 from plural.bridge.model import Answer, Incoming, Notice, Place, Pressed
 
 
+class PlatformError(Exception):
+    """A chat service refused or failed. The bridge reports it and may try again."""
+
+
+class AuthError(PlatformError):
+    """The credentials are wrong or were revoked. Trying again will not help."""
+
+
 class ChatPlatform(Protocol):
     """A chat service the bridge talks through."""
 
     name: str
 
+    @property
+    def identity(self) -> str:
+        """How people find the bot on this service, for example `@my_bot`. Known after start."""
+        ...
+
     async def start(self) -> None:
-        """Connects and learns who the bot is. Raises when the credentials are wrong."""
+        """Connects and learns who the bot is. Raises `AuthError` when the credentials are wrong."""
         ...
 
     def incoming(self) -> AsyncIterator[Incoming]: ...
