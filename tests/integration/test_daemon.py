@@ -16,12 +16,14 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from tests.e2e.support import free_port
 
 from plural.agent_setup import AgentSetup
+from plural.bridge.service import BridgeService
 from plural.daemon.app import create_app
 from plural.daemon.folders import FolderPickerUnavailable, Folders
 from plural.daemon.rooms import Rooms
 from plural.daemon.terminal import TerminalUnavailable
 from plural.host.account import AccountStore, Entitlement
 from plural.host.team import TeamError, TeamProfile, TeamStore
+from plural.protocol.commands import ClientInfo
 from plural.protocol.entitlement import EntitlementClaims
 from plural.protocol.events import ParticipantJoined
 from plural.protocol.models import Participant, Role
@@ -235,6 +237,9 @@ async def running_daemon(
         agent=agent,
         terminal=terminal,
         teams=teams,
+        bridges=BridgeService(
+            tmp_path / "state", rooms=lambda: [], client=ClientInfo(kind="test", version="0")
+        ),
         fetch_teams=relays,
         clock=lambda: now,
     )
@@ -923,3 +928,60 @@ async def test_sessions_need_a_ticket(tmp_path: Path, method: str, path: str) ->
     async with running_daemon(tmp_path) as daemon:
         status, _, _ = await daemon.call(method, path)
         assert status == 401
+
+
+# --- chat bridges ------------------------------------------------------------------------------
+
+
+async def test_every_bridge_call_needs_a_ticket(tmp_path: Path) -> None:
+    calls: list[tuple[str, str, dict[str, Any] | None]] = [
+        ("GET", "/v1/bridges", None),
+        ("PUT", "/v1/bridges/telegram", {"values": {"token": "1:a"}}),
+        ("DELETE", "/v1/bridges/telegram", None),
+        ("POST", "/v1/bridges/telegram/test", {}),
+        ("POST", "/v1/bridges/telegram/pairing", None),
+        ("DELETE", "/v1/bridges/telegram/owners/7", None),
+    ]
+    async with running_daemon(tmp_path) as daemon:
+        for method, path, body in calls:
+            status, answer, _ = await daemon.call(method, path, body=body)
+            assert (status, answer["error"]["code"]) == (401, "no_ticket"), (method, path)
+
+
+async def test_a_token_goes_in_and_the_catalog_only_says_it_is_there(tmp_path: Path) -> None:
+    secret = "123456:AAH-secret-token-value"
+    async with running_daemon(tmp_path) as daemon:
+        status, _, _ = await daemon.call(
+            "PUT",
+            "/v1/bridges/telegram",
+            ticket=daemon.ticket(nonce="b1"),
+            body={"values": {"token": secret}, "enabled": False},
+        )
+        assert status == 204
+        status, catalog, _ = await daemon.call(
+            "GET", "/v1/bridges", ticket=daemon.ticket(nonce="b2")
+        )
+        assert status == 200
+        assert secret not in json.dumps(catalog)
+        by_id = {entry["id"]: entry for entry in catalog["providers"]}
+        assert set(by_id) >= {"telegram", "discord"}
+        assert by_id["telegram"]["configured"] is True
+        assert by_id["telegram"]["set"] == ["token"]
+        assert by_id["discord"]["configured"] is False
+        assert by_id["telegram"]["fields"][0]["secret"] is True
+
+
+async def test_a_bad_bridge_request_is_refused_with_a_reason(tmp_path: Path) -> None:
+    async with running_daemon(tmp_path) as daemon:
+        status, answer, _ = await daemon.call(
+            "PUT", "/v1/bridges/telegram", ticket=daemon.ticket(nonce="b3"), body={"values": {}}
+        )
+        assert (status, answer["error"]["code"]) == (400, "bad_bridge")
+        status, answer, _ = await daemon.call(
+            "PUT", "/v1/bridges/nowhere", ticket=daemon.ticket(nonce="b4"), body={"values": {}}
+        )
+        assert (status, answer["error"]["code"]) == (400, "bad_bridge")
+        status, answer, _ = await daemon.call(
+            "DELETE", "/v1/bridges/nowhere", ticket=daemon.ticket(nonce="b5")
+        )
+        assert (status, answer["error"]["code"]) == (404, "no_bridge")

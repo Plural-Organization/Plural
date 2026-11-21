@@ -18,6 +18,7 @@ from rich.table import Table
 from plural import __version__
 from plural.cli.account import login, logout, whoami
 from plural.cli.agent import agent_app
+from plural.cli.bridge import bridge_app
 from plural.cli.copies import copies_of
 from plural.cli.format import ago
 from plural.cli.stop import stop
@@ -38,6 +39,7 @@ if TYPE_CHECKING:
 app = typer.Typer(name="plural-host", no_args_is_help=True, add_completion=False)
 app.add_typer(team_app, name="team")
 app.add_typer(agent_app, name="agent")
+app.add_typer(bridge_app, name="bridge")
 app.command(name="ls")(ls)
 app.command(name="login")(login)
 app.command(name="stop")(stop)
@@ -253,12 +255,21 @@ async def _host(settings: HostSettings, *, machine: bool) -> None:
         if settings.team
         else None
     )
+    from plural.storage.running import announce, withdraw
+
+    announced = announce(
+        settings.state_dir,
+        room=plural_host.room,
+        host_link=plural_host.host_link,
+        workspace=settings.workspace,
+    )
     try:
         if machine:
             await _serve_until_stdin_closes(plural_host, settings)
         else:
             await plural_host.serve()
     finally:
+        withdraw(announced)
         if presence is not None:
             presence.cancel()
             with suppress(asyncio.CancelledError):
