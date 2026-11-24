@@ -10,6 +10,7 @@ import { loadKeys, saveKeys } from "./credentials";
 import { setExtras } from "./extras";
 import { setTools } from "./tools";
 import { setPresets, toConfig } from "./presets";
+import { loadHistory, saveHistory } from "./history";
 import { loadSettings, saveSettings } from "./settings";
 import { freePort, HostUnavailable, runHostCommand, startLocalHost, type HostHandle } from "./host-process";
 import { startProgress } from "./lib/progress";
@@ -438,6 +439,7 @@ async function runOne(options: SessionOptions, joinLink: string | null, name: st
           sharing: target.host === null || target.shared,
           settings,
           onSettings: saveSettings,
+          history: { initial: loadHistory(), save: (entries) => saveHistory(entries) },
           control,
           keys,
           onKeys: (preset, key, remember) => {

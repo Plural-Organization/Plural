@@ -1,7 +1,7 @@
 import { decodePasteBytes, stripAnsiSequences, type KeyBinding, type PasteEvent, type TextareaRenderable } from "@opentui/core";
 import { useKeyboard } from "@opentui/react";
 import { useEffect, useRef, useState } from "react";
-import type { Mentionable, Role, Route } from "@plural/client";
+import { historyView, leave, MAX_HISTORY, newer, NOT_BROWSING, older, remember, type Browsing, type Mentionable, type Role, type Route } from "@plural/client";
 import { suggestions as suggest, visibleSuggestionWindow, type AskTarget, type CommandHint } from "../commands";
 import { imagePath } from "../lib/image-paste";
 import { expandPastes, pasteLabel, shouldCollapse } from "../lib/paste";
@@ -47,9 +47,14 @@ interface ComposerProps {
   onPasteImageFile?: (path: string) => Promise<boolean>;
   onDropImage?: () => void;
   remember?: boolean;
+  /** The prompts sent before, newest first, and where to keep them for the next time. Without it they last until the program closes. */
+  history?: PromptHistory;
 }
 
-const MAX_HISTORY = 100;
+export interface PromptHistory {
+  initial: string[];
+  save: (entries: string[]) => void;
+}
 
 const BINDINGS: KeyBinding[] = [
   { name: "return", action: "submit" },
@@ -64,9 +69,10 @@ export function Composer(props: ComposerProps) {
   const [value, setValue] = useState("");
   const [choice, setChoice] = useState(0);
   const [dismissed, setDismissed] = useState(false);
-  const history = useRef<string[]>([]);
-  const position = useRef(-1);
-  const draft = useRef("");
+  const history = useRef<string[]>(props.history?.initial.slice(0, MAX_HISTORY) ?? []);
+  const browsing = useRef<Browsing>(NOT_BROWSING);
+  // What the arrows last put in the box. The box reports that as a change, which is not the person typing over it.
+  const recalled = useRef<string | null>(null);
   const pasted = useRef(new Map<string, string>());
   const pasteCount = useRef(0);
 
@@ -101,9 +107,10 @@ export function Composer(props: ComposerProps) {
       return;
     }
     if (props.remember !== false) {
-      history.current = [text, ...history.current.filter((entry) => entry !== text)].slice(0, MAX_HISTORY);
+      history.current = remember(history.current, text);
+      props.history?.save(history.current);
     }
-    position.current = -1;
+    browsing.current = NOT_BROWSING;
     put("");
     props.onSubmit(text);
   };
@@ -140,16 +147,11 @@ export function Composer(props: ComposerProps) {
   };
 
   const recall = (direction: 1 | -1): void => {
-    const entries = history.current;
-    if (direction === 1 && position.current + 1 < entries.length) {
-      if (position.current === -1) {
-        draft.current = value;
-      }
-      position.current += 1;
-      put(entries[position.current] ?? "");
-    } else if (direction === -1 && position.current >= 0) {
-      position.current -= 1;
-      put(position.current === -1 ? draft.current : (entries[position.current] ?? ""));
+    const step = direction === 1 ? older(history.current, browsing.current, value) : newer(history.current, browsing.current);
+    if (step.value !== null) {
+      browsing.current = step.browsing;
+      recalled.current = step.value;
+      put(step.value);
     }
   };
 
@@ -194,9 +196,11 @@ export function Composer(props: ComposerProps) {
     }
     if (key.name === "escape") {
       key.preventDefault();
-      if (position.current >= 0) {
-        position.current = -1;
-        put(draft.current);
+      if (browsing.current.position >= 0) {
+        const back = leave(browsing.current);
+        browsing.current = back.browsing;
+        recalled.current = back.value;
+        put(back.value ?? "");
       } else if (hints.length > 0) {
         setDismissed(true);
       } else {
@@ -243,17 +247,10 @@ export function Composer(props: ComposerProps) {
   const progress = props.delivery?.state === "sending" ? " · sending…" : props.delivery?.state === "sent" ? " · ✓ delivered" : "";
   const head = route !== null ? `→ ${route.label} · ${route.note}` : (label ?? "");
   const more = value === "" ? "" : `${lines > 1 ? ` · ${lines} lines` : ""} · ⇧↵ new line`;
-  const title = `${head}${more}${progress}`;
-  const HISTORY_ROWS = 6;
-  const recalled = history.current;
-  const browsing = position.current >= 0 && recalled.length > 0;
-  const firstShown = Math.max(0, Math.min(position.current - 2, recalled.length - HISTORY_ROWS));
-  const pastRows = browsing
-    ? recalled
-        .slice(firstShown, firstShown + HISTORY_ROWS)
-        .map((text, offset) => ({ text, index: firstShown + offset }))
-        .reverse()
-    : [];
+  const past = historyView(history.current, browsing.current);
+  const rest = `${head}${more}${progress}`;
+  // Counts down from the newest as each step goes further back: "history 100/100", then 99/100.
+  const title = past === null ? rest : `history ${past.at}/${past.of}${rest === "" ? "" : ` · ${rest}`}`;
   return (
     <box flexDirection="column" flexShrink={0} paddingX={1} onMouseDown={() => props.onFocus()}>
       <box
@@ -296,25 +293,28 @@ export function Composer(props: ComposerProps) {
               props.onActivity(text);
               setChoice(0);
               setDismissed(false);
-              position.current = -1;
+              if (text !== recalled.current) {
+                browsing.current = NOT_BROWSING;
+              }
             }}
             onSubmit={submit}
           />
         </box>
       </box>
-      {pastRows.length > 0 ? (
+      {past !== null ? (
         <box flexDirection="column" paddingLeft={4}>
-          {pastRows.map((row) => {
-            const on = row.index === position.current;
+          {past.rows.map((row) => {
             const line = (row.text.split("\n")[0] ?? "").slice(0, 80);
+            const extra = row.text.split("\n").length - 1;
             return (
-              <text key={row.index} fg={on ? theme.accent : theme.dim} wrapMode="none">
-                {on ? "› " : "  "}
+              <text key={row.index} fg={row.current ? theme.accent : theme.dim} wrapMode="none">
+                {row.current ? "› " : "  "}
                 {line}
+                {extra > 0 ? <span fg={theme.dim}> +{extra} lines</span> : null}
               </text>
             );
           })}
-          <text fg={theme.dim}>  ↑↓ earlier prompts · enter sends · esc keeps typing</text>
+          <text fg={theme.dim}>  ↑↓ browse · enter sends · esc back to what you were typing</text>
         </box>
       ) : null}
       {hints.length > 0 ? (
