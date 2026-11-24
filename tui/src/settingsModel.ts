@@ -7,13 +7,13 @@ import type { UpdateState } from "./update";
 import { relayProblem, type ShareMode } from "./share";
 import { THEMES, THEME_NAMES } from "./theme";
 
-export type Tab = "model" | "session" | "apps" | "appearance";
+export type Tab = "model" | "session" | "appearance" | "apps";
 
 export const TABS: { id: Tab; label: string }[] = [
   { id: "model", label: "Model" },
   { id: "session", label: "Session" },
-  { id: "apps", label: "Chat apps" },
   { id: "appearance", label: "Appearance" },
+  { id: "apps", label: "Chat apps" },
 ];
 
 export type RowKind = "choice" | "toggle" | "text" | "secret" | "action" | "radio" | "swatch" | "note" | "header";
