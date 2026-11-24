@@ -187,12 +187,25 @@ def pair(
         code = service.renew_pairing(provider) if renew else service.pairing(provider)
     except ConfigError as error:
         _fail(error)
+    link = _open_link(service, provider, code)
     if as_json:
-        _json({"ok": True, "pairing": code})
+        _json({"ok": True, "pairing": code, "link": link})
     elif code is None:
         console.print("The bot has an owner. Use --renew to add another.")
+    elif link:
+        console.print(f"Open [bold]{escape(link)}[/bold] and press Start.")
     else:
         console.print(f"Send [bold]/pair {code}[/bold] to the bot in a private chat.")
+
+
+def _open_link(service: "BridgeService", provider: str, code: str | None) -> str:
+    """A link that makes the person an owner in one tap, when the bridge runs and the service
+    takes the code from a link (Telegram does); empty otherwise."""
+    for entry in service.catalog():
+        links = cast("dict[str, object]", entry.get("links") or {})
+        if entry["id"] == provider and links.get("autopair") and code is not None:
+            return str(links.get("open", ""))
+    return ""
 
 
 @bridge_app.command()
@@ -227,9 +240,12 @@ def _once(provider: str, values: dict[str, str]) -> None:
         store = service.store(provider)
         if not store.owners:
             code = store.pairing_code()
+            link = platform.links.open.replace("{code}", code) if platform.links.autopair else ""
             console.print(
-                f"To own the bot, send [bold]/pair {code}[/bold] to {escape(platform.identity)} "
-                "in a private chat."
+                f"To own the bot, open [bold]{escape(link)}[/bold] and press Start."
+                if link
+                else f"To own the bot, send [bold]/pair {code}[/bold] to "
+                f"{escape(platform.identity)} in a private chat."
             )
         await service.run_with(provider, platform)
 

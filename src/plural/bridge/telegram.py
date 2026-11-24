@@ -34,7 +34,7 @@ from plural.bridge.model import (
     StepState,
     Tone,
 )
-from plural.bridge.platform import AuthError, PlatformError
+from plural.bridge.platform import AuthError, Links, PlatformError
 
 log = structlog.get_logger(__name__)
 
@@ -56,6 +56,8 @@ COMMANDS: Final = (
     ("unlink", "Stop following the session here"),
     ("status", "Which session this chat follows"),
     ("stop", "Stop the agent's current run"),
+    ("mute", "Stop alerts about sessions this chat does not follow"),
+    ("unmute", "Alert me when a session needs me or finishes"),
     ("ask", "Send a prompt without a mention"),
     ("help", "What the bot does"),
 )
@@ -124,6 +126,13 @@ class Telegram:
     @property
     def identity(self) -> str:
         return f"@{self.username}" if self.username else ""
+
+    @property
+    def links(self) -> Links:
+        if not self.username:
+            return Links()
+        base = f"https://t.me/{self.username}"
+        return Links(open=f"{base}?start={{code}}", invite=f"{base}?startgroup=true")
 
     async def start(self) -> None:
         if self._me_id:

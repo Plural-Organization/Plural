@@ -4,6 +4,7 @@ from pathlib import Path
 
 from plural.bridge.bridge import Bridge
 from plural.bridge.model import Answer, Incoming, Notice, Person, Place, Pressed, Said
+from plural.bridge.platform import Links
 from plural.bridge.store import BridgeStore
 from plural.protocol.commands import ClientInfo
 
@@ -15,6 +16,7 @@ PERSON = Person("1", "Askar")
 class Chat:
     name = "fake"
     identity = "@fake"
+    links = Links()
 
     def __init__(self) -> None:
         self.inbox: asyncio.Queue[Incoming] = asyncio.Queue()

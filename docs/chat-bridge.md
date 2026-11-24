@@ -15,9 +15,10 @@ Chat apps are set up on the host's computer, in any of three places. They all wr
 Each service shows what to do in it first (Telegram: [@BotFather](https://t.me/BotFather) → `/newbot`; Discord: Developer Portal → application → Bot, with *Message Content Intent* turned on), then asks for the bot's token. **Test** connects once and tells you the bot's name without saving anything; **Save and connect** keeps the token on your computer and connects at once.
 
 1. Add a service and save. The status shows *Connected* with the bot's name.
-2. The settings show a pairing code. Send `/pair <code>` to the bot in a **private** chat: that makes you its owner. *Add another owner* shows a new code.
+2. Press **Open Telegram** (or, on Discord, **Open Discord**) next to the code. Telegram opens the private chat with the bot: press *Start*, and you are its owner. Discord has no such link, so send `/pair <code>` there. *Add another owner* shows a new code.
 3. Start `plural` in a project folder as usual.
-4. Add the bot to a group or server, or stay in the private chat, and send `/link`. Pick the session from the buttons.
+
+That is all for yourself. In your private chat with the bot, write to it: it follows the session running on your computer by itself, and moves to the next one when that session ends. With several sessions running it asks which. To share a session with a group, press **Add to a group or server** (it adds the bot with the right permissions), then send `/link` there and pick the session.
 
 Something has to run the bridges: `plural daemon` does it for as long as it runs, and `plural bridge run` does it without the daemon. If neither runs, the settings say *Waiting to start*. Only one process on a computer runs them (the other only edits the settings), so a token is never read twice. A change made in any place reaches the running bridge within a couple of seconds.
 
@@ -25,10 +26,19 @@ To try a bot once without saving anything: `plural bridge telegram --token <toke
 
 From then on, start a message with its name (`plural, how does auth work?`), mention it (`@your_bot …`), reply to one of its messages or use `/ask <text>`. The names are `plural`, `плюрал`, `плурал` and the bot's own name; the *Names that call the bot* setting replaces them. In a private chat every message goes to the agent.
 
+## Alerts: it finds you when you are away
+
+An owner's private chat with the bot gets a message for sessions that chat does not follow, so a session started at the terminal can reach your phone:
+
+- **The agent waits for you.** An approval that is still unanswered after 15 seconds appears with its buttons and the project's name. Answer at the terminal first and nothing is sent.
+- **A long run is done.** A run longer than 30 seconds that finished or failed sends the start of its answer, with a *Follow here* button that makes the chat follow that session.
+
+`/mute` turns both off, `/unmute` brings them back. For a session the chat follows, everything shows in the chat as usual.
+
 ## One bot, many chats and sessions
 
 - Each service runs one bot, and the bot serves every chat it is in. Telegram and Discord can run side by side, and a session can be followed from both.
-- A chat follows one session at a time. In a Telegram group with topics, each topic is a chat of its own, so one group can follow several sessions, a topic each. On Discord a channel (or a thread, which is a channel of its own) is a chat.
+- A chat follows one session at a time. A private chat with an owner follows the running session by itself. In a Telegram group with topics, each topic is a chat of its own, so one group can follow several sessions, a topic each. On Discord a channel (or a thread, which is a channel of its own) is a chat.
 - Several chats can follow the same session, and the terminal and the web client keep working alongside them. What happens in the session shows up in every chat that follows it, whoever asked.
 - A link survives restarts: when the session's host stops, the chat says so, and when `plural -c` brings the session back, the chat follows it again on its own.
 
@@ -53,6 +63,7 @@ A guest's prompt is treated like any guest's: the commands and writes it leads t
 
 | | |
 |---|---|
+| `/mute`, `/unmute` | alerts to your private chat about sessions it does not follow |
 | `/link` | pick a running session for this chat |
 | `/unlink` | stop following it here |
 | `/status` | which session this chat follows, and whether it is running |
@@ -67,6 +78,7 @@ On Discord they are slash commands, which the bot registers when it connects. No
 - The token is a secret: anyone with it can read what the bot reads. It lives in `~/.plural/bridge/config.json`, readable by you only, and is never logged. The settings screens and the daemon never send it back: they say only that one is saved. Terminal and command-line changes pass it on standard input, never in the arguments.
 - What the agent writes goes through the chat service's servers, like any message in the chat. Don't link a chat to a session whose code must not leave your company.
 - Owners and links are in `~/.plural/bridge/<service>.json`, also readable by you only. Each running host leaves a file with its host link in `~/.plural/running/` while it runs, so the bridge can offer it in `/link`; it is as private as the host key next to it.
+- Alerts mean the bridge joins every session running on this computer, not only the linked ones, as a participant named `bridge`, for as long as an owner has a private chat with the bot and has not muted it. What it sends there (the project's folder name, what the agent asks to do, the start of its answer) goes through the chat service like any message. `/mute` stops the alerts and, with no linked chats left, the bridge leaves those sessions.
 - One bot, one reader: Telegram hands a bot's updates to one reader, so a second program with the same token stops with an error. Discord's bot needs *Message Content Intent*; without it the bridge says so instead of hearing nothing.
 - A bridge that loses the network tries again with a growing pause. One that the service refuses (a revoked token) stops and shows why, so it does not keep knocking.
 

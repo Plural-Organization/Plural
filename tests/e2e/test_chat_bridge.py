@@ -8,6 +8,7 @@ from pathlib import Path
 
 from plural.bridge.bridge import Bridge
 from plural.bridge.model import Answer, Incoming, Notice, Person, Phase, Place, Pressed, Said
+from plural.bridge.platform import Links
 from plural.bridge.store import BridgeStore
 from plural.protocol.commands import ClientInfo
 from plural.protocol.running import RunningRoom
@@ -17,6 +18,7 @@ from tests.e2e.support import Session, running_session
 OWNER = Person("1", "Tamirlan")
 GUEST = Person("2", "Askar")
 GROUP = Place("fake", "-100", None, private=False)
+HOME = Place("fake", "1", None, private=True)
 
 
 @dataclass(slots=True)
@@ -31,6 +33,7 @@ class Shown:
 class FakeChat:
     name = "fake"
     identity = "@fake_bot"
+    links = Links()
 
     def __init__(self) -> None:
         self.inbox: asyncio.Queue[Incoming] = asyncio.Queue()
@@ -93,11 +96,15 @@ def _copy(answer: Answer) -> Answer:
 
 
 @asynccontextmanager
-async def bridged(session: Session, tmp_path: Path) -> AsyncGenerator[tuple[FakeChat, BridgeStore]]:
+async def bridged(
+    session: Session, tmp_path: Path, *, link: bool = True, **options: float
+) -> AsyncGenerator[tuple[FakeChat, BridgeStore]]:
     chat = FakeChat()
     store = BridgeStore(tmp_path / "bridge-data", "fake")
     store.pair(OWNER, store.pairing_code())
-    store.link(GROUP, session.host.room)
+    if link:
+        store.link(GROUP, session.host.room)
+    store.remember_home(OWNER, HOME)
     entry = RunningRoom(
         room=session.host.room,
         host_link=session.host.host_link,
@@ -105,7 +112,14 @@ async def bridged(session: Session, tmp_path: Path) -> AsyncGenerator[tuple[Fake
         pid=os.getpid(),
         started_at=datetime.now(UTC),
     )
-    bridge = Bridge(chat, store, rooms=lambda: [entry], client=ClientInfo(kind="test", version="0"))
+    bridge = Bridge(
+        chat,
+        store,
+        rooms=lambda: [entry],
+        client=ClientInfo(kind="test", version="0"),
+        sync_s=0.05,
+        **options,
+    )
     running = asyncio.create_task(bridge.run())
     try:
         async with asyncio.timeout(10):
@@ -216,3 +230,126 @@ async def test_talk_not_meant_for_the_bot_reaches_the_agent_with_the_next_questi
     assert "we moved the deploy to Friday" in seen
     assert "Askar" in seen
     assert not [shown for shown in chat.shown if shown.key.startswith("say:")]
+
+
+async def test_a_long_run_alerts_the_owner_in_the_private_chat_that_does_not_follow(
+    tmp_path: Path,
+) -> None:
+    provider = FakeProvider([reply("the build is green")])
+    async with (
+        running_session(tmp_path, relayed=False, provider=provider) as session,
+        bridged(session, tmp_path, alert_after_s=0) as (chat, _),
+    ):
+        await chat.inbox.put(said(OWNER, "run the build", "5"))
+
+        alert = await chat.until(lambda: chat.last("alert:"))
+
+    assert alert.place == HOME
+    assert isinstance(alert.view, Notice)
+    assert "ws" in alert.view.text
+    assert "finished" in alert.view.text
+    assert "the build is green" in alert.view.text
+    assert alert.view.choices[0][0].data == f"link:{session.host.room}"
+
+
+async def test_a_short_run_does_not_alert(tmp_path: Path) -> None:
+    provider = FakeProvider([reply("quick")])
+    async with (
+        running_session(tmp_path, relayed=False, provider=provider) as session,
+        bridged(session, tmp_path) as (chat, _),
+    ):
+        await chat.inbox.put(said(OWNER, "hi", "5"))
+        await chat.until(lambda: chat.last("run:", final=True))
+        await asyncio.sleep(0.2)
+
+    assert chat.last("alert:") is None
+
+
+async def test_a_muted_owner_gets_no_alert(tmp_path: Path) -> None:
+    provider = FakeProvider([reply("done")])
+    async with (
+        running_session(tmp_path, relayed=False, provider=provider) as session,
+        bridged(session, tmp_path, alert_after_s=0) as (chat, store),
+    ):
+        store.mute(OWNER, True)
+        await chat.inbox.put(said(OWNER, "go", "5"))
+        await chat.until(lambda: chat.last("run:", final=True))
+        await asyncio.sleep(0.2)
+
+    assert chat.last("alert:") is None
+
+
+async def test_an_approval_nobody_answers_reaches_the_owner_and_can_be_answered_there(
+    tmp_path: Path,
+) -> None:
+    provider = FakeProvider([use_tool("bash", "b1", command="echo hi"), reply("it printed hi")])
+    async with (
+        running_session(tmp_path, relayed=False, provider=provider) as session,
+        bridged(session, tmp_path, approval_delay_s=0.05) as (chat, _),
+    ):
+        await chat.inbox.put(said(GUEST, "run echo hi", "7"))
+
+        asked = await chat.until(
+            lambda: next(
+                (
+                    shown
+                    for shown in chat.shown
+                    if shown.place == HOME and shown.key.startswith("approval:")
+                ),
+                None,
+            )
+        )
+        assert isinstance(asked.view, Notice)
+        assert "in `ws`" in asked.view.text
+        allow = asked.view.choices[0][0]
+
+        await chat.inbox.put(Pressed(HOME, OWNER, allow.data, query="q"))
+        await chat.until(lambda: chat.last("run:", final=True))
+        settled = next(
+            shown
+            for shown in reversed(chat.shown)
+            if shown.place == HOME and shown.key.startswith("approval:")
+        )
+
+    assert isinstance(settled.view, Notice)
+    assert "Allowed once" in settled.view.text
+    assert not settled.view.choices
+
+
+async def test_an_approval_answered_at_the_terminal_never_reaches_the_phone(
+    tmp_path: Path,
+) -> None:
+    provider = FakeProvider([use_tool("bash", "b1", command="echo hi"), reply("it printed hi")])
+    async with (
+        running_session(tmp_path, relayed=False, provider=provider) as session,
+        bridged(session, tmp_path, approval_delay_s=30) as (chat, _),
+    ):
+        await chat.inbox.put(said(GUEST, "run echo hi", "7"))
+        asked = await chat.until(lambda: chat.last("approval:"))
+        assert isinstance(asked.view, Notice)
+        await chat.inbox.put(Pressed(GROUP, OWNER, asked.view.choices[0][0].data, query="q"))
+        await chat.until(lambda: chat.last("run:", final=True))
+
+    assert [shown for shown in chat.shown if shown.place == HOME] == []
+
+
+async def test_an_owner_who_writes_in_private_follows_the_one_running_session_by_itself(
+    tmp_path: Path,
+) -> None:
+    provider = FakeProvider([reply("notes.txt has two lines")])
+    async with (
+        running_session(tmp_path, relayed=False, provider=provider) as session,
+        bridged(session, tmp_path, link=False) as (chat, store),
+    ):
+        await chat.inbox.put(Said(HOME, OWNER, "what is in notes.txt?", addressed=True, ref="9"))
+
+        done = await chat.until(lambda: chat.last("run:", final=True))
+
+    assert done.place == HOME
+    assert isinstance(done.view, Answer)
+    assert done.view.text == "notes.txt has two lines"
+    assert store.room_of(HOME) == session.host.room
+    told = chat.last("linked:")
+    assert told is not None
+    assert isinstance(told.view, Notice)
+    assert "Following `ws`" in told.view.text

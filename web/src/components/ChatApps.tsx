@@ -46,7 +46,28 @@ function Owners({ provider, refresh }: { provider: BridgeProvider; refresh: () =
           ))}
         </ul>
       )}
-      {shown === null ? (
+      {shown !== null && provider.links.open !== "" ? (
+        <>
+          <a
+            href={provider.links.open}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="button button--primary button--sm self-start"
+          >
+            Open {provider.label}
+          </a>
+          <Description>
+            {provider.links.autopair ? (
+              <>Press Start in the chat that opens: that makes you the owner. It works once.</>
+            ) : (
+              <>
+                Then send this to {bot} in the <b>private</b> chat. It works once.
+              </>
+            )}
+          </Description>
+          {provider.links.autopair ? null : <CopyBox text={`/pair ${shown}`} label="Copy the pairing message" />}
+        </>
+      ) : shown === null ? (
         <Button size="sm" variant="secondary" className="self-start" onPress={() => act(() => renewPairing(provider.id).then(setCode))}>
           Add another owner
         </Button>
@@ -57,6 +78,21 @@ function Owners({ provider, refresh }: { provider: BridgeProvider; refresh: () =
           </Description>
           <CopyBox text={`/pair ${shown}`} label="Copy the pairing message" />
         </>
+      )}
+      {provider.links.invite === "" ? null : (
+        <a
+          href={provider.links.invite}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="button button--secondary button--sm self-start"
+        >
+          Add to a group or server
+        </a>
+      )}
+      {provider.owners.length === 0 ? null : (
+        <Description>
+          Write to the bot in a private chat and it follows your session by itself, and tells you when it needs an answer or finishes a long run.
+        </Description>
       )}
       {problem === null ? null : <p className="text-sm text-danger">{problem}</p>}
     </div>

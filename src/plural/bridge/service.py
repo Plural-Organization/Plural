@@ -20,7 +20,7 @@ import structlog
 
 from plural.bridge.bridge import Bridge
 from plural.bridge.config import BridgeConfig, ConfigError, Entry
-from plural.bridge.platform import AuthError, ChatPlatform, PlatformError
+from plural.bridge.platform import AuthError, ChatPlatform, Links, PlatformError
 from plural.bridge.providers import builtin
 from plural.bridge.registry import Provider, Registry
 from plural.bridge.store import BridgeStore
@@ -54,6 +54,7 @@ class _Live:
     state: State = State.STARTING
     identity: str = ""
     error: str = ""
+    links: Links = field(default_factory=Links)
     retry_in: float = field(default=0.0)
 
 
@@ -101,6 +102,8 @@ class BridgeService:
         identity = live.identity if live else str(shown.get("identity", ""))
         error = live.error if live else str(shown.get("error", ""))
         values = entry.values if entry else {}
+        links = live.links if live else _links(shown)
+        code = None if store.owners else store.pairing_code()
         return {
             **provider.to_json(),
             "configured": configured,
@@ -115,7 +118,14 @@ class BridgeService:
             },
             "set": [item.id for item in provider.fields if values.get(item.id)],
             "owners": [{"id": key, "name": name} for key, name in store.owners.items()],
-            "pairing": None if store.owners else store.pairing_code(),
+            "pairing": code,
+            # Where to meet the bot. `open` already holds the pairing code when the service can
+            # take it from a link, so one click makes the person an owner.
+            "links": {
+                "open": links.open.replace("{code}", code or "") if state is State.RUNNING else "",
+                "invite": links.invite if state is State.RUNNING else "",
+                "autopair": links.autopair and code is not None,
+            },
             "chats": len(store.places_of_all()),
         }
 
@@ -272,6 +282,8 @@ class BridgeService:
                     "state": live.state.value,
                     "identity": live.identity,
                     "error": live.error,
+                    "open": live.links.open,
+                    "invite": live.links.invite,
                 }
                 for provider_id, live in self._live.items()
             },
@@ -329,6 +341,7 @@ class BridgeService:
                 platform = provider.build(entry.values)
                 await platform.start()
                 live.state, live.identity, live.error = State.RUNNING, platform.identity, ""
+                live.links = platform.links
                 delay = self._retry_s
                 await Bridge(
                     platform,
@@ -351,3 +364,7 @@ class BridgeService:
             live.retry_in = delay
             await asyncio.sleep(delay)
             delay = min(delay * 2, RETRY_MAX_S)
+
+
+def _links(shown: dict[str, object]) -> Links:
+    return Links(open=str(shown.get("open", "")), invite=str(shown.get("invite", "")))

@@ -23,6 +23,7 @@ const telegram = (over: Partial<BridgeApp> = {}): BridgeApp => ({
   owners: [],
   pairing: null,
   chats: 0,
+  links: { open: "", invite: "", autopair: false },
   ...over,
 });
 
@@ -73,6 +74,16 @@ describe("chat apps rows", () => {
     const owned = appsRows(state({ apps: [telegram({ ...base, owners: [{ id: "7", name: "Askar" }] })] }));
     expect(owned.find((row) => row.id === "app:telegram:owners")?.label).toContain("Askar");
     expect(ids(owned)).toContain("app:telegram:renew");
+  });
+
+  test("a link that carries the code replaces typing it, and the invite is offered", () => {
+    const links = { open: "https://t.me/plural_bot?start=482913", invite: "https://t.me/plural_bot?startgroup=true", autopair: true };
+    const base = { configured: true, enabled: true, state: "running" as const, identity: "@plural_bot", set: ["token"], links };
+    const rows = appsRows(state({ apps: [telegram({ ...base, pairing: "482913" })] }));
+    const pair = rows.find((row) => row.id === "app:telegram:pair")?.label ?? "";
+    expect(pair).toContain("https://t.me/plural_bot?start=482913");
+    expect(pair).not.toContain("/pair");
+    expect(rows.find((row) => row.id === "app:telegram:invite")?.label).toContain("startgroup");
   });
 
   test("a failed bridge shows why", () => {

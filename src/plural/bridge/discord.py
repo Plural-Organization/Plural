@@ -35,7 +35,7 @@ from plural.bridge.model import (
     StepState,
     Tone,
 )
-from plural.bridge.platform import AuthError, PlatformError
+from plural.bridge.platform import AuthError, Links, PlatformError
 
 log = structlog.get_logger(__name__)
 
@@ -53,11 +53,15 @@ INTENTS: Final = 1 | (1 << 9) | (1 << 12) | (1 << 15)
 STYLE: Final = {Tone.PRIMARY: 1, Tone.PLAIN: 2, Tone.GOOD: 3, Tone.DANGER: 4}
 ICON: Final = {StepState.RUNNING: "⏳", StepState.OK: "✓", StepState.FAILED: "✗"}
 EPHEMERAL: Final = 64
+# View channels, send messages, embed links, read history, and send in threads: all the bot does.
+INVITE_PERMISSIONS: Final = (1 << 10) | (1 << 11) | (1 << 14) | (1 << 16) | (1 << 38)
 COMMANDS: Final = (
     ("link", "Pick the session this chat follows", None),
     ("unlink", "Stop following the session here", None),
     ("status", "Which session this chat follows", None),
     ("stop", "Stop the agent's current run", None),
+    ("mute", "Stop alerts about sessions this chat does not follow", None),
+    ("unmute", "Alert me when a session needs me or finishes", None),
     ("ask", "Send a prompt to the agent", "What to ask"),
     ("help", "What the bot does", None),
     ("pair", "Become the bot's owner", "The code from Plural's settings"),
@@ -250,6 +254,16 @@ class Discord:
     @property
     def identity(self) -> str:
         return f"@{self.username}" if self.username else ""
+
+    @property
+    def links(self) -> Links:
+        if not self._app_id:
+            return Links()
+        return Links(
+            open=f"https://discord.com/users/{self._me_id}",
+            invite=f"https://discord.com/oauth2/authorize?client_id={self._app_id}"
+            f"&scope=bot%20applications.commands&permissions={INVITE_PERMISSIONS}",
+        )
 
     async def start(self) -> None:
         if self._me_id:

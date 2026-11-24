@@ -7,7 +7,7 @@ import pytest
 
 from plural.bridge.config import BridgeConfig, ConfigError
 from plural.bridge.model import Answer, Incoming, Notice, Person, Place, Pressed
-from plural.bridge.platform import AuthError, PlatformError
+from plural.bridge.platform import AuthError, Links, PlatformError
 from plural.bridge.registry import NAMES, Field, Provider, Registry
 from plural.bridge.service import BridgeService, State
 from plural.protocol.commands import ClientInfo
@@ -18,6 +18,7 @@ class Quiet:
 
     name = "quiet"
     identity = "@quiet_bot"
+    links = Links(open="https://chat.test/open?start={code}", invite="https://chat.test/invite")
 
     def __init__(self, values: Mapping[str, str]) -> None:
         self.values = dict(values)
@@ -123,6 +124,31 @@ async def test_saving_starts_the_bridge_and_removing_stops_it(tmp_path: Path) ->
 
     bridges.remove("quiet")
     assert only(bridges.catalog())["configured"] is False
+    await bridges.stop()
+
+
+async def test_a_running_bot_offers_links_and_the_open_link_carries_the_pairing_code(
+    tmp_path: Path,
+) -> None:
+    bridges = service(tmp_path)
+    assert bridges.start()
+    bridges.save("quiet", {"token": "good"})
+    await _until(bridges, "state", State.RUNNING)
+
+    described = only(bridges.catalog())
+    links = described["links"]
+    code = described["pairing"]
+
+    assert isinstance(links, dict)
+    assert links["open"] == f"https://chat.test/open?start={code}"
+    assert links["invite"] == "https://chat.test/invite"
+    assert links["autopair"] is True
+
+    bridges.save("quiet", {"token": "good"}, enabled=False)
+    off = only(bridges.catalog())["links"]
+    assert isinstance(off, dict)
+    assert off["open"] == ""
+    assert off["autopair"] is False
     await bridges.stop()
 
 

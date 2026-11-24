@@ -18,8 +18,17 @@ class _Link(BaseModel):
     private: bool = False
 
 
+class _Home(BaseModel):
+    """An owner's private chat with the bot: where it can reach them first."""
+
+    chat: str
+    thread: str | None = None
+    muted: bool = False
+
+
 class _Saved(BaseModel):
     owners: dict[str, str] = Field(default_factory=dict[str, str])
+    homes: dict[str, _Home] = Field(default_factory=dict[str, _Home])
     pairing: str | None = None
     links: dict[str, _Link] = Field(default_factory=dict[str, _Link])
 
@@ -79,8 +88,42 @@ class BridgeStore:
 
     def unpair(self, person_id: str) -> None:
         self._fresh()
-        if self._saved.owners.pop(person_id, None) is not None:
+        gone = self._saved.owners.pop(person_id, None)
+        home = self._saved.homes.pop(person_id, None)
+        if gone is not None or home is not None:
             self._save()
+
+    def remember_home(self, person: Person, place: Place) -> None:
+        """Keeps the private chat an owner talks to the bot in, so alerts can find them there."""
+        self._fresh()
+        if person.id not in self._saved.owners or not place.private:
+            return
+        known = self._saved.homes.get(person.id)
+        if known is not None and (known.chat, known.thread) == (place.chat, place.thread):
+            return
+        muted = known.muted if known else False
+        self._saved.homes[person.id] = _Home(chat=place.chat, thread=place.thread, muted=muted)
+        self._save()
+
+    def alert_places(self) -> list[Place]:
+        """The private chats of owners who did not mute alerts."""
+        self._fresh()
+        return [
+            Place(self.platform, home.chat, home.thread, True)
+            for person, home in self._saved.homes.items()
+            if not home.muted and person in self._saved.owners
+        ]
+
+    def mute(self, person: Person, muted: bool) -> bool:
+        """Turns alerts off or on for an owner. False when they have no private chat yet."""
+        self._fresh()
+        home = self._saved.homes.get(person.id)
+        if home is None:
+            return False
+        if home.muted != muted:
+            home.muted = muted
+            self._save()
+        return True
 
     def places_of_all(self) -> list[Place]:
         self._fresh()

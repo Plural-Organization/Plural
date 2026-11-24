@@ -19,6 +19,14 @@ export interface BridgeOwner {
   name: string;
 }
 
+export interface BridgeLinks {
+  /** Opens a private chat with the bot. With `autopair` it carries the pairing code: one tap makes the person its owner. */
+  open: string;
+  /** Adds the bot to a group or a server. */
+  invite: string;
+  autopair: boolean;
+}
+
 export interface BridgeProvider {
   id: string;
   label: string;
@@ -40,6 +48,7 @@ export interface BridgeProvider {
   /** The code that makes a person the owner; null once someone is. */
   pairing: string | null;
   chats: number;
+  links: BridgeLinks;
 }
 
 const json = (method: string, body: unknown): RequestInit => ({ method, body: JSON.stringify(body) });

@@ -1,6 +1,10 @@
 """One room seen from a chat: what happens in it goes to every chat that follows it, and what
 people write there goes into it.
 
+A run that took long and an approval nobody answered in a while also go to the owners' private chats
+that do not follow the room (the "away" chats), so someone who walked away from the computer learns
+that the agent finished or waits for them.
+
 The feed joins the room with the host link of a host running on this computer
 (`storage/running.py`), so it can answer approvals and stop runs. It never acts on its own: an
 approval is answered only after an owner presses a button (`bridge.py` checks who pressed).
@@ -9,9 +13,11 @@ participant invite, so the room sees them by name and treats their prompts as a 
 """
 
 import asyncio
+import time
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import structlog
 
@@ -62,6 +68,11 @@ log = structlog.get_logger(__name__)
 
 POLL_S = 2.0
 JOIN_TIMEOUT_S = 15.0
+# A run shorter than this finished while its owner was watching: no alert. An approval answered
+# within the delay (at the terminal) never reaches the owner's phone.
+ALERT_AFTER_S = 30.0
+APPROVAL_DELAY_S = 15.0
+GIST = 600
 MAX_PROMPT = 20_000
 
 DECIDED = {
@@ -106,6 +117,7 @@ class _Run:
     origin: tuple[Place, str | None] | None = None
     message: str | None = None
     texts: dict[str, str] = field(default_factory=dict[str, str])
+    started: float = field(default_factory=time.monotonic)
 
 
 @dataclass(slots=True)
@@ -133,6 +145,9 @@ class RoomFeed:
         approvals: ApprovalBook,
         client: ClientInfo,
         poll_s: float = POLL_S,
+        alerts: Callable[[], list[Place]] = list[Place],
+        alert_after_s: float = ALERT_AFTER_S,
+        approval_delay_s: float = APPROVAL_DELAY_S,
     ) -> None:
         self.room = room
         self._platform = platform
@@ -141,6 +156,11 @@ class RoomFeed:
         self._book = approvals
         self._client = client
         self._poll_s = poll_s
+        self._alerts = alerts
+        self._alert_after_s = alert_after_s
+        self._approval_delay_s = approval_delay_s
+        self._waiting: dict[str, asyncio.Task[None]] = {}
+        self._alerted: set[str] = set()
         self._host: SessionClient | None = None
         self._runs: dict[str, _Run] = {}
         self._messages: dict[str, str] = {}
@@ -209,6 +229,9 @@ class RoomFeed:
         await self._require_host().send(RunAbort())
 
     async def close(self) -> None:
+        for task in self._waiting.values():
+            task.cancel()
+        self._waiting.clear()
         await self._drop_guests()
 
     # The room's events
@@ -318,6 +341,7 @@ class RoomFeed:
             if step.state is StepState.RUNNING:
                 step.state = StepState.FAILED
         await self._render(run_id, run, final=True)
+        await self._alert_run(run_id, run)
 
     async def _show(self, run_id: str, *, final: bool) -> None:
         run = self._runs.get(run_id)
@@ -344,6 +368,21 @@ class RoomFeed:
         self._shown[approval.id] = approval
         notice = approval_notice(approval, self._book.short(self.room, approval.id))
         await self._notify(f"approval:{self.room}:{approval.id}", notice)
+        if self._away():
+            self._waiting[approval.id] = asyncio.create_task(
+                self._alert_approval(approval), name=f"alert:{approval.id}"
+            )
+
+    async def _alert_approval(self, approval: ApprovalView) -> None:
+        await asyncio.sleep(self._approval_delay_s)
+        away = self._away()
+        if approval.id not in self._shown or not away:
+            return
+        self._alerted.add(approval.id)
+        notice = approval_notice(
+            approval, self._book.short(self.room, approval.id), where=self._project()
+        )
+        await self._notify_to(away, f"approval:{self.room}:{approval.id}", notice)
 
     async def _resolved(self, approval_id: str, decision: ApprovalDecision, by: str | None) -> None:
         approval = self._shown.pop(approval_id, None)
@@ -351,11 +390,57 @@ class RoomFeed:
         if approval is None:
             return
         who = f" · {self._name(by)}" if by else ""
-        notice = approval_notice(approval, None, outcome=f"**{DECIDED[decision]}**{who}")
-        await self._notify(f"approval:{self.room}:{approval_id}", notice)
+        outcome = f"**{DECIDED[decision]}**{who}"
+        await self._notify(
+            f"approval:{self.room}:{approval_id}", approval_notice(approval, None, outcome=outcome)
+        )
+        await self._settle(approval, outcome)
+
+    async def _settle(self, approval: ApprovalView, outcome: str) -> None:
+        """Takes back what an approval alert asked: the buttons give way to how it ended."""
+        if (waiting := self._waiting.pop(approval.id, None)) is not None:
+            waiting.cancel()
+        if approval.id in self._alerted:
+            self._alerted.discard(approval.id)
+            notice = approval_notice(approval, None, outcome=outcome, where=self._project())
+            await self._notify_to(self._away(), f"approval:{self.room}:{approval.id}", notice)
+
+    def _away(self) -> list[Place]:
+        """Owners' private chats that do not follow this room, where alerts go."""
+        following = set(self._places())
+        return [place for place in self._alerts() if place not in following]
+
+    def _project(self) -> str:
+        if self.workspace:
+            return Path(self.workspace).name or self.workspace
+        return self.room[-6:]
+
+    async def _alert_run(self, run_id: str, run: _Run) -> None:
+        phase = run.answer.phase
+        away = self._away()
+        if phase not in (Phase.DONE, Phase.FAILED) or not away:
+            return
+        if time.monotonic() - run.started < self._alert_after_s:
+            return
+        project = self._project()
+        if phase is Phase.DONE:
+            lines = [f"**✅ {project}** finished"]
+            gist = _gist(run.answer.text)
+        else:
+            lines = [f"**⚠️ {project}** failed"]
+            gist = _gist(run.answer.error or "")
+        if gist:
+            lines.append(gist)
+        follow = ((Choice("👀 Follow here", f"link:{self.room}"),),)
+        await self._notify_to(
+            away, f"alert:{self.room}:{run_id}", Notice("\n\n".join(lines), follow)
+        )
 
     async def _notify(self, key: str, notice: Notice) -> None:
-        for place in self._places():
+        await self._notify_to(self._places(), key, notice)
+
+    async def _notify_to(self, places: list[Place], key: str, notice: Notice) -> None:
+        for place in places:
             try:
                 await self._platform.show(place, key, notice)
             except Exception:
@@ -372,8 +457,10 @@ class RoomFeed:
         self._messages.clear()
         for approval_id, approval in list(self._shown.items()):
             self._book.forget(self.room, approval_id)
-            notice = approval_notice(approval, None, outcome="_The session went offline._")
+            outcome = "_The session went offline._"
+            notice = approval_notice(approval, None, outcome=outcome)
             await self._notify(f"approval:{self.room}:{approval_id}", notice)
+            await self._settle(approval, outcome)
         self._shown.clear()
 
     # Connections
@@ -424,18 +511,22 @@ class RoomFeed:
                 await guest.task
 
 
-def approval_notice(approval: ApprovalView, short: str | None, *, outcome: str = "") -> Notice:
-    """What the agent asks to do, and the buttons to answer it while it waits."""
+def approval_notice(
+    approval: ApprovalView, short: str | None, *, outcome: str = "", where: str = ""
+) -> Notice:
+    """What the agent asks to do, and the buttons to answer it while it waits. `where` names the
+    project when the chat does not follow the session, so the message says whose request it is."""
     call = approval.call
+    here = f" in `{where}`" if where else ""
     if approval.folder is not None:
         access = "read and write" if approval.folder.write else "read"
         lines = [
-            f"**🔐 The agent asks to {access} a folder outside the project**",
+            f"**🔐 The agent{here} asks to {access} a folder outside the project**",
             _block(approval.folder.folder),
         ]
     else:
         what = RISKY.get(call.name, f"use `{call.name}`")
-        lines = [f"**🔐 The agent wants to {what}**"]
+        lines = [f"**🔐 The agent{here} wants to {what}**"]
         if call.subject:
             lines.append(_block(call.subject))
     lines.extend(f"⚠️ {warning}" for warning in approval.warnings)
@@ -463,3 +554,13 @@ def approval_notice(approval: ApprovalView, short: str | None, *, outcome: str =
 def _block(text: str) -> str:
     fence = "````" if "```" in text else "```"
     return f"{fence}\n{text[:3000]}\n{fence}"
+
+
+def _gist(text: str) -> str:
+    """The start of an answer, short enough for an alert and with its code fences closed."""
+    text = text.strip()
+    if len(text) > GIST:
+        text = text[:GIST].rstrip() + "…"
+    if text.count("```") % 2:
+        text += "\n```"
+    return text

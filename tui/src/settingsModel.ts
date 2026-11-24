@@ -412,9 +412,13 @@ export function appsRows(state: ModelState): Row[] {
       rows.push({ id: `app:${app.id}:owners`, kind: "note", label: `owners: ${owners}`, value: "", hint: "", enabled: false });
       if (app.pairing) {
         const bot = app.identity || "the bot";
-        rows.push({ id: `app:${app.id}:pair`, kind: "note", label: `send /pair ${app.pairing} to ${bot} in a private chat`, value: "", hint: "", enabled: false });
+        const label = app.links.autopair && app.links.open ? `open ${app.links.open} and press Start` : `send /pair ${app.pairing} to ${bot} in a private chat${app.links.open ? ` (${app.links.open})` : ""}`;
+        rows.push({ id: `app:${app.id}:pair`, kind: "note", label, value: "", hint: "", enabled: false });
       } else {
         rows.push({ id: `app:${app.id}:renew`, kind: "action", label: "Add another owner", value: "", hint: "shows a new pairing code", enabled: true });
+      }
+      if (app.links.invite) {
+        rows.push({ id: `app:${app.id}:invite`, kind: "note", label: `add it to a group or server: ${app.links.invite}`, value: "", hint: "", enabled: false });
       }
       rows.push({ id: `app:${app.id}:remove`, kind: "action", label: "Remove", value: "", hint: "forgets the token and settings", enabled: true });
     }

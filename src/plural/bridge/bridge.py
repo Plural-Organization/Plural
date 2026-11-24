@@ -17,7 +17,7 @@ import structlog
 
 from plural.bridge.model import Choice, Incoming, Notice, Place, Pressed, Said, Tone
 from plural.bridge.platform import ChatPlatform
-from plural.bridge.room import ApprovalBook, RoomFeed
+from plural.bridge.room import ALERT_AFTER_S, APPROVAL_DELAY_S, POLL_S, ApprovalBook, RoomFeed
 from plural.bridge.store import BridgeStore
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import ClientInfo
@@ -35,7 +35,9 @@ Start a message with "plural", mention me or reply to me to talk to the agent of
 /status: which session this chat follows
 /stop: stop the agent's current run
 /ask <text>: send a prompt without a mention
+/mute, /unmute: alerts to your private chat about sessions it does not follow
 
+In a private chat with its owner the bot follows the session running on the computer by itself. \
 Only the bot's owner links chats, answers the agent's requests and stops runs. Everyone else \
 writes to the session as a guest."""
 
@@ -48,7 +50,14 @@ class Bridge:
         *,
         rooms: Callable[[], list[RunningRoom]],
         client: ClientInfo,
+        alert_after_s: float = ALERT_AFTER_S,
+        approval_delay_s: float = APPROVAL_DELAY_S,
+        sync_s: float = POLL_S,
     ) -> None:
+        self._alert_after_s = alert_after_s
+        self._approval_delay_s = approval_delay_s
+        self._sync_s = sync_s
+        self._syncing: asyncio.Task[None] | None = None
         self._platform = platform
         self._store = store
         self._rooms = rooms
@@ -64,6 +73,7 @@ class Bridge:
         await self._platform.start()
         for room in self._store.rooms:
             self._feed(room)
+        self._syncing = asyncio.create_task(self._sync(), name="bridge:sync")
         try:
             async for item in self._platform.incoming():
                 self._dispatch(item)
@@ -93,7 +103,39 @@ class Bridge:
         except Exception:
             log.exception("bridge.handle_failed")
 
+    async def _sync(self) -> None:
+        """Keeps a feed on every running session while an owner wants alerts, so a session
+        started at the terminal can reach their phone, and lets go of the ones that ended."""
+        while True:
+            try:
+                await self._watch_rooms()
+            except Exception:
+                log.exception("bridge.sync_failed")
+            await asyncio.sleep(self._sync_s)
+
+    async def _watch_rooms(self) -> None:
+        running = {entry.room for entry in self._rooms()}
+        alerting = bool(self._store.alert_places())
+        if alerting:
+            for room in running:
+                self._feed(room)
+        keep: set[str] = set(self._store.rooms)
+        if alerting:
+            keep |= running
+        for room in [room for room in self._feeds if room not in keep]:
+            task = self._tasks.pop(room, None)
+            if task is not None:
+                task.cancel()
+                with suppress(asyncio.CancelledError, Exception):
+                    await task
+            await self._feeds.pop(room).close()
+
     async def close(self) -> None:
+        if self._syncing is not None:
+            self._syncing.cancel()
+            with suppress(asyncio.CancelledError):
+                await self._syncing
+            self._syncing = None
         for handling in list(self._handling):
             handling.cancel()
         for task in self._tasks.values():
@@ -117,6 +159,9 @@ class Bridge:
                 lookup=self._lookup,
                 approvals=self._book,
                 client=self._client,
+                alerts=self._store.alert_places,
+                alert_after_s=self._alert_after_s,
+                approval_delay_s=self._approval_delay_s,
             )
             self._tasks[room] = asyncio.create_task(feed.run(), name=f"room:{room}")
         return feed
@@ -127,6 +172,8 @@ class Bridge:
     # Messages
 
     async def _said(self, said: Said) -> None:
+        if said.place.private and self._store.is_owner(said.person):
+            self._store.remember_home(said.person, said.place)
         if not said.addressed:
             await self._overheard(said)
             return
@@ -140,10 +187,14 @@ class Bridge:
         owner = self._store.is_owner(said.person)
         match name:
             case "start" | "help":
-                if said.place.private and not owner:
+                if name == "start" and rest and not owner:
+                    await self._pair(said, rest)
+                elif said.place.private and not owner:
                     await self._say(said, _STRANGER)
                 else:
                     await self._say(said, HELP)
+                    if name == "start" and said.place.private:
+                        await self._resolve(said)
             case "pair":
                 await self._pair(said, rest)
             case "ask":
@@ -162,7 +213,9 @@ class Bridge:
                 await self._stop(said.place)
             case "status":
                 await self._say(said, self._status(said.place))
-            case "link" | "unlink" | "stop":
+            case "mute" | "unmute" if owner:
+                await self._mute(said, muted=name == "mute")
+            case "link" | "unlink" | "stop" | "mute" | "unmute":
                 await self._say(said, "Only the owner of this bot can do that.")
             case _:
                 pass
@@ -173,9 +226,11 @@ class Bridge:
                 said, "Write something after the command, or mention me with a question."
             )
             return
-        room = self._store.room_of(said.place)
+        owner = self._store.is_owner(said.person)
+        room = await self._resolve(said)
         if room is None:
-            owner = self._store.is_owner(said.person)
+            if said.place.private and owner:
+                return
             await self._say(
                 said,
                 "This chat follows no session yet. "
@@ -201,6 +256,58 @@ class Bridge:
         except CommandRejected as error:
             await self._say(said, f"The session refused it: {error.error.message}")
 
+    async def _resolve(self, said: Said) -> str | None:
+        """The session this chat follows. In an owner's private chat nobody has to link one: when
+        a single session runs on this computer, the chat follows it, and moves to the next one
+        when the session it followed is gone. With several running, it asks which. A chat that
+        is not an owner's private chat follows only what its owner linked."""
+        place = said.place
+        room = self._store.room_of(place)
+        if not (place.private and self._store.is_owner(said.person)):
+            return room
+        if room is not None and self._lookup(room) is not None:
+            return room
+        running = self._rooms()
+        if len(running) == 1 and running[0].room != room:
+            entry = running[0]
+            self._store.link(place, entry.room)
+            self._feed(entry.room)
+            await self._platform.show(
+                place,
+                self._key("linked"),
+                Notice(
+                    f"Following `{_project(entry)}`. Mention me to talk to its agent; "
+                    "/link picks another session."
+                ),
+            )
+            return entry.room
+        if room is None and not running:
+            await self._platform.show(
+                place,
+                self._key("link"),
+                Notice(
+                    "No session is running on this computer. Start `plural` in a project folder "
+                    "and write to me again: I follow it by myself."
+                ),
+            )
+        elif room is None:
+            await self._offer_rooms(place, again=True)
+        return room
+
+    async def _mute(self, said: Said, *, muted: bool) -> None:
+        if not self._store.mute(said.person, muted):
+            await self._say(
+                said, "Write to me in a private chat first, so I know where to reach you."
+            )
+        elif muted:
+            await self._say(said, "Muted. /unmute brings the alerts back.")
+        else:
+            await self._say(
+                said,
+                "I will write here when a session needs your answer, "
+                "and when a long run finishes in one this chat does not follow.",
+            )
+
     async def _overheard(self, said: Said) -> None:
         """Talk in a linked chat that is not meant for the bot goes to the room's chat, so the
         agent knows what the group said when it is next asked. It never answers it."""
@@ -220,15 +327,20 @@ class Bridge:
             await self._say(said, "You already own this bot.")
             return
         if self._store.pair(said.person, code):
+            self._store.remember_home(said.person, said.place)
             await self._say(
-                said, "Paired. Add me to a group, or stay here, and send /link to pick a session."
+                said,
+                "Paired. I follow the session running on this computer, and I write here when "
+                "it needs your answer or finishes a long run. /mute turns that off. "
+                "Add me to a group to share a session with it.",
             )
+            await self._resolve(said)
         else:
             await self._say(
                 said, "That code is not right. The runner of the bridge prints it at start."
             )
 
-    async def _offer_rooms(self, place: Place) -> None:
+    async def _offer_rooms(self, place: Place, *, again: bool = False) -> None:
         running = self._rooms()
         if not running:
             await self._platform.show(
@@ -243,7 +355,7 @@ class Bridge:
         rows = tuple(
             (
                 Choice(
-                    f"{Path(entry.workspace).name or entry.workspace} · {entry.room[-6:]}",
+                    f"{_project(entry)} · {entry.room[-6:]}",
                     f"link:{entry.room}",
                     Tone.PRIMARY,
                 ),
@@ -252,6 +364,8 @@ class Bridge:
         )
         current = self._store.room_of(place)
         note = f"\n\nNow following `{current}`." if current else ""
+        if again:
+            note += "\n\nThen write your message again."
         await self._platform.show(
             place,
             self._key("link"),
@@ -330,6 +444,10 @@ class Bridge:
         """A key of its own for each of the bot's own messages, so none replaces another."""
         self._said_count += 1
         return f"{kind}:{self._said_count}"
+
+
+def _project(entry: RunningRoom) -> str:
+    return Path(entry.workspace).name or entry.workspace
 
 
 _STRANGER = """This bot connects a chat to a Plural session.

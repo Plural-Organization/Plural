@@ -32,6 +32,7 @@ export interface BridgeApp {
   owners: { id: string; name: string }[];
   pairing: string | null;
   chats: number;
+  links: { open: string; invite: string; autopair: boolean };
 }
 
 export interface BridgeResult {
