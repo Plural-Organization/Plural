@@ -77,6 +77,7 @@ describe("the up key in the composer", () => {
   test("escape leaves the list and gives back what was being typed", async () => {
     const { setup } = await mount({ initial: ["an older prompt", "an even older one"], save: () => undefined });
     await setup.mockInput.typeText("half a sentence");
+    await until(setup, () => shows(setup, "half a sentence"));
 
     await setup.mockInput.pressArrow("up");
     await until(setup, () => shows(setup, "history 2/2"));

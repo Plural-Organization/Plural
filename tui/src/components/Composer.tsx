@@ -147,7 +147,9 @@ export function Composer(props: ComposerProps) {
   };
 
   const recall = (direction: 1 | -1): void => {
-    const step = direction === 1 ? older(history.current, browsing.current, value) : newer(history.current, browsing.current);
+    // The box itself, not the state: a key pressed right after typing sees the state of the render before.
+    const typed = area.current?.plainText ?? value;
+    const step = direction === 1 ? older(history.current, browsing.current, typed) : newer(history.current, browsing.current);
     if (step.value !== null) {
       browsing.current = step.browsing;
       recalled.current = step.value;
