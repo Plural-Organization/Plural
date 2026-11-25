@@ -39,7 +39,7 @@ import { listSessions, resolveSession } from "./sessions";
 import { parseAsk } from "./lib/ask";
 import { feedId, FeedRow, PinnedPrompt, pinId } from "./components/Cards";
 import { onCodeCopy } from "./code";
-import { Composer, type Delivery } from "./components/Composer";
+import { Composer, type Delivery, type PromptHistory } from "./components/Composer";
 import { SearchBar } from "./components/SearchBar";
 import { Inbox, type InboxItem } from "./components/Inbox";
 import { ExtrasDialog } from "./components/ExtrasDialog";
@@ -90,6 +90,8 @@ export interface AppProps {
   onLeaveTeam?: { owner: boolean; run: () => Promise<void> };
   settings?: Settings;
   onSettings?: (settings: Settings) => void;
+  // The prompts sent before, for the up key; without it they last until the program closes.
+  history?: PromptHistory;
   control?: AgentControl | null;
   keys?: Keys;
   onKeys?: (preset: PresetId, key: string, remember: boolean) => void;
@@ -149,6 +151,7 @@ export function App({
   onLeaveTeam,
   settings: initialSettings,
   onSettings,
+  history,
   control = null,
   keys = {},
   onKeys,
@@ -1723,6 +1726,7 @@ export function App({
           focused={active && focus === "composer" && !dialog && !inviteOpen && !shareOpen && !leaveOpen && extrasPrompt === null && setup === null}
           placeholder={asking ? `${asking.label}${asking.hint ? ` · ${asking.hint}` : ""}` : placeholder}
           remember={!asking?.secret}
+          {...(history ? { history } : {})}
           role={me?.role}
           people={mentionable(state, projection.meId)}
           commands={suggested}

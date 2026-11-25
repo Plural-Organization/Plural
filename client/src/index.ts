@@ -4,6 +4,7 @@ export * from "./commands";
 export * from "./decode";
 export * from "./diff";
 export * from "./feed";
+export * from "./history";
 export * from "./inbox";
 export * from "./link";
 export * from "./presenter";
