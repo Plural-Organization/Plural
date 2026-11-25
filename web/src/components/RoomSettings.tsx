@@ -126,7 +126,7 @@ function AgentSection({ room, label }: { room: string; label: string }) {
       <div className="flex flex-wrap items-center gap-x-3.5 gap-y-3">
         <span className="setting-agent__logo">{agentMark(shown) ? <AgentLogo label={shown} size={22} decorative /> : <Robot size={22} weight="duotone" aria-hidden="true" />}</span>
         <div className="flex min-w-[8rem] flex-1 flex-col leading-tight">
-          <span className="truncate font-display text-[17px] font-semibold text-foreground tracking-[-0.01em]">{name}</span>
+          <span className="line-clamp-2 break-words font-display text-[17px] font-semibold text-foreground tracking-[-0.01em]">{name}</span>
           {model.length > 0 ? <span className="truncate font-mono text-xs text-muted">{model.join(" · ")}</span> : null}
         </div>
         <Chip size="sm" variant="soft" color={mine === true ? "accent" : "default"} className="max-sm:order-last">
@@ -150,8 +150,8 @@ function AgentSection({ room, label }: { room: string; label: string }) {
           </Button>
         </div>
       ) : (
-        <p className="mt-3 flex items-center gap-2 text-[13px] text-muted">
-          {phase === "checking" || (phase === "ready" && mine === null) ? <Spinner size="sm" color="current" /> : <Desktop size={15} aria-hidden="true" />}
+        <p className="mt-3 flex items-start gap-2 text-[13px] leading-snug text-muted">
+          {phase === "checking" || (phase === "ready" && mine === null) ? <Spinner size="sm" color="current" className="flex-none" /> : <Desktop size={15} className="flex-none" aria-hidden="true" />}
           {phase === "checking" || (phase === "ready" && mine === null) ? "Looking for this room on your computer…" : "The agent is picked on the computer that runs this room. Open this page there to switch it."}
         </p>
       )}

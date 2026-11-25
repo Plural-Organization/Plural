@@ -324,7 +324,7 @@ export function TraceView({ trace, projection, send, onClose }: { trace: Trace; 
               <Tooltip.Content>Ask the host again</Tooltip.Content>
             </Tooltip>
             <Tooltip delay={300}>
-              <Drawer.CloseTrigger />
+              <Drawer.CloseTrigger className={styles.close} />
               <Tooltip.Content>
                 Close <Kbd className="ml-1 h-5 px-1 text-[11px]"><Kbd.Content>esc</Kbd.Content></Kbd> or{" "}
                 <Kbd className="h-5 px-1 text-[11px]"><Kbd.Content>t</Kbd.Content></Kbd>
