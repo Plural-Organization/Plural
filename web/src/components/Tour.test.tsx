@@ -27,3 +27,10 @@ test("the last card ends the tour instead of offering to skip it", () => {
   expect(html).toContain("Start working");
   expect(html).not.toContain("Skip tour");
 });
+
+test("a step that compares choices lists them, the dangerous one marked", () => {
+  const index = steps.findIndex((step) => step.id === "permissions");
+  const html = card(index);
+  expect(html).toContain("Danger zone");
+  expect(html).toContain('data-tone="danger"');
+});

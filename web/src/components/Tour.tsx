@@ -1,5 +1,5 @@
 import { Button, Kbd, Popover } from "@heroui/react";
-import { ArrowLeft, ArrowRight, X } from "@phosphor-icons/react";
+import { ArrowLeft, ArrowRight, Lightning, ShieldCheck, Warning, X } from "@phosphor-icons/react";
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import type { TourStep } from "../lib/onboarding";
@@ -182,6 +182,16 @@ export function TourCard({ step, index, count, onBack, onNext, onSkip }: TourCar
       </div>
       <h3 className="mt-2 font-display text-lg font-semibold tracking-[-0.015em]">{step.title}</h3>
       <p className="mt-1 text-sm leading-relaxed text-muted text-pretty">{step.body}</p>
+      {step.points ? (
+        <ul className="tour-points">
+          {step.points.map((point) => (
+            <li key={point.label} data-tone={point.tone}>
+              <span className="tour-points__mark" aria-hidden="true">{point.tone === "danger" ? <Warning size={13} weight="bold" /> : point.tone === "warn" ? <Lightning size={13} weight="bold" /> : <ShieldCheck size={13} weight="bold" />}</span>
+              <span><b>{point.label}</b> {point.says}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="mt-4 flex items-center gap-3">
         <span className="tour-dots" aria-hidden="true">
           {Array.from({ length: count }, (_, dot) => (

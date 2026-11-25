@@ -42,3 +42,10 @@ test("the host is shown the agent switch; a guest, who cannot use it, is not", (
     expect(new Set(steps.map((step) => step.id)).size).toBe(steps.length);
   }
 });
+
+test("host and guest are both told what the danger zone means before they meet it", () => {
+  for (const isHost of [true, false]) {
+    const step = tourSteps(isHost).find((item) => item.target === "permissions");
+    expect(step?.points?.some((point) => point.tone === "danger" && point.label === "Danger zone")).toBe(true);
+  }
+});
