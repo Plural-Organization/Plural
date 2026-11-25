@@ -20,7 +20,7 @@ function order(a: Participant, b: Participant): number {
 export function People({ projection, isHost, send, onInvite }: PeopleProps) {
   const state = projection.state;
   return (
-    <Section title="in the room">
+    <Section title="in the room" tour="people">
       <ul className={styles.people}>
         {Object.values(state.participants)
           .sort(order)

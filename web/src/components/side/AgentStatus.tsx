@@ -18,7 +18,7 @@ interface AgentStatusProps {
 export function AgentStatus({ projection, status, isHost, send, onSwitch }: AgentStatusProps) {
   const running = projection.state.run !== null;
   return (
-    <Section title="agent">
+    <Section title="agent" tour="agent">
       <AgentName label={projection.agentLabel} />
       <p className={running ? styles.running : "muted"}>
         {running ? <Spinner size="sm" color="current" className="mr-2 align-middle" /> : null}
