@@ -1,3 +1,5 @@
+import { parseTeamInvite } from "@plural/client";
+
 export function unwrapLink(raw: string): string {
   const text = raw
     .trim()
@@ -23,6 +25,16 @@ export function hostOf(url: string): string {
 
 export function browserJoinLink(invite: string, location: Pick<Location, "origin" | "pathname">): string {
   return `${location.origin}${location.pathname}?join=${encodeURIComponent(invite)}`;
+}
+
+// A shared target belongs to routing, not to the join form: App also needs to know about it so an
+// existing team workspace opens the form instead of hiding the target behind its sessions menu.
+export function sharedOnLoad(location: Pick<Location, "search" | "href">): string {
+  const query = new URLSearchParams(location.search).get("join");
+  if (query !== null) {
+    return query;
+  }
+  return parseTeamInvite(location.href) === null ? "" : location.href;
 }
 
 export function blockedByMixedContent(link: string, protocol: string): boolean {
