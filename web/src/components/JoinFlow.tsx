@@ -8,7 +8,7 @@ import { signInUrl } from "../lib/accounts";
 import { StartRoom } from "./StartRoom";
 import { PersonAvatar } from "./PersonAvatar";
 import { copyText } from "../lib/clipboard";
-import { blockedByMixedContent, hostOf, unwrapLink } from "../lib/links";
+import { blockedByMixedContent, hostOf, sharedOnLoad, unwrapLink } from "../lib/links";
 import { rememberName, savedName } from "../lib/saved";
 import { INSTALL } from "../lib/install";
 import { ROOM_ART, TEAM_ART } from "../lib/pixelArt";
@@ -72,14 +72,6 @@ function clearStartIntent(): void {
   }
 }
 
-function sharedOnLoad(): string {
-  const query = new URLSearchParams(window.location.search).get("join");
-  if (query !== null) {
-    return query;
-  }
-  return parseTeamInvite(window.location.href) === null ? "" : window.location.href;
-}
-
 interface JoinFlowProps {
   team: TeamState;
   account: AccountState;
@@ -93,16 +85,16 @@ interface JoinFlowProps {
 }
 
 export function JoinFlow({ team, account, onJoin, onTeamJoined, onStep, onCreateTeam }: JoinFlowProps) {
-  const [raw, setRaw] = useState(sharedOnLoad);
+  const [raw, setRaw] = useState(() => sharedOnLoad(window.location));
   const [target, setTarget] = useState<Target | null>(() => {
-    const shared = sharedOnLoad();
+    const shared = sharedOnLoad(window.location);
     if (shared === "") {
       return null;
     }
     const read = readShared(shared);
     return "target" in read ? read.target : null;
   });
-  const [starting, setStarting] = useState(() => startIntent() && account.loginError === null && sharedOnLoad() === "");
+  const [starting, setStarting] = useState(() => startIntent() && account.loginError === null && sharedOnLoad(window.location) === "");
   // The wish is spent once the room form (or the sign-in step) is up, so Back does not bring it back.
   useEffect(() => clearStartIntent(), []);
   const [problem, setProblem] = useState<string | null>(null);

@@ -27,3 +27,13 @@ test("links only to http and https", () => {
 test("keeps underscores inside words", () => {
   expect(render("call foo_bar_baz now")).toContain("foo_bar_baz");
 });
+
+test("renders markdown tables instead of exposing their source", () => {
+  const html = render("| Name | State | Note |\n| --- | :---: | ---: |\n| web | **ready** | `safe|value` |\n| tui | ready | escaped\\|pipe | ");
+  expect(html).toContain("<table>");
+  expect(html).toContain("<th>Name</th>");
+  expect(html).toContain("<strong>ready</strong>");
+  expect(html).toContain("<code>safe|value</code>");
+  expect(html).toContain("<td>escaped|pipe</td>");
+  expect(html).not.toContain("| --- |");
+});
