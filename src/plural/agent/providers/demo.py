@@ -1,6 +1,7 @@
 """The demo agent: a scripted provider that needs no model, to try the interface."""
 
 import asyncio
+import re
 from collections.abc import AsyncIterator
 
 from pydantic import JsonValue
@@ -14,6 +15,9 @@ from plural.agent.providers.base import (
     ToolCallRequest,
 )
 from plural.agent.providers.preset import Preset
+
+# A message that tags the agent ("@plrl $ ls") reaches it with the tag; the script reads past it.
+LEADING_TAGS = re.compile(r"^(?:@\S+\s+)+")
 
 
 def reply(text: str) -> tuple[LlmEvent, ...]:
@@ -37,7 +41,7 @@ class DemoProvider:
             turn = reply(f"Tool output:\n{last.content[:2000]}")
         else:
             self._counter += 1
-            text = last.content.splitlines()[-1].strip()
+            text = LEADING_TAGS.sub("", last.content.splitlines()[-1].strip())
             call_id = f"demo_{self._counter}"
             turn = (
                 use_tool("bash", call_id, command=text[2:])

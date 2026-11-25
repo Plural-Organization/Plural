@@ -198,6 +198,7 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
   return (
     <div
       className={styles.composer}
+      data-tour="composer"
       onDragOver={(event) => {
         if (onAttach && event.dataTransfer.types.includes("Files")) {
           event.preventDefault();

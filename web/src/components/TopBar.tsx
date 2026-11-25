@@ -34,7 +34,7 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
   const review = state.prompt_mode === "review";
   const mention = state.chat_mode === "mention";
   return (
-    <header className="col-span-full flex h-14 min-w-0 flex-none items-center gap-3 px-2 sm:px-3">
+    <header className="@container col-span-full flex h-14 min-w-0 flex-none items-center gap-3 px-2 sm:px-3">
       <Tooltip delay={300}>
         <Button isIconOnly variant="ghost" size="sm" className={railOpen ? "min-[981px]:hidden" : ""} aria-label="Show the sessions" onPress={onToggleRail}>
           <SidebarSimple size={18} />
@@ -42,7 +42,7 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
         <Tooltip.Content>Show the sessions</Tooltip.Content>
       </Tooltip>
       {host ? <PersonAvatar seed={host.name} /> : null}
-      <div className="flex min-w-0 flex-col leading-tight">
+      <div className="flex min-w-[6.5rem] shrink flex-col leading-tight">
         <span className="truncate font-display text-base font-semibold tracking-[-0.01em]">{host ? `${host.name}'s session` : "Room"}</span>
         <Tooltip delay={300}>
           <button type="button" className="max-w-[16ch] cursor-pointer truncate text-left font-mono text-xs text-muted hover:text-foreground" onClick={onCopyRoom}>
@@ -51,18 +51,18 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
           <Tooltip.Content>Copy the room id</Tooltip.Content>
         </Tooltip>
       </div>
-      <Chip size="sm" variant="soft" color={review ? "warning" : "default"} className="hidden sm:inline-flex">
+      <Chip size="sm" variant="soft" color={review ? "warning" : "default"} className="hidden flex-none @2xl:inline-flex">
         <Chip.Label><span className="cap">{state.prompt_mode} mode</span></Chip.Label>
       </Chip>
       <Tooltip delay={300}>
-        <Chip size="sm" variant="soft" color={mention ? "accent" : "default"} className="hidden sm:inline-flex">
+        <Chip size="sm" variant="soft" color={mention ? "accent" : "default"} className="hidden flex-none @2xl:inline-flex">
           <Chip.Label>{mention ? "agent answers @plrl" : "agent answers all"}</Chip.Label>
         </Chip>
         <Tooltip.Content>{mention ? "A plain message is chat the agent reads; it answers messages that tag @plrl" : "Every message goes to the agent; /team writes to people only"}</Tooltip.Content>
       </Tooltip>
       {state.permission_mode === "danger" ? (
         <Tooltip delay={300}>
-          <Chip size="sm" variant="soft" color="danger">
+          <Chip size="sm" variant="soft" color="danger" className="flex-none">
             <Chip.Label>Danger zone</Chip.Label>
           </Chip>
           <Tooltip.Content>Guests&apos; edits and commands run on the host&apos;s computer without asking. Folders outside the project still ask.</Tooltip.Content>
@@ -71,7 +71,7 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
       <span className="grow" />
       {meter ? (
         <Tooltip delay={300}>
-          <div className="hidden items-center gap-2.5 md:flex">
+          <div className="hidden flex-none items-center gap-2.5 @4xl:flex">
             <ProgressBar aria-label="Context used" value={meter.percent} size="sm" color={METER_COLOR[meter.level as keyof typeof METER_COLOR] ?? "accent"} className="w-16">
               <ProgressBar.Track><ProgressBar.Fill /></ProgressBar.Track>
             </ProgressBar>
@@ -81,7 +81,7 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
         </Tooltip>
       ) : null}
       {projection.agentLabel ? (
-        <Chip size="sm" variant="secondary" className="hidden max-w-[16rem] lg:inline-flex">
+        <Chip size="sm" variant="secondary" className="hidden max-w-[16rem] @5xl:inline-flex">
           <i className="status-dot" data-status={state.run ? "running" : "idle"} />
           <AgentLogo label={projection.agentLabel} size={14} decorative />
           <Chip.Label className="truncate">{projection.agentLabel}</Chip.Label>
@@ -89,7 +89,7 @@ export function TopBar({ room, projection, connection, panelOpen, panelShown = f
       ) : null}
       {connection === "online" ? (
         <Tooltip delay={300}>
-          <AvatarGroup className="hidden sm:flex" max={4}>
+          <AvatarGroup className="hidden flex-none @lg:flex" max={4}>
             {here.map((person) => (
               <Avatar key={person.id} size="sm">
                 <Avatar.Fallback style={orbFor(person.name)}>{""}</Avatar.Fallback>

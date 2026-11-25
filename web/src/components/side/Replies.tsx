@@ -5,7 +5,7 @@ import { Section } from "./Section";
 // When the agent answers: everyone sees it, so they know whether a plain message reaches the agent.
 export function Replies({ mode, isHost, send }: { mode: ChatMode; isHost: boolean; send: (command: Command) => void }) {
   return (
-    <Section title="agent answers">
+    <Section title="agent answers" tour="replies">
       {isHost ? (
         <ToggleButtonGroup
           size="sm"

@@ -16,6 +16,8 @@ import { RoomSettings } from "../components/RoomSettings";
 import { TraceView } from "../components/TraceView";
 import { Sidebar } from "../components/side/Sidebar";
 import { TopBar } from "../components/TopBar";
+import { Tour } from "../components/Tour";
+import { tourSteps } from "../lib/onboarding";
 import { useAttachments } from "../hooks/useAttachments";
 import { useHotkeys } from "../hooks/useHotkeys";
 import { useShareSelection } from "../hooks/useShareSelection";
@@ -53,8 +55,10 @@ interface RoomScreenProps {
   // Says whose session this is, once the room knows.
   onHost: (name: string) => void;
   onLeave: (reason: string | null) => void;
+  // A first visit: once the room is ready, walk this person through it, and say when they are done.
+  tour?: { onClose: (how: "done" | "skipped") => void };
 }
-export function RoomScreen({ link, name, member, active, notice = null, railTucked, side, onToggleRail, onHost, onLeave }: RoomScreenProps) {
+export function RoomScreen({ link, name, member, active, notice = null, railTucked, side, onToggleRail, onHost, onLeave, tour }: RoomScreenProps) {
   // The session keeps the callback it started with, so it calls the latest one through a ref.
   const leaving = useRef(onLeave);
   leaving.current = onLeave;
@@ -440,6 +444,24 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
       {invite && active ? <InviteDialog invite={invite} onClose={session.clearInvite} /> : null}
       {isHost && settingsOpen ? <RoomSettings room={link.room} projection={projection} send={send} onClose={() => setSettingsOpen(false)} /> : null}
       {session.trace && active ? <TraceView trace={session.trace} projection={projection} send={send} onClose={session.closeTrace} /> : null}
+      {tour && active && projection.ready && me !== undefined && me.role !== "viewer" ? (
+        <Tour
+          steps={tourSteps(isHost)}
+          onStep={(step) => {
+            // Each step's element has to be on screen: the panel opens for the panel's steps, and on a narrow screen,
+            // where it covers the room, it closes again for the others.
+            if (step.panel) {
+              setCanvasId(null);
+              setBoardShown(false);
+              if (isNarrow()) setPanel(true);
+              else setSideTucked(false);
+            } else if (isNarrow()) {
+              setPanel(false);
+            }
+          }}
+          onClose={tour.onClose}
+        />
+      ) : null}
     </div>
   );
 }

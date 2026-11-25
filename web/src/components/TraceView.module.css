@@ -36,6 +36,12 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* HeroUI pins the close button to the corner, over the last button of the header; here it takes its place in the row. */
+.header .close {
+  position: static;
+  flex: none;
+}
+
 .body {
   flex: 1;
   min-height: 0;
@@ -616,4 +622,31 @@
   margin: 0;
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
+}
+
+/* A phone: the drawer takes the whole width and the steps' columns tighten so they fit without scrolling sideways. */
+@media (max-width: 520px) {
+  .drawer {
+    width: 100vw;
+    border-left: 0;
+  }
+  .header {
+    padding: 12px 12px 10px 16px;
+  }
+  .body {
+    padding: 10px 12px 12px;
+  }
+  .legend {
+    margin-left: 0;
+    gap: 10px;
+  }
+  .rows {
+    min-width: 0;
+  }
+  .row,
+  .head {
+    grid-template-columns: minmax(0, 1fr) 40px minmax(56px, 28%) 40px;
+    gap: 6px;
+    padding: 0 8px;
+  }
 }

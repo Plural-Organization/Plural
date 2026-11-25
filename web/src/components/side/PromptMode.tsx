@@ -4,7 +4,7 @@ import { Section } from "./Section";
 
 export function PromptMode({ mode, isHost, send }: { mode: Mode; isHost: boolean; send: (command: Command) => void }) {
   return (
-    <Section title="prompts">
+    <Section title="prompts" tour="prompts">
       {isHost ? (
         <ToggleButtonGroup
           size="sm"

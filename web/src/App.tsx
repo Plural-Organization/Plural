@@ -15,6 +15,7 @@ import { useTeam } from "./hooks/useTeam";
 import type { Team } from "./lib/team";
 import { isNarrow, RAIL_WIDTH, SIDE_WIDTH, useTucked, useWidth } from "./lib/panels";
 import { ResizeHandle } from "./components/ResizeHandle";
+import { finishTour, isNewcomer } from "./lib/onboarding";
 import { sharedOnLoad } from "./lib/links";
 
 export interface Space {
@@ -48,6 +49,12 @@ export function App() {
   const [sideWidth, setSideWidth] = useWidth("plural.side.width", 290, SIDE_WIDTH);
   // Right after joining a team, the first session someone shares opens on its own, as in the terminal.
   const [entering, setEntering] = useState(false);
+  // Read before the first room leaves its traces in this browser: only someone new to Plural gets the tour.
+  const [newcomer, setNewcomer] = useState(isNewcomer);
+  const endTour = (how: "done" | "skipped") => {
+    finishTour(how);
+    setNewcomer(false);
+  };
 
   const open = (space: Space) => {
     unlockAudio();
@@ -185,6 +192,7 @@ export function App() {
               onToggleRail={() => (isNarrow() ? setRailOpen(true) : setRailTucked(!railTucked))}
               onHost={(owner) => setSpaces((current) => current.map((item) => (item.link.room === space.link.room && item.owner !== owner ? { ...item, owner } : item)))}
               onLeave={(reason) => close(space.link.room, reason)}
+              tour={newcomer && space.link.room === active && !showForm ? { onClose: endTour } : undefined}
             />
           </div>
         ))}
