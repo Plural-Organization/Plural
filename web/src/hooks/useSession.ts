@@ -108,7 +108,12 @@ export class SessionStore {
     this.client = client;
     this.update({ projection: client.projection, feed: emptyFeed(), connection: client.status, invite: null, asks: [] });
     const off = client.onStatus((connection) => {
-      if (connection !== "online") this.clearPreviewRequests();
+      if (connection !== "online") {
+        this.clearPreviewRequests();
+        // A fetch may have been lost with the socket. The feed asks again after reconnect; do not
+        // mistake that retry for a duplicate request.
+        this.asked.clear();
+      }
       this.update({ connection });
     });
     let alive = true;

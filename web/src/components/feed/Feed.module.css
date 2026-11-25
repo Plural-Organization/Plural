@@ -23,6 +23,7 @@
 .agent { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
 .agentMark { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: var(--raise); color: var(--fg); }
 .agentBody { flex: 1; display: grid; gap: 4px; min-width: 0; font-size: 15px; line-height: 1.6; }
+.agentBody > * { min-width: 0; }
 .agentName { display: flex; align-items: center; font-size: 13px; font-weight: 500; color: var(--fg); min-height: 20px; }
 
 .steps { display: grid; gap: 2px; margin-left: 42px; padding: 8px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; min-width: 0; }

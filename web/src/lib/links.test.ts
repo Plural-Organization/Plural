@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { blockedByMixedContent, browserJoinLink, hostOf, unwrapLink } from "./links";
+import { blockedByMixedContent, browserJoinLink, hostOf, sharedOnLoad, unwrapLink } from "./links";
 
 const INVITE = "ws://127.0.0.1:7777/r_1?invite=abc";
 
@@ -33,4 +33,16 @@ test("a room link with its own join code goes through the browser link and comes
   const page = browserJoinLink(room, { origin: "https://plural.example", pathname: "/" });
   expect(unwrapLink(page)).toBe(room);
   expect(unwrapLink(`plural join "${room}"`)).toBe(room);
+});
+
+test("routing sees a shared room even when a team workspace already exists", () => {
+  const room = "wss://relay.example/r_new?join=code";
+  const href = browserJoinLink(room, { origin: "https://plural.example", pathname: "/" });
+  expect(sharedOnLoad({ href, search: new URL(href).search })).toBe(room);
+  expect(sharedOnLoad({ href: "https://plural.example/", search: "" })).toBe("");
+});
+
+test("routing also sees a team invite carried by the page URL", () => {
+  const href = "https://plural.example/?team=join-code&relay=wss%3A%2F%2Frelay.example";
+  expect(sharedOnLoad({ href, search: new URL(href).search })).toBe(href);
 });

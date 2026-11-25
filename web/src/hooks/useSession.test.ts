@@ -73,3 +73,27 @@ test("a team member is told what the host said, not about invites", async () => 
 test("someone with a link still hears that the invite is used up", async () => {
   expect(await refuse(null)).toContain("Invites are single-use");
 });
+
+test("an image fetch lost with the connection can be retried after reconnect", async () => {
+  let status: ((connection: "connecting" | "online" | "offline") => void) | undefined;
+  vi.spyOn(SessionClient.prototype, "events").mockImplementation(async function* () { yield* [] as never[]; });
+  vi.spyOn(SessionClient.prototype, "onStatus").mockImplementation((listener) => {
+    status = listener;
+    return () => undefined;
+  });
+  const send = vi.spyOn(SessionClient.prototype, "send").mockResolvedValue(undefined);
+  const store = new SessionStore(parseLink("ws://localhost/r_1?token=test"), "Me", vi.fn());
+  const close = store.start();
+  try {
+    status?.("online");
+    store.fetchPicture("a_1");
+    store.fetchPicture("a_1");
+    expect(send).toHaveBeenCalledTimes(1);
+    status?.("offline");
+    status?.("online");
+    store.fetchPicture("a_1");
+    expect(send).toHaveBeenCalledTimes(2);
+  } finally {
+    close();
+  }
+});

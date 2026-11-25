@@ -16,6 +16,7 @@ import type { Team } from "./lib/team";
 import { isNarrow, RAIL_WIDTH, SIDE_WIDTH, useTucked, useWidth } from "./lib/panels";
 import { ResizeHandle } from "./components/ResizeHandle";
 import { finishTour, isNewcomer } from "./lib/onboarding";
+import { sharedOnLoad } from "./lib/links";
 
 export interface Space {
   link: JoinLink;
@@ -40,7 +41,7 @@ export function App() {
   // The create-a-team window lives here, not in the screen that opened it: creating a team swaps the
   // screen, and the invite link it shows has to outlive that.
   const [creating, setCreating] = useState(false);
-  const [adding, setAdding] = useState<"join" | "start" | false>(false);
+  const [adding, setAdding] = useState<"join" | "start" | false>(() => (sharedOnLoad(window.location) === "" ? false : "join"));
   const [railOpen, setRailOpen] = useState(false);
   const [railTucked, setRailTucked] = useTucked("plural.rail.tucked");
   const [railWidth, setRailWidth] = useWidth("plural.rail.width", 288, RAIL_WIDTH);
