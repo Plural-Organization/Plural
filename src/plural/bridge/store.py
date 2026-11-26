@@ -3,12 +3,17 @@
 import json
 import os
 import secrets
+import time
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 
 from pydantic import BaseModel, Field, ValidationError
 
 from plural.bridge.model import Person, Place
+
+PAIRING_TTL_S = 10 * 60
+PAIRING_MAX_FAILURES = 5
 
 
 class _Link(BaseModel):
@@ -30,6 +35,8 @@ class _Saved(BaseModel):
     owners: dict[str, str] = Field(default_factory=dict[str, str])
     homes: dict[str, _Home] = Field(default_factory=dict[str, _Home])
     pairing: str | None = None
+    pairing_issued_at: float | None = None
+    pairing_failures: int = 0
     links: dict[str, _Link] = Field(default_factory=dict[str, _Link])
 
 
@@ -40,9 +47,12 @@ class BridgeStore:
     unlink chats, stop a run. Everyone else in a linked chat writes to the room as a guest.
     """
 
-    def __init__(self, data_dir: Path, platform: str) -> None:
+    def __init__(
+        self, data_dir: Path, platform: str, *, clock: Callable[[], float] = time.time
+    ) -> None:
         self.platform = platform
         self.path = data_dir / "bridge" / f"{platform}.json"
+        self._clock = clock
         self._stamp = 0
         self._saved = self._load()
 
@@ -71,20 +81,49 @@ class BridgeStore:
 
     def pairing_code(self, *, renew: bool = False) -> str:
         self._fresh()
-        if renew or self._saved.pairing is None:
-            self._saved.pairing = f"{secrets.randbelow(10**6):06d}"
+        if renew or self._pairing_expired():
+            self._renew_pairing()
             self._save()
-        return self._saved.pairing
+        pairing = self._saved.pairing
+        assert pairing is not None
+        return pairing
 
     def pair(self, person: Person, code: str) -> bool:
         self._fresh()
         expected = self._saved.pairing
-        if expected is None or not secrets.compare_digest(code.strip(), expected):
+        if expected is None or self._pairing_expired():
+            self._renew_pairing()
+            self._save()
+            return False
+        if not secrets.compare_digest(code.strip(), expected):
+            self._saved.pairing_failures += 1
+            if self._saved.pairing_failures >= PAIRING_MAX_FAILURES:
+                self._renew_pairing()
+            self._save()
             return False
         self._saved.owners[person.id] = person.name
         self._saved.pairing = None
+        self._saved.pairing_issued_at = None
+        self._saved.pairing_failures = 0
         self._save()
         return True
+
+    def _pairing_expired(self) -> bool:
+        issued = self._saved.pairing_issued_at
+        return (
+            self._saved.pairing is None
+            or issued is None
+            or self._clock() - issued >= PAIRING_TTL_S
+        )
+
+    def _renew_pairing(self) -> None:
+        previous = self._saved.pairing
+        pairing = f"{secrets.randbelow(10**6):06d}"
+        while pairing == previous:
+            pairing = f"{secrets.randbelow(10**6):06d}"
+        self._saved.pairing = pairing
+        self._saved.pairing_issued_at = self._clock()
+        self._saved.pairing_failures = 0
 
     def unpair(self, person_id: str) -> None:
         self._fresh()
