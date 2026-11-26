@@ -271,7 +271,7 @@ class Bridge:
             self._store.unlink(place)
             room = None
         running = self._rooms()
-        if len(running) == 1 and running[0].room != room:
+        if len(running) == 1:
             entry = running[0]
             self._store.link(place, entry.room)
             self._feed(entry.room)
