@@ -124,9 +124,7 @@ class BridgeStore:
     def _pairing_expired(self) -> bool:
         issued = self._saved.pairing_issued_at
         return (
-            self._saved.pairing is None
-            or issued is None
-            or self._clock() - issued >= PAIRING_TTL_S
+            self._saved.pairing is None or issued is None or self._clock() - issued >= PAIRING_TTL_S
         )
 
     def _renew_pairing(self) -> None:

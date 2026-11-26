@@ -21,8 +21,7 @@ def feed() -> RoomFeed:
     )
 
 
-async def test_prompt_origin_follows_the_request_id_when_identical_prompts_arrive_out_of_order(
-) -> None:
+async def test_request_id_routes_identical_prompts_that_arrive_out_of_order() -> None:
     room = feed()
     first = _Sent("p_host", "same", Place("fake", "one"), "m1")
     second = _Sent("p_host", "same", Place("fake", "two"), "m2")
