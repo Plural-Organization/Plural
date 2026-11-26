@@ -20,6 +20,7 @@ export type {
   ChatMode,
   AccessRequestView,
   BriefingRequestView,
+  HandoverView,
   JoinRequestView,
   ContextPart,
   ContextPartKind,

@@ -50,6 +50,8 @@ const SPECS = [
   { name: "import", usage: "/import", description: "the address that lets Claude, ChatGPT or Grok send a chat's context to this session", hostOnly: true, kind: "local" },
   { name: "brief", usage: "/brief share off|ask|team", description: "who may ask your agent for a briefing of this session", hostOnly: true, kind: "local", unlisted: ["tui"] },
   { name: "ask", usage: "/ask @name <question> · /ask give", description: "ask a teammate's agent about their session, then hand the answer to yours (host: /ask share off|ask|team)", kind: "local", unlisted: ["web"] },
+  { name: "handover", usage: "/handover <name> | cancel", description: "hand the host to a participant on their computer; the room and the conversation go with it", hostOnly: true, kind: "local" },
+  { name: "approver", usage: "/approver [add|rm <name>]", description: "let a participant answer tool calls when you are away (once or refuse, never a rule)", hostOnly: true, kind: "local" },
   { name: "access", usage: "/access [note]", description: "ask the host for the right to write (host: allow|deny|revoke <name>)", kind: "local" },
   {
     name: "preview", usage: "/preview <port> [title] | off", description: "show a server running on this machine in the web canvas", hostOnly: true, kind: "local",

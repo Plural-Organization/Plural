@@ -225,6 +225,11 @@ export function Sidebar({ projection, room: _room, inbox, running, status, space
                 <text selectable={false} key={item.id} fg={theme.info}>
                   ⏸ the plan is ready to start
                 </text>
+              ) : item.kind === "handover" ? (
+                <box key={item.id} flexDirection="column">
+                  <text selectable={false} fg={theme.warn}>⇄ the host is offered to you</text>
+                  <text selectable={false} fg={theme.dim}>  y takes it, n declines</text>
+                </box>
               ) : (
                 <box key={item.id} flexDirection="column">
                   <text selectable={false} fg={theme.warn}>? {nameOf(projection, item.proposal.author_id)} proposes</text>

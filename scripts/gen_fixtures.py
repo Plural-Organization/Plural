@@ -12,6 +12,7 @@ from plural.protocol.events import (
     AgentChanged,
     ApprovalRequested,
     ApprovalResolved,
+    ApproverChanged,
     AttachmentAdded,
     BriefingDelivered,
     BriefingImported,
@@ -23,6 +24,10 @@ from plural.protocol.events import (
     ContextCompacted,
     Event,
     EventRecord,
+    HostHandedOver,
+    HostHandoverAccepted,
+    HostHandoverEnded,
+    HostHandoverOffered,
     JoinRequested,
     JoinResolved,
     MessageDelta,
@@ -59,6 +64,7 @@ from plural.protocol.models import (
     ChatMode,
     Delivery,
     DequeueReason,
+    HandoverEnd,
     JoinDecision,
     JoinRequestView,
     Origin,
@@ -201,6 +207,12 @@ def _steps() -> list[tuple[str, Event]]:
         ("record", BriefingSharingChanged(mode=BriefingSharing.OFF)),
         ("record", ParticipantRoleChanged(participant_id="p_bek2222", role=Role.PARTICIPANT)),
         ("record", PromptModeChanged(mode=PromptMode.REVIEW)),
+        ("record", ApproverChanged(participant_id="p_bek2222", enabled=True)),
+        ("record", ApproverChanged(participant_id="p_alia", enabled=True)),
+        ("record", ApproverChanged(participant_id="p_alia", enabled=False)),
+        ("record", HostHandoverOffered(participant_id="p_alia", name="Alia")),
+        ("record", HostHandoverAccepted(participant_id="p_alia")),
+        ("record", HostHandoverEnded(reason=HandoverEnd.CANCELLED)),
         ("record", AgentChanged(agent="anthropic · claude-opus-5-5")),
         (
             "record",
@@ -354,6 +366,17 @@ def _steps() -> list[tuple[str, Event]]:
         ),
         ("record", AdmissionChanged(mode=AdmissionMode.APPROVE)),
         ("record", ParticipantRevoked(participant_id="p_alia")),
+        ("record", HostHandoverOffered(participant_id="p_bek2222", name="Bek")),
+        ("record", HostHandoverAccepted(participant_id="p_bek2222")),
+        (
+            "record",
+            HostHandedOver(
+                former_host_id="p_oldhost",
+                former_host_name="Host",
+                participant_id="p_bek2222",
+                name="Bek",
+            ),
+        ),
     ]
 
 

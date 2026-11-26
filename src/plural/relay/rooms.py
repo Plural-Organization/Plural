@@ -7,6 +7,7 @@ import time
 from collections.abc import AsyncIterator, Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from typing import Final
 
 import structlog
@@ -25,12 +26,17 @@ from plural.protocol.relay import (
 )
 from plural.relay.entitlements import EntitlementWatch, Outcome
 from plural.relay.limits import PeerGate, RelayLimits, TokenBucket, peer_of
+from plural.security.succession import InvalidSuccession, verify_succession
 from plural.security.tokens import TokenVerifier
 
 CLOSE_BAD_OPEN = 4400
 CLOSE_BAD_PROOF = 4401
 CLOSE_NO_HOST = 4404
 CLOSE_ROOM_TAKEN = 4409
+# The room's host is another one now: guests come back and say who they are to it.
+CLOSE_HOST_CHANGED = 4410
+# Said to a host whose room its own word gave to another key: it is not the host any more.
+CLOSE_HANDED_OVER = 4411
 CLOSE_TOO_LARGE = 4413
 CLOSE_RATE_LIMITED = 4429
 CLOSE_SLOW = 4408
@@ -227,11 +233,16 @@ class Rooms:
                 return
             room = self._rooms[room_id] = Room(public_key=opening.public_key)
             log.info("relay.room_opened", room=room_id, peer=peer)
+            gone = CLOSE_ROOM_TAKEN
         elif room.public_key != opening.public_key:
-            await socket.close(CLOSE_ROOM_TAKEN)
-            return
+            if not await self._succeed(room, opening, room_id):
+                await socket.close(CLOSE_ROOM_TAKEN)
+                return
+            gone = CLOSE_HANDED_OVER
+        else:
+            gone = CLOSE_ROOM_TAKEN
         if room.host is not None:
-            await room.host.close(CLOSE_ROOM_TAKEN)
+            await room.host.close(gone)
             for waiting in room.requests.values():
                 _abandon(waiting)
             room.requests.clear()
@@ -271,6 +282,27 @@ class Rooms:
                 room.requests.clear()
                 for connection_id in list(room.guests):
                     await self._drop(room, connection_id, CLOSE_NO_HOST)
+
+    async def _succeed(self, room: Room, opening: RelayOpen, room_id: str) -> bool:
+        """Gives the room to a new key when its current key said so, for this key and just now."""
+        if opening.succession is None:
+            return False
+        try:
+            verify_succession(
+                opening.succession,
+                room=room_id,
+                current_key=room.public_key,
+                new_key=opening.public_key,
+                now=datetime.now(UTC),
+            )
+        except InvalidSuccession:
+            return False
+        room.public_key = opening.public_key
+        log.info("relay.room_handed_over", room=room_id)
+        # They were talking to the old host; the new one has not met them, so they come back.
+        for connection_id in list(room.guests):
+            await self._drop(room, connection_id, CLOSE_HOST_CHANGED)
+        return True
 
     def _judge(self, opening: RelayOpen, room_id: str, peer: str) -> tuple[int, str] | None:
         """Records what the host's certificate says and, on a relay that requires accounts, says

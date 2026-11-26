@@ -4,7 +4,7 @@ import binascii
 import hashlib
 import json
 import sqlite3
-from collections.abc import Coroutine, Sequence
+from collections.abc import Callable, Coroutine, Sequence
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from datetime import datetime
@@ -23,7 +23,17 @@ from plural.agent.providers.base import LlmImage
 from plural.agent.skills import SKILL_COMMAND, Package, SkillError, SkillLibrary, parse_package
 from plural.agent.subagents import AgentError, AgentLibrary, AgentSpec, agent_tools
 from plural.agent.tools.extra.board import AGENT_AUTHOR, BoardRefused
-from plural.core import access, approvals, briefings, chat, joins, policies, proposals, visibility
+from plural.core import (
+    access,
+    approvals,
+    briefings,
+    chat,
+    joins,
+    policies,
+    proposals,
+    visibility,
+)
+from plural.core import handover as handovers
 from plural.core.errors import (
     Conflict,
     DomainError,
@@ -43,6 +53,7 @@ from plural.host.attachments import AttachmentVault, image_type
 from plural.host.briefing import BriefingService
 from plural.host.conflicts import ConflictBoard
 from plural.host.gateway import Admission, Gateway, NeedsApproval
+from plural.host.handover import GRANT_PATIENCE, OFFER_TTL, HandoverDesk
 from plural.host.inbox import (
     AgentOutput,
     ApprovalExpired,
@@ -51,6 +62,8 @@ from plural.host.inbox import (
     BriefingReady,
     ChatAccepted,
     Disconnected,
+    HandoverLapsed,
+    HostDisplaced,
     Inbox,
     InboxMessage,
     Incoming,
@@ -97,6 +110,7 @@ from plural.protocol.commands import (
     AgentsCreate,
     AgentsRemove,
     ApprovalRespond,
+    ApproverSet,
     AttachmentFetch,
     BoardClear,
     BoardDraw,
@@ -115,6 +129,11 @@ from plural.protocol.commands import (
     CursorSet,
     FileAttach,
     HistoryGet,
+    HostHandoverAnswer,
+    HostHandoverCancel,
+    HostHandoverFetch,
+    HostHandoverOffer,
+    HostHandoverReady,
     ImportLink,
     InviteCreate,
     JoinDecide,
@@ -155,6 +174,7 @@ from plural.protocol.events import (
     AgentChanged,
     AgentsChanged,
     ApprovalRequested,
+    ApproverChanged,
     AttachmentAdded,
     AttachmentData,
     BoardCleared,
@@ -175,6 +195,7 @@ from plural.protocol.events import (
     ErrorRaised,
     Event,
     EventRecord,
+    HostHandedOver,
     ImportLinkShown,
     InviteCreated,
     JoinPending,
@@ -239,6 +260,7 @@ from plural.protocol.models import (
     ContextView,
     Delivery,
     DequeueReason,
+    HandoverEnd,
     JoinDecision,
     Participant,
     PermissionMode,
@@ -259,6 +281,9 @@ from plural.security.secrets import Redactor, is_denied_path
 from plural.storage.sessions import fork_session, read_session, session_path
 
 log = structlog.get_logger(__name__)
+
+# What a host that is being handed over refuses, so the log the successor holds is the whole of it.
+NEW_WORK = (PromptSubmit, ProposalDecide, ContextCompact, CommandRun, SessionFork)
 
 PLAN_NOTE = prompt("plan")
 MAX_REPLY_CHARS = 8000
@@ -329,7 +354,14 @@ class SessionActor:
         team_sweep_s: float = 30.0,
         imported: BriefingImport | None = None,
         import_url: str | None = None,
+        handover_desk: HandoverDesk | None = None,
+        handed_over: HostHandedOver | None = None,
+        on_displaced: Callable[[], None] | None = None,
     ) -> None:
+        self._desk = handover_desk
+        self._handed_over = handed_over
+        self._on_displaced = on_displaced
+        self._handover_timer: asyncio.TimerHandle | None = None
         self._imported = imported
         self._import_url = import_url
         self._team_sweep_s = team_sweep_s
@@ -404,6 +436,7 @@ class SessionActor:
         records = await self._store.read()
         for record in records:
             self._state = reduce(self._state, record)
+        await self._take_the_seat()
         if self._state.preview is not None:
             await self._emit(PreviewChanged(preview=None))
         self._sync_policy()
@@ -416,11 +449,14 @@ class SessionActor:
         if conversation := await self._history(records):
             self._agent.restore(conversation)
         self._agent.load_tools(self._state.loaded_tools)
-        if self._state.briefings_imported:
+        if self._state.briefings_imported or self._state.handovers:
+            # What an earlier host wrote is, to this one, what a guest wrote (ADR 0019).
             self._agent.mark_shared()
         if self._ledger is not None:
             for record in records:
                 self._ledger.observe(record.event)
+        if (offer := handovers.end(self._state, HandoverEnd.CANCELLED)) is not None:
+            await self._emit(offer)
         for stale in list(self._state.briefing_requests.values()):
             await self._emit(
                 BriefingResolved(
@@ -602,6 +638,12 @@ class SessionActor:
             case TypingExpired(participant_id=participant_id):
                 if self._typing.pop(participant_id, None) is not None:
                     await self._emit(ParticipantTyping(participant_id=participant_id, typing=False))
+            case HandoverLapsed(participant_id=participant_id):
+                await self._handover_lapsed(participant_id)
+            case HostDisplaced():
+                log.warning("host.displaced", room=self._publisher.room)
+                if self._on_displaced is not None:
+                    self._on_displaced()
             case ApprovalExpired(approval_id=approval_id):
                 self._timers.pop(approval_id, None)
                 expired = approvals.expire(self._state, approval_id)
@@ -627,6 +669,8 @@ class SessionActor:
             return
         participant = self._authenticate(connection, token)
         authorize(participant.role, command)
+        if self._desk is not None and self._desk.frozen and isinstance(command, NEW_WORK):
+            raise Conflict("the host is being handed over; this waits for the new host")
         match command:
             case HistoryGet():
                 records = await self._store.read(before=command.before_seq, limit=command.limit)
@@ -647,6 +691,12 @@ class SessionActor:
             case ProposalDecide():
                 await self._decide(participant, command)
             case ApprovalRespond():
+                approvals.authorize_response(
+                    self._state,
+                    approval_id=command.approval_id,
+                    decision=command.decision,
+                    responder=participant,
+                )
                 resolved = approvals.resolve(
                     self._state,
                     approval_id=command.approval_id,
@@ -690,6 +740,12 @@ class SessionActor:
                     self._agent.compact(run_id)
             case PromptModeSet():
                 await self._set_prompt_mode(command.mode, actor_id=participant.id)
+            case ApproverSet():
+                await self._set_approver(command, actor_id=participant.id)
+            case HostHandoverOffer() | HostHandoverAnswer() | HostHandoverCancel():
+                await self._handover_step(participant, command)
+            case HostHandoverFetch() | HostHandoverReady():
+                await self._handover_transfer(participant, connection, command)
             case PermissionModeSet():
                 await self._set_permission_mode(command.mode, actor_id=participant.id)
             case ChatModeSet():
@@ -1246,6 +1302,102 @@ class SessionActor:
     async def _set_prompt_mode(self, mode: PromptMode, *, actor_id: str) -> None:
         if mode is not self._state.prompt_mode:
             await self._emit(PromptModeChanged(mode=mode), actor_id=actor_id)
+
+    async def _take_the_seat(self) -> None:
+        """A host that was handed the room writes down that it was, once, before anything else."""
+        moved = self._handed_over
+        if moved is None:
+            return
+        person = self._state.participants.get(moved.participant_id)
+        if person is not None and person.role is Role.PARTICIPANT:
+            await self._emit(moved, actor_id=self._host.id)
+
+    async def _handover_step(
+        self,
+        participant: Participant,
+        command: HostHandoverOffer | HostHandoverAnswer | HostHandoverCancel,
+    ) -> None:
+        desk = self._desk
+        if desk is None:
+            raise Conflict("this host cannot be handed over")
+        match command:
+            case HostHandoverOffer(participant_id=person_id):
+                desk.require_allowed()
+                offered = handovers.offer(self._state, participant_id=person_id)
+                desk.begin(offered.participant_id)
+                await self._emit(offered, actor_id=participant.id)
+                self._arm_handover(OFFER_TTL.total_seconds(), offered.participant_id)
+            case HostHandoverAnswer(accept=False):
+                handovers.successor(self._state, participant)
+                await self._end_handover(HandoverEnd.DECLINED, actor_id=participant.id)
+            case HostHandoverAnswer(seal_key=seal_key, host_key=host_key):
+                accepted = handovers.accept(self._state, participant)
+                desk.accept(seal_key=seal_key, host_key=host_key)
+                await self._emit(accepted, actor_id=participant.id)
+            case HostHandoverCancel():
+                if self._state.handover is None:
+                    raise Conflict("nobody is being handed the host")
+                if participant.role is not Role.HOST:
+                    handovers.successor(self._state, participant)
+                if desk.granted:
+                    raise Conflict("the handover is finishing; it ends by itself if it fails")
+                await self._end_handover(HandoverEnd.CANCELLED, actor_id=participant.id)
+
+    async def _handover_transfer(
+        self,
+        participant: Participant,
+        connection: Connection,
+        command: HostHandoverFetch | HostHandoverReady,
+    ) -> None:
+        desk = self._desk
+        if desk is None:
+            raise Conflict("this host cannot be handed over")
+        handovers.successor(self._state, participant)
+        match command:
+            case HostHandoverFetch(part=index):
+                chunk = await desk.part(self._state, self._store, index)
+                self._publisher.deliver(connection, chunk)
+            case HostHandoverReady():
+                self._publisher.deliver(connection, desk.grant())
+                # Past this the host waits to be displaced; if it is not, the successor failed.
+                self._arm_handover(GRANT_PATIENCE.total_seconds(), participant.id)
+
+    def _arm_handover(self, seconds: float, participant_id: str) -> None:
+        self._disarm_handover()
+        self._handover_timer = asyncio.get_running_loop().call_later(
+            seconds, self._inbox.put, HandoverLapsed(participant_id)
+        )
+
+    def _disarm_handover(self) -> None:
+        if self._handover_timer is not None:
+            self._handover_timer.cancel()
+            self._handover_timer = None
+
+    async def _end_handover(self, reason: HandoverEnd, *, actor_id: str | None = None) -> None:
+        self._disarm_handover()
+        if self._desk is not None:
+            self._desk.reset()
+        if (ended := handovers.end(self._state, reason)) is not None:
+            await self._emit(ended, actor_id=actor_id)
+
+    async def _handover_lapsed(self, participant_id: str) -> None:
+        offer = self._state.handover
+        if offer is None or offer.participant_id != participant_id:
+            return
+        log.warning("host.handover_lapsed", room=self._publisher.room, successor=participant_id)
+        await self._end_handover(HandoverEnd.EXPIRED)
+
+    async def _set_approver(self, command: ApproverSet, *, actor_id: str) -> None:
+        person = self._state.participants.get(command.participant_id)
+        if person is None:
+            raise NotFound(f"participant {command.participant_id}")
+        if command.enabled and person.role is not Role.PARTICIPANT:
+            raise Invalid("only a participant who can write can be an approver")
+        if (person.id in self._state.approvers) is not command.enabled:
+            await self._emit(
+                ApproverChanged(participant_id=person.id, enabled=command.enabled),
+                actor_id=actor_id,
+            )
 
     async def _set_chat_mode(self, mode: ChatMode, *, actor_id: str) -> None:
         if mode is not self._state.chat_mode:

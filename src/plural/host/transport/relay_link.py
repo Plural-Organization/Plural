@@ -30,6 +30,8 @@ REPLY_CHUNK_BYTES = 512 * 1024
 # Close codes of a relay that requires an account (ADR 0017). The first two will not pass until the
 # person signs in, so the host waits long between tries instead of knocking every few seconds.
 ACCOUNT_REFUSED = frozenset({4402, 4403})
+# The relay closes a host with this when its own word gave the room to another host's key.
+HANDED_OVER = 4411
 REFUSED_DELAY_S = 60.0
 # What the relay may send: a guest's message, or a preview request's body in base64 with headers.
 MAX_RELAY_MESSAGE_BYTES = 8 * 1024 * 1024
@@ -67,7 +69,11 @@ class RelayLink:
         max_delay_s: float = 5,
         preview: PreviewProxy | None = None,
         entitlement: Callable[[], Awaitable[str | None]] | None = None,
+        on_displaced: Callable[[], None] | None = None,
     ) -> None:
+        self._on_displaced = on_displaced
+        # A host that was handed this room carries the old host's word until the relay has taken it.
+        self._succession: str | None = None
         self._url = url.rstrip("/")
         self._room = room
         self._signer = signer
@@ -75,6 +81,10 @@ class RelayLink:
         self._max_delay_s = max_delay_s
         self._preview = preview
         self._entitlement = entitlement
+
+    def succeed_with(self, statement: str) -> None:
+        """The old host's signed word that this host's key now holds the room (ADR 0019)."""
+        self._succession = statement
 
     async def serve(self, inbox: Inbox) -> None:
         delay = 0.5
@@ -88,6 +98,11 @@ class RelayLink:
                     delay = 0.5
                     await self._session(socket, inbox)
             except (OSError, WebSocketException) as error:
+                if _handed_over(error):
+                    # The room has another host now: this one stops, it does not knock again.
+                    if self._on_displaced is not None:
+                        self._on_displaced()
+                    return
                 refused = _account_refusal(error)
                 if refused is not None:
                     log.error("relay.account_required", reason=refused)
@@ -103,8 +118,10 @@ class RelayLink:
             public_key=self._signer.verifier.public_b64(),
             proof=self._signer.prove(self._room.encode()),
             entitlement=None if self._entitlement is None else await self._entitlement(),
+            succession=self._succession,
         )
         await socket.send(opening.model_dump_json())
+
         outbox: asyncio.Queue[str] = asyncio.Queue(maxsize=self._queue_size)
         links: dict[str, RelayConnection] = {}
         requests: set[asyncio.Task[None]] = set()
@@ -142,6 +159,14 @@ class RelayLink:
                 task.cancel()
             for link in links.values():
                 await inbox.put_external(Disconnected(link))
+
+
+def _handed_over(error: BaseException) -> bool:
+    return (
+        isinstance(error, ConnectionClosed)
+        and error.rcvd is not None
+        and error.rcvd.code == HANDED_OVER
+    )
 
 
 def _account_refusal(error: BaseException) -> str | None:

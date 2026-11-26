@@ -2,10 +2,10 @@ import asyncio
 import json
 import os
 import secrets
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 import structlog
 
@@ -39,7 +39,8 @@ from plural.host.config import HostSettings
 from plural.host.conflicts import ConflictBoard
 from plural.host.extras import extra_for
 from plural.host.gateway import Gateway
-from plural.host.inbox import Inbox, McpUpdated, SkillsUpdated
+from plural.host.handover import HandedAway, HandoverDesk
+from plural.host.inbox import HostDisplaced, Inbox, McpUpdated, SkillsUpdated
 from plural.host.invites import InviteBook, RoomLink
 from plural.host.ledger import ChangeLedger
 from plural.host.mcp_link import McpLink, import_address, load_or_create_secret
@@ -63,6 +64,7 @@ from plural.host.transport.direct import DirectTransport
 from plural.host.transport.relay_link import RelayLink
 from plural.importers import Imported, ImportNotFound, bring_in
 from plural.protocol.commands import BriefingImport
+from plural.protocol.events import HostHandedOver
 from plural.protocol.models import HOST_PARTICIPANT_ID, Participant, Role
 from plural.security.keys import load_or_create_host_key
 from plural.security.secrets import Redactor
@@ -90,13 +92,23 @@ class Host:
     import_url: str | None = None
     chat_link: McpLink | None = None
     plugins: PluginHost | None = None
+    # Set when the relay gave this host's room to another host (ADR 0019).
+    displaced: asyncio.Event = field(default_factory=asyncio.Event)
 
     async def serve(self) -> None:
-        async with asyncio.TaskGroup() as group:
-            group.create_task(self.actor.run(), name="actor")
-            group.create_task(self.transport.serve(self.inbox), name="transport")
-            if self.chat_link is not None:
-                group.create_task(self.chat_link.serve(), name="mcp_link")
+        try:
+            async with asyncio.TaskGroup() as group:
+                group.create_task(self.actor.run(), name="actor")
+                group.create_task(self.transport.serve(self.inbox), name="transport")
+                group.create_task(self._leave_when_displaced(), name="displaced")
+                if self.chat_link is not None:
+                    group.create_task(self.chat_link.serve(), name="mcp_link")
+        except* HandedAway:
+            raise HandedAway(f"the room {self.room} is another host's now") from None
+
+    async def _leave_when_displaced(self) -> None:
+        await self.displaced.wait()
+        raise HandedAway
 
     async def close(self) -> None:
         if self.mcp is not None:
@@ -308,6 +320,10 @@ async def _assemble(
     )
     delegate.attach(lambda: loop)
     log.info("agent.models", main=settings.agent_label(), fast=helper.label if helper else "")
+    previous_hosts = await _meta_json(store, "previous_hosts")
+    pending = await _meta_json(store, "handover_pending")
+    handed_over = HostHandedOver.model_validate(pending) if pending else None
+    displaced = asyncio.Event()
     room_url = settings.room_url(room)
     invites = InviteBook(clock=clock, link_base=room_url)
     link_code = await store.meta("room_link")
@@ -323,6 +339,17 @@ async def _assemble(
         ids=ids,
         clock=clock,
         token_ttl_s=settings.token_ttl_s,
+        previous_hosts={str(key): str(value) for key, value in previous_hosts.items()},
+    )
+    handover_desk = HandoverDesk(
+        room=room,
+        signer=signer,
+        data_dir=settings.state_dir,
+        workspace=workspace.root,
+        ids=ids,
+        clock=clock,
+        # The relay is what hands the room to another host; a direct address cannot move.
+        allowed=bool(settings.relay_url) and not settings.team,
     )
     host = Participant(id=HOST_PARTICIPANT_ID, name=settings.host_name, role=Role.HOST)
     team = await _team_admission(settings, store, clock, room, profile) if profile else None
@@ -383,6 +410,9 @@ async def _assemble(
         team_sweep_s=settings.team_roster_ttl_s,
         imported=imported,
         import_url=import_url,
+        handover_desk=handover_desk,
+        handed_over=handed_over,
+        on_displaced=displaced.set,
     )
     desk.attach(actor.board)
     await actor.start()
@@ -393,6 +423,7 @@ async def _assemble(
             signer=signer,
             preview=actor.preview,
             entitlement=AccountStore(state_dir).certificate,
+            on_displaced=lambda: inbox.put(HostDisplaced()),
         )
         if settings.relay_url
         else DirectTransport(host=settings.bind_host, port=settings.port)
@@ -415,7 +446,17 @@ async def _assemble(
         import_url=import_url,
         chat_link=chat_link,
         plugins=plugins,
+        displaced=displaced,
     )
+
+
+async def _meta_json(store: SqliteEventStore, key: str) -> dict[str, Any]:
+    """A JSON object kept in the session's meta; none, or one that is not an object, is empty."""
+    try:
+        found: object = json.loads(await store.meta(key) or "{}")
+    except ValueError:
+        return {}
+    return cast("dict[str, Any]", found) if isinstance(found, dict) else {}
 
 
 async def _chat_link(

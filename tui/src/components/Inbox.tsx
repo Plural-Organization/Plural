@@ -1,4 +1,4 @@
-import { approvalChoices, defaultApprovalChoice, participantName as from, type AccessRequestView, type BriefingRequestView, type ApprovalView, type InboxRequest, type JoinRequestView, type ProposalView, type SessionState } from "@plural/client";
+import { approvalChoices, defaultApprovalChoice, participantName as from, type AccessRequestView, type BriefingRequestView, type ApprovalView, type HandoverView, type InboxRequest, type JoinRequestView, type ProposalView, type SessionState } from "@plural/client";
 import { colorFor, theme } from "../theme";
 
 // What waits for the host lives in @plural/client, for this client and the web one; the terminal adds a plan that is ready to start.
@@ -33,9 +33,11 @@ interface InboxProps {
   focused: boolean;
   now: number;
   approvalChoice?: { id: string; index: number } | null;
+  /** The person answering is a participant the host named, not the host: calls only, once or refuse. */
+  approver?: boolean;
 }
 
-export function Inbox({ items, state, selected, focused, now, approvalChoice }: InboxProps) {
+export function Inbox({ items, state, selected, focused, now, approvalChoice, approver = false }: InboxProps) {
   const index = Math.min(selected, items.length - 1);
   const item = items[index];
   if (!item) {
@@ -70,9 +72,11 @@ export function Inbox({ items, state, selected, focused, now, approvalChoice }: 
       ) : item.kind === "briefing" ? (
         <BriefingBody request={item.request} now={now} focused={focused} />
       ) : item.kind === "approval" ? (
-        <ApprovalBody approval={item.approval} state={state} now={now} focused={focused} selected={approvalChoice?.id === item.id ? approvalChoice.index : defaultApprovalChoice(item.approval)} place={items.length > 1 ? `${index + 1}/${items.length}` : ""} />
+        <ApprovalBody approver={approver} approval={item.approval} state={state} now={now} focused={focused} selected={approvalChoice?.id === item.id ? approvalChoice.index : defaultApprovalChoice(item.approval)} place={items.length > 1 ? `${index + 1}/${items.length}` : ""} />
       ) : item.kind === "plan" ? (
         <PlanBody focused={focused} />
+      ) : item.kind === "handover" ? (
+        <HandoverBody offer={item.offer} state={state} focused={focused} />
       ) : (
         <ProposalBody proposal={item.proposal} state={state} focused={focused} />
       )}
@@ -188,7 +192,7 @@ function FolderBody({ approval, state, now, focused, selected, place }: { approv
   );
 }
 
-function ApprovalBody({ approval, state, now, focused, selected, place }: { approval: ApprovalView; state: SessionState; now: number; focused: boolean; selected: number; place: string }) {
+function ApprovalBody({ approver, approval, state, now, focused, selected, place }: { approver: boolean; approval: ApprovalView; state: SessionState; now: number; focused: boolean; selected: number; place: string }) {
   if (approval.folder) {
     return <FolderBody approval={approval} state={state} now={now} focused={focused} selected={selected} place={place} />;
   }
@@ -213,7 +217,7 @@ function ApprovalBody({ approval, state, now, focused, selected, place }: { appr
         </span>
         <b>?</b>
         {"  "}
-        {approvalChoices(approval).map(({ decision }, index) => (
+        {approvalChoices(approval, approver).map(({ decision }, index) => (
           <span key={decision}>
             {index > 0 ? "  " : ""}
             {focused && index === selected ? (
@@ -258,6 +262,24 @@ function ProposalBody({ proposal, state, focused }: { proposal: ProposalView; st
       ) : (
         <text fg={theme.dim}>tab to answer</text>
       )}
+    </>
+  );
+}
+
+function HandoverBody({ offer, state, focused }: { offer: HandoverView; state: SessionState; focused: boolean }) {
+  const host = Object.values(state.participants).find((person) => person.role === "host");
+  return (
+    <>
+      <text>
+        <span fg={theme.warn}>
+          <b>{host?.name ?? "the host"}</b>
+        </span>
+        <span fg={theme.text}> offers you the host of this room, {offer.name}</span>
+      </text>
+      <text fg={theme.dim} wrapMode="word">
+        The session and its conversation move to this computer, the link stays the same. The agent will work in this folder with your model key, and what it runs, it runs here.
+      </text>
+      {focused ? <Keys items={[["y", "take it"], ["n", "decline"]]} /> : <text fg={theme.dim}>tab to answer</text>}
     </>
   );
 }

@@ -28,7 +28,7 @@ at start; when the flag is absent the persisted mode of a resumed room is kept.
 ## Consequences
 
 - Provenance is unchanged: `is_guest_originated` treats every role other than host as guest, so the taint
-  holds in both modes. An `allow` rule still never lifts the taint, and approvals stay host-only.
+  holds in both modes. An `allow` rule still never lifts the taint, and approvals stay host-only unless the host names an approver (ADR 0018).
 - Viewers still cannot prompt. Only the `participant` and `host` roles can submit.
 - Prompts of several participants share the existing queue (steer or follow-up delivery); the host can
   abort a run with `/abort`.

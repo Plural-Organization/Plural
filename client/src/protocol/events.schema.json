@@ -312,6 +312,27 @@
       ],
       "type": "object"
     },
+    "ApproverChanged": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "approver.changed",
+          "default": "approver.changed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "participant_id",
+        "enabled"
+      ],
+      "type": "object"
+    },
     "AskKind": {
       "enum": [
         "confirm",
@@ -1460,6 +1481,7 @@
               "agents.changed": "#/$defs/AgentsChanged",
               "approval.requested": "#/$defs/ApprovalRequested",
               "approval.resolved": "#/$defs/ApprovalResolved",
+              "approver.changed": "#/$defs/ApproverChanged",
               "attachment.added": "#/$defs/AttachmentAdded",
               "attachment.data": "#/$defs/AttachmentData",
               "board.cleared": "#/$defs/BoardCleared",
@@ -1479,6 +1501,12 @@
               "context.compacting": "#/$defs/ContextCompacting",
               "context.usage": "#/$defs/ContextUsage",
               "error": "#/$defs/ErrorRaised",
+              "host.handed_over": "#/$defs/HostHandedOver",
+              "host.handover_accepted": "#/$defs/HostHandoverAccepted",
+              "host.handover_chunk": "#/$defs/HostHandoverChunk",
+              "host.handover_ended": "#/$defs/HostHandoverEnded",
+              "host.handover_grant": "#/$defs/HostHandoverGrant",
+              "host.handover_offered": "#/$defs/HostHandoverOffered",
               "import.link": "#/$defs/ImportLinkShown",
               "invite.created": "#/$defs/InviteCreated",
               "join.requested": "#/$defs/JoinRequested",
@@ -1547,6 +1575,27 @@
             },
             {
               "$ref": "#/$defs/PromptModeChanged"
+            },
+            {
+              "$ref": "#/$defs/ApproverChanged"
+            },
+            {
+              "$ref": "#/$defs/HostHandoverOffered"
+            },
+            {
+              "$ref": "#/$defs/HostHandoverAccepted"
+            },
+            {
+              "$ref": "#/$defs/HostHandoverEnded"
+            },
+            {
+              "$ref": "#/$defs/HostHandedOver"
+            },
+            {
+              "$ref": "#/$defs/HostHandoverChunk"
+            },
+            {
+              "$ref": "#/$defs/HostHandoverGrant"
             },
             {
               "$ref": "#/$defs/PermissionModeChanged"
@@ -1798,6 +1847,164 @@
         "folder",
         "write",
         "broad"
+      ],
+      "type": "object"
+    },
+    "HandoverEnd": {
+      "enum": [
+        "declined",
+        "cancelled",
+        "expired"
+      ],
+      "type": "string"
+    },
+    "HandoverView": {
+      "description": "The host has offered its seat to a participant, who has not finished taking it yet.",
+      "properties": {
+        "accepted": {
+          "default": false,
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "participant_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id",
+        "name",
+        "accepted"
+      ],
+      "type": "object"
+    },
+    "HostHandedOver": {
+      "description": "The host's seat is another person's now: the first event the new host writes.\n\nThe old host goes on as `former_host_id`, a participant like the others, and the participant\nwho took over leaves their old id for the seat, `p_host`. What each wrote follows them.",
+      "properties": {
+        "former_host_id": {
+          "type": "string"
+        },
+        "former_host_name": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "host.handed_over",
+          "default": "host.handed_over",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "former_host_id",
+        "former_host_name",
+        "participant_id",
+        "name"
+      ],
+      "type": "object"
+    },
+    "HostHandoverAccepted": {
+      "properties": {
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "host.handover_accepted",
+          "default": "host.handover_accepted",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "participant_id"
+      ],
+      "type": "object"
+    },
+    "HostHandoverChunk": {
+      "description": "One part of the sealed session, sent only to the person taking it over.",
+      "properties": {
+        "data_b64": {
+          "type": "string"
+        },
+        "part": {
+          "type": "integer"
+        },
+        "parts": {
+          "type": "integer"
+        },
+        "type": {
+          "const": "host.handover_chunk",
+          "default": "host.handover_chunk",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "part",
+        "parts",
+        "data_b64"
+      ],
+      "type": "object"
+    },
+    "HostHandoverEnded": {
+      "properties": {
+        "reason": {
+          "$ref": "#/$defs/HandoverEnd"
+        },
+        "type": {
+          "const": "host.handover_ended",
+          "default": "host.handover_ended",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "HostHandoverGrant": {
+      "description": "The old host's signed word that the successor's key holds the room.",
+      "properties": {
+        "statement": {
+          "type": "string"
+        },
+        "type": {
+          "const": "host.handover_grant",
+          "default": "host.handover_grant",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "statement"
+      ],
+      "type": "object"
+    },
+    "HostHandoverOffered": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "host.handover_offered",
+          "default": "host.handover_offered",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type",
+        "participant_id",
+        "name"
       ],
       "type": "object"
     },
@@ -3212,6 +3419,13 @@
           },
           "type": "object"
         },
+        "approvers": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "attachments": {
           "additionalProperties": {
             "$ref": "#/$defs/AttachmentMeta"
@@ -3270,6 +3484,21 @@
         "fast_agent": {
           "default": "",
           "type": "string"
+        },
+        "handover": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/HandoverView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "handovers": {
+          "default": 0,
+          "type": "integer"
         },
         "join_requests": {
           "additionalProperties": {
@@ -3402,6 +3631,9 @@
         "preview",
         "last_seq",
         "prompt_mode",
+        "approvers",
+        "handover",
+        "handovers",
         "chat_mode",
         "permission_mode",
         "admission",
@@ -4147,6 +4379,7 @@
           "agents.changed": "#/$defs/AgentsChanged",
           "approval.requested": "#/$defs/ApprovalRequested",
           "approval.resolved": "#/$defs/ApprovalResolved",
+          "approver.changed": "#/$defs/ApproverChanged",
           "attachment.added": "#/$defs/AttachmentAdded",
           "attachment.data": "#/$defs/AttachmentData",
           "board.cleared": "#/$defs/BoardCleared",
@@ -4166,6 +4399,12 @@
           "context.compacting": "#/$defs/ContextCompacting",
           "context.usage": "#/$defs/ContextUsage",
           "error": "#/$defs/ErrorRaised",
+          "host.handed_over": "#/$defs/HostHandedOver",
+          "host.handover_accepted": "#/$defs/HostHandoverAccepted",
+          "host.handover_chunk": "#/$defs/HostHandoverChunk",
+          "host.handover_ended": "#/$defs/HostHandoverEnded",
+          "host.handover_grant": "#/$defs/HostHandoverGrant",
+          "host.handover_offered": "#/$defs/HostHandoverOffered",
           "import.link": "#/$defs/ImportLinkShown",
           "invite.created": "#/$defs/InviteCreated",
           "join.requested": "#/$defs/JoinRequested",
@@ -4234,6 +4473,27 @@
         },
         {
           "$ref": "#/$defs/PromptModeChanged"
+        },
+        {
+          "$ref": "#/$defs/ApproverChanged"
+        },
+        {
+          "$ref": "#/$defs/HostHandoverOffered"
+        },
+        {
+          "$ref": "#/$defs/HostHandoverAccepted"
+        },
+        {
+          "$ref": "#/$defs/HostHandoverEnded"
+        },
+        {
+          "$ref": "#/$defs/HostHandedOver"
+        },
+        {
+          "$ref": "#/$defs/HostHandoverChunk"
+        },
+        {
+          "$ref": "#/$defs/HostHandoverGrant"
         },
         {
           "$ref": "#/$defs/PermissionModeChanged"

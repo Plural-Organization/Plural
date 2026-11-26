@@ -28,6 +28,8 @@ class HostSettings(BaseSettings):
     data_dir: Path = Path("~/.plural")
     room: str | None = None
     import_from: str | None = None
+    # Your own link to a room whose host was offered to you: take its seat over (ADR 0019).
+    takeover: str | None = None
     title: str | None = Field(default=None, min_length=1, max_length=80)
     host_name: str = "host"
     prompt_mode: PromptMode | None = None

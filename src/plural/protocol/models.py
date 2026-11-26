@@ -208,6 +208,20 @@ class QueuedPrompt(Model):
     delivery: Delivery
 
 
+class HandoverEnd(StrEnum):
+    DECLINED = "declined"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+
+
+class HandoverView(Model):
+    """The host has offered its seat to a participant, who has not finished taking it yet."""
+
+    participant_id: str
+    name: str
+    accepted: bool = False
+
+
 class FolderAccess(Model):
     """A request to reach a folder outside the workspace, put to the host before the call itself."""
 
@@ -562,6 +576,13 @@ class SessionState(Model):
     preview: PreviewView | None = None
     last_seq: int = 0
     prompt_mode: PromptMode = PromptMode.OPEN
+    # Participants the host let answer a tool call, besides the host: once or reject, never a rule.
+    approvers: tuple[str, ...] = ()
+    # An offer of the host's seat to a participant; None when nobody is taking it over.
+    handover: HandoverView | None = None
+    # How many times the host's seat has changed hands. What the first host wrote is, to the next
+    # one, what a guest wrote (ADR 0019), so a session that has been handed over asks more.
+    handovers: int = 0
     # A session from before mention mode keeps answering every message; a new one starts in it.
     chat_mode: ChatMode = ChatMode.ALL
     permission_mode: PermissionMode = PermissionMode.DEFAULT

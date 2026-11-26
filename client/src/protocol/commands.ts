@@ -99,6 +99,12 @@ export interface CommandsSchema {
     | ContextCompact
     | SessionFork
     | PromptModeSet
+    | ApproverSet
+    | HostHandoverOffer
+    | HostHandoverAnswer
+    | HostHandoverFetch
+    | HostHandoverReady
+    | HostHandoverCancel
     | PermissionModeSet
     | ChatModeSet
     | SkillsSearch
@@ -359,6 +365,59 @@ export interface SessionFork {
 export interface PromptModeSet {
   mode: PromptMode;
   type?: "session.set_prompt_mode";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "ApproverSet".
+ */
+export interface ApproverSet {
+  enabled: boolean;
+  participant_id: string;
+  type?: "approver.set";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "HostHandoverOffer".
+ */
+export interface HostHandoverOffer {
+  participant_id: string;
+  type?: "host.handover_offer";
+}
+/**
+ * The offered participant's answer; to accept, a key to seal to and their host key.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "HostHandoverAnswer".
+ */
+export interface HostHandoverAnswer {
+  accept: boolean;
+  host_key?: string | null;
+  seal_key?: string | null;
+  type?: "host.handover_answer";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "HostHandoverFetch".
+ */
+export interface HostHandoverFetch {
+  part: number;
+  type?: "host.handover_fetch";
+}
+/**
+ * The successor has the session, checked it, and is ready to open the room.
+ *
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "HostHandoverReady".
+ */
+export interface HostHandoverReady {
+  type?: "host.handover_ready";
+}
+/**
+ * This interface was referenced by `CommandsSchema`'s JSON-Schema
+ * via the `definition` "HostHandoverCancel".
+ */
+export interface HostHandoverCancel {
+  type?: "host.handover_cancel";
 }
 /**
  * This interface was referenced by `CommandsSchema`'s JSON-Schema

@@ -1,7 +1,7 @@
 import { Alert, Button, Spinner } from "@heroui/react";
 import { ArrowDown } from "@phosphor-icons/react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { AGENT_HANDLE, inMentionMode, label, mentionable, routeOf, status, type JoinLink, type ProposalView } from "@plural/client";
+import { AGENT_HANDLE, approverRequests, handoverRequests, inMentionMode, isApprover, label, mentionable, routeOf, status, type JoinLink, type ProposalView } from "@plural/client";
 import { Board, type Pointer } from "../components/Board";
 import { Canvas } from "../components/Canvas";
 import { Composer } from "../components/Composer";
@@ -68,6 +68,8 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
   const me = projection.me;
   const pluginCommands = useMemo(() => [...pluginHints(state.commands), ...skillHints(state.skills)], [state.commands, state.skills]);
   const isHost = me?.role === "host";
+  // A participant the host named answers tool calls for others: once or refuse, nothing that lasts.
+  const approver = !isHost && isApprover(state, projection.meId);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const hostName = Object.values(state.participants).find((person) => person.role === "host")?.name;
   useEffect(() => {
@@ -76,8 +78,11 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
     }
   }, [hostName]);
   const items = useMemo(
-    () => [...askItems(session.asks), ...(isHost ? inboxItems(state) : [])],
-    [session.asks, isHost, state.approvals, state.proposals, state.join_requests],
+    () => [
+      ...askItems(session.asks),
+      ...(isHost ? inboxItems(state) : [...handoverRequests(state, projection.meId), ...(approver ? approverRequests(state, projection.meId) : [])]),
+    ],
+    [session.asks, isHost, approver, state.handover, projection.meId, state.approvals, state.proposals, state.join_requests],
   );
   const [editing, setEditing] = useState<ProposalView | null>(null);
   const [panel, setPanel] = useState(false);
@@ -231,7 +236,7 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
   const traceOpen = session.trace !== null;
   const toggleTrace = () => (traceOpen ? session.closeTrace() : session.openTrace());
   // While the trace is open its own keys rule: esc closes it instead of stopping the run.
-  useHotkeys({ enabled: invite === null && active && !traceOpen, first: items[0], canAbort, send, onEdit: setEditing, onFocusInput: focusInput, onTrace: session.openTrace });
+  useHotkeys({ enabled: invite === null && active && !traceOpen, first: items[0], approver, canAbort, send, onEdit: setEditing, onFocusInput: focusInput, onTrace: session.openTrace });
   useEffect(() => {
     if (!traceOpen) return;
     // t closes the trace too, unless someone is typing.
@@ -334,7 +339,7 @@ export function RoomScreen({ link, name, member, active, notice = null, railTuck
               </Alert.Content>
             </Alert>
           ) : null}
-          <Inbox items={items} state={state} send={send} onEdit={setEditing} answer={session.answer} />
+          <Inbox items={items} state={state} approver={approver} send={send} onEdit={setEditing} answer={session.answer} />
           <div className={styles.presence}>
             {typers.length > 0 ? (
               <span>

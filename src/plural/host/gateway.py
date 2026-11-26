@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -6,8 +7,14 @@ from plural.core.ports import Clock, IdGenerator
 from plural.host.invites import InviteBook, RoomLink
 from plural.protocol.capability import CapabilityClaims
 from plural.protocol.commands import SessionHello
-from plural.protocol.models import AdmissionMode, Participant, Role, SessionState
-from plural.security.tokens import InvalidToken, TokenSigner
+from plural.protocol.models import (
+    HOST_PARTICIPANT_ID,
+    AdmissionMode,
+    Participant,
+    Role,
+    SessionState,
+)
+from plural.security.tokens import InvalidToken, TokenSigner, TokenVerifier
 
 
 @dataclass(frozen=True, slots=True)
@@ -33,7 +40,10 @@ class Gateway:
         ids: IdGenerator,
         clock: Clock,
         token_ttl_s: int,
+        previous_hosts: Mapping[str, str] | None = None,
     ) -> None:
+        # The keys of hosts that handed this room over, each with the participant it became.
+        self._previous = dict(previous_hosts or {})
         self._room = room
         self._signer = signer
         self._invites = invites
@@ -81,11 +91,26 @@ class Gateway:
     def identify(self, token: str, state: SessionState) -> Participant:
         try:
             claims = self._signer.verifier.verify(token, now=self._clock.now())
+            person = claims.participant
         except InvalidToken as error:
-            raise Unauthorized(str(error)) from error
+            claims, person = self._identify_before(token, error)
         if claims.room != self._room:
             raise Unauthorized("token belongs to another room")
-        participant = state.participants.get(claims.participant)
+        participant = state.participants.get(person)
         if participant is None:
             raise Unauthorized("access revoked")
         return participant
+
+    def _identify_before(self, token: str, refusal: InvalidToken) -> tuple[CapabilityClaims, str]:
+        """A token a host before this one signed. The host's own token (`p_host`) was its holder's,
+        who is a participant now, so it stands for them and never for the host."""
+        for key, former in self._previous.items():
+            try:
+                claims = TokenVerifier.from_b64(key).verify(token, now=self._clock.now())
+            except (InvalidToken, ValueError):
+                continue
+            return (
+                claims,
+                former if claims.participant == HOST_PARTICIPANT_ID else claims.participant,
+            )
+        raise Unauthorized(str(refusal)) from refusal

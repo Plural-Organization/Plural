@@ -287,6 +287,16 @@ You are identified by a key that plural creates once in `~/.plural/identity.pem`
 
 Change it with `/mode open|review`, from the settings, or at start with `--prompts`. Tool calls need the host's approval in both modes. A run that contains a participant's prompt always asks, whatever the rules say.
 
+### Handing the host to someone else
+
+When you have to go, you can give your seat to a participant: `/handover alia`. Alia sees a card, presses `y` in her terminal, and the room moves to her computer: the same link, the same conversation, her model key and her folder. You stay in the room as a participant. It needs a session on a relay (not `--local` and not a team session), and Alia has to be connected and able to write. While she takes it, you cannot start anything new; `/handover cancel` takes it back, and an offer nobody answers lapses after five minutes.
+
+What does not move: your model key, plugins and MCP servers (hers apply), and your folder. Alia needs the same code in hers: the card tells which repository, branch and commit the session was on. After a handover every run asks before it writes or runs anything, even in auto mode, because what you wrote before is, to her, what a guest wrote.
+
+### Approvers
+
+When you step away, a run waits on a card only you can answer. Name a participant to answer for you with `/approver add alia`, take it back with `/approver rm alia`, and see who can with `/approver`. An approver sees the approval cards of other people's runs and answers `once` or `reject`. They cannot make a rule (`always`, `block`), open a folder outside the session, or approve a call their own prompt started. You can still answer first. Name only someone you would let sit at your keyboard, because they decide what runs on your computer, and your computer has to stay on.
+
 ## Permission modes
 
 The host decides how much the agent may do without asking. `shift+tab` cycles the modes, and the line under the composer shows the current one to everyone.
@@ -425,6 +435,8 @@ What a command shows, like `/help`, `/who`, `/skills` or skills.sh search result
 | `/who` | Participants |
 | `/invite [link\|once\|viewer\|revoke\|open\|approve]` | Copy the room link, make a one-time invite, or change who may join (host) |
 | `/mode open\|review` | Who may prompt directly (host) |
+| `/handover <name>\|cancel` | Give the host to a participant on their computer, or take the offer back (host) |
+| `/approver [add\|rm <name>]` | List, name or remove a participant who can answer tool calls for you (host) |
 | `/policy` | Show the permission rules (host) |
 | `/policy allow\|ask\|deny <tool> <pattern>` | Add a rule (host) |
 | `/policy rm <id>` | Remove a rule (host) |

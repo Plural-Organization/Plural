@@ -3,6 +3,7 @@ import { useNow } from "../../hooks/useNow";
 import { AccessCard } from "./AccessCard";
 import { BriefingAsk } from "./BriefingAsk";
 import { ApprovalCard } from "./ApprovalCard";
+import { HandoverCard } from "./HandoverCard";
 import { JoinCard } from "./JoinCard";
 import { PluginAskCard } from "./PluginAskCard";
 import type { InboxItem } from "./items";
@@ -12,12 +13,13 @@ import styles from "./Inbox.module.css";
 interface InboxProps {
   items: InboxItem[];
   state: SessionState;
+  approver?: boolean;
   send: (command: Command) => void;
   onEdit: (proposal: ProposalView) => void;
   answer: (askId: string, value: string | null) => void;
 }
 
-export function Inbox({ items, state, send, onEdit, answer }: InboxProps) {
+export function Inbox({ items, state, approver = false, send, onEdit, answer }: InboxProps) {
   const now = useNow(items.some((item) => item.kind === "approval"));
   const first = items[0];
   if (first === undefined) {
@@ -35,7 +37,9 @@ export function Inbox({ items, state, send, onEdit, answer }: InboxProps) {
       ) : first.kind === "briefing" ? (
         <BriefingAsk request={first.request} send={send} />
       ) : first.kind === "approval" ? (
-        <ApprovalCard approval={first.approval} state={state} now={now} send={send} />
+        <ApprovalCard approval={first.approval} state={state} now={now} approver={approver} send={send} />
+      ) : first.kind === "handover" ? (
+        <HandoverCard offer={first.offer} state={state} send={send} />
       ) : (
         <ProposalCard proposal={first.proposal} state={state} send={send} onEdit={onEdit} />
       )}

@@ -8,6 +8,7 @@ from plural.protocol.events import (
     AgentsChanged,
     ApprovalRequested,
     ApprovalResolved,
+    ApproverChanged,
     AttachmentAdded,
     BoardCleared,
     BoardErased,
@@ -23,6 +24,10 @@ from plural.protocol.events import (
     ContextCompacted,
     ContextUsage,
     EventRecord,
+    HostHandedOver,
+    HostHandoverAccepted,
+    HostHandoverEnded,
+    HostHandoverOffered,
     JoinRequested,
     JoinResolved,
     McpChanged,
@@ -54,12 +59,16 @@ from plural.protocol.events import (
 from plural.protocol.models import (
     BOARD_STROKES_LIMIT,
     BOARD_TOTAL_POINTS,
+    HOST_PARTICIPANT_ID,
     BoardStroke,
     ChatEntry,
     EntryKind,
+    HandoverView,
+    Participant,
     PluginLine,
     PluginStatus,
     QueuedPrompt,
+    Role,
     RunView,
     SessionState,
     TranscriptEntry,
@@ -98,12 +107,18 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
         case ParticipantRoleChanged(participant_id=participant_id, role=role):
             patched = _patch_participant(state, participant_id, {"role": role})
             return patched.model_copy(
-                update={"access_requests": _without(patched.access_requests, participant_id)}
+                update={
+                    "access_requests": _without(patched.access_requests, participant_id),
+                    "approvers": patched.approvers
+                    if role is Role.PARTICIPANT
+                    else _kept_approvers(patched, participant_id, False),
+                }
             )
         case ParticipantRevoked(participant_id=participant_id):
             return state.model_copy(
                 update={
                     "participants": _without(state.participants, participant_id),
+                    "approvers": _kept_approvers(state, participant_id, False),
                     "access_requests": _without(state.access_requests, participant_id),
                     "briefing_requests": {
                         key: ask
@@ -150,6 +165,24 @@ def _apply(state: SessionState, record: EventRecord) -> SessionState:
             return state.model_copy(update={"agent": agent, "fast_agent": fast})
         case PromptModeChanged(mode=mode):
             return state.model_copy(update={"prompt_mode": mode})
+        case HostHandoverOffered(participant_id=participant_id, name=name):
+            return state.model_copy(
+                update={"handover": HandoverView(participant_id=participant_id, name=name)}
+            )
+        case HostHandoverAccepted():
+            if state.handover is None:
+                return state
+            return state.model_copy(
+                update={"handover": state.handover.model_copy(update={"accepted": True})}
+            )
+        case HostHandoverEnded():
+            return state.model_copy(update={"handover": None})
+        case HostHandedOver():
+            return _handed_over(state, event)
+        case ApproverChanged(participant_id=participant_id, enabled=enabled):
+            return state.model_copy(
+                update={"approvers": _kept_approvers(state, participant_id, enabled)}
+            )
         case PermissionModeChanged(mode=mode):
             return state.model_copy(update={"permission_mode": mode})
         case ChatModeChanged(mode=mode):
@@ -326,6 +359,79 @@ def _without_briefings(state: SessionState, participant_id: str) -> SessionState
         if len(kept) == len(state.briefing_requests)
         else state.model_copy(update={"briefing_requests": kept})
     )
+
+
+def _handed_over(state: SessionState, event: HostHandedOver) -> SessionState:
+    """The seat `p_host` passes to the participant who took it; its old holder is a participant.
+
+    Everything either of them wrote stays theirs: entries by `p_host` are now the old host's, and
+    entries by the successor, written as a participant, are now the host's."""
+    seat, took = HOST_PARTICIPANT_ID, event.participant_id
+    moved = {seat: event.former_host_id, took: seat}
+
+    def own(person: str) -> str:
+        return moved.get(person, person)
+
+    people = {
+        key: person
+        for key, person in state.participants.items()
+        if key not in {seat, took, event.former_host_id}
+    }
+    people[event.former_host_id] = Participant(
+        id=event.former_host_id, name=event.former_host_name, role=Role.PARTICIPANT
+    )
+    people[seat] = Participant(id=seat, name=event.name, role=Role.HOST)
+    return state.model_copy(
+        update={
+            "participants": people,
+            "handover": None,
+            "handovers": state.handovers + 1,
+            "approvers": tuple(person for person in state.approvers if person not in {seat, took}),
+            "access_requests": _without(state.access_requests, took),
+            "briefing_requests": {
+                key: ask
+                for key, ask in state.briefing_requests.items()
+                if ask.participant_id not in {seat, took}
+            },
+            "transcript": tuple(
+                entry
+                if entry.author_id is None
+                else entry.model_copy(update={"author_id": own(entry.author_id)})
+                for entry in state.transcript
+            ),
+            "chat": tuple(
+                entry.model_copy(
+                    update={
+                        "author_id": own(entry.author_id),
+                        "to": None if entry.to is None else own(entry.to),
+                        "mentions": tuple(own(person) for person in entry.mentions),
+                    }
+                )
+                for entry in state.chat
+            ),
+            "proposals": {
+                key: proposal.model_copy(update={"author_id": own(proposal.author_id)})
+                for key, proposal in state.proposals.items()
+            },
+            "attachments": {
+                key: meta.model_copy(update={"owner_id": own(meta.owner_id)})
+                for key, meta in state.attachments.items()
+            },
+            "board": state.board.model_copy(
+                update={
+                    "strokes": tuple(
+                        stroke.model_copy(update={"author_id": own(stroke.author_id)})
+                        for stroke in state.board.strokes
+                    )
+                }
+            ),
+        }
+    )
+
+
+def _kept_approvers(state: SessionState, participant_id: str, approves: bool) -> tuple[str, ...]:
+    others = tuple(person for person in state.approvers if person != participant_id)
+    return (*others, participant_id) if approves else others
 
 
 def _without[V](mapping: dict[str, V], key: str) -> dict[str, V]:

@@ -209,6 +209,26 @@ async function start(options: SessionOptions, joinLink: string | null, name: str
   }
 }
 
+/** How long a takeover may take: the old host waits for its agent to be idle before it packs the session. */
+const TAKEOVER_TIMEOUT_MS = 15 * 60_000;
+
+/** Start a host that takes the room over from the host that offered it, and be that host. */
+async function takingOver(link: string, name: string): Promise<Target> {
+  progress.step("taking the host over…");
+  const host = await startLocalHost(["--takeover", link, "--workspace", process.cwd(), "--name", name], TAKEOVER_TIMEOUT_MS);
+  return {
+    link: host.hostLink,
+    room: host.room,
+    guestLink: host.guestLink,
+    host,
+    tunnel: null,
+    note: ["you are the host of this room now; its link is the same, and the agent works in this folder", ...host.notes].join(". "),
+    joined: false,
+    visiting: null,
+    shared: false,
+  };
+}
+
 async function printOnce(options: SessionOptions, name: string): Promise<void> {
   if (options.tunnel !== null) {
     fail("--tunnel shares a session with people, -p runs alone. Drop one of them");
@@ -277,11 +297,18 @@ async function printOnce(options: SessionOptions, name: string): Promise<void> {
 async function run(options: SessionOptions, joinLink: string | null, name: string, hosting: TeamHosting | null = null): Promise<void> {
   let next = await runOne(options, joinLink, name, hosting);
   while (next !== null) {
-    const hostArgs = withoutFlags(options.hostArgs, ["--room", "--title", "--import"]);
-    next = await runOne({ ...options, hostArgs, prompt: null, resume: { kind: "id", value: next } }, null, name, null);
+    if ("takeover" in next) {
+      next = await runOne({ ...options, prompt: null }, null, name, null, next.takeover);
+    } else {
+      const hostArgs = withoutFlags(options.hostArgs, ["--room", "--title", "--import"]);
+      next = await runOne({ ...options, hostArgs, prompt: null, resume: { kind: "id", value: next.resume } }, null, name, null);
+    }
   }
   process.exit(0);
 }
+
+/** Where the person goes when a session ends without quitting: another session this client hosts, or the host's seat they were offered. */
+type Next = { resume: string } | { takeover: string };
 
 /** `args` without each of these flags and the value it takes. */
 function withoutFlags(args: string[], flags: string[]): string[] {
@@ -297,7 +324,7 @@ function withoutFlags(args: string[], flags: string[]): string[] {
 }
 
 /** One session, until the person quits (null) or switches to another session (its id). */
-async function runOne(options: SessionOptions, joinLink: string | null, name: string, hosting: TeamHosting | null): Promise<string | null> {
+async function runOne(options: SessionOptions, joinLink: string | null, name: string, hosting: TeamHosting | null, takeover: string | null = null): Promise<Next | null> {
   if (options.print) {
     await printOnce(options, name);
     return null;
@@ -319,7 +346,7 @@ async function runOne(options: SessionOptions, joinLink: string | null, name: st
   Object.assign(process.env, agentEnv(settings, options));
   let target: Target;
   try {
-    target = await start(options, joinLink, name);
+    target = takeover === null ? await start(options, joinLink, name) : await takingOver(takeover, name);
   } catch (error) {
     fail(problem(error));
   }
@@ -413,7 +440,7 @@ async function runOne(options: SessionOptions, joinLink: string | null, name: st
       throw error;
     }
   };
-  let switchTo: string | null = null;
+  let switchTo: Next | null = null;
   const quit = new Promise<void>((resolve) => {
     createRoot(renderer).render(
       <Shell
@@ -464,9 +491,17 @@ async function runOne(options: SessionOptions, joinLink: string | null, name: st
             host === null
               ? undefined
               : (room: string) => {
-                  switchTo = room;
+                  switchTo = { resume: room };
                   resolve();
                 },
+          // A person who joined a room can be offered its host: they take it from here, on this computer.
+          onTakeOver:
+            host === null
+              ? (link: string) => {
+                  switchTo = { takeover: link };
+                  resolve();
+                }
+              : undefined,
         }}
       />,
     );
@@ -474,6 +509,11 @@ async function runOne(options: SessionOptions, joinLink: string | null, name: st
     process.on("SIGINT", () => resolve());
   });
   await quit;
+  // Taking a room over starts a host of its own; this client's seat in the room is not needed any more.
+  const leaving = switchTo as Next | null;
+  if (leaving !== null && "takeover" in leaving) {
+    client.close();
+  }
   watcher?.stop();
   renderer.destroy();
   await host?.stop();
