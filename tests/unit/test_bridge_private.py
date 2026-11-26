@@ -120,6 +120,21 @@ async def test_several_running_sessions_are_offered_instead_of_guessing(tmp_path
     assert store.room_of(DM) is None
 
 
+async def test_a_private_chat_forgets_a_stopped_session_before_offering_the_running_ones(
+    tmp_path: Path,
+) -> None:
+    bridge, chat, store = setup(tmp_path, [room("a"), room("b")])
+    store.pair(ME, store.pairing_code())
+    store.link(DM, "room-gone")
+
+    await say(bridge, ME, DM, "what changed?")
+
+    offered = chat.told[-1]
+    assert "write your message again" in offered.text
+    assert [row[0].data for row in offered.choices] == ["link:room-a", "link:room-b"]
+    assert store.room_of(DM) is None
+
+
 async def test_a_group_is_never_linked_by_itself(tmp_path: Path) -> None:
     bridge, chat, store = setup(tmp_path, [room("a")])
     store.pair(ME, store.pairing_code())

@@ -267,6 +267,9 @@ class Bridge:
             return room
         if room is not None and self._lookup(room) is not None:
             return room
+        if room is not None:
+            self._store.unlink(place)
+            room = None
         running = self._rooms()
         if len(running) == 1 and running[0].room != room:
             entry = running[0]
