@@ -18,9 +18,8 @@ const STATE: Record<BridgeState, { label: string; color: "success" | "warning" |
 
 // How the person makes themselves the bot's owner: the code goes to the bot in a private chat.
 function Owners({ provider, refresh }: { provider: BridgeProvider; refresh: () => void }) {
-  const [code, setCode] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const shown = provider.pairing ?? code;
+  const shown = provider.pairing;
   const bot = provider.identity === "" ? "the bot" : provider.identity;
   const act = (work: () => Promise<unknown>) => {
     setProblem(null);
@@ -68,7 +67,7 @@ function Owners({ provider, refresh }: { provider: BridgeProvider; refresh: () =
           {provider.links.autopair ? null : <CopyBox text={`/pair ${shown}`} label="Copy the pairing message" />}
         </>
       ) : shown === null ? (
-        <Button size="sm" variant="secondary" className="self-start" onPress={() => act(() => renewPairing(provider.id).then(setCode))}>
+        <Button size="sm" variant="secondary" className="self-start" onPress={() => act(() => renewPairing(provider.id))}>
           Add another owner
         </Button>
       ) : (

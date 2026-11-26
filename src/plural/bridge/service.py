@@ -91,6 +91,7 @@ class BridgeService:
         entry = self._config.get(provider.id)
         live = self._live.get(provider.id)
         store = self._store(provider.id)
+        owners = store.owners
         configured = entry is not None
         shown = self._status(provider.id)
         if entry is None or not entry.enabled:
@@ -103,7 +104,7 @@ class BridgeService:
         error = live.error if live else str(shown.get("error", ""))
         values = entry.values if entry else {}
         links = live.links if live else _links(shown)
-        code = None if store.owners else store.pairing_code()
+        code = store.active_pairing() if owners else store.pairing_code()
         return {
             **provider.to_json(),
             "configured": configured,
@@ -117,7 +118,7 @@ class BridgeService:
                 for item in provider.fields
             },
             "set": [item.id for item in provider.fields if values.get(item.id)],
-            "owners": [{"id": key, "name": name} for key, name in store.owners.items()],
+            "owners": [{"id": key, "name": name} for key, name in owners.items()],
             "pairing": code,
             # Where to meet the bot. `open` already holds the pairing code when the service can
             # take it from a link, so one click makes the person an owner.

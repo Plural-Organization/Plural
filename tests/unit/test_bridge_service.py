@@ -204,6 +204,14 @@ def test_pairing_shows_until_there_is_an_owner_and_can_be_renewed(tmp_path: Path
     renewed = bridges.renew_pairing("quiet")
 
     assert renewed != first or len(renewed) == 6
+    assert only(bridges.catalog())["pairing"] == renewed
+
+    owner = Person("1", "Tamirlan")
+    assert bridges.store("quiet").pair(owner, renewed)
+    assert only(bridges.catalog())["pairing"] is None
+
+    another = bridges.renew_pairing("quiet")
+    assert only(bridges.catalog())["pairing"] == another
     with pytest.raises(ConfigError, match="unknown chat service"):
         bridges.renew_pairing("nowhere")
 

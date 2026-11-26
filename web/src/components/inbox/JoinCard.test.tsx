@@ -25,6 +25,6 @@ test("a name is shown as text, never as markup", () => {
 test("people who wait come first in what waits for the host", () => {
   const state = emptyState();
   state.join_requests = { j_1: request };
-  state.proposals = { pr_1: { id: "pr_1", author_id: "p_a", text: "x", delivery: "now", attachments: [] } };
+  state.proposals = { pr_1: { id: "pr_1", author_id: "p_a", text: "x", delivery: "now", attachments: [], client_request_id: null } };
   expect(inboxItems(state).map((item) => item.kind)).toEqual(["join", "proposal"]);
 });

@@ -88,6 +88,19 @@ class BridgeStore:
         assert pairing is not None
         return pairing
 
+    def active_pairing(self) -> str | None:
+        """The still-usable code, without creating one when owners already exist."""
+        self._fresh()
+        if self._saved.pairing is None:
+            return None
+        if self._pairing_expired():
+            self._saved.pairing = None
+            self._saved.pairing_issued_at = None
+            self._saved.pairing_failures = 0
+            self._save()
+            return None
+        return self._saved.pairing
+
     def pair(self, person: Person, code: str) -> bool:
         self._fresh()
         expected = self._saved.pairing
