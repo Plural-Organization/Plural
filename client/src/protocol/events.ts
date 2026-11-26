@@ -836,6 +836,7 @@ export interface ProposalCreated {
 export interface ProposalView {
   attachments: string[];
   author_id: string;
+  client_request_id: string | null;
   delivery: Delivery;
   id: string;
   text: string;
@@ -866,6 +867,7 @@ export interface ProposalRejected {
 export interface PromptAccepted {
   attachments: string[];
   author_id: string;
+  client_request_id: string | null;
   delivery: Delivery;
   display: string | null;
   prompt_id: string;
@@ -1443,6 +1445,7 @@ export interface TranscriptEntry {
  * via the `definition` "InviteCreated".
  */
 export interface InviteCreated {
+  client_request_id: string | null;
   code: string;
   expires_at: string | null;
   link: string;

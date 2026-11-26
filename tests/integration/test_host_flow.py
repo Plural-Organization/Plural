@@ -127,10 +127,11 @@ async def test_guest_proposal_to_approved_tool_call(host: Host) -> None:
     )
     assert guest.first(SessionSnapshot) is not None
 
-    send(host, guest, PromptSubmit(text="check the notes"))
+    send(host, guest, PromptSubmit(text="check the notes", client_request_id="from-chat"))
     await eventually(lambda: owner.first(ProposalCreated))
     created = owner.first(ProposalCreated)
     assert created is not None
+    assert created.proposal.client_request_id == "from-chat"
 
     send(
         host,
@@ -141,6 +142,9 @@ async def test_guest_proposal_to_approved_tool_call(host: Host) -> None:
     requested = owner.first(ApprovalRequested)
     assert requested is not None
     assert requested.approval.provenance.origin is Origin.PROPOSAL
+    accepted = owner.first(PromptAccepted)
+    assert accepted is not None
+    assert accepted.client_request_id == "from-chat"
 
     forbidden = send(
         host,

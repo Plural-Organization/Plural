@@ -823,7 +823,9 @@ class SessionActor:
                 if command.role is Role.HOST:
                     raise Invalid("cannot invite another host")
                 if command.reusable:
-                    self._publisher.deliver(connection, self._room_link_event())
+                    self._publisher.deliver(
+                        connection, self._room_link_event(command.client_request_id)
+                    )
                     return
                 invite = self._invites.create(command.role, command.ttl_s)
                 self._publisher.deliver(
@@ -833,6 +835,7 @@ class SessionActor:
                         role=invite.role,
                         expires_at=invite.expires_at,
                         link=invite.link,
+                        client_request_id=command.client_request_id,
                     ),
                 )
             case BriefingRequest():
@@ -973,13 +976,14 @@ class SessionActor:
     def _connected(self) -> int:
         return sum(1 for person in self._state.participants.values() if person.connected)
 
-    def _room_link_event(self) -> InviteCreated:
+    def _room_link_event(self, client_request_id: str | None = None) -> InviteCreated:
         return InviteCreated(
             code=self._link.code,
             role=Role.PARTICIPANT,
             expires_at=None,
             link=self._link.link,
             reusable=True,
+            client_request_id=client_request_id,
         )
 
     def _refuse(self, connection: Connection, reason: str) -> None:
@@ -1093,6 +1097,7 @@ class SessionActor:
                 via=via,
                 display=display,
                 from_hook=from_hook,
+                client_request_id=command.client_request_id,
             )
             return
         # A proposal shows the host the whole text it approves, so the short display is dropped.
@@ -1587,6 +1592,7 @@ class SessionActor:
             delivery=proposal.delivery,
             attachments=proposal.attachments,
             provenance=from_proposal(author.id, author.role),
+            client_request_id=proposal.client_request_id,
         )
 
     async def _accept(
@@ -1600,6 +1606,7 @@ class SessionActor:
         via: str | None = None,
         display: str | None = None,
         from_hook: bool = False,
+        client_request_id: str | None = None,
     ) -> None:
         prompt_id = self._ids.new("pm_")
         if from_hook:
@@ -1613,6 +1620,7 @@ class SessionActor:
             attachments=attachments,
             via=via,
             display=display,
+            client_request_id=client_request_id,
         )
         await self._emit(accepted, actor_id=author.id)
         await self._set_typing(author.id, typing=False)

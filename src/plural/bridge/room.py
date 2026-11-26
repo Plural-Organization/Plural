@@ -13,6 +13,7 @@ participant invite, so the room sees them by name and treats their prompts as a 
 """
 
 import asyncio
+import secrets
 import time
 from collections.abc import Callable
 from contextlib import suppress
@@ -165,10 +166,11 @@ class RoomFeed:
         self._runs: dict[str, _Run] = {}
         self._messages: dict[str, str] = {}
         self._prompts: dict[str, tuple[str, str, _Sent | None]] = {}
-        self._sent: list[_Sent] = []
+        self._sent: dict[str, _Sent] = {}
         self._shown: dict[str, ApprovalView] = {}
         self._guests: dict[str, _Guest] = {}
         self._invite: asyncio.Future[str] | None = None
+        self._invite_request_id: str | None = None
         self._invite_lock = asyncio.Lock()
         self.online = asyncio.Event()
         self.workspace: str | None = None
@@ -206,11 +208,12 @@ class RoomFeed:
             return
         client = self._require_host() if as_owner else await self._guest(said.person)
         me = client.projection.me_id or ""
-        self._sent.append(_Sent(me, text, said.place, said.ref))
+        request_id = secrets.token_urlsafe(16)
+        self._sent[request_id] = _Sent(me, text, said.place, said.ref)
         try:
-            await client.send(PromptSubmit(text=text))
+            await client.send(PromptSubmit(text=text, client_request_id=request_id))
         except BaseException:
-            self._sent = [sent for sent in self._sent if sent.text != text or sent.author != me]
+            self._sent.pop(request_id, None)
             raise
 
     async def chat(self, said: Said, *, as_owner: bool) -> None:
@@ -257,11 +260,27 @@ class RoomFeed:
             case SessionSnapshot(state=state):
                 for approval in state.approvals.values():
                     await self._ask(approval)
-            case InviteCreated(link=link):
-                if self._invite is not None and not self._invite.done():
+            case InviteCreated(link=link, role=role, client_request_id=request_id):
+                expected = self._invite_request_id
+                correlated = request_id == expected or request_id is None
+                if (
+                    role is Role.PARTICIPANT
+                    and correlated
+                    and self._invite is not None
+                    and not self._invite.done()
+                ):
                     self._invite.set_result(link)
-            case PromptAccepted(prompt_id=prompt_id, author_id=author, text=text):
-                self._prompts[prompt_id] = (author, text, self._claim(author, text))
+            case PromptAccepted(
+                prompt_id=prompt_id,
+                author_id=author,
+                text=text,
+                client_request_id=request_id,
+            ):
+                self._prompts[prompt_id] = (
+                    author,
+                    text,
+                    self._claim(request_id, author, text),
+                )
             case RunStarted(run_id=run_id, prompt_id=prompt_id):
                 await self._started(run_id, prompt_id)
             case MessageStarted(run_id=run_id, message_id=message_id):
@@ -294,10 +313,13 @@ class RoomFeed:
             case _:
                 pass
 
-    def _claim(self, author: str, text: str) -> _Sent | None:
-        for index, sent in enumerate(self._sent):
+    def _claim(self, request_id: str | None, author: str, text: str) -> _Sent | None:
+        if request_id is not None:
+            return self._sent.pop(request_id, None)
+        # Compatibility with a host from before client request IDs were added.
+        for key, sent in self._sent.items():
             if sent.author == author and sent.text == text:
-                return self._sent.pop(index)
+                return self._sent.pop(key)
         return None
 
     def _name(self, participant_id: str) -> str:
@@ -455,6 +477,8 @@ class RoomFeed:
             await self._render(run_id, run, final=True)
         self._runs.clear()
         self._messages.clear()
+        self._prompts.clear()
+        self._sent.clear()
         for approval_id, approval in list(self._shown.items()):
             self._book.forget(self.room, approval_id)
             outcome = "_The session went offline._"
@@ -492,9 +516,20 @@ class RoomFeed:
         host = self._require_host()
         async with self._invite_lock:
             self._invite = asyncio.get_running_loop().create_future()
-            await host.send(InviteCreate(role=Role.PARTICIPANT, ttl_s=300))
-            async with asyncio.timeout(JOIN_TIMEOUT_S):
-                return await self._invite
+            self._invite_request_id = secrets.token_urlsafe(16)
+            try:
+                await host.send(
+                    InviteCreate(
+                        role=Role.PARTICIPANT,
+                        ttl_s=300,
+                        client_request_id=self._invite_request_id,
+                    )
+                )
+                async with asyncio.timeout(JOIN_TIMEOUT_S):
+                    return await self._invite
+            finally:
+                self._invite = None
+                self._invite_request_id = None
 
     async def _drain(self, client: SessionClient, welcomed: asyncio.Event) -> None:
         with suppress(CommandRejected):

@@ -199,6 +199,7 @@ class ProposalView(Model):
     text: str
     delivery: Delivery
     attachments: tuple[str, ...] = ()
+    client_request_id: str | None = None
 
 
 class QueuedPrompt(Model):

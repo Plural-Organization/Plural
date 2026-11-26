@@ -714,6 +714,18 @@
     },
     "InviteCreate": {
       "properties": {
+        "client_request_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "reusable": {
           "default": false,
           "type": "boolean"
@@ -1177,6 +1189,18 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "client_request_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "delivery": {
           "$ref": "#/$defs/Delivery",
