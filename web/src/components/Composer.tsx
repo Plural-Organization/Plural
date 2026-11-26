@@ -1,10 +1,11 @@
 import { Button } from "@heroui/react";
 import { ArrowUp, FileText, Paperclip, X } from "@phosphor-icons/react";
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
-import { mentionCompletions, mentionNote, type Mentionable, type ProposalView, type Role } from "@plural/client";
+import { historyView, jump, leave, mentionCompletions, mentionNote, newer, NOT_BROWSING, older, remember, type Browsing, type Mentionable, type ProposalView, type Role } from "@plural/client";
 import type { Attachment } from "../hooks/useAttachments";
 import { suggestions, type CommandHint } from "../lib/commands";
-import { loadHistory, newer, NOT_BROWSING, older, remember, saveHistory, type Browsing } from "../lib/promptHistory";
+import { loadHistory, saveHistory } from "../lib/promptHistory";
+import { HistoryList } from "./HistoryList";
 import { withQuote } from "../lib/quote";
 import styles from "./Composer.module.css";
 
@@ -37,7 +38,8 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
   const [dragging, setDragging] = useState(false);
   // What was sent, for the up and down keys; loaded once, kept in this browser.
   const history = useRef<string[]>(loadHistory());
-  const browsing = useRef<Browsing>(NOT_BROWSING);
+  const [browsing, setBrowsing] = useState<Browsing>(NOT_BROWSING);
+  const recalled = historyView(history.current, browsing);
   const commandHints = suggestions(value, role, commands);
   const mentions = commandHints.length === 0 ? mentionCompletions(value, people) : [];
   const hints = [
@@ -91,7 +93,7 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
     }
     history.current = remember(history.current, text);
     saveHistory(history.current);
-    browsing.current = NOT_BROWSING;
+    setBrowsing(NOT_BROWSING);
     onSubmit(text);
     setValue("");
   };
@@ -110,16 +112,21 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
     if (!onEdge) {
       return false;
     }
-    const step = up ? older(history.current, browsing.current, value) : newer(history.current, browsing.current);
+    const step = up ? older(history.current, browsing, value) : newer(history.current, browsing);
     if (step.value === null) {
       return false;
     }
     event.preventDefault();
-    browsing.current = step.browsing;
-    setValue(step.value);
-    // After the new text is in the box, with the caret at its end, so the next key press goes on from there.
-    requestAnimationFrame(() => area.current?.setSelectionRange(step.value?.length ?? 0, step.value?.length ?? 0));
+    show(step.browsing, step.value);
     return true;
+  };
+
+  // Puts a message from the list in the box with the caret at its end, so the next key press goes on from there.
+  const show = (next: Browsing, text: string) => {
+    setBrowsing(next);
+    setValue(text);
+    onActivity(text);
+    requestAnimationFrame(() => area.current?.setSelectionRange(text.length, text.length));
   };
 
   const keyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -145,6 +152,11 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
         return;
       }
       submit();
+    } else if (event.key === "Escape" && browsing.position !== -1) {
+      // Leaves the list and gives back the line that was being typed.
+      event.preventDefault();
+      const back = leave(browsing);
+      show(back.browsing, back.value ?? "");
     } else if (event.key === "Escape" && editing) {
       event.preventDefault();
       setValue("");
@@ -186,6 +198,7 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
   return (
     <div
       className={styles.composer}
+      data-tour="composer"
       onDragOver={(event) => {
         if (onAttach && event.dataTransfer.types.includes("Files")) {
           event.preventDefault();
@@ -204,6 +217,17 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
             </li>
           ))}
         </ul>
+      ) : null}
+      {recalled !== null && hints.length === 0 ? (
+        <HistoryList
+          view={recalled}
+          onPick={(index) => {
+            const step = jump(history.current, browsing, index, value);
+            if (step.value !== null) {
+              show(step.browsing, step.value);
+            }
+          }}
+        />
       ) : null}
       {editing ? <div className={styles.editing}>editing the proposal · enter sends it to the agent, esc cancels</div> : null}
       {attachments.length > 0 ? (
@@ -231,7 +255,7 @@ export function Composer({ role, commands, people = [], placeholder, disabled, e
           placeholder={disabled ?? placeholder}
           onChange={(event) => {
             // Typing over a recalled message makes it a new line of its own; the next up starts from the newest again.
-            browsing.current = NOT_BROWSING;
+            setBrowsing(NOT_BROWSING);
             setValue(event.target.value);
             onActivity(event.target.value);
           }}

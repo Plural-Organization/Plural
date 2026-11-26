@@ -114,3 +114,93 @@ h1, h2, .font-display { font-family: var(--font-display); }
   .pl-in { animation: enter .55s cubic-bezier(.16,1,.3,1) both; }
   @media (prefers-reduced-motion: reduce) { .pl-in { animation: none; } }
 }
+
+/* The first-visit tour (components/Tour.tsx): the room dims, the step's element stays lit, a popover points at it. */
+.tour { position: fixed; inset: 0; z-index: 1000; }
+.tour-dim { position: absolute; inset: 0; background: rgb(0 0 0 / .55); backdrop-filter: blur(2px); animation: tour-fade .25s ease both; }
+.tour-spot {
+  position: fixed; border-radius: 14px; pointer-events: none;
+  box-shadow: 0 0 0 1.5px var(--accent), 0 0 0 6px color-mix(in oklab, var(--accent) 22%, transparent), 0 0 0 100vmax rgb(0 0 0 / .55);
+  transition: top .35s cubic-bezier(.16,1,.3,1), left .35s cubic-bezier(.16,1,.3,1), width .35s cubic-bezier(.16,1,.3,1), height .35s cubic-bezier(.16,1,.3,1);
+  animation: tour-fade .25s ease both;
+}
+.tour-spot::after { content: ""; position: absolute; inset: -1.5px; border-radius: inherit; box-shadow: 0 0 0 0 var(--accent); animation: tour-pulse 2.2s ease-out infinite; }
+.tour-pop { width: min(22rem, calc(100vw - 32px)); }
+.tour-card { padding: 16px 18px 16px; }
+.tour-center {
+  position: absolute; left: 50%; top: 50%; width: min(24rem, calc(100vw - 32px)); transform: translate(-50%, -50%);
+  background: var(--overlay); color: var(--overlay-foreground); box-shadow: var(--overlay-shadow); border-radius: 24px; padding: 10px 6px 6px;
+  animation: tour-rise .4s cubic-bezier(.16,1,.3,1) both;
+}
+.tour-center .tour-card { padding-top: 8px; }
+.tour-mark { display: grid; place-items: center; width: 52px; height: 52px; margin: 12px 18px 4px; border-radius: 16px; background: var(--accent-soft); color: var(--accent); }
+.tour-dots { display: inline-flex; align-items: center; gap: 5px; }
+.tour-dots i { width: 6px; height: 6px; border-radius: 999px; background: color-mix(in oklab, var(--muted) 35%, transparent); transition: width .3s cubic-bezier(.16,1,.3,1), background-color .3s; }
+.tour-dots i[data-past="true"] { background: color-mix(in oklab, var(--accent) 45%, transparent); }
+.tour-dots i[data-on="true"] { width: 18px; background: var(--accent); }
+@keyframes tour-fade { from { opacity: 0; } }
+@keyframes tour-rise { from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)) scale(.97); } }
+@keyframes tour-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in oklab, var(--accent) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 14px transparent; } }
+@media (prefers-reduced-motion: reduce) {
+  .tour-dim, .tour-spot, .tour-center { animation: none; }
+  .tour-spot { transition: none; }
+  .tour-spot::after { animation: none; }
+}
+
+/* Room settings (components/RoomSettings.tsx): groups of choices drawn as tiles, the permission modes as a ladder. */
+.setting-agent { padding: 16px; border-radius: 22px; background: var(--surface-secondary); border: 1px solid var(--border); }
+.setting-agent__logo { display: grid; place-items: center; flex: none; width: 44px; height: 44px; border-radius: 14px; background: var(--surface-tertiary); color: var(--foreground); }
+.setting-group { display: flex; flex-direction: column; gap: 18px; }
+.setting-group__title { display: flex; align-items: center; gap: 8px; margin: 0; padding-bottom: 10px; border-bottom: 1px solid var(--separator, var(--border)); font-family: var(--font-sans); font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.setting { gap: 10px; }
+.setting__head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.setting__title { font-size: 15px; font-weight: 500; }
+.setting__hint { font-size: 12px; color: var(--muted); }
+.setting__grid { display: grid; gap: 8px; grid-template-columns: 1fr; }
+@media (min-width: 560px) {
+  .setting__grid[data-count="2"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .setting__grid[data-count="3"] { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.setting__ladder { display: flex; flex-direction: column; gap: 6px; }
+.setting .setting-tile { margin: 0 !important; display: flex; }
+.setting-tile__body {
+  display: flex; align-items: flex-start; gap: 12px; width: 100%; height: 100%; padding: 12px 14px; border-radius: 16px;
+  background: var(--surface-secondary); border: 1px solid transparent; font-weight: 400;
+  transition: background-color .2s, border-color .2s, box-shadow .2s;
+}
+.setting__ladder .setting-tile__body { align-items: center; }
+.setting-tile__body[data-hovered="true"] { background: var(--surface-tertiary); }
+.setting-tile[data-selected="true"] .setting-tile__body { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 7%, var(--surface-secondary)); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 14%, transparent); }
+.setting-tile__body[data-focus-visible="true"] { outline: 2px solid var(--focus); outline-offset: 2px; }
+.setting-tile__icon { display: grid; place-items: center; flex: none; width: 34px; height: 34px; border-radius: 11px; background: var(--surface-tertiary); color: var(--muted); transition: color .2s, background-color .2s; }
+.setting-tile[data-selected="true"] .setting-tile__icon { background: var(--accent); color: var(--accent-foreground); }
+.setting-tile__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.setting-tile__label { font-size: 14px; font-weight: 500; color: var(--foreground); }
+.setting-tile__says { font-size: 12.5px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
+.setting-tile__check { margin-top: 2px; border-color: color-mix(in oklab, var(--muted) 45%, transparent) !important; }
+.setting__ladder .setting-tile__check { margin-top: 0; }
+.setting-risk { display: none; align-items: flex-end; gap: 2px; height: 14px; flex: none; }
+@media (min-width: 480px) { .setting-risk { display: inline-flex; } }
+.setting-risk i { width: 3px; border-radius: 2px; background: color-mix(in oklab, var(--muted) 25%, transparent); }
+.setting-risk i:nth-child(1) { height: 5px; } .setting-risk i:nth-child(2) { height: 7px; } .setting-risk i:nth-child(3) { height: 9px; } .setting-risk i:nth-child(4) { height: 11px; } .setting-risk i:nth-child(5) { height: 14px; }
+.setting-risk i[data-on="true"] { background: var(--success, #2a9d73); }
+.setting-risk[data-level="4"] i[data-on="true"] { background: var(--warning); }
+.setting-risk[data-level="5"] i[data-on="true"] { background: var(--danger); }
+/* The danger zone looks like one at rest, and louder once it is on. */
+.setting-tile[data-danger="true"] .setting-tile__body { background: color-mix(in oklab, var(--danger) 7%, var(--surface-secondary)); border-color: color-mix(in oklab, var(--danger) 22%, transparent); }
+.setting-tile[data-danger="true"] .setting-tile__icon { background: color-mix(in oklab, var(--danger) 16%, transparent); color: var(--danger); }
+.setting-tile[data-danger="true"] .setting-tile__label { color: var(--danger); }
+.setting-tile[data-danger="true"][data-selected="true"] .setting-tile__body { border-color: var(--danger); box-shadow: 0 0 0 3px color-mix(in oklab, var(--danger) 18%, transparent); }
+.setting-tile[data-danger="true"][data-selected="true"] .setting-tile__icon { background: var(--danger); color: var(--danger-foreground, white); }
+.setting-tile[data-danger="true"]:has(input:checked) .radio__control { background-color: var(--danger); }
+@media (prefers-reduced-motion: reduce) { .setting-tile__body, .setting-tile__icon { transition: none; } }
+.tour-points { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 0; padding: 0; list-style: none; }
+.tour-points li { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 12px; background: var(--surface-secondary); font-size: 12.5px; line-height: 1.45; color: var(--muted); }
+.tour-points b { font-weight: 600; color: var(--foreground); }
+.tour-points__mark { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 7px; }
+.tour-points li[data-tone="safe"] .tour-points__mark { background: color-mix(in oklab, var(--success, #2a9d73) 18%, transparent); color: var(--success, #2a9d73); }
+.tour-points li[data-tone="warn"] .tour-points__mark { background: color-mix(in oklab, var(--warning) 18%, transparent); color: var(--warning); }
+.tour-points li[data-tone="danger"] { background: color-mix(in oklab, var(--danger) 10%, var(--surface-secondary)); }
+.tour-points li[data-tone="danger"] .tour-points__mark { background: color-mix(in oklab, var(--danger) 20%, transparent); color: var(--danger); }
+.tour-points li[data-tone="danger"] b { color: var(--danger); }
+.setting-tile:not([data-selected="true"]) .setting-tile__check { opacity: 0; }

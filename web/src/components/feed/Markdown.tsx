@@ -9,6 +9,7 @@ export type Block =
   | { kind: "code"; lang: string; text: string }
   | { kind: "heading"; level: number; text: string }
   | { kind: "list"; ordered: boolean; items: string[] }
+  | { kind: "table"; headers: string[]; rows: string[][] }
   | { kind: "quote"; text: string }
   | { kind: "paragraph"; text: string };
 
@@ -16,6 +17,34 @@ const FENCE = /^```\s*([\w+-]*)\s*$/;
 const HEADING = /^(#{1,4})\s+(.*)$/;
 const BULLET = /^\s*[-*]\s+(.*)$/;
 const NUMBERED = /^\s*\d+[.)]\s+(.*)$/;
+const TABLE_DIVIDER = /^\s*\|?\s*:?-{3,}:?\s*(?:\|\s*:?-{3,}:?\s*)+\|?\s*$/;
+
+function tableCells(line: string): string[] {
+  const source = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+  const cells: string[] = [];
+  let cell = "";
+  let escaped = false;
+  let code = false;
+  for (const character of source) {
+    if (escaped) {
+      cell += character === "|" ? "|" : `\\${character}`;
+      escaped = false;
+    } else if (character === "\\") {
+      escaped = true;
+    } else if (character === "`") {
+      cell += character;
+      code = !code;
+    } else if (character === "|" && !code) {
+      cells.push(cell.trim());
+      cell = "";
+    } else {
+      cell += character;
+    }
+  }
+  if (escaped) cell += "\\";
+  cells.push(cell.trim());
+  return cells;
+}
 
 export function blocks(source: string): Block[] {
   const lines = source.replace(/\r\n/g, "\n").split("\n");
@@ -37,6 +66,18 @@ export function blocks(source: string): Block[] {
     }
     if (line.trim() === "") {
       index += 1;
+      continue;
+    }
+    if (index + 1 < lines.length && line.includes("|") && TABLE_DIVIDER.test(lines[index + 1]!)) {
+      const headers = tableCells(line);
+      const rows: string[][] = [];
+      index += 2;
+      while (index < lines.length && lines[index]!.includes("|") && lines[index]!.trim() !== "") {
+        const cells = tableCells(lines[index]!);
+        rows.push(headers.map((_, column) => cells[column] ?? ""));
+        index += 1;
+      }
+      out.push({ kind: "table", headers, rows });
       continue;
     }
     const heading = HEADING.exec(line);
@@ -162,6 +203,15 @@ export function Markdown({ text, streaming = false, onOpenCode }: MarkdownProps)
               </Tag>
             );
           }
+          case "table":
+            return (
+              <div key={index} className={styles.tableWrap}>
+                <table>
+                  <thead><tr>{block.headers.map((cell, column) => <th key={column}>{inline(cell)}</th>)}</tr></thead>
+                  <tbody>{block.rows.map((row, position) => <tr key={position}>{row.map((cell, column) => <td key={column}>{inline(cell)}</td>)}</tr>)}</tbody>
+                </table>
+              </div>
+            );
           case "quote":
             return <blockquote key={index}>{inline(block.text)}</blockquote>;
           case "paragraph":

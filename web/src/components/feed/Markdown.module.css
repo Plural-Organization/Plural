@@ -5,6 +5,10 @@
 .md h3, .md h4, .md h5 { font-family: var(--font-display); letter-spacing: -0.01em; margin-top: 16px; }
 .md ul, .md ol { padding-left: 22px; }
 .md blockquote { border-left: 2px solid var(--line); padding-left: 12px; color: var(--muted); }
+.tableWrap { max-width: 100%; overflow-x: auto; }
+.tableWrap table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.tableWrap th, .tableWrap td { padding: 7px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+.tableWrap th { color: var(--muted); font-weight: 500; }
 .code { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; overflow-x: auto; font-size: 13px; line-height: 1.55; }
 .code code { background: none; padding: 0; }
 .code[data-lang]::before { content: attr(data-lang); display: block; font-size: 11px; color: var(--dim); margin-bottom: 6px; }
