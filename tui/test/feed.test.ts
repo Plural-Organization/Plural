@@ -95,6 +95,7 @@ describe("feed", () => {
       attachments: [],
       via: null,
       display: null,
+      client_request_id: null,
     });
     expect(feed.items.at(-1)).toMatchObject({ kind: "user", name: "Alia", role: "participant", viaProposal: true, text: "hello" });
   });
@@ -110,6 +111,7 @@ describe("feed", () => {
       attachments: [],
       via: "btw",
       display: "what is overfitting?",
+      client_request_id: null,
     });
     expect(feed.items.at(-1)).toMatchObject({
       kind: "user",
@@ -151,7 +153,7 @@ describe("feed", () => {
   test("the last reply joins everything since the last prompt", () => {
     const { feed } = replay(
       joined(ALIA),
-      { type: "prompt.accepted", prompt_id: "pm1", author_id: "p_alia", text: "go", delivery: "now", provenance: DIRECT, attachments: [], via: null, display: null },
+      { type: "prompt.accepted", prompt_id: "pm1", author_id: "p_alia", text: "go", delivery: "now", provenance: DIRECT, attachments: [], via: null, display: null, client_request_id: null },
       { type: "message.ended", run_id: "r", message_id: "m1", text: "one", thinking: "" },
       { type: "tool.started", run_id: "r", call: CALL },
       { type: "message.ended", run_id: "r", message_id: "m2", text: "two", thinking: "" },
