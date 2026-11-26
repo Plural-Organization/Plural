@@ -2112,7 +2112,8 @@
             "author_id": "p_alia",
             "text": "check the notes",
             "delivery": "now",
-            "attachments": []
+            "attachments": [],
+            "client_request_id": null
           }
         }
       },
@@ -2168,7 +2169,8 @@
             "author_id": "p_alia",
             "text": "check the notes",
             "delivery": "now",
-            "attachments": []
+            "attachments": [],
+            "client_request_id": null
           }
         },
         "approvals": {},
@@ -2300,7 +2302,8 @@
             "author_id": "p_alia",
             "text": "delete all",
             "delivery": "now",
-            "attachments": []
+            "attachments": [],
+            "client_request_id": null
           }
         }
       },
@@ -2356,7 +2359,8 @@
             "author_id": "p_alia",
             "text": "delete all",
             "delivery": "now",
-            "attachments": []
+            "attachments": [],
+            "client_request_id": null
           }
         },
         "approvals": {},
@@ -2493,7 +2497,8 @@
           },
           "attachments": [],
           "via": null,
-          "display": null
+          "display": null,
+          "client_request_id": null
         }
       },
       "state": {
@@ -2714,7 +2719,8 @@
           },
           "attachments": [],
           "via": null,
-          "display": null
+          "display": null,
+          "client_request_id": null
         }
       },
       "state": {
@@ -2849,7 +2855,8 @@
           },
           "attachments": [],
           "via": null,
-          "display": null
+          "display": null,
+          "client_request_id": null
         }
       },
       "state": {
@@ -6119,7 +6126,8 @@
           },
           "attachments": [],
           "via": null,
-          "display": null
+          "display": null,
+          "client_request_id": null
         }
       },
       "state": {
