@@ -35,6 +35,7 @@ from plural.bridge.model import (
     Tone,
 )
 from plural.bridge.platform import ChatPlatform
+from plural.bridge.store import BridgeStore
 from plural.client.connection import CommandRejected
 from plural.client.reconnect import JoinLink, SessionClient
 from plural.protocol.commands import (
@@ -54,6 +55,7 @@ from plural.protocol.events import (
     MessageDelta,
     MessageEnded,
     MessageStarted,
+    ParticipantRevoked,
     PromptAccepted,
     RunEnded,
     RunStarted,
@@ -75,6 +77,10 @@ ALERT_AFTER_S = 30.0
 APPROVAL_DELAY_S = 15.0
 GIST = 600
 MAX_PROMPT = 20_000
+# An approval longer than this does not fit in one message on every service. What a person cannot
+# read in full they cannot allow from the chat.
+MAX_APPROVAL = 1900
+CUT_SUBJECT = 1000
 
 DECIDED = {
     ApprovalDecision.ONCE: "✅ Allowed once",
@@ -88,18 +94,17 @@ RISKY = {"edit": "change a file", "write": "write a file", "bash": "run a comman
 
 
 class ApprovalBook:
-    """Short names for approvals, since a button carries at most 64 bytes."""
+    """Short names for approvals, since a button carries at most 64 bytes. They are random:
+    a button left in a chat by an earlier run of the bridge never names a newer request."""
 
     def __init__(self) -> None:
-        self._next = 0
         self._by_short: dict[str, tuple[str, str]] = {}
         self._short: dict[tuple[str, str], str] = {}
 
     def short(self, room: str, approval_id: str) -> str:
         key = (room, approval_id)
         if key not in self._short:
-            self._next += 1
-            self._short[key] = str(self._next)
+            self._short[key] = secrets.token_urlsafe(9)
             self._by_short[self._short[key]] = key
         return self._short[key]
 
@@ -110,6 +115,10 @@ class ApprovalBook:
         short = self._short.pop((room, approval_id), None)
         if short is not None:
             self._by_short.pop(short, None)
+
+
+class GuestRevoked(Exception):
+    """The host removed this person from the room."""
 
 
 @dataclass(slots=True)
@@ -145,6 +154,7 @@ class RoomFeed:
         lookup: Callable[[str], RunningRoom | None],
         approvals: ApprovalBook,
         client: ClientInfo,
+        store: BridgeStore,
         poll_s: float = POLL_S,
         alerts: Callable[[], list[Place]] = list[Place],
         alert_after_s: float = ALERT_AFTER_S,
@@ -156,6 +166,7 @@ class RoomFeed:
         self._lookup = lookup
         self._book = approvals
         self._client = client
+        self._store = store
         self._poll_s = poll_s
         self._alerts = alerts
         self._alert_after_s = alert_after_s
@@ -258,8 +269,14 @@ class RoomFeed:
             case SessionWelcome():
                 self.online.set()
             case SessionSnapshot(state=state):
+                # Removed while the bridge was not looking.
+                for participant_id in self._store.guests_of(self.room):
+                    if participant_id not in state.participants:
+                        self._revoked(participant_id)
                 for approval in state.approvals.values():
                     await self._ask(approval)
+            case ParticipantRevoked(participant_id=participant_id):
+                self._revoked(participant_id)
             case InviteCreated(link=link, role=role, client_request_id=request_id):
                 expected = self._invite_request_id
                 correlated = request_id == expected or request_id is None
@@ -494,14 +511,26 @@ class RoomFeed:
             raise ConnectionError("the session is not running")
         return self._host
 
+    def _revoked(self, participant_id: str) -> None:
+        person = self._store.revoke_guest(self.room, participant_id)
+        if person is not None and (guest := self._guests.pop(person, None)) is not None:
+            guest.task.cancel()
+
+    def _refuse_revoked(self, person: Person) -> None:
+        if self._store.is_revoked(self.room, person.id):
+            raise GuestRevoked
+
     async def _guest(self, person: Person) -> SessionClient:
+        self._refuse_revoked(person)
         guest = self._guests.get(person.id)
         if guest is not None and not guest.task.done():
             return guest.client
         link = await self._new_invite()
+        # Again: the events before the invite, a removal among them, are handled by now.
+        self._refuse_revoked(person)
         client = SessionClient(JoinLink.parse(link), name=person.name[:40], client=self._client)
         welcomed = asyncio.Event()
-        task = asyncio.create_task(self._drain(client, welcomed), name=f"guest:{person.id}")
+        task = asyncio.create_task(self._drain(client, welcomed, person), name=f"guest:{person.id}")
         self._guests[person.id] = _Guest(client, task)
         try:
             async with asyncio.timeout(JOIN_TIMEOUT_S):
@@ -531,10 +560,11 @@ class RoomFeed:
                 self._invite = None
                 self._invite_request_id = None
 
-    async def _drain(self, client: SessionClient, welcomed: asyncio.Event) -> None:
+    async def _drain(self, client: SessionClient, welcomed: asyncio.Event, person: Person) -> None:
         with suppress(CommandRejected):
             async for event in client.events():
                 if isinstance(event, SessionWelcome):
+                    self._store.add_guest(self.room, event.participant.id, person.id)
                     welcomed.set()
 
     async def _drop_guests(self) -> None:
@@ -555,20 +585,27 @@ def approval_notice(
     here = f" in `{where}`" if where else ""
     if approval.folder is not None:
         access = "read and write" if approval.folder.write else "read"
-        lines = [
-            f"**🔐 The agent{here} asks to {access} a folder outside the project**",
-            _block(approval.folder.folder),
-        ]
+        title = f"**🔐 The agent{here} asks to {access} a folder outside the project**"
+        subject = approval.folder.folder
     else:
         what = RISKY.get(call.name, f"use `{call.name}`")
-        lines = [f"**🔐 The agent{here} wants to {what}**"]
-        if call.subject:
-            lines.append(_block(call.subject))
-    lines.extend(f"⚠️ {warning}" for warning in approval.warnings)
+        title = f"**🔐 The agent{here} wants to {what}**"
+        subject = call.subject
+    warnings = [f"⚠️ {warning}" for warning in approval.warnings]
+    lines = [title, *([_block(subject)] if subject else []), *warnings]
+    whole = len("\n\n".join(lines)) <= MAX_APPROVAL
+    if not whole:
+        lines = [
+            title,
+            _block(f"{subject[:CUT_SUBJECT]}\n… (cut)"),
+            *(["\n".join(warnings)[:400]] if warnings else []),
+            "**Too long to show here in full.** Allow it in the terminal or the web client.",
+        ]
     if outcome:
         lines.append(outcome)
     choices: tuple[tuple[Choice, ...], ...] = ()
     if short is not None and not outcome:
+        reject = (Choice("⛔ Reject", f"ap:{short}:{ApprovalDecision.REJECT.value}", Tone.DANGER),)
         if approval.folder is not None:
             first = (
                 Choice("📖 Read", f"ap:{short}:{ApprovalDecision.READ.value}", Tone.PRIMARY),
@@ -579,16 +616,13 @@ def approval_notice(
                 Choice("✅ Allow", f"ap:{short}:{ApprovalDecision.ONCE.value}", Tone.GOOD),
                 Choice("Always", f"ap:{short}:{ApprovalDecision.ALWAYS.value}", Tone.PRIMARY),
             )
-        choices = (
-            first,
-            (Choice("⛔ Reject", f"ap:{short}:{ApprovalDecision.REJECT.value}", Tone.DANGER),),
-        )
+        choices = (first, reject) if whole else (reject,)
     return Notice("\n\n".join(lines), choices)
 
 
 def _block(text: str) -> str:
     fence = "````" if "```" in text else "```"
-    return f"{fence}\n{text[:3000]}\n{fence}"
+    return f"{fence}\n{text}\n{fence}"
 
 
 def _gist(text: str) -> str:

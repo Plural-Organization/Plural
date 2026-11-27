@@ -13,7 +13,10 @@ from pydantic import BaseModel, Field, ValidationError
 from plural.bridge.model import Person, Place
 
 PAIRING_TTL_S = 10 * 60
-PAIRING_MAX_FAILURES = 5
+# Long enough that guessing is hopeless however many tries a stranger sends, so nothing has to
+# count them (a count would let a stranger lock the owner out). No look-alikes: it gets typed.
+PAIRING_ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789"
+PAIRING_CHARS = 12
 
 
 class _Link(BaseModel):
@@ -36,8 +39,10 @@ class _Saved(BaseModel):
     homes: dict[str, _Home] = Field(default_factory=dict[str, _Home])
     pairing: str | None = None
     pairing_issued_at: float | None = None
-    pairing_failures: int = 0
     links: dict[str, _Link] = Field(default_factory=dict[str, _Link])
+    # By room: the chat person behind each guest participant, and the people the host removed.
+    guests: dict[str, dict[str, str]] = Field(default_factory=dict[str, dict[str, str]])
+    revoked: dict[str, list[str]] = Field(default_factory=dict[str, list[str]])
 
 
 class BridgeStore:
@@ -96,28 +101,22 @@ class BridgeStore:
         if self._pairing_expired():
             self._saved.pairing = None
             self._saved.pairing_issued_at = None
-            self._saved.pairing_failures = 0
             self._save()
             return None
         return self._saved.pairing
 
     def pair(self, person: Person, code: str) -> bool:
+        """Makes the person an owner when they give the active code. It never makes a code:
+        only the settings and the command line do."""
         self._fresh()
         expected = self._saved.pairing
         if expected is None or self._pairing_expired():
-            self._renew_pairing()
-            self._save()
             return False
-        if not secrets.compare_digest(code.strip(), expected):
-            self._saved.pairing_failures += 1
-            if self._saved.pairing_failures >= PAIRING_MAX_FAILURES:
-                self._renew_pairing()
-            self._save()
+        if not secrets.compare_digest(code.strip().upper().encode(), expected.encode()):
             return False
         self._saved.owners[person.id] = person.name
         self._saved.pairing = None
         self._saved.pairing_issued_at = None
-        self._saved.pairing_failures = 0
         self._save()
         return True
 
@@ -128,20 +127,51 @@ class BridgeStore:
         )
 
     def _renew_pairing(self) -> None:
-        previous = self._saved.pairing
-        pairing = f"{secrets.randbelow(10**6):06d}"
-        while pairing == previous:
-            pairing = f"{secrets.randbelow(10**6):06d}"
-        self._saved.pairing = pairing
+        self._saved.pairing = "".join(
+            secrets.choice(PAIRING_ALPHABET) for _ in range(PAIRING_CHARS)
+        )
         self._saved.pairing_issued_at = self._clock()
-        self._saved.pairing_failures = 0
 
     def unpair(self, person_id: str) -> None:
+        """Removes an owner, and with them their private chat's hold on any session."""
         self._fresh()
         gone = self._saved.owners.pop(person_id, None)
         home = self._saved.homes.pop(person_id, None)
+        if home is not None:
+            self._saved.links = {
+                key: link
+                for key, link in self._saved.links.items()
+                if not (link.private and link.chat == home.chat)
+            }
         if gone is not None or home is not None:
             self._save()
+
+    def add_guest(self, room: str, participant_id: str, person_id: str) -> None:
+        self._fresh()
+        self._saved.guests.setdefault(room, {})[participant_id] = person_id
+        self._save()
+
+    def guests_of(self, room: str) -> dict[str, str]:
+        """Participant id to chat person id, for the guests this bridge brought into a room."""
+        self._fresh()
+        return dict(self._saved.guests.get(room, {}))
+
+    def revoke_guest(self, room: str, participant_id: str) -> str | None:
+        """Remembers that the host removed a guest, so the bridge does not bring that person
+        back. Returns the person, or None when the participant was not one of its guests."""
+        self._fresh()
+        person = self._saved.guests.get(room, {}).pop(participant_id, None)
+        if person is None:
+            return None
+        revoked = self._saved.revoked.setdefault(room, [])
+        if person not in revoked:
+            revoked.append(person)
+        self._save()
+        return person
+
+    def is_revoked(self, room: str, person_id: str) -> bool:
+        self._fresh()
+        return person_id in self._saved.revoked.get(room, [])
 
     def remember_home(self, person: Person, place: Place) -> None:
         """Keeps the private chat an owner talks to the bot in, so alerts can find them there."""

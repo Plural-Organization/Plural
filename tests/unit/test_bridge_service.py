@@ -10,6 +10,7 @@ from plural.bridge.model import Answer, Incoming, Notice, Person, Place, Pressed
 from plural.bridge.platform import AuthError, Links, PlatformError
 from plural.bridge.registry import NAMES, Field, Provider, Registry
 from plural.bridge.service import BridgeService, State
+from plural.bridge.store import PAIRING_CHARS
 from plural.protocol.commands import ClientInfo
 
 
@@ -199,11 +200,11 @@ def test_pairing_shows_until_there_is_an_owner_and_can_be_renewed(tmp_path: Path
     bridges.save("quiet", {"token": "good"}, enabled=False)
     first = only(bridges.catalog())["pairing"]
     assert isinstance(first, str)
-    assert len(first) == 6
+    assert len(first) == PAIRING_CHARS
 
     renewed = bridges.renew_pairing("quiet")
 
-    assert renewed != first or len(renewed) == 6
+    assert renewed != first
     assert only(bridges.catalog())["pairing"] == renewed
 
     owner = Person("1", "Tamirlan")
@@ -242,6 +243,37 @@ async def test_a_second_process_edits_the_settings_and_the_first_one_runs_them(
     editor.remove("quiet")
     await _until(runner, "configured", False)
     await runner.stop()
+    await editor.stop()
+
+
+async def test_the_second_process_takes_over_when_the_first_one_stops(tmp_path: Path) -> None:
+    runner = service(tmp_path)
+    waiting = service(tmp_path)
+    assert runner.start()
+    assert not waiting.start()
+    runner.save("quiet", {"token": "good"})
+    await _until(runner, "state", State.RUNNING)
+
+    await runner.stop()
+
+    await _until(waiting, "state", State.RUNNING)
+    await waiting.stop()
+
+
+def test_a_save_keeps_what_another_process_saved_in_between(tmp_path: Path) -> None:
+    other = Provider(id="other", label="Other", summary="", fields=QUIET.fields, build=QUIET.build)
+    daemon = BridgeConfig(tmp_path)
+    BridgeConfig(tmp_path).save(other, {"token": "from-the-cli"})
+
+    daemon.save(QUIET, {"token": "from-the-web"})
+    assert BridgeConfig(tmp_path).ids() == ["other", "quiet"]
+
+    BridgeConfig(tmp_path).set_enabled("quiet", False)
+    daemon.remove("other")
+    entry = daemon.get("quiet")
+    assert entry is not None
+    assert not entry.enabled
+    assert BridgeConfig(tmp_path).ids() == ["quiet"]
 
 
 async def test_the_editor_sees_idle_when_nothing_runs_the_bridges(tmp_path: Path) -> None:

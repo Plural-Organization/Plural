@@ -15,12 +15,12 @@ Chat apps are set up on the host's computer, in any of three places. They all wr
 Each service shows what to do in it first (Telegram: [@BotFather](https://t.me/BotFather) → `/newbot`; Discord: Developer Portal → application → Bot, with *Message Content Intent* turned on), then asks for the bot's token. **Test** connects once and tells you the bot's name without saving anything; **Save and connect** keeps the token on your computer and connects at once.
 
 1. Add a service and save. The status shows *Connected* with the bot's name.
-2. Press **Open Telegram** (or, on Discord, **Open Discord**) next to the code. Telegram opens the private chat with the bot: press *Start*, and you are its owner. Discord has no such link, so send `/pair <code>` there. *Add another owner* shows a new code.
+2. Press **Open Telegram** (or, on Discord, **Open Discord**) next to the code. Telegram opens the private chat with the bot: press *Start*, and you are its owner. Discord has no such link, so send `/pair <code>` there. *Add another owner* shows a new code. A code works once and for ten minutes, and only the settings and `plural bridge pair` make one. Removing an owner also unlinks their private chat.
 3. Start `plural` in a project folder as usual.
 
 That is all for yourself. In your private chat with the bot, write to it: it follows the session running on your computer by itself, and moves to the next one when that session ends. With several sessions running it asks which. To share a session with a group, press **Add to a group or server** (it adds the bot with the right permissions), then send `/link` there and pick the session.
 
-Something has to run the bridges: `plural daemon` does it for as long as it runs, and `plural bridge run` does it without the daemon. If neither runs, the settings say *Waiting to start*. Only one process on a computer runs them (the other only edits the settings), so a token is never read twice. A change made in any place reaches the running bridge within a couple of seconds.
+Something has to run the bridges: `plural daemon` does it for as long as it runs, and `plural bridge run` does it without the daemon. If neither runs, the settings say *Waiting to start*. Only one process on a computer runs them (the other only edits the settings, and takes over when that one stops), so a token is never read twice. A change made in any place reaches the running bridge within a couple of seconds.
 
 To try a bot once without saving anything: `plural bridge telegram --token <token>` or `plural bridge discord --token <token>`.
 
@@ -56,8 +56,10 @@ A guest's prompt is treated like any guest's: the commands and writes it leads t
 
 - **A reply** is a rich message. While the agent works, a Telegram private chat shows Telegram's own *Thinking…* draft with a stop button; a group, and every Discord channel, shows the message growing, edited every couple of seconds, with a **Stop** button for owners. A Discord reply over 2000 characters continues in a second message.
 - **Steps** the agent took fold into a block at the top of the reply that opens on a tap (Telegram), or sit in a short list of the last few (Discord).
-- **A request to allow** something is a message of its own with **Allow**, **Always** and **Reject**, or **Read** and **Read and write** for a folder outside the project. Once answered, it says who answered and how.
+- **A request to allow** something is a message of its own with **Allow**, **Always** and **Reject**, or **Read** and **Read and write** for a folder outside the project. Once answered, it says who answered and how. A request too long to show in full in one message can only be rejected from the chat: allow it in the terminal or the web client.
 - **The rest of the group's talk** goes to the session's chat, under each person's name. The agent does not answer it, but reads it before its next answer, so "what did we decide about the deploy?" works. It needs the bot to see every message: make it an admin of the group or turn privacy mode off in @BotFather (`/setprivacy` → Disable). With privacy mode on it sees only commands and replies to it. Like a guest's prompt, a guest's message makes the next run a guest turn, so writes and commands in it wait for an owner.
+
+A guest the host removes from a session (*revoke access*) stays removed: the bridge does not bring that person back into it, from any chat.
 
 ## Commands
 

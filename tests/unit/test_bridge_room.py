@@ -1,13 +1,30 @@
 import asyncio
+import tempfile
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import cast
 
 from plural.bridge.model import Place
 from plural.bridge.platform import ChatPlatform
-from plural.bridge.room import ApprovalBook, RoomFeed, _Sent  # pyright: ignore[reportPrivateUsage]
+from plural.bridge.room import (
+    MAX_APPROVAL,
+    ApprovalBook,
+    RoomFeed,
+    _Sent,  # pyright: ignore[reportPrivateUsage]
+    approval_notice,
+)
+from plural.bridge.store import BridgeStore
 from plural.core.provenance import direct
 from plural.protocol.commands import ClientInfo
 from plural.protocol.events import InviteCreated, PromptAccepted
-from plural.protocol.models import Delivery, Role
+from plural.protocol.models import (
+    ApprovalView,
+    Delivery,
+    FolderAccess,
+    Role,
+    ToolCallView,
+    ToolRisk,
+)
 
 
 def feed() -> RoomFeed:
@@ -18,6 +35,7 @@ def feed() -> RoomFeed:
         lookup=lambda _room: None,
         approvals=ApprovalBook(),
         client=ClientInfo(kind="test", version="0"),
+        store=BridgeStore(Path(tempfile.mkdtemp()), "fake"),
     )
 
 
@@ -96,3 +114,40 @@ async def test_invite_waiter_accepts_only_its_participant_invite() -> None:
         )
     )
     assert room._invite.result() == "plural://participant"  # pyright: ignore[reportPrivateUsage]
+
+
+def asking(command: str, *, folder: FolderAccess | None = None) -> ApprovalView:
+    call = ToolCallView(id="c1", name="bash", risk=ToolRisk.EXEC, subject=command)
+    return ApprovalView(
+        id="ap_1",
+        call=call,
+        provenance=direct("p_host", Role.HOST),
+        timeout_at=datetime.now(UTC),
+        folder=folder,
+    )
+
+
+def test_a_button_from_an_earlier_run_of_the_bridge_names_nothing() -> None:
+    old = ApprovalBook().short("r_1", "ap_old")
+    newer = ApprovalBook()
+    short = newer.short("r_1", "ap_new")
+
+    assert newer.find(old) is None
+    assert newer.find(short) == ("r_1", "ap_new")
+    assert len(f"ap:{short}:{'x' * 8}".encode()) <= 64
+
+
+def test_what_does_not_fit_in_a_message_can_only_be_rejected_from_the_chat() -> None:
+    fits = approval_notice(asking("echo " + "a" * 1500 + " && echo TAIL"), "s")
+    assert "echo TAIL" in fits.text
+    assert len(fits.choices) == 2
+
+    for approval in (
+        asking("echo " + "a" * 3500 + " && echo TAIL"),
+        asking("", folder=FolderAccess(folder="/" + "a" * 3000, write=True)),
+    ):
+        cut = approval_notice(approval, "s")
+        assert [choice.data for row in cut.choices for choice in row] == ["ap:s:reject"]
+        assert "(cut)" in cut.text
+        assert "TAIL" not in cut.text
+        assert len(cut.text) <= MAX_APPROVAL

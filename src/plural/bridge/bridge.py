@@ -17,7 +17,14 @@ import structlog
 
 from plural.bridge.model import Choice, Incoming, Notice, Place, Pressed, Said, Tone
 from plural.bridge.platform import ChatPlatform
-from plural.bridge.room import ALERT_AFTER_S, APPROVAL_DELAY_S, POLL_S, ApprovalBook, RoomFeed
+from plural.bridge.room import (
+    ALERT_AFTER_S,
+    APPROVAL_DELAY_S,
+    POLL_S,
+    ApprovalBook,
+    GuestRevoked,
+    RoomFeed,
+)
 from plural.bridge.store import BridgeStore
 from plural.client.connection import CommandRejected
 from plural.protocol.commands import ClientInfo
@@ -159,6 +166,7 @@ class Bridge:
                 lookup=self._lookup,
                 approvals=self._book,
                 client=self._client,
+                store=self._store,
                 alerts=self._store.alert_places,
                 alert_after_s=self._alert_after_s,
                 approval_delay_s=self._approval_delay_s,
@@ -255,6 +263,8 @@ class Bridge:
             )
         except CommandRejected as error:
             await self._say(said, f"The session refused it: {error.error.message}")
+        except GuestRevoked:
+            await self._say(said, "The host removed you from this session.")
 
     async def _resolve(self, said: Said) -> str | None:
         """The session this chat follows. In an owner's private chat nobody has to link one: when
@@ -319,7 +329,7 @@ class Bridge:
             return
         try:
             await self._feed(room).chat(said, as_owner=self._store.is_owner(said.person))
-        except (ConnectionError, TimeoutError, CommandRejected) as error:
+        except (ConnectionError, TimeoutError, CommandRejected, GuestRevoked) as error:
             log.info("bridge.chat_dropped", room=room, error=str(error))
 
     async def _pair(self, said: Said, code: str) -> None:
@@ -340,7 +350,9 @@ class Bridge:
             await self._resolve(said)
         else:
             await self._say(
-                said, "That code is not right. The runner of the bridge prints it at start."
+                said,
+                "That code is not right or has expired. Get a new one in Chat apps in Plural's "
+                "settings, or with `plural-host bridge pair`.",
             )
 
     async def _offer_rooms(self, place: Place, *, again: bool = False) -> None:

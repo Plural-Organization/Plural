@@ -6,11 +6,15 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from plural.bridge.bridge import Bridge
 from plural.bridge.model import Answer, Incoming, Notice, Person, Phase, Place, Pressed, Said
 from plural.bridge.platform import Links
 from plural.bridge.store import BridgeStore
-from plural.protocol.commands import ClientInfo
+from plural.client.reconnect import JoinLink, SessionClient
+from plural.protocol.commands import ClientInfo, ParticipantRevoke
+from plural.protocol.events import SessionSnapshot
 from plural.protocol.running import RunningRoom
 from tests.doubles import FakeProvider, reply, use_tool
 from tests.e2e.support import Session, running_session
@@ -353,3 +357,54 @@ async def test_an_owner_who_writes_in_private_follows_the_one_running_session_by
     assert told is not None
     assert isinstance(told.view, Notice)
     assert "Following `ws`" in told.view.text
+
+
+async def revoke(session: Session, name: str) -> None:
+    """The host removes a participant, the way the terminal does."""
+    found = next(p for p in session.host.actor.state.participants.values() if p.name == name)
+    host = SessionClient(
+        JoinLink.parse(session.host.host_link),
+        name="terminal",
+        client=ClientInfo(kind="test", version="0"),
+    )
+    joined = asyncio.Event()
+
+    async def read() -> None:
+        async for event in host.events():
+            if isinstance(event, SessionSnapshot):
+                joined.set()
+
+    reading = asyncio.create_task(read())
+    try:
+        async with asyncio.timeout(5):
+            await joined.wait()
+        await host.send(ParticipantRevoke(participant_id=found.id))
+    finally:
+        reading.cancel()
+        with suppress(asyncio.CancelledError):
+            await reading
+
+
+@pytest.mark.parametrize("bridge_is_down", [False, True])
+async def test_a_guest_the_host_removed_is_not_brought_back(
+    tmp_path: Path, bridge_is_down: bool
+) -> None:
+    provider = FakeProvider([reply("one"), reply("two")])
+    async with running_session(tmp_path, relayed=False, provider=provider) as session:
+        async with bridged(session, tmp_path) as (chat, store):
+            await chat.inbox.put(said(GUEST, "first", "1"))
+            await chat.until(lambda: chat.last("run:", final=True))
+            if not bridge_is_down:
+                await revoke(session, GUEST.name)
+        if bridge_is_down:
+            await revoke(session, GUEST.name)
+
+        async with bridged(session, tmp_path) as (chat, store):
+            await chat.inbox.put(said(GUEST, "second", "2"))
+            told = await chat.until(lambda: chat.last("say:"))
+
+        names = [p.name for p in session.host.actor.state.participants.values()]
+        assert isinstance(told.view, Notice)
+        assert "removed you" in told.view.text
+        assert GUEST.name not in names
+        assert store.is_revoked(session.host.room, GUEST.id)

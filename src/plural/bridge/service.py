@@ -185,7 +185,15 @@ class BridgeService:
     def start(self) -> bool:
         """Takes the right to run the bridges and starts them. False when another process on this
         computer (the daemon, or `plural bridge run`) already holds it: then this one only edits
-        the settings, and that one picks the changes up."""
+        the settings, and takes over once that one stops."""
+        held = self._claim()
+        if held:
+            self._reconcile()
+        if self._watcher is None:
+            self._watcher = asyncio.create_task(self._watch(), name="bridge:watch")
+        return held
+
+    def _claim(self) -> bool:
         if self._lock is None:
             path = self._dir / "bridge" / "supervisor.lock"
             path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
@@ -196,9 +204,6 @@ class BridgeService:
                 handle.close()
                 return False
             self._lock = handle
-        self._reconcile()
-        if self._watcher is None:
-            self._watcher = asyncio.create_task(self._watch(), name="bridge:watch")
         return True
 
     async def stop(self) -> None:
@@ -222,6 +227,7 @@ class BridgeService:
     async def run(self) -> None:
         """Runs every enabled bridge until cancelled: the headless way, `plural bridge run`."""
         if not self.start():
+            await self.stop()
             raise BridgeBusy("another Plural process already runs the chat bridges")
         try:
             await asyncio.Event().wait()
@@ -236,9 +242,11 @@ class BridgeService:
     async def _watch(self) -> None:
         while True:
             await asyncio.sleep(self._watch_s)
-            if self._config.reload():
-                self._reconcile()
-            self._publish()
+            try:
+                if self._claim():
+                    self._reconcile()
+            except (ConfigError, OSError) as error:
+                log.warning("bridge.watch_failed", error=str(error))
 
     def _reconcile(self) -> None:
         """Makes what runs match the settings: starts, restarts and stops what changed."""
