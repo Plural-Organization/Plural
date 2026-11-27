@@ -34,6 +34,9 @@ dependencies = [
 [project.optional-dependencies]
 anthropic = ["anthropic>=2.3.0", "pydantic-ai-slim[anthropic]>=2.63.0"]
 openai = ["openai>=3.37.0", "pydantic-ai-slim[openai]>=2.63.0"]
+codemode = [
+    "pydantic-ai-harness[codemode]>=0.63.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/Plural-Organization/Plural"
@@ -48,6 +51,7 @@ dev = [
   "anthropic>=2.3.0",
   "openai>=3.37.0",
   "pydantic-ai-slim[anthropic,openai]>=2.63.0",
+  "pydantic-ai-harness[codemode]>=0.63.0",
   "coverage>=7.6",
   "hypothesis>=6.125",
   "import-linter>=2.2",

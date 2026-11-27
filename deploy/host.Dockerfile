@@ -1,3 +1,7 @@
+# The same uv is on Docker Hub as astral/uv, for a network that cannot reach ghcr.io.
+ARG UV_IMAGE=ghcr.io/astral-sh/uv:0.9.11
+FROM ${UV_IMAGE} AS uv
+
 FROM python:3.12-slim
 RUN apt-get update \
  && apt-get upgrade -y --no-install-recommends \
@@ -5,7 +9,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/* \
  && useradd --system --create-home --uid 10001 plural \
  && mkdir /data && chown plural /data
-COPY --from=ghcr.io/astral-sh/uv:0.9.11 /uv /bin/uv
+COPY --from=uv /uv /bin/uv
 WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy PATH="/app/.venv/bin:$PATH" PLURAL_DATA_DIR=/data
 COPY pyproject.toml uv.lock README.md ./

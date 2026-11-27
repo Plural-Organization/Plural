@@ -44,6 +44,8 @@ DEFAULT_RULES: Final = RuleSet.from_mapping(
         "skill": {"*": "allow"},
         "agent": {"*": "allow"},
         "tool_search": {"*": "allow"},
+        # The code only computes: each tool call it makes is put to these rules as its own.
+        "run_code": {"*": "allow"},
         "skill_search": {"*": "allow"},
         # The board is the room's shared sketch, not the workspace: drawing on it asks no one.
         "board_view": {"*": "allow"},

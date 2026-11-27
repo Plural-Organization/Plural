@@ -3,11 +3,12 @@ itself with its streamed output, and the events that tell the session about each
 
 import asyncio
 import time
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from dataclasses import replace
+from functools import partial
 
 import structlog
-from pydantic import ValidationError
+from pydantic import JsonValue, ValidationError
 
 from plural.agent.loop.events import AgentEvent, ToolEnd, ToolOutput, ToolStart
 from plural.agent.loop.gate import GateResult, PolicyGate
@@ -44,6 +45,7 @@ class ToolRunner:
         self._timeout_s = timeout_s
         # The span tool calls open under: the run's, while one is going.
         self.span: Span | None = None
+        self._nested_calls = 0
 
     def groups(self, calls: Sequence[ToolCallRequest]) -> list[list[ToolCallRequest]]:
         groups: list[list[ToolCallRequest]] = []
@@ -98,7 +100,12 @@ class ToolRunner:
                 raise outcome
 
     async def _execute(
-        self, call: ToolCallRequest, provenance: Provenance, cancel: asyncio.Event
+        self,
+        call: ToolCallRequest,
+        provenance: Provenance,
+        cancel: asyncio.Event,
+        *,
+        nested: bool = False,
     ) -> AsyncIterator[AgentEvent]:
         if call.parse_error is not None:
             for event in self.skip(call, f"Invalid tool call: {call.parse_error}"):
@@ -107,7 +114,7 @@ class ToolRunner:
         # The host may change the arguments; what it changes still goes through every check.
         call = await self._hooks.tool_args(call, provenance)
         try:
-            prepared = self._tools.prepare(call)
+            prepared = self._tools.prepare(call, load=not nested)
         except (UnknownTool, ValidationError) as error:
             for event in self.skip(call, f"Invalid tool call: {error}"):
                 yield event
@@ -166,6 +173,9 @@ class ToolRunner:
                             provenance=provenance,
                             cancel=cancel,
                             span=span,
+                            call=partial(
+                                self._nested, call.id, provenance, cancel, queue.put_nowait
+                            ),
                         ),
                     )
                 )
@@ -217,6 +227,32 @@ class ToolRunner:
             run_ms=round((done - ran) * 1000) if ran is not None else None,
         )
         yield ToolEnd(call.id, result)
+
+    async def _nested(
+        self,
+        parent: str,
+        provenance: Provenance,
+        cancel: asyncio.Event,
+        emit: Callable[[str], None],
+        name: str,
+        args: Mapping[str, JsonValue],
+    ) -> ToolResult:
+        """Run a call a tool makes through another tool. It goes through every check a call of
+        the model's does, and its steps show as output of the call that made it."""
+        self._nested_calls += 1
+        request = ToolCallRequest(id=f"{parent}.{self._nested_calls}", name=name, args=dict(args))
+        result = ToolResult(ABORTED, is_error=True)
+        async for event in self._execute(request, provenance, cancel, nested=True):
+            match event:
+                case ToolStart(call=view):
+                    emit(f"{view.name} {view.subject}\n")
+                case ToolOutput(chunk=text):
+                    emit(text)
+                case ToolEnd(result=ended):
+                    result = ended
+                case _:
+                    pass
+        return result
 
     async def _reach(
         self,

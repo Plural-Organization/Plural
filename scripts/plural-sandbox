@@ -1,0 +1,65 @@
+#!/bin/sh
+# Run the Plural host in a Docker container that sees only the current project.
+#
+# The agent's commands, bash included, then run inside the container: they reach the project
+# folder mounted at /workspace and nothing else of this machine, not your home, keys or other
+# projects. The network stays open, because the agent needs its model's API.
+#
+#   scripts/plural-sandbox                     # this folder, through the relay
+#   scripts/plural-sandbox --local             # direct mode on 127.0.0.1:7777
+#   PLURAL_SANDBOX_DIR=~/code/app scripts/plural-sandbox
+#
+# Model keys come from ANTHROPIC_API_KEY, OPENAI_API_KEY and the other variables passed below.
+# CLI providers (Claude Code, Codex) are not installed in the image. Any other argument goes to
+# `plural-host host`.
+set -eu
+
+here="$(cd "$(dirname "$0")/.." && pwd)"
+project="$(cd "${PLURAL_SANDBOX_DIR:-$PWD}" && pwd)"
+image="${PLURAL_SANDBOX_IMAGE:-plural-host:sandbox}"
+port="${PLURAL_PORT:-7777}"
+
+if [ "$project" = "$HOME" ] || [ "$project" = "/" ]; then
+  echo "plural-sandbox: run it in a project folder, not $project" >&2
+  exit 1
+fi
+
+if [ -z "${PLURAL_SANDBOX_NO_BUILD:-}" ]; then
+  docker build --quiet -t "$image" -f "$here/deploy/host.Dockerfile" \
+    ${PLURAL_SANDBOX_UV_IMAGE:+--build-arg "UV_IMAGE=$PLURAL_SANDBOX_UV_IMAGE"} "$here" >/dev/null
+fi
+
+local_mode=""
+for arg in "$@"; do
+  [ "$arg" = "--local" ] && local_mode=1
+done
+
+# A key is passed only when it is set, and by name, so it never shows in the command line.
+keys=""
+for name in ANTHROPIC_API_KEY OPENAI_API_KEY GEMINI_API_KEY OPENROUTER_API_KEY GROQ_API_KEY \
+  DEEPSEEK_API_KEY XAI_API_KEY PLURAL_API_KEY PLURAL_PRESET PLURAL_MODEL PLURAL_BASE_URL \
+  PLURAL_CODE_MODE; do
+  eval "set_=\${$name+x}"
+  [ -n "$set_" ] && keys="$keys --env $name"
+done
+
+network=""
+extra=""
+if [ -n "$local_mode" ]; then
+  network="--publish 127.0.0.1:$port:$port"
+  extra="--bind 0.0.0.0 --port $port --public-url ws://127.0.0.1:$port"
+fi
+
+# shellcheck disable=SC2086
+exec docker run --rm -it \
+  --name "plural-sandbox-$(basename "$project" | tr -c 'a-zA-Z0-9_.-\n' '-')" \
+  --volume "$project:/workspace" \
+  --volume plural-sandbox-data:/data \
+  --env PLURAL_WORKSPACE=/workspace \
+  --env PLURAL_BROWSER="${PLURAL_BROWSER:-off}" \
+  --env GIT_CONFIG_COUNT=1 --env GIT_CONFIG_KEY_0=safe.directory --env GIT_CONFIG_VALUE_0=/workspace \
+  --cap-drop ALL --security-opt no-new-privileges \
+  --pids-limit 512 --memory "${PLURAL_SANDBOX_MEMORY:-4g}" \
+  $keys $network \
+  --entrypoint plural-host \
+  "$image" host --workspace /workspace $extra "$@"
