@@ -38,6 +38,18 @@ class ApprovalExpired:
 
 
 @dataclass(frozen=True, slots=True)
+class HandoverLapsed:
+    """An offer went unanswered, or the host's word to a successor was not taken up in time."""
+
+    participant_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class HostDisplaced:
+    """The relay gave this host's room to another host: this one is not the host any more."""
+
+
+@dataclass(frozen=True, slots=True)
 class JoinExpired:
     request_id: str
 
@@ -168,6 +180,8 @@ InboxMessage = (
     | AgentOutput
     | ApprovalNeeded
     | ApprovalExpired
+    | HandoverLapsed
+    | HostDisplaced
     | TypingExpired
     | JoinExpired
     | Reconfigure

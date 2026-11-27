@@ -12,6 +12,9 @@ export function emptyState(): SessionState {
     preview: null,
     last_seq: 0,
     prompt_mode: "open",
+    approvers: [],
+    handover: null,
+    handovers: 0,
     permission_mode: "default",
     chat_mode: "all",
     participants: {},
@@ -79,12 +82,17 @@ function apply(state: SessionState, record: EventRecord): SessionState {
     }
     case "participant.role_changed": {
       const patched = patchParticipant(state, event.participant_id, { role: event.role });
-      return { ...patched, access_requests: without(patched.access_requests, event.participant_id) };
+      return {
+        ...patched,
+        approvers: event.role === "participant" ? patched.approvers : patched.approvers.filter((id) => id !== event.participant_id),
+        access_requests: without(patched.access_requests, event.participant_id),
+      };
     }
     case "participant.revoked":
       return {
         ...state,
         participants: without(state.participants, event.participant_id),
+        approvers: state.approvers.filter((id) => id !== event.participant_id),
         access_requests: without(state.access_requests, event.participant_id),
         briefing_requests: withoutAsker(state.briefing_requests, event.participant_id),
       };
@@ -144,6 +152,18 @@ function apply(state: SessionState, record: EventRecord): SessionState {
       return { ...state, agent: event.agent, fast_agent: event.fast };
     case "session.prompt_mode_changed":
       return { ...state, prompt_mode: event.mode };
+    case "host.handover_offered":
+      return { ...state, handover: { participant_id: event.participant_id, name: event.name, accepted: false } };
+    case "host.handover_accepted":
+      return state.handover === null ? state : { ...state, handover: { ...state.handover, accepted: true } };
+    case "host.handover_ended":
+      return { ...state, handover: null };
+    case "host.handed_over":
+      return handedOver(state, event);
+    case "approver.changed": {
+      const others = state.approvers.filter((id) => id !== event.participant_id);
+      return { ...state, approvers: event.enabled ? [...others, event.participant_id] : others };
+    }
     case "session.permission_mode_changed":
       return { ...state, permission_mode: event.mode };
     case "session.chat_mode_changed":
@@ -269,6 +289,40 @@ function apply(state: SessionState, record: EventRecord): SessionState {
     default:
       return state;
   }
+}
+
+// The seat `p_host` passes to the participant who took it, and its old holder is a participant. What
+// each wrote stays theirs. Mirrors core/state.py `_handed_over`.
+const HOST_SEAT = "p_host";
+
+function handedOver(state: SessionState, event: Extract<EventRecord["event"], { type: "host.handed_over" }>): SessionState {
+  const took = event.participant_id;
+  const own = (person: string): string => (person === HOST_SEAT ? event.former_host_id : person === took ? HOST_SEAT : person);
+  const skipped = new Set([HOST_SEAT, took, event.former_host_id]);
+  const participants = Object.fromEntries(Object.entries(state.participants).filter(([id]) => !skipped.has(id)));
+  participants[event.former_host_id] = { id: event.former_host_id, name: event.former_host_name, role: "participant", connected: false };
+  participants[HOST_SEAT] = { id: HOST_SEAT, name: event.name, role: "host", connected: false };
+  return {
+    ...state,
+    participants,
+    handover: null,
+    handovers: state.handovers + 1,
+    approvers: state.approvers.filter((id) => id !== HOST_SEAT && id !== took),
+    access_requests: without(state.access_requests, took),
+    briefing_requests: Object.fromEntries(
+      Object.entries(state.briefing_requests).filter(([, ask]) => ask.participant_id !== HOST_SEAT && ask.participant_id !== took),
+    ),
+    transcript: state.transcript.map((entry) => (entry.author_id == null ? entry : { ...entry, author_id: own(entry.author_id) })),
+    chat: state.chat.map((entry) => ({
+      ...entry,
+      author_id: own(entry.author_id),
+      to: entry.to === null ? null : own(entry.to),
+      mentions: entry.mentions.map(own),
+    })),
+    proposals: Object.fromEntries(Object.entries(state.proposals).map(([id, proposal]) => [id, { ...proposal, author_id: own(proposal.author_id) }])),
+    attachments: Object.fromEntries(Object.entries(state.attachments).map(([id, meta]) => [id, { ...meta, owner_id: own(meta.owner_id) }])),
+    board: { ...state.board, strokes: state.board.strokes.map((stroke) => ({ ...stroke, author_id: own(stroke.author_id) })) },
+  };
 }
 
 function patchParticipant(

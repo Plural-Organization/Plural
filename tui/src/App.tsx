@@ -4,6 +4,10 @@ import { useKeyboard, useRenderer, useSelectionHandler, useTerminalDimensions } 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   approvalChoices,
+  approverRequests,
+  handoverRequests,
+  isApprover,
+  participantName,
   approvalDecisionFor,
   defaultApprovalChoice,
   inboxRequests,
@@ -118,6 +122,8 @@ export interface AppProps {
   onQuit: () => void;
   /** Leave this session for another one this client hosts: a fork, or one /resume found. */
   onSwitch?: (room: string) => void;
+  /** Start a host on this computer that takes the room over, from this person's own link to it: the host offered them its seat. */
+  onTakeOver?: (link: string) => void;
 }
 
 type Focus = "composer" | "inbox" | "search";
@@ -176,6 +182,7 @@ export function App({
   splash = false,
   onQuit,
   onSwitch,
+  onTakeOver,
 }: AppProps) {
   const renderer = useRenderer();
   const [settings, setSettings] = useState<Settings>(initialSettings ?? DEFAULT_SETTINGS);
@@ -425,11 +432,19 @@ export function App({
   const pluginCommands = useMemo(() => pluginHints(state.commands), [state.commands]);
   const suggested = useMemo(() => [...pluginCommands, ...skillHints(state.skills)], [pluginCommands, state.skills]);
   const isHost = me?.role === "host";
+  // A participant the host named answers tool calls for others: once or refuse, nothing that lasts.
+  const approver = !isHost && isApprover(state, projection.meId);
+  // The host's seat, offered to this person: it is theirs to take or decline.
+  const offered = !isHost && handoverRequests(state, projection.meId).length > 0;
+  const canAnswer = isHost || approver || offered;
   const mode = state.permission_mode;
   const running = state.run !== null;
   const items = useMemo(
-    (): InboxItem[] => (isHost ? [...inboxRequests(state), ...(planReady ? [{ kind: "plan", id: "plan" } as const] : [])] : []),
-    [isHost, state.approvals, state.proposals, state.join_requests, state.access_requests, state.briefing_requests, planReady],
+    (): InboxItem[] =>
+      isHost
+        ? [...inboxRequests(state), ...(planReady ? [{ kind: "plan", id: "plan" } as const] : [])]
+        : [...(offered ? handoverRequests(state, projection.meId) : []), ...(approver ? approverRequests(state, projection.meId) : [])],
+    [isHost, approver, offered, state.handover, projection.meId, state.approvals, state.proposals, state.join_requests, state.access_requests, state.briefing_requests, planReady],
   );
   const approvals = Object.keys(state.approvals).length;
   const queuedIds = useMemo(
@@ -555,7 +570,7 @@ export function App({
   const copyText = useCallback((text: string): void => copyRef.current(text, "Copied", `${text.length} characters`), []);
   useEffect(() => onCodeCopy(copyText), []);
 
-  const phase = isHost && items.length > 0 ? "waiting" : running ? "running" : finished ? "done" : "idle";
+  const phase = canAnswer && items.length > 0 ? "waiting" : running ? "running" : finished ? "done" : "idle";
   useEffect(() => onSummary?.({ phase }), [phase]);
 
   const knownConflicts = useRef<ReadonlySet<string>>(new Set());
@@ -601,11 +616,11 @@ export function App({
   const seenInbox = useRef<ReadonlySet<string>>(new Set());
   useEffect(() => {
     const ids = new Set(items.map((item) => `${item.kind}:${item.id}`));
-    if (settings.bell && isHost && [...ids].some((id) => !seenInbox.current.has(id))) {
+    if (settings.bell && canAnswer && [...ids].some((id) => !seenInbox.current.has(id))) {
       sound.ring();
     }
     seenInbox.current = ids;
-  }, [items, settings.bell, isHost]);
+  }, [items, settings.bell, canAnswer]);
 
   useEffect(() => {
     if (approvals === 0) {
@@ -1283,6 +1298,43 @@ export function App({
         }
         return true;
       }
+      case "handover": {
+        const [verb, ...names] = rest;
+        const offer = state.handover;
+        if (verb === undefined) {
+          show("handover", [[{ text: offer === null ? "the host is yours; /handover <name> offers it to someone here" : `offered to ${offer.name}${offer.accepted ? ", who is taking it over" : ", waiting for their answer"}`, fg: theme.dim }]]);
+        } else if (verb === "cancel") {
+          send({ type: "host.handover_cancel" });
+        } else {
+          const person = findPerson([verb, ...names].join(" "), mentionable(state, projection.meId));
+          if (person === null) {
+            warn("handover", "usage: /handover <name> | /handover cancel (see /who)");
+          } else if (person.role !== "participant") {
+            warn("handover", `${person.label} cannot write; give them the right first (/access allow ${person.label})`);
+          } else {
+            send({ type: "host.handover_offer", participant_id: person.id });
+            notify("accent", `waiting for ${person.label} to take the host over, on their computer`);
+          }
+        }
+        return true;
+      }
+      case "approver": {
+        const [verb, ...names] = rest;
+        const named = state.approvers.map((id) => participantName(state, id));
+        if (verb === undefined) {
+          show("approver", named.length === 0 ? [[{ text: "nobody can approve for you; /approver add <name>", fg: theme.dim }]] : named.map((name): Row => [{ text: name, bold: true }]));
+        } else {
+          const person = findPerson(names.join(" "), mentionable(state, projection.meId));
+          if (person === null || (verb !== "add" && verb !== "rm")) {
+            warn("approver", "usage: /approver [add|rm <name>]");
+          } else if (verb === "add" && person.role !== "participant") {
+            warn("approver", `${person.label} cannot write; give them the right first (/access allow ${person.label})`);
+          } else {
+            send({ type: "approver.set", participant_id: person.id, enabled: verb === "add" });
+          }
+        }
+        return true;
+      }
       case "kick": {
         const person = findPerson(rest.join(" "), mentionable(state, projection.meId));
         if (person === null) {
@@ -1518,7 +1570,7 @@ export function App({
       scroll.current?.scrollBy((key.name === "pageup" ? -1 : 1) * Math.max(3, height - 8));
       return;
     }
-    if (focus !== "inbox" || !isHost || Date.now() < guardUntil.current) {
+    if (focus !== "inbox" || !canAnswer || Date.now() < guardUntil.current) {
       return;
     }
     const item = items[Math.min(selected, items.length - 1)];
@@ -1529,7 +1581,7 @@ export function App({
       const direction = key.name === "left" ? -1 : 1;
       setApprovalChoice((current) => ({
         id: item.id,
-        index: Math.max(0, Math.min(approvalChoices(item.approval).length - 1, (current?.id === item.id ? current.index : defaultApprovalChoice(item.approval)) + direction)),
+        index: Math.max(0, Math.min(approvalChoices(item.approval, approver).length - 1, (current?.id === item.id ? current.index : defaultApprovalChoice(item.approval)) + direction)),
       }));
     } else if (key.name === "up" || key.name === "k") {
       setApprovalChoice(null);
@@ -1560,10 +1612,21 @@ export function App({
       // x refuses a folder as well as n, as it does for every other request in the terminal.
       const decision =
         key.name === "return"
-          ? approvalChoices(item.approval)[index]?.decision
-          : approvalDecisionFor(item.approval, key.name === "x" && item.approval.folder ? "n" : key.name);
+          ? approvalChoices(item.approval, approver)[index]?.decision
+          : approvalDecisionFor(item.approval, key.name === "x" && item.approval.folder ? "n" : key.name, approver);
       if (decision) {
         send({ type: "approval.respond", approval_id: item.id, decision });
+      }
+    } else if (item?.kind === "handover") {
+      if (key.name === "y" || key.name === "return") {
+        const address = client.address ?? null;
+        if (address === null || onTakeOver === undefined) {
+          flash("this client cannot take the host over: start plural in a terminal on the computer that should host");
+        } else {
+          onTakeOver(address);
+        }
+      } else if (key.name === "n" || key.name === "x") {
+        send({ type: "host.handover_answer", accept: false });
       }
     } else if (item?.kind === "plan") {
       const choices: Record<string, PermissionMode> = { a: "auto", e: "accept_edits", y: "default", return: "default" };
@@ -1705,7 +1768,7 @@ export function App({
             </text>
           </box>
         ) : null}
-        {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} approvalChoice={approvalChoice} /> : null}
+        {items.length > 0 ? <Inbox items={items} state={state} selected={selected} focused={focus === "inbox"} now={now} approvalChoice={approvalChoice} approver={approver} /> : null}
         {projection.compacting ? (
           <Compacting tokens={projection.compacting.tokens} />
         ) : running ? (

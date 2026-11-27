@@ -4,6 +4,7 @@ import json
 import os
 import sqlite3
 import sys
+from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Annotated, Any
@@ -106,6 +107,13 @@ def host(
             envvar="PLURAL_TEAM_ID",
         ),
     ] = None,
+    takeover: Annotated[
+        str | None,
+        typer.Option(
+            "--takeover",
+            help="Take over the host of a room it was offered you in: your own link to the room.",
+        ),
+    ] = None,
     machine: Annotated[
         bool,
         typer.Option(
@@ -125,6 +133,7 @@ def host(
         "room": room,
         "title": title,
         "import_from": import_from,
+        "takeover": takeover,
         "host_name": name,
         "prompt_mode": prompts,
         "chat_mode": chat,
@@ -144,18 +153,35 @@ def host(
         if _wants_relay(settings):
             settings = settings.model_copy(update={"relay_url": _default_relay(settings)})
     from plural.host.account_gate import AccountRequired
+    from plural.host.handover import HandedAway
     from plural.host.providers import ConfigError
+    from plural.host.takeover import TakeoverError
     from plural.host.team_presence import PresenceUnavailable
 
     try:
         asyncio.run(_host(settings, machine=machine))
-    except (ConfigError, PresenceUnavailable) as error:
+    except HandedAway:
+        # Not a failure: the room has another host now, and this one is done with it.
+        if machine:
+            print(json.dumps({"type": "handed_over"}), flush=True)
+        else:
+            console.print("This room has another host now. You are a participant in it.")
+    except (ConfigError, PresenceUnavailable, TakeoverError) as error:
         console.print(f"[red]{error}[/red]")
         raise typer.Exit(1) from error
     except AccountRequired as error:
         # On stderr, where the web client's daemon reads why a host stopped at start.
         Console(stderr=True).print(f"[red]{error}[/red]", highlight=False)
         raise typer.Exit(1) from error
+
+
+def _progress(machine: bool) -> "Callable[[str], None]":
+    """Where a takeover says what it is doing: stderr, so the JSON line on stdout stays clean."""
+
+    def say(text: str) -> None:
+        print(text, file=sys.stderr, flush=True)
+
+    return say if machine else console.print
 
 
 def _wants_relay(settings: HostSettings) -> bool:
@@ -194,7 +220,13 @@ def _saved_workspace(room: str) -> Path:
     return folder
 
 
-def ready_line(room: str, guest_link: str, host_link: str, import_url: str | None = None) -> str:
+def ready_line(
+    room: str,
+    guest_link: str,
+    host_link: str,
+    import_url: str | None = None,
+    notes: list[str] | None = None,
+) -> str:
     return json.dumps(
         {
             "type": "ready",
@@ -204,6 +236,8 @@ def ready_line(room: str, guest_link: str, host_link: str, import_url: str | Non
             "import_url": import_url,
             "version": __version__,
             "protocol": PROTOCOL_VERSION,
+            # Only a host that took a room over has any, so the line is the same for the others.
+            **({"notes": notes} if notes else {}),
         }
     )
 
@@ -221,17 +255,38 @@ def plain_links(room: str, guest_link: str, host_link: str) -> str:
 async def _host(settings: HostSettings, *, machine: bool) -> None:
     from plural.host.account_gate import ensure_signed_in
     from plural.host.bootstrap import build_host
+    from plural.host.takeover import Takeover
     from plural.host.team_presence import TeamPresence, ensure_ready
 
     _configure_logging(settings.state_dir / "logs" / "host.log" if machine else None)
+    taking = (
+        Takeover(settings.takeover, settings, notice=_progress(machine))
+        if settings.takeover
+        else None
+    )
+    if taking is not None:
+        settings = await taking.receive()
     await ensure_signed_in(settings)
     if settings.team:
         ensure_ready(settings, TeamStore(settings.state_dir, settings.team_id))
-    plural_host = await build_host(settings)
+    try:
+        plural_host = await build_host(settings)
+        if taking is not None:
+            await taking.finish(plural_host)
+    except BaseException:
+        if taking is not None:
+            await taking.close()
+        raise
     room_link = plural_host.room_link.link
     if machine:
         print(
-            ready_line(plural_host.room, room_link, plural_host.host_link, plural_host.import_url),
+            ready_line(
+                plural_host.room,
+                room_link,
+                plural_host.host_link,
+                plural_host.import_url,
+                taking.notes if taking is not None else None,
+            ),
             flush=True,
         )
     elif console.is_terminal:

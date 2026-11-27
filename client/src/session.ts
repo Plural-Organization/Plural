@@ -22,6 +22,8 @@ export interface SessionOptions {
 export interface Session {
   readonly projection: Projection;
   readonly status: ConnectionStatus;
+  /** The room's address with this person's own token, for starting a host that takes the room over; null before they are in. */
+  readonly address?: string | null;
   onStatus(listener: (status: ConnectionStatus) => void): () => void;
   events(): AsyncIterable<Event>;
   send(command: Command): Promise<void>;
@@ -41,6 +43,10 @@ export class SessionClient implements Session {
     private readonly options: SessionOptions,
   ) {
     this.token = link.token;
+  }
+
+  get address(): string | null {
+    return this.token === null ? null : `${this.link.url}?token=${this.token}`;
   }
 
   get status(): ConnectionStatus {

@@ -5,6 +5,8 @@ import type { InboxItem } from "../components/inbox/items";
 interface Hotkeys {
   enabled: boolean;
   first: InboxItem | undefined;
+  /** The person answering is a participant the host named: once or refuse only. */
+  approver?: boolean;
   canAbort: boolean;
   send: (command: Command) => void;
   onEdit: (proposal: ProposalView) => void;
@@ -13,7 +15,7 @@ interface Hotkeys {
   onTrace?: () => void;
 }
 
-export function useHotkeys({ enabled, first, canAbort, send, onEdit, onFocusInput, onTrace }: Hotkeys) {
+export function useHotkeys({ enabled, first, approver = false, canAbort, send, onEdit, onFocusInput, onTrace }: Hotkeys) {
   useEffect(() => {
     if (!enabled) {
       return;
@@ -35,9 +37,9 @@ export function useHotkeys({ enabled, first, canAbort, send, onEdit, onFocusInpu
       } else if (first?.kind === "access" && (event.key === "y" || event.key === "n")) {
         event.preventDefault();
         send({ type: "access.decide", participant_id: first.id, decision: event.key === "y" ? "allow" : "deny" });
-      } else if (first?.kind === "approval" && approvalDecisionFor(first.approval, event.key) !== undefined) {
+      } else if (first?.kind === "approval" && approvalDecisionFor(first.approval, event.key, approver) !== undefined) {
         event.preventDefault();
-        send({ type: "approval.respond", approval_id: first.id, decision: approvalDecisionFor(first.approval, event.key)! });
+        send({ type: "approval.respond", approval_id: first.id, decision: approvalDecisionFor(first.approval, event.key, approver)! });
       } else if (first?.kind === "proposal" && (event.key === "y" || event.key === "n")) {
         event.preventDefault();
         send({ type: "proposal.decide", proposal_id: first.id, decision: event.key === "y" ? "approve" : "reject" });

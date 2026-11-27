@@ -40,6 +40,11 @@ export type Role = "host" | "participant" | "viewer";
 export type PromptMode = "open" | "review";
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "HandoverEnd".
+ */
+export type HandoverEnd = "declined" | "cancelled" | "expired";
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
  * via the `definition` "PermissionMode".
  */
 export type PermissionMode = "default" | "accept_edits" | "plan" | "auto" | "danger";
@@ -182,6 +187,13 @@ export interface EventsSchema {
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | ApproverChanged
+    | HostHandoverOffered
+    | HostHandoverAccepted
+    | HostHandoverEnded
+    | HostHandedOver
+    | HostHandoverChunk
+    | HostHandoverGrant
     | PermissionModeChanged
     | ChatModeChanged
     | SkillsChanged
@@ -334,6 +346,78 @@ export interface ParticipantRevoked {
 export interface PromptModeChanged {
   mode: PromptMode;
   type: "session.prompt_mode_changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "ApproverChanged".
+ */
+export interface ApproverChanged {
+  enabled: boolean;
+  participant_id: string;
+  type: "approver.changed";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "HostHandoverOffered".
+ */
+export interface HostHandoverOffered {
+  name: string;
+  participant_id: string;
+  type: "host.handover_offered";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "HostHandoverAccepted".
+ */
+export interface HostHandoverAccepted {
+  participant_id: string;
+  type: "host.handover_accepted";
+}
+/**
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "HostHandoverEnded".
+ */
+export interface HostHandoverEnded {
+  reason: HandoverEnd;
+  type: "host.handover_ended";
+}
+/**
+ * The host's seat is another person's now: the first event the new host writes.
+ *
+ * The old host goes on as `former_host_id`, a participant like the others, and the participant
+ * who took over leaves their old id for the seat, `p_host`. What each wrote follows them.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "HostHandedOver".
+ */
+export interface HostHandedOver {
+  former_host_id: string;
+  former_host_name: string;
+  name: string;
+  participant_id: string;
+  type: "host.handed_over";
+}
+/**
+ * One part of the sealed session, sent only to the person taking it over.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "HostHandoverChunk".
+ */
+export interface HostHandoverChunk {
+  data_b64: string;
+  part: number;
+  parts: number;
+  type: "host.handover_chunk";
+}
+/**
+ * The old host's signed word that the successor's key holds the room.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "HostHandoverGrant".
+ */
+export interface HostHandoverGrant {
+  statement: string;
+  type: "host.handover_grant";
 }
 /**
  * This interface was referenced by `EventsSchema`'s JSON-Schema
@@ -1330,6 +1414,7 @@ export interface SessionState {
   approvals: {
     [k: string]: ApprovalView;
   };
+  approvers: string[];
   attachments: {
     [k: string]: AttachmentMeta;
   };
@@ -1348,6 +1433,8 @@ export interface SessionState {
   commands: PluginCommandView[];
   context: ContextView | null;
   fast_agent: string;
+  handover: HandoverView | null;
+  handovers: number;
   join_requests: {
     [k: string]: JoinRequestView;
   };
@@ -1393,6 +1480,17 @@ export interface ChatEntry {
   text: string;
   to: string | null;
   ts: string;
+}
+/**
+ * The host has offered its seat to a participant, who has not finished taking it yet.
+ *
+ * This interface was referenced by `EventsSchema`'s JSON-Schema
+ * via the `definition` "HandoverView".
+ */
+export interface HandoverView {
+  accepted: boolean;
+  name: string;
+  participant_id: string;
 }
 /**
  * A short status line a plugin keeps in the side panel, such as "tests ✓".
@@ -1479,6 +1577,13 @@ export interface EventRecord {
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | ApproverChanged
+    | HostHandoverOffered
+    | HostHandoverAccepted
+    | HostHandoverEnded
+    | HostHandedOver
+    | HostHandoverChunk
+    | HostHandoverGrant
     | PermissionModeChanged
     | ChatModeChanged
     | SkillsChanged

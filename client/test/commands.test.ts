@@ -6,11 +6,11 @@ const names = (surface: "tui" | "web") => listedCommands(surface).map((hint) => 
 describe("the command registry", () => {
   test("each client is offered the commands it had before the list was shared, in one order", () => {
     expect(names("web")).toEqual([
-      "help", "who", "draw", "team", "invite", "import", "brief", "access", "preview", "kick", "mode", "replies", "danger", "policy", "skills",
+      "help", "who", "draw", "team", "invite", "import", "brief", "handover", "approver", "access", "preview", "kick", "mode", "replies", "danger", "policy", "skills",
       "mcp", "usage", "context", "trace", "plugins", "compact", "abort", "cancel", "copy", "leave",
     ]);
     expect(names("tui")).toEqual([
-      "help", "who", "team", "invite", "import", "ask", "access", "preview", "kick", "mode", "replies", "danger", "policy", "skills", "mcp",
+      "help", "who", "team", "invite", "import", "ask", "handover", "approver", "access", "preview", "kick", "mode", "replies", "danger", "policy", "skills", "mcp",
       "agents", "usage", "context", "trace", "plugins", "fork", "resume", "compact", "abort", "cancel", "settings", "copy", "quit",
     ]);
   });

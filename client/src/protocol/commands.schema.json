@@ -168,6 +168,26 @@
       ],
       "type": "object"
     },
+    "ApproverSet": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "approver.set",
+          "default": "approver.set",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id",
+        "enabled"
+      ],
+      "type": "object"
+    },
     "AttachmentFetch": {
       "description": "Asks for the picture of an image on the board; only those are handed out.",
       "properties": {
@@ -696,6 +716,104 @@
         "type": {
           "const": "history.get",
           "default": "history.get",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "HostHandoverAnswer": {
+      "description": "The offered participant's answer; to accept, a key to seal to and their host key.",
+      "properties": {
+        "accept": {
+          "type": "boolean"
+        },
+        "host_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "seal_key": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 40,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "type": {
+          "const": "host.handover_answer",
+          "default": "host.handover_answer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "accept"
+      ],
+      "type": "object"
+    },
+    "HostHandoverCancel": {
+      "properties": {
+        "type": {
+          "const": "host.handover_cancel",
+          "default": "host.handover_cancel",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "HostHandoverFetch": {
+      "properties": {
+        "part": {
+          "maximum": 100000,
+          "minimum": 0,
+          "type": "integer"
+        },
+        "type": {
+          "const": "host.handover_fetch",
+          "default": "host.handover_fetch",
+          "type": "string"
+        }
+      },
+      "required": [
+        "part"
+      ],
+      "type": "object"
+    },
+    "HostHandoverOffer": {
+      "properties": {
+        "participant_id": {
+          "type": "string"
+        },
+        "type": {
+          "const": "host.handover_offer",
+          "default": "host.handover_offer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "participant_id"
+      ],
+      "type": "object"
+    },
+    "HostHandoverReady": {
+      "description": "The successor has the session, checked it, and is ready to open the room.",
+      "properties": {
+        "type": {
+          "const": "host.handover_ready",
+          "default": "host.handover_ready",
           "type": "string"
         }
       },
@@ -1595,6 +1713,7 @@
           "agents.create": "#/$defs/AgentsCreate",
           "agents.remove": "#/$defs/AgentsRemove",
           "approval.respond": "#/$defs/ApprovalRespond",
+          "approver.set": "#/$defs/ApproverSet",
           "attachment.fetch": "#/$defs/AttachmentFetch",
           "board.clear": "#/$defs/BoardClear",
           "board.draw": "#/$defs/BoardDraw",
@@ -1609,6 +1728,11 @@
           "context.compact": "#/$defs/ContextCompact",
           "file.attach": "#/$defs/FileAttach",
           "history.get": "#/$defs/HistoryGet",
+          "host.handover_answer": "#/$defs/HostHandoverAnswer",
+          "host.handover_cancel": "#/$defs/HostHandoverCancel",
+          "host.handover_fetch": "#/$defs/HostHandoverFetch",
+          "host.handover_offer": "#/$defs/HostHandoverOffer",
+          "host.handover_ready": "#/$defs/HostHandoverReady",
           "import.link": "#/$defs/ImportLink",
           "invite.create": "#/$defs/InviteCreate",
           "join.decide": "#/$defs/JoinDecide",
@@ -1718,6 +1842,24 @@
         },
         {
           "$ref": "#/$defs/PromptModeSet"
+        },
+        {
+          "$ref": "#/$defs/ApproverSet"
+        },
+        {
+          "$ref": "#/$defs/HostHandoverOffer"
+        },
+        {
+          "$ref": "#/$defs/HostHandoverAnswer"
+        },
+        {
+          "$ref": "#/$defs/HostHandoverFetch"
+        },
+        {
+          "$ref": "#/$defs/HostHandoverReady"
+        },
+        {
+          "$ref": "#/$defs/HostHandoverCancel"
         },
         {
           "$ref": "#/$defs/PermissionModeSet"

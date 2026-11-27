@@ -1,4 +1,4 @@
-import { assertNever, cacheHitLabel, findPerson, isSkillCommand, label, localCommand, lastReply, mentionable, parseChat, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
+import { assertNever, cacheHitLabel, findPerson, isSkillCommand, label, localCommand, lastReply, mentionable, parseChat, participantName, parseSlash, routeOf, ruleLine, SlashError, type ProposalView } from "@plural/client";
 import { copyText } from "../lib/clipboard";
 import { commandName, helpText, isHostOnly, pluginHints } from "../lib/commands";
 import { contextText } from "../lib/context";
@@ -113,6 +113,43 @@ export function useSubmit({ session, editing, onEdited, onLeave, flash, onDraw }
             send({ type: "participant.set_role", participant_id: person.id, role: "viewer" });
           } else {
             send({ type: "access.decide", participant_id: person.id, decision: verb as "allow" | "deny" });
+          }
+        }
+        return true;
+      }
+      case "handover": {
+        const [verb, ...names] = rest;
+        const offer = state.handover;
+        if (verb === undefined) {
+          notify("accent", offer === null ? "the host is yours; /handover <name> offers it to someone here" : `offered to ${offer.name}${offer.accepted ? ", who is taking it over" : ", waiting for their answer"}`);
+        } else if (verb === "cancel") {
+          send({ type: "host.handover_cancel" });
+        } else {
+          const person = findPerson([verb, ...names].join(" "), mentionable(state, projection.meId));
+          if (person === null) {
+            notify("warn", "usage: /handover <name> | /handover cancel (see /who)");
+          } else if (person.role !== "participant") {
+            notify("warn", `${person.label} cannot write; give them the right first (/access allow ${person.label})`);
+          } else {
+            send({ type: "host.handover_offer", participant_id: person.id });
+            notify("accent", `waiting for ${person.label} to take the host over, on their computer. It happens in their terminal`);
+          }
+        }
+        return true;
+      }
+      case "approver": {
+        const [verb, ...names] = rest;
+        if (verb === undefined) {
+          const named = state.approvers.map((id) => participantName(state, id));
+          notify("accent", named.length === 0 ? "nobody can approve for you; /approver add <name>" : `can approve for you: ${named.join(", ")}`);
+        } else {
+          const person = findPerson(names.join(" "), mentionable(state, projection.meId));
+          if (person === null || (verb !== "add" && verb !== "rm")) {
+            notify("warn", "usage: /approver [add|rm <name>]");
+          } else if (verb === "add" && person.role !== "participant") {
+            notify("warn", `${person.label} cannot write; give them the right first (/access allow ${person.label})`);
+          } else {
+            send({ type: "approver.set", participant_id: person.id, enabled: verb === "add" });
           }
         }
         return true;

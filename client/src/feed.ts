@@ -205,6 +205,21 @@ export function absorb(feed: Feed, event: Event, projection: Projection): Feed {
           ? "prompts are open: participants prompt the agent directly"
           : "prompts are in review: the host approves each participant prompt",
       );
+    case "host.handover_offered":
+      return note("warn", `the host offered its seat to ${event.name}`);
+    case "host.handover_accepted":
+      return note("accent", `${nameOf(event.participant_id)} accepted and is taking the session over`);
+    case "host.handover_ended":
+      return note("dim", event.reason === "declined" ? "the host was not taken over: it was declined" : event.reason === "expired" ? "the host was not taken over: nobody took it in time" : "the handover was called off");
+    case "host.handed_over":
+      return note("warn", `${event.name} is the host now; ${event.former_host_name} is a participant`);
+    case "approver.changed":
+      return note(
+        "accent",
+        event.enabled
+          ? `${nameOf(event.participant_id)} can now approve tool calls for the host`
+          : `${nameOf(event.participant_id)} can no longer approve tool calls`,
+      );
     case "skills.changed": {
       const parts = [
         event.added.length > 0 ? `added ${event.added.join(", ")}` : "",

@@ -19,6 +19,8 @@ class RelayOpen(Model):
     proof: str
     # A certificate from an accounts service, for a relay that asks hosts to belong to an account.
     entitlement: str | None = None
+    # The old host's signed word that this key takes over a room that another key holds (ADR 0019).
+    succession: str | None = None
 
 
 class RelayFrame(Model):

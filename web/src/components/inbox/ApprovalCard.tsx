@@ -21,9 +21,9 @@ const FOLDER_LOOK: Look = {
   reject: { label: "refuse", tone: "primary" },
 };
 
-function buttons(approval: ApprovalView): { decision: ApprovalDecision; key: string; label: string; tone?: string }[] {
+function buttons(approval: ApprovalView, approver = false): { decision: ApprovalDecision; key: string; label: string; tone?: string }[] {
   const look = approval.folder ? FOLDER_LOOK : LOOK;
-  return approvalChoices(approval).map((choice) => ({ ...choice, label: choice.decision, ...look[choice.decision] }));
+  return approvalChoices(approval, approver).map((choice) => ({ ...choice, label: choice.decision, ...look[choice.decision] }));
 }
 
 // A command can be a whole script, and so can the pattern "for the session" would allow. Only its first line is said in a sentence,
@@ -43,6 +43,7 @@ interface ApprovalCardProps {
   approval: ApprovalView;
   state: SessionState;
   now: number;
+  approver?: boolean;
   send: (command: Command) => void;
 }
 
@@ -82,7 +83,7 @@ function FolderCard({ approval, state, now, send }: ApprovalCardProps) {
   );
 }
 
-export function ApprovalCard({ approval, state, now, send }: ApprovalCardProps) {
+export function ApprovalCard({ approval, state, now, approver = false, send }: ApprovalCardProps) {
   if (approval.folder) {
     return <FolderCard approval={approval} state={state} now={now} send={send} />;
   }
@@ -122,7 +123,7 @@ export function ApprovalCard({ approval, state, now, send }: ApprovalCardProps) 
         </p>
       </div>
       <div className={styles.actions}>
-        {buttons(approval).map((button) => (
+        {buttons(approval, approver).map((button) => (
           <Action key={button.decision} hint={button.key} tone={button.tone} onPress={() => send({ type: "approval.respond", approval_id: approval.id, decision: button.decision })}>
             {button.label}
           </Action>

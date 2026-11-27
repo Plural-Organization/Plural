@@ -87,6 +87,41 @@ class ApprovalRespond(Model):
     decision: ApprovalDecision
 
 
+class ApproverSet(Model):
+    type: Literal["approver.set"] = "approver.set"
+    participant_id: str
+    enabled: bool
+
+
+class HostHandoverOffer(Model):
+    type: Literal["host.handover_offer"] = "host.handover_offer"
+    participant_id: str
+
+
+class HostHandoverAnswer(Model):
+    """The offered participant's answer; to accept, a key to seal to and their host key."""
+
+    type: Literal["host.handover_answer"] = "host.handover_answer"
+    accept: bool
+    seal_key: str | None = Field(default=None, min_length=40, max_length=64)
+    host_key: str | None = Field(default=None, min_length=40, max_length=64)
+
+
+class HostHandoverFetch(Model):
+    type: Literal["host.handover_fetch"] = "host.handover_fetch"
+    part: int = Field(ge=0, le=100_000)
+
+
+class HostHandoverReady(Model):
+    """The successor has the session, checked it, and is ready to open the room."""
+
+    type: Literal["host.handover_ready"] = "host.handover_ready"
+
+
+class HostHandoverCancel(Model):
+    type: Literal["host.handover_cancel"] = "host.handover_cancel"
+
+
 class RunAbort(Model):
     type: Literal["run.abort"] = "run.abort"
 
@@ -412,6 +447,12 @@ Command = Annotated[
     | ContextCompact
     | SessionFork
     | PromptModeSet
+    | ApproverSet
+    | HostHandoverOffer
+    | HostHandoverAnswer
+    | HostHandoverFetch
+    | HostHandoverReady
+    | HostHandoverCancel
     | PermissionModeSet
     | ChatModeSet
     | SkillsSearch

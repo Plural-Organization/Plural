@@ -8,6 +8,8 @@ export interface HostHandle {
   hostLink: string;
   /** Where a chat service (Claude, ChatGPT) sends its context to this session; null without a relay. */
   importUrl: string | null;
+  /** What the person should know before the agent works here, when this host took a room over. */
+  notes: string[];
   version: string;
   control: AgentControl;
   stop: () => Promise<void>;
@@ -36,7 +38,7 @@ export function freePort(): Promise<number> {
   });
 }
 
-export async function startLocalHost(args: string[]): Promise<HostHandle> {
+export async function startLocalHost(args: string[], readyTimeoutMs = 60_000): Promise<HostHandle> {
   const [command, ...prefix] = hostCommand();
   const withPort = args.includes("--port") ? args : [...args, "--port", String(await freePort())];
   const child = spawn(command as string, [...prefix, "host", "--json", ...withPort], {
@@ -48,9 +50,9 @@ export async function startLocalHost(args: string[]): Promise<HostHandle> {
   });
   const link = new ControlLink((line) => child.stdin?.write(line) ?? false);
   child.on("exit", () => link.close());
-  const ready = await new Promise<{ room: string; guest_link: string; host_link: string; import_url?: string | null; version: string }>(
+  const ready = await new Promise<{ room: string; guest_link: string; host_link: string; import_url?: string | null; notes?: string[]; version: string }>(
     (resolve, reject) => {
-      const timer = setTimeout(() => reject(new HostUnavailable(`the host did not start in time\n${errors}`)), 60_000);
+      const timer = setTimeout(() => reject(new HostUnavailable(`the host did not start in time\n${errors}`)), readyTimeoutMs);
       let buffered = "";
       let announced = false;
       child.stdout?.on("data", (chunk: Buffer) => {
@@ -89,6 +91,7 @@ export async function startLocalHost(args: string[]): Promise<HostHandle> {
     guestLink: ready.guest_link,
     hostLink: ready.host_link,
     importUrl: ready.import_url ?? null,
+    notes: ready.notes ?? [],
     version: ready.version,
     control: link,
     stop: () =>

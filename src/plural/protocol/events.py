@@ -23,6 +23,7 @@ from plural.protocol.models import (
     ContextView,
     Delivery,
     DequeueReason,
+    HandoverEnd,
     JoinDecision,
     JoinRequestView,
     McpServerView,
@@ -81,6 +82,57 @@ class ParticipantRevoked(EventBase):
 class PromptModeChanged(EventBase):
     type: Literal["session.prompt_mode_changed"] = "session.prompt_mode_changed"
     mode: PromptMode
+
+
+class ApproverChanged(EventBase):
+    type: Literal["approver.changed"] = "approver.changed"
+    participant_id: str
+    enabled: bool
+
+
+class HostHandoverOffered(EventBase):
+    type: Literal["host.handover_offered"] = "host.handover_offered"
+    participant_id: str
+    name: str
+
+
+class HostHandoverAccepted(EventBase):
+    type: Literal["host.handover_accepted"] = "host.handover_accepted"
+    participant_id: str
+
+
+class HostHandoverEnded(EventBase):
+    type: Literal["host.handover_ended"] = "host.handover_ended"
+    reason: HandoverEnd
+
+
+class HostHandedOver(EventBase):
+    """The host's seat is another person's now: the first event the new host writes.
+
+    The old host goes on as `former_host_id`, a participant like the others, and the participant
+    who took over leaves their old id for the seat, `p_host`. What each wrote follows them."""
+
+    type: Literal["host.handed_over"] = "host.handed_over"
+    former_host_id: str
+    former_host_name: str
+    participant_id: str
+    name: str
+
+
+class HostHandoverChunk(TransientEvent):
+    """One part of the sealed session, sent only to the person taking it over."""
+
+    type: Literal["host.handover_chunk"] = "host.handover_chunk"
+    part: int
+    parts: int
+    data_b64: str
+
+
+class HostHandoverGrant(TransientEvent):
+    """The old host's signed word that the successor's key holds the room."""
+
+    type: Literal["host.handover_grant"] = "host.handover_grant"
+    statement: str
 
 
 class ChatModeChanged(EventBase):
@@ -566,6 +618,13 @@ Event = Annotated[
     | ParticipantRoleChanged
     | ParticipantRevoked
     | PromptModeChanged
+    | ApproverChanged
+    | HostHandoverOffered
+    | HostHandoverAccepted
+    | HostHandoverEnded
+    | HostHandedOver
+    | HostHandoverChunk
+    | HostHandoverGrant
     | PermissionModeChanged
     | ChatModeChanged
     | SkillsChanged
