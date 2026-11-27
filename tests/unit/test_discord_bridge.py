@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from plural.bridge.discord import (
+    MAX_MESSAGE,
     Discord,
     DiscordApi,
     DiscordError,
@@ -259,13 +260,18 @@ async def test_a_failed_final_message_is_raised_not_swallowed() -> None:
         await discord.show(GROUP, "k", Notice("hi"))
 
 
-def test_a_long_answer_is_split_under_the_limit_and_code_fences_stay_closed() -> None:
-    body = "intro\n\n```py\n" + "x = 1\n" * 600 + "```\n\nend"
+@pytest.mark.parametrize(
+    "code",
+    ["x = 1\n" * 600, "y" * 6000],
+    ids=["lines", "one long line"],
+)
+def test_a_long_answer_is_split_under_the_limit_and_code_fences_stay_closed(code: str) -> None:
+    body = "intro\n\n```py\n" + code + "```\n\nend"
 
     parts = split(body)
 
     assert len(parts) >= 2
-    assert all(len(part) <= 2010 for part in parts)
+    assert all(len(part) <= MAX_MESSAGE for part in parts)
     assert all(part.count("```") % 2 == 0 for part in parts)
 
 

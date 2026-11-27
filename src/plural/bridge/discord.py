@@ -541,14 +541,16 @@ def clip(markdown: str) -> str:
 
 def split(markdown: str) -> list[str]:
     """Pieces under Discord's limit, cut between paragraphs where it can."""
+    # A piece of cut code is reopened and closed again, and those fences count too.
+    limit = MAX_MESSAGE - len("```\n\n```") if "```" in markdown else MAX_MESSAGE
     parts: list[str] = []
     rest = markdown
-    while len(rest) > MAX_MESSAGE:
-        cut = rest.rfind("\n\n", 0, MAX_MESSAGE)
-        if cut < MAX_MESSAGE // 2:
-            cut = rest.rfind("\n", 0, MAX_MESSAGE)
-        if cut < MAX_MESSAGE // 2:
-            cut = MAX_MESSAGE
+    while len(rest) > limit:
+        cut = rest.rfind("\n\n", 0, limit)
+        if cut < limit // 2:
+            cut = rest.rfind("\n", 0, limit)
+        if cut < limit // 2:
+            cut = limit
         parts.append(rest[:cut])
         rest = rest[cut:].lstrip("\n")
     parts.append(rest)
