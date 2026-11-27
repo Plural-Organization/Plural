@@ -228,9 +228,8 @@ async def test_the_seat_moves_to_another_computer_and_the_room_goes_on(room: Roo
             await serving
 
 
-async def test_a_host_that_accepted_takes_no_new_work_and_a_lapsed_offer_ends(
-    room: Room, monkeypatch: pytest.MonkeyPatch
-) -> None:
+@pytest.mark.parametrize("decline", [False, True])
+async def test_an_accepted_handover_can_end_before_a_grant(room: Room, decline: bool) -> None:
     owner, alia, cleo = await offered(room)
     key = "k" * 43
     await alia.client.send(HostHandoverAnswer(accept=True, seal_key=key, host_key=key))
@@ -241,8 +240,9 @@ async def test_a_host_that_accepted_takes_no_new_work_and_a_lapsed_offer_ends(
     )
     assert await rejected(owner.client.send(PromptSubmit(text="and from me"))) is ErrorCode.CONFLICT
     # The successor can still turn back, and then the host works again.
-    await alia.client.send(HostHandoverCancel())
-    assert (await owner.next(HostHandoverEnded)).reason is HandoverEnd.CANCELLED
+    await alia.client.send(HostHandoverAnswer(accept=False) if decline else HostHandoverCancel())
+    expected = HandoverEnd.DECLINED if decline else HandoverEnd.CANCELLED
+    assert (await owner.next(HostHandoverEnded)).reason is expected
     await cleo.client.send(PromptSubmit(text="now it works"))
     await owner.next(RunEnded)
 
@@ -271,7 +271,7 @@ async def test_a_successor_that_never_opens_the_room_leaves_the_host_in_its_seat
     room: Room, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The old host signed its word, and the new host did not come: it takes its seat back."""
-    monkeypatch.setattr("plural.host.actor.GRANT_PATIENCE", timedelta(milliseconds=500))
+    monkeypatch.setattr("plural.host.actor.GRANT_PATIENCE", timedelta(seconds=2))
     owner, alia, cleo = await offered(room)
     sealed, mine = SealKey(), TokenSigner(Ed25519PrivateKey.generate())
     await alia.client.send(
@@ -285,6 +285,17 @@ async def test_a_successor_that_never_opens_the_room_leaves_the_host_in_its_seat
     await alia.client.send(HostHandoverReady())
     grant = await alia.next(HostHandoverGrant)
     assert grant.statement
+    # A signed grant cannot be revoked locally: the relay can still accept it until it expires.
+    for watcher, command in (
+        (alia, HostHandoverAnswer(accept=False)),
+        (alia, HostHandoverCancel()),
+        (owner, HostHandoverCancel()),
+    ):
+        assert await rejected(watcher.client.send(command)) is ErrorCode.CONFLICT
+    assert room.host.actor.state.handover is not None
+    assert await rejected(cleo.client.send(PromptSubmit(text="not until the grant expires"))) is (
+        ErrorCode.CONFLICT
+    )
     # She goes quiet. The old host waits out its patience, then ends the offer and works again.
     ended = await owner.next(HostHandoverEnded)
     assert ended.reason is HandoverEnd.EXPIRED

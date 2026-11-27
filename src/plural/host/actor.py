@@ -1339,8 +1339,6 @@ class SessionActor:
                     raise Conflict("nobody is being handed the host")
                 if participant.role is not Role.HOST:
                     handovers.successor(self._state, participant)
-                if desk.granted:
-                    raise Conflict("the handover is finishing; it ends by itself if it fails")
                 await self._end_handover(HandoverEnd.CANCELLED, actor_id=participant.id)
 
     async def _handover_transfer(
@@ -1374,6 +1372,9 @@ class SessionActor:
             self._handover_timer = None
 
     async def _end_handover(self, reason: HandoverEnd, *, actor_id: str | None = None) -> None:
+        # Neither declining nor cancelling can revoke a grant the relay may still accept.
+        if self._desk is not None and self._desk.granted and reason is not HandoverEnd.EXPIRED:
+            raise Conflict("the handover is finishing; it ends by itself if it fails")
         self._disarm_handover()
         if self._desk is not None:
             self._desk.reset()
