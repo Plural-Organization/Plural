@@ -1828,6 +1828,17 @@
     },
     "InviteCreated": {
       "properties": {
+        "client_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "code": {
           "type": "string"
         },
@@ -1865,7 +1876,8 @@
         "role",
         "expires_at",
         "link",
-        "reusable"
+        "reusable",
+        "client_request_id"
       ],
       "type": "object"
     },
@@ -2774,6 +2786,17 @@
         "author_id": {
           "type": "string"
         },
+        "client_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "delivery": {
           "$ref": "#/$defs/Delivery"
         },
@@ -2823,7 +2846,8 @@
         "provenance",
         "attachments",
         "via",
-        "display"
+        "display",
+        "client_request_id"
       ],
       "type": "object"
     },
@@ -2947,6 +2971,17 @@
         "author_id": {
           "type": "string"
         },
+        "client_request_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "delivery": {
           "$ref": "#/$defs/Delivery"
         },
@@ -2962,7 +2997,8 @@
         "author_id",
         "text",
         "delivery",
-        "attachments"
+        "attachments",
+        "client_request_id"
       ],
       "type": "object"
     },

@@ -15,6 +15,7 @@
   "payload": {
     "text": "run the tests",
     "attachments": [],
-    "delivery": "now"
+    "delivery": "now",
+    "client_request_id": null
   }
 }

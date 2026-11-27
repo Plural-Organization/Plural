@@ -1,0 +1,260 @@
+"""Who owns a bridge and which chat follows which room, kept in one private file."""
+
+import json
+import os
+import secrets
+import time
+from collections.abc import Callable
+from contextlib import suppress
+from pathlib import Path
+
+from pydantic import BaseModel, Field, ValidationError
+
+from plural.bridge.model import Person, Place
+
+PAIRING_TTL_S = 10 * 60
+# Long enough that guessing is hopeless however many tries a stranger sends, so nothing has to
+# count them (a count would let a stranger lock the owner out). No look-alikes: it gets typed.
+PAIRING_ALPHABET = "ABCDEFGHJKMNPQRSTVWXYZ23456789"
+PAIRING_CHARS = 12
+
+
+class _Link(BaseModel):
+    room: str
+    chat: str
+    thread: str | None = None
+    private: bool = False
+
+
+class _Home(BaseModel):
+    """An owner's private chat with the bot: where it can reach them first."""
+
+    chat: str
+    thread: str | None = None
+    muted: bool = False
+
+
+class _Saved(BaseModel):
+    owners: dict[str, str] = Field(default_factory=dict[str, str])
+    homes: dict[str, _Home] = Field(default_factory=dict[str, _Home])
+    pairing: str | None = None
+    pairing_issued_at: float | None = None
+    links: dict[str, _Link] = Field(default_factory=dict[str, _Link])
+    # By room: the chat person behind each guest participant, and the people the host removed.
+    guests: dict[str, dict[str, str]] = Field(default_factory=dict[str, dict[str, str]])
+    revoked: dict[str, list[str]] = Field(default_factory=dict[str, list[str]])
+
+
+class BridgeStore:
+    """`<data dir>/bridge/<platform>.json`, readable by its owner only.
+
+    Owners are the people allowed to run the session from the chat: answer approvals, link and
+    unlink chats, stop a run. Everyone else in a linked chat writes to the room as a guest.
+    """
+
+    def __init__(
+        self, data_dir: Path, platform: str, *, clock: Callable[[], float] = time.time
+    ) -> None:
+        self.platform = platform
+        self.path = data_dir / "bridge" / f"{platform}.json"
+        self._clock = clock
+        self._stamp = 0
+        self._saved = self._load()
+
+    def _fresh(self) -> None:
+        """Another process may have paired or linked: read the file again when it changed."""
+        try:
+            stamp = self.path.stat().st_mtime_ns
+        except OSError:
+            return
+        if stamp != self._stamp:
+            self._saved = self._load()
+
+    @property
+    def owners(self) -> dict[str, str]:
+        self._fresh()
+        return dict(self._saved.owners)
+
+    @property
+    def rooms(self) -> set[str]:
+        self._fresh()
+        return {link.room for link in self._saved.links.values()}
+
+    def is_owner(self, person: Person) -> bool:
+        self._fresh()
+        return person.id in self._saved.owners
+
+    def pairing_code(self, *, renew: bool = False) -> str:
+        self._fresh()
+        if renew or self._pairing_expired():
+            self._renew_pairing()
+            self._save()
+        pairing = self._saved.pairing
+        assert pairing is not None
+        return pairing
+
+    def active_pairing(self) -> str | None:
+        """The still-usable code, without creating one when owners already exist."""
+        self._fresh()
+        if self._saved.pairing is None:
+            return None
+        if self._pairing_expired():
+            self._saved.pairing = None
+            self._saved.pairing_issued_at = None
+            self._save()
+            return None
+        return self._saved.pairing
+
+    def pair(self, person: Person, code: str) -> bool:
+        """Makes the person an owner when they give the active code. It never makes a code:
+        only the settings and the command line do."""
+        self._fresh()
+        expected = self._saved.pairing
+        if expected is None or self._pairing_expired():
+            return False
+        if not secrets.compare_digest(code.strip().upper().encode(), expected.encode()):
+            return False
+        self._saved.owners[person.id] = person.name
+        self._saved.pairing = None
+        self._saved.pairing_issued_at = None
+        self._save()
+        return True
+
+    def _pairing_expired(self) -> bool:
+        issued = self._saved.pairing_issued_at
+        return (
+            self._saved.pairing is None or issued is None or self._clock() - issued >= PAIRING_TTL_S
+        )
+
+    def _renew_pairing(self) -> None:
+        self._saved.pairing = "".join(
+            secrets.choice(PAIRING_ALPHABET) for _ in range(PAIRING_CHARS)
+        )
+        self._saved.pairing_issued_at = self._clock()
+
+    def unpair(self, person_id: str) -> None:
+        """Removes an owner, and with them their private chat's hold on any session."""
+        self._fresh()
+        gone = self._saved.owners.pop(person_id, None)
+        home = self._saved.homes.pop(person_id, None)
+        if home is not None:
+            self._saved.links = {
+                key: link
+                for key, link in self._saved.links.items()
+                if not (link.private and link.chat == home.chat)
+            }
+        if gone is not None or home is not None:
+            self._save()
+
+    def add_guest(self, room: str, participant_id: str, person_id: str) -> None:
+        self._fresh()
+        self._saved.guests.setdefault(room, {})[participant_id] = person_id
+        self._save()
+
+    def guests_of(self, room: str) -> dict[str, str]:
+        """Participant id to chat person id, for the guests this bridge brought into a room."""
+        self._fresh()
+        return dict(self._saved.guests.get(room, {}))
+
+    def revoke_guest(self, room: str, participant_id: str) -> str | None:
+        """Remembers that the host removed a guest, so the bridge does not bring that person
+        back. Returns the person, or None when the participant was not one of its guests."""
+        self._fresh()
+        person = self._saved.guests.get(room, {}).pop(participant_id, None)
+        if person is None:
+            return None
+        revoked = self._saved.revoked.setdefault(room, [])
+        if person not in revoked:
+            revoked.append(person)
+        self._save()
+        return person
+
+    def is_revoked(self, room: str, person_id: str) -> bool:
+        self._fresh()
+        return person_id in self._saved.revoked.get(room, [])
+
+    def remember_home(self, person: Person, place: Place) -> None:
+        """Keeps the private chat an owner talks to the bot in, so alerts can find them there."""
+        self._fresh()
+        if person.id not in self._saved.owners or not place.private:
+            return
+        known = self._saved.homes.get(person.id)
+        if known is not None and (known.chat, known.thread) == (place.chat, place.thread):
+            return
+        muted = known.muted if known else False
+        self._saved.homes[person.id] = _Home(chat=place.chat, thread=place.thread, muted=muted)
+        self._save()
+
+    def alert_places(self) -> list[Place]:
+        """The private chats of owners who did not mute alerts."""
+        self._fresh()
+        return [
+            Place(self.platform, home.chat, home.thread, True)
+            for person, home in self._saved.homes.items()
+            if not home.muted and person in self._saved.owners
+        ]
+
+    def mute(self, person: Person, muted: bool) -> bool:
+        """Turns alerts off or on for an owner. False when they have no private chat yet."""
+        self._fresh()
+        home = self._saved.homes.get(person.id)
+        if home is None:
+            return False
+        if home.muted != muted:
+            home.muted = muted
+            self._save()
+        return True
+
+    def places_of_all(self) -> list[Place]:
+        self._fresh()
+        return [
+            Place(self.platform, link.chat, link.thread, link.private)
+            for link in self._saved.links.values()
+        ]
+
+    def room_of(self, place: Place) -> str | None:
+        self._fresh()
+        link = self._saved.links.get(place.key)
+        return None if link is None else link.room
+
+    def places_of(self, room: str) -> list[Place]:
+        self._fresh()
+        return [
+            Place(self.platform, link.chat, link.thread, link.private)
+            for link in self._saved.links.values()
+            if link.room == room
+        ]
+
+    def link(self, place: Place, room: str) -> None:
+        self._fresh()
+        self._saved.links[place.key] = _Link(
+            room=room, chat=place.chat, thread=place.thread, private=place.private
+        )
+        self._save()
+
+    def unlink(self, place: Place) -> str | None:
+        self._fresh()
+        link = self._saved.links.pop(place.key, None)
+        if link is None:
+            return None
+        self._save()
+        return link.room
+
+    def _load(self) -> _Saved:
+        with suppress(OSError):
+            self._stamp = self.path.stat().st_mtime_ns
+        try:
+            return _Saved.model_validate_json(self.path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return _Saved()
+        except (OSError, ValidationError, json.JSONDecodeError) as error:
+            raise ValueError(f"{self.path} is unreadable: {error}") from error
+
+    def _save(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        temporary = self.path.with_suffix(".tmp")
+        descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+            file.write(self._saved.model_dump_json(indent=2))
+        temporary.replace(self.path)
+        self._stamp = self.path.stat().st_mtime_ns

@@ -65,6 +65,7 @@ class PromptSubmit(Model):
     text: str = Field(min_length=1, max_length=MAX_PROMPT_CHARS)
     attachments: tuple[str, ...] = ()
     delivery: Delivery = Delivery.NOW
+    client_request_id: str | None = Field(default=None, max_length=64)
 
 
 class ChatSend(Model):
@@ -96,6 +97,7 @@ class InviteCreate(Model):
     role: Role = Role.PARTICIPANT
     ttl_s: int = Field(default=3600, ge=60, le=86_400)
     reusable: bool = False
+    client_request_id: str | None = Field(default=None, max_length=64)
 
 
 class ImportLink(Model):

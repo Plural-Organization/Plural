@@ -358,6 +358,7 @@ class PromptAccepted(EventBase):
     # the full one the agent gets.
     via: str | None = None
     display: str | None = None
+    client_request_id: str | None = None
 
 
 class RunStarted(EventBase):
@@ -547,6 +548,7 @@ class InviteCreated(TransientEvent):
     expires_at: datetime | None = None
     link: str
     reusable: bool = False
+    client_request_id: str | None = None
 
 
 class ImportLinkShown(TransientEvent):

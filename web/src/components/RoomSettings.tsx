@@ -1,16 +1,17 @@
-import { Alert, Button, Chip, Label, Modal, Radio, RadioGroup, Spinner } from "@heroui/react";
+import { Alert, Button, Card, Chip, Description, Label, Modal, Radio, RadioGroup, Spinner } from "@heroui/react";
 import { ArrowsClockwise, At, ChatsCircle, ChatsTeardrop, Desktop, DoorOpen, EyeSlash, GearSix, HandPalm, Lightning, ListChecks, MapTrifold, PencilSimpleLine, Question, Robot, ShieldCheck, UserCheck, UsersThree, Warning, type Icon } from "@phosphor-icons/react";
 import type { ChatMode, Command, PermissionMode, Projection, PromptMode } from "@plural/client";
 import { useEffect, useState, type ReactNode } from "react";
 import { useAgentSetup } from "../hooks/useAgentSetup";
 import { useDaemon } from "../hooks/useDaemon";
 import { runningRooms, setRoomAgent } from "../lib/agent";
+import { agentMark } from "../lib/agents";
 import { DaemonError, daemonMessage } from "../lib/daemon";
 import { type AdmissionMode, type BriefingSharing, type Option, ADMISSION, BRIEFINGS, DANGER_TITLE, DANGER_WARNING, PERMISSIONS, PROMPTS, REPLIES } from "../lib/roomSettings";
 import { Confirm } from "./Confirm";
 import { AgentSetup } from "./AgentSetup";
 import { AgentLogo } from "./AgentLogo";
-import { agentMark } from "../lib/agents";
+import { ChatApps } from "./ChatApps";
 
 // Each option's picture, so a choice reads at a glance before its words do.
 const PROMPT_ICONS: Record<PromptMode, Icon> = { open: ChatsCircle, review: ListChecks };
@@ -85,6 +86,18 @@ function Group({ icon: Picture, title, children }: { icon: Icon; title: string; 
 
 // The agent this room runs. It can be changed here only when the room runs on the computer this page
 // can reach, because the key and the agent's tools live there.
+function ChatAppsSection() {
+  const { phase } = useDaemon(true);
+  return (
+    <Card variant="secondary">
+      <Card.Header>
+        <Card.Title className="text-[15px]">Chat apps</Card.Title>
+      </Card.Header>
+      <Card.Content className="gap-4">{phase === "ready" ? <ChatApps active /> : <Description>{phase === "checking" ? "Looking for Plural on your computer…" : "Chat apps are set up on the computer that runs your sessions. Start plural daemon there and open this page again."}</Description>}</Card.Content>
+    </Card>
+  );
+}
+
 function AgentSection({ room, label }: { room: string; label: string }) {
   const { phase } = useDaemon(true);
   const [mine, setMine] = useState<boolean | null>(null);
@@ -187,6 +200,7 @@ export function RoomSettings({ room, projection, send, onClose }: RoomSettingsPr
           </Modal.Header>
           <Modal.Body className="flex flex-col gap-7">
             <AgentSection room={room} label={agentLabel} />
+            <ChatAppsSection />
             <Group icon={ChatsCircle} title="Conversation">
               <Choice title="Who may prompt" options={PROMPTS} icons={PROMPT_ICONS} value={state.prompt_mode} onChange={(mode) => send({ type: "session.set_prompt_mode", mode })} />
               <Choice title="When the agent answers" options={REPLIES} icons={REPLY_ICONS} value={state.chat_mode} onChange={(mode) => send({ type: "session.set_chat_mode", mode })} />

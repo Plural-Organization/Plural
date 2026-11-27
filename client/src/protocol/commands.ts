@@ -181,6 +181,7 @@ export interface HistoryGet {
  */
 export interface PromptSubmit {
   attachments?: string[];
+  client_request_id?: string | null;
   delivery?: "now" | "steer" | "follow_up";
   text: string;
   type?: "prompt.submit";
@@ -226,6 +227,7 @@ export interface RunAbort {
  * via the `definition` "InviteCreate".
  */
 export interface InviteCreate {
+  client_request_id?: string | null;
   reusable?: boolean;
   role?: "host" | "participant" | "viewer";
   ttl_s?: number;

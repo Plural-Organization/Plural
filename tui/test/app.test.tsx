@@ -244,7 +244,7 @@ describe("App", () => {
   test("the prompt being answered stays pinned on top while its reply scrolls by", async () => {
     const fake = session();
     const setup = await mount(fake, 100, 24);
-    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_host", text: "bro which skills do you have?", delivery: "now", provenance: GUEST, attachments: [], via: null, display: null });
+    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_host", text: "bro which skills do you have?", delivery: "now", provenance: GUEST, attachments: [], via: null, display: null, client_request_id: null });
     const reply = Array.from({ length: 40 }, (_, i) => `- skill number ${i + 1}`).join("\n");
     fake.emit({ type: "message.started", run_id: "r", message_id: "m1" });
     fake.emit({ type: "message.ended", run_id: "r", message_id: "m1", text: reply, thinking: "" });
@@ -549,7 +549,7 @@ describe("App", () => {
     const fake = session();
     const setup = await mount(fake);
     fake.emit({ type: "participant.joined", participant: ALIA });
-    fake.emit({ type: "proposal.created", proposal: { id: "pr1", author_id: "p_alia", text: "delete everything", delivery: "now", attachments: [] } });
+    fake.emit({ type: "proposal.created", proposal: { id: "pr1", author_id: "p_alia", text: "delete everything", delivery: "now", attachments: [], client_request_id: null } });
     await frame(setup, "proposal");
     await setup.mockInput.pressTab();
     await tick(100);
@@ -700,7 +700,7 @@ describe("App", () => {
     const fake = session();
     const setup = await mount(fake);
     fake.emit({ type: "run.started", run_id: "r", prompt_id: "pm0", provenance: GUEST });
-    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_host", text: "did you read other files?", delivery: "now", provenance: GUEST, attachments: [], via: null, display: null });
+    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_host", text: "did you read other files?", delivery: "now", provenance: GUEST, attachments: [], via: null, display: null, client_request_id: null });
     const text = await frame(setup, "⧗ queued");
     expect(text).toContain("the agent reads it after its current step");
     expect(text).toContain("1 queued");
@@ -715,8 +715,8 @@ describe("App", () => {
     const setup = await mount(fake);
     fake.emit({ type: "participant.joined", participant: ALIA });
     fake.emit({ type: "run.started", run_id: "r", prompt_id: "pm0", provenance: GUEST });
-    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_alia", text: "then fix the readme", delivery: "now", provenance: GUEST, attachments: [], via: null, display: null });
-    fake.emit({ type: "prompt.accepted", prompt_id: "pm2", author_id: "p_alia", text: "and add tests", delivery: "follow_up", provenance: GUEST, attachments: [], via: null, display: null });
+    fake.emit({ type: "prompt.accepted", prompt_id: "pm1", author_id: "p_alia", text: "then fix the readme", delivery: "now", provenance: GUEST, attachments: [], via: null, display: null, client_request_id: null });
+    fake.emit({ type: "prompt.accepted", prompt_id: "pm2", author_id: "p_alia", text: "and add tests", delivery: "follow_up", provenance: GUEST, attachments: [], via: null, display: null, client_request_id: null });
     const text = await frame(setup, "QUEUE");
     expect(text).toContain("1 Alia");
     expect(text).toContain("then fix the readme");

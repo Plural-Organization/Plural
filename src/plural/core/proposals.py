@@ -16,6 +16,7 @@ def submit(
         text=command.text,
         delivery=command.delivery,
         attachments=command.attachments,
+        client_request_id=command.client_request_id,
     )
     return ProposalCreated(proposal=proposal)
 

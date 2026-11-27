@@ -1,0 +1,635 @@
+"""One room seen from a chat: what happens in it goes to every chat that follows it, and what
+people write there goes into it.
+
+A run that took long and an approval nobody answered in a while also go to the owners' private chats
+that do not follow the room (the "away" chats), so someone who walked away from the computer learns
+that the agent finished or waits for them.
+
+The feed joins the room with the host link of a host running on this computer
+(`storage/running.py`), so it can answer approvals and stop runs. It never acts on its own: an
+approval is answered only after an owner presses a button (`bridge.py` checks who pressed).
+Someone in the chat who is not an owner writes through a connection of their own, joined with a
+participant invite, so the room sees them by name and treats their prompts as a guest's.
+"""
+
+import asyncio
+import secrets
+import time
+from collections.abc import Callable
+from contextlib import suppress
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import structlog
+
+from plural.bridge.model import (
+    Answer,
+    Choice,
+    Notice,
+    Person,
+    Phase,
+    Place,
+    Said,
+    Step,
+    StepState,
+    Tone,
+)
+from plural.bridge.platform import ChatPlatform
+from plural.bridge.store import BridgeStore
+from plural.client.connection import CommandRejected
+from plural.client.reconnect import JoinLink, SessionClient
+from plural.protocol.commands import (
+    MAX_CHAT_CHARS,
+    ApprovalRespond,
+    ChatSend,
+    ClientInfo,
+    InviteCreate,
+    PromptSubmit,
+    RunAbort,
+)
+from plural.protocol.events import (
+    ApprovalRequested,
+    ApprovalResolved,
+    Event,
+    InviteCreated,
+    MessageDelta,
+    MessageEnded,
+    MessageStarted,
+    ParticipantRevoked,
+    PromptAccepted,
+    RunEnded,
+    RunStarted,
+    SessionSnapshot,
+    SessionWelcome,
+    ToolEnded,
+    ToolStarted,
+)
+from plural.protocol.models import ApprovalDecision, ApprovalView, Role, RunEndReason
+from plural.protocol.running import RunningRoom
+
+log = structlog.get_logger(__name__)
+
+POLL_S = 2.0
+JOIN_TIMEOUT_S = 15.0
+# A run shorter than this finished while its owner was watching: no alert. An approval answered
+# within the delay (at the terminal) never reaches the owner's phone.
+ALERT_AFTER_S = 30.0
+APPROVAL_DELAY_S = 15.0
+GIST = 600
+MAX_PROMPT = 20_000
+# An approval longer than this does not fit in one message on every service. What a person cannot
+# read in full they cannot allow from the chat.
+MAX_APPROVAL = 1900
+CUT_SUBJECT = 1000
+
+DECIDED = {
+    ApprovalDecision.ONCE: "✅ Allowed once",
+    ApprovalDecision.ALWAYS: "✅ Always allowed",
+    ApprovalDecision.REJECT: "⛔ Rejected",
+    ApprovalDecision.BLOCK: "⛔ Blocked",
+    ApprovalDecision.READ: "📖 Opened for reading",
+    ApprovalDecision.WRITE: "✏️ Opened for writing",
+}
+RISKY = {"edit": "change a file", "write": "write a file", "bash": "run a command"}
+
+
+class ApprovalBook:
+    """Short names for approvals, since a button carries at most 64 bytes. They are random:
+    a button left in a chat by an earlier run of the bridge never names a newer request."""
+
+    def __init__(self) -> None:
+        self._by_short: dict[str, tuple[str, str]] = {}
+        self._short: dict[tuple[str, str], str] = {}
+
+    def short(self, room: str, approval_id: str) -> str:
+        key = (room, approval_id)
+        if key not in self._short:
+            self._short[key] = secrets.token_urlsafe(9)
+            self._by_short[self._short[key]] = key
+        return self._short[key]
+
+    def find(self, short: str) -> tuple[str, str] | None:
+        return self._by_short.get(short)
+
+    def forget(self, room: str, approval_id: str) -> None:
+        short = self._short.pop((room, approval_id), None)
+        if short is not None:
+            self._by_short.pop(short, None)
+
+
+class GuestRevoked(Exception):
+    """The host removed this person from the room."""
+
+
+@dataclass(slots=True)
+class _Run:
+    answer: Answer
+    origin: tuple[Place, str | None] | None = None
+    message: str | None = None
+    texts: dict[str, str] = field(default_factory=dict[str, str])
+    started: float = field(default_factory=time.monotonic)
+
+
+@dataclass(slots=True)
+class _Guest:
+    client: SessionClient
+    task: asyncio.Task[None]
+
+
+@dataclass(frozen=True, slots=True)
+class _Sent:
+    author: str
+    text: str
+    place: Place
+    ref: str | None
+
+
+class RoomFeed:
+    def __init__(
+        self,
+        room: str,
+        platform: ChatPlatform,
+        *,
+        places: Callable[[], list[Place]],
+        lookup: Callable[[str], RunningRoom | None],
+        approvals: ApprovalBook,
+        client: ClientInfo,
+        store: BridgeStore,
+        poll_s: float = POLL_S,
+        alerts: Callable[[], list[Place]] = list[Place],
+        alert_after_s: float = ALERT_AFTER_S,
+        approval_delay_s: float = APPROVAL_DELAY_S,
+    ) -> None:
+        self.room = room
+        self._platform = platform
+        self._places = places
+        self._lookup = lookup
+        self._book = approvals
+        self._client = client
+        self._store = store
+        self._poll_s = poll_s
+        self._alerts = alerts
+        self._alert_after_s = alert_after_s
+        self._approval_delay_s = approval_delay_s
+        self._waiting: dict[str, asyncio.Task[None]] = {}
+        self._alerted: set[str] = set()
+        self._host: SessionClient | None = None
+        self._runs: dict[str, _Run] = {}
+        self._messages: dict[str, str] = {}
+        self._prompts: dict[str, tuple[str, str, _Sent | None]] = {}
+        self._sent: dict[str, _Sent] = {}
+        self._shown: dict[str, ApprovalView] = {}
+        self._guests: dict[str, _Guest] = {}
+        self._invite: asyncio.Future[str] | None = None
+        self._invite_request_id: str | None = None
+        self._invite_lock = asyncio.Lock()
+        self.online = asyncio.Event()
+        self.workspace: str | None = None
+
+    async def run(self) -> None:
+        """Follows the room for as long as the bridge runs, through host restarts."""
+        while True:
+            entry = self._lookup(self.room)
+            if entry is None:
+                await asyncio.sleep(self._poll_s)
+                continue
+            self.workspace = entry.workspace
+            host = SessionClient(
+                JoinLink.parse(entry.host_link), name="bridge", client=self._client
+            )
+            reading = asyncio.create_task(self._read(host), name=f"feed:{self.room}")
+            try:
+                while not reading.done():
+                    await asyncio.wait({reading}, timeout=self._poll_s)
+                    now = self._lookup(self.room)
+                    if now is None or now.pid != entry.pid:
+                        break
+            finally:
+                reading.cancel()
+                with suppress(asyncio.CancelledError):
+                    await reading
+                await self._went_offline()
+            if not reading.cancelled() and reading.exception() is not None:
+                await asyncio.sleep(self._poll_s)
+
+    async def prompt(self, said: Said, *, as_owner: bool) -> None:
+        """Sends what someone wrote to the agent, as the host for an owner, else as themselves."""
+        text = said.text.strip()[:MAX_PROMPT]
+        if not text:
+            return
+        client = self._require_host() if as_owner else await self._guest(said.person)
+        me = client.projection.me_id or ""
+        request_id = secrets.token_urlsafe(16)
+        self._sent[request_id] = _Sent(me, text, said.place, said.ref)
+        try:
+            await client.send(PromptSubmit(text=text, client_request_id=request_id))
+        except BaseException:
+            self._sent.pop(request_id, None)
+            raise
+
+    async def chat(self, said: Said, *, as_owner: bool) -> None:
+        """Posts talk from the chat to the room's chat. The agent reads it before its next run
+        (in the room's `mention` chat mode), as a note from the person who wrote it."""
+        text = said.text.strip()[:MAX_CHAT_CHARS]
+        if not text:
+            return
+        client = self._require_host() if as_owner else await self._guest(said.person)
+        await client.send(ChatSend(text=text))
+
+    async def decide(self, approval_id: str, decision: ApprovalDecision) -> None:
+        await self._require_host().send(ApprovalRespond(approval_id=approval_id, decision=decision))
+
+    async def abort(self) -> None:
+        await self._require_host().send(RunAbort())
+
+    async def close(self) -> None:
+        for task in self._waiting.values():
+            task.cancel()
+        self._waiting.clear()
+        await self._drop_guests()
+
+    # The room's events
+
+    async def _read(self, host: SessionClient) -> None:
+        self._host = host
+        try:
+            async for event in host.events():
+                try:
+                    await self._on(event)
+                except Exception:
+                    log.exception("bridge.event_failed", room=self.room, event=event.type)
+        except CommandRejected as error:
+            log.warning("bridge.host_refused", room=self.room, error=str(error))
+            raise
+        finally:
+            self._host = None
+
+    async def _on(self, event: Event) -> None:
+        match event:
+            case SessionWelcome():
+                self.online.set()
+            case SessionSnapshot(state=state):
+                # Removed while the bridge was not looking.
+                for participant_id in self._store.guests_of(self.room):
+                    if participant_id not in state.participants:
+                        self._revoked(participant_id)
+                for approval in state.approvals.values():
+                    await self._ask(approval)
+            case ParticipantRevoked(participant_id=participant_id):
+                self._revoked(participant_id)
+            case InviteCreated(link=link, role=role, client_request_id=request_id):
+                expected = self._invite_request_id
+                correlated = request_id == expected or request_id is None
+                if (
+                    role is Role.PARTICIPANT
+                    and correlated
+                    and self._invite is not None
+                    and not self._invite.done()
+                ):
+                    self._invite.set_result(link)
+            case PromptAccepted(
+                prompt_id=prompt_id,
+                author_id=author,
+                text=text,
+                client_request_id=request_id,
+            ):
+                self._prompts[prompt_id] = (
+                    author,
+                    text,
+                    self._claim(request_id, author, text),
+                )
+            case RunStarted(run_id=run_id, prompt_id=prompt_id):
+                await self._started(run_id, prompt_id)
+            case MessageStarted(run_id=run_id, message_id=message_id):
+                self._messages[message_id] = run_id
+                if (run := self._runs.get(run_id)) is not None:
+                    run.message = message_id
+            case MessageDelta(message_id=message_id, text=text, thinking=False):
+                await self._delta(message_id, text)
+            case MessageEnded(run_id=run_id, message_id=message_id, text=text):
+                self._messages.pop(message_id, None)
+                if (run := self._runs.get(run_id)) is not None and text.strip():
+                    run.answer.text = text
+            case ToolStarted(run_id=run_id, call=call):
+                if (run := self._runs.get(run_id)) is not None:
+                    run.answer.steps.append(Step(call.id, call.name, call.subject))
+                    run.answer.phase = Phase.WORKING
+                    await self._show(run_id, final=False)
+            case ToolEnded(run_id=run_id, call_id=call_id, ok=ok):
+                if (run := self._runs.get(run_id)) is not None:
+                    for step in run.answer.steps:
+                        if step.call_id == call_id:
+                            step.state = StepState.OK if ok else StepState.FAILED
+                    await self._show(run_id, final=False)
+            case ApprovalRequested(approval=approval):
+                await self._ask(approval)
+            case ApprovalResolved(approval_id=approval_id, decision=decision, resolved_by=by):
+                await self._resolved(approval_id, decision, by)
+            case RunEnded(run_id=run_id, reason=reason, error=error):
+                await self._ended(run_id, reason, error)
+            case _:
+                pass
+
+    def _claim(self, request_id: str | None, author: str, text: str) -> _Sent | None:
+        if request_id is not None:
+            return self._sent.pop(request_id, None)
+        # Compatibility with a host from before client request IDs were added.
+        for key, sent in self._sent.items():
+            if sent.author == author and sent.text == text:
+                return self._sent.pop(key)
+        return None
+
+    def _name(self, participant_id: str) -> str:
+        host = self._host
+        participant = host.projection.state.participants.get(participant_id) if host else None
+        return participant.name if participant is not None else "someone"
+
+    async def _started(self, run_id: str, prompt_id: str) -> None:
+        author, question, sent = self._prompts.pop(prompt_id, ("", "", None))
+        answer = Answer(asked_by=self._name(author) if author else None, question=question)
+        run = _Run(answer, origin=None if sent is None else (sent.place, sent.ref))
+        self._runs[run_id] = run
+        await self._show(run_id, final=False)
+
+    async def _delta(self, message_id: str, text: str) -> None:
+        run_id = self._messages.get(message_id)
+        run = self._runs.get(run_id) if run_id else None
+        if run is None or run_id is None:
+            return
+        run.texts[message_id] = run.texts.get(message_id, "") + text
+        if run.texts[message_id].strip():
+            run.answer.text = run.texts[message_id]
+            run.answer.phase = Phase.WORKING
+            await self._show(run_id, final=False)
+
+    async def _ended(self, run_id: str, reason: RunEndReason, error: str | None) -> None:
+        run = self._runs.pop(run_id, None)
+        if run is None:
+            return
+        for message_id in [key for key, owner in self._messages.items() if owner == run_id]:
+            self._messages.pop(message_id, None)
+        run.answer.phase = {
+            RunEndReason.STOP: Phase.DONE,
+            RunEndReason.ABORTED: Phase.STOPPED,
+        }.get(reason, Phase.FAILED)
+        if run.answer.phase is Phase.FAILED:
+            run.answer.error = error or (
+                "the step limit was reached" if reason is RunEndReason.LIMIT else ""
+            )
+        for step in run.answer.steps:
+            if step.state is StepState.RUNNING:
+                step.state = StepState.FAILED
+        await self._render(run_id, run, final=True)
+        await self._alert_run(run_id, run)
+
+    async def _show(self, run_id: str, *, final: bool) -> None:
+        run = self._runs.get(run_id)
+        if run is not None:
+            await self._render(run_id, run, final=final)
+
+    async def _render(self, run_id: str, run: _Run, *, final: bool) -> None:
+        for place in self._places():
+            here = run.origin is not None and run.origin[0] == place
+            try:
+                await self._platform.show(
+                    place,
+                    f"run:{self.room}:{run_id}",
+                    run.answer,
+                    final=final,
+                    reply_to=run.origin[1] if here and run.origin else None,
+                )
+            except Exception:
+                log.exception("bridge.show_failed", room=self.room, place=place.key)
+
+    async def _ask(self, approval: ApprovalView) -> None:
+        if approval.id in self._shown:
+            return
+        self._shown[approval.id] = approval
+        notice = approval_notice(approval, self._book.short(self.room, approval.id))
+        await self._notify(f"approval:{self.room}:{approval.id}", notice)
+        if self._away():
+            self._waiting[approval.id] = asyncio.create_task(
+                self._alert_approval(approval), name=f"alert:{approval.id}"
+            )
+
+    async def _alert_approval(self, approval: ApprovalView) -> None:
+        await asyncio.sleep(self._approval_delay_s)
+        away = self._away()
+        if approval.id not in self._shown or not away:
+            return
+        self._alerted.add(approval.id)
+        notice = approval_notice(
+            approval, self._book.short(self.room, approval.id), where=self._project()
+        )
+        await self._notify_to(away, f"approval:{self.room}:{approval.id}", notice)
+
+    async def _resolved(self, approval_id: str, decision: ApprovalDecision, by: str | None) -> None:
+        approval = self._shown.pop(approval_id, None)
+        self._book.forget(self.room, approval_id)
+        if approval is None:
+            return
+        who = f" · {self._name(by)}" if by else ""
+        outcome = f"**{DECIDED[decision]}**{who}"
+        await self._notify(
+            f"approval:{self.room}:{approval_id}", approval_notice(approval, None, outcome=outcome)
+        )
+        await self._settle(approval, outcome)
+
+    async def _settle(self, approval: ApprovalView, outcome: str) -> None:
+        """Takes back what an approval alert asked: the buttons give way to how it ended."""
+        if (waiting := self._waiting.pop(approval.id, None)) is not None:
+            waiting.cancel()
+        if approval.id in self._alerted:
+            self._alerted.discard(approval.id)
+            notice = approval_notice(approval, None, outcome=outcome, where=self._project())
+            await self._notify_to(self._away(), f"approval:{self.room}:{approval.id}", notice)
+
+    def _away(self) -> list[Place]:
+        """Owners' private chats that do not follow this room, where alerts go."""
+        following = set(self._places())
+        return [place for place in self._alerts() if place not in following]
+
+    def _project(self) -> str:
+        if self.workspace:
+            return Path(self.workspace).name or self.workspace
+        return self.room[-6:]
+
+    async def _alert_run(self, run_id: str, run: _Run) -> None:
+        phase = run.answer.phase
+        away = self._away()
+        if phase not in (Phase.DONE, Phase.FAILED) or not away:
+            return
+        if time.monotonic() - run.started < self._alert_after_s:
+            return
+        project = self._project()
+        if phase is Phase.DONE:
+            lines = [f"**✅ {project}** finished"]
+            gist = _gist(run.answer.text)
+        else:
+            lines = [f"**⚠️ {project}** failed"]
+            gist = _gist(run.answer.error or "")
+        if gist:
+            lines.append(gist)
+        follow = ((Choice("👀 Follow here", f"link:{self.room}"),),)
+        await self._notify_to(
+            away, f"alert:{self.room}:{run_id}", Notice("\n\n".join(lines), follow)
+        )
+
+    async def _notify(self, key: str, notice: Notice) -> None:
+        await self._notify_to(self._places(), key, notice)
+
+    async def _notify_to(self, places: list[Place], key: str, notice: Notice) -> None:
+        for place in places:
+            try:
+                await self._platform.show(place, key, notice)
+            except Exception:
+                log.exception("bridge.show_failed", room=self.room, place=place.key)
+
+    async def _went_offline(self) -> None:
+        self.online.clear()
+        await self._drop_guests()
+        for run_id, run in list(self._runs.items()):
+            run.answer.phase = Phase.FAILED
+            run.answer.error = "the session went offline"
+            await self._render(run_id, run, final=True)
+        self._runs.clear()
+        self._messages.clear()
+        self._prompts.clear()
+        self._sent.clear()
+        for approval_id, approval in list(self._shown.items()):
+            self._book.forget(self.room, approval_id)
+            outcome = "_The session went offline._"
+            notice = approval_notice(approval, None, outcome=outcome)
+            await self._notify(f"approval:{self.room}:{approval_id}", notice)
+            await self._settle(approval, outcome)
+        self._shown.clear()
+
+    # Connections
+
+    def _require_host(self) -> SessionClient:
+        if self._host is None or not self.online.is_set():
+            raise ConnectionError("the session is not running")
+        return self._host
+
+    def _revoked(self, participant_id: str) -> None:
+        person = self._store.revoke_guest(self.room, participant_id)
+        if person is not None and (guest := self._guests.pop(person, None)) is not None:
+            guest.task.cancel()
+
+    def _refuse_revoked(self, person: Person) -> None:
+        if self._store.is_revoked(self.room, person.id):
+            raise GuestRevoked
+
+    async def _guest(self, person: Person) -> SessionClient:
+        self._refuse_revoked(person)
+        guest = self._guests.get(person.id)
+        if guest is not None and not guest.task.done():
+            return guest.client
+        link = await self._new_invite()
+        # Again: the events before the invite, a removal among them, are handled by now.
+        self._refuse_revoked(person)
+        client = SessionClient(JoinLink.parse(link), name=person.name[:40], client=self._client)
+        welcomed = asyncio.Event()
+        task = asyncio.create_task(self._drain(client, welcomed, person), name=f"guest:{person.id}")
+        self._guests[person.id] = _Guest(client, task)
+        try:
+            async with asyncio.timeout(JOIN_TIMEOUT_S):
+                await welcomed.wait()
+        except TimeoutError:
+            task.cancel()
+            self._guests.pop(person.id, None)
+            raise ConnectionError("could not join the session") from None
+        return client
+
+    async def _new_invite(self) -> str:
+        host = self._require_host()
+        async with self._invite_lock:
+            self._invite = asyncio.get_running_loop().create_future()
+            self._invite_request_id = secrets.token_urlsafe(16)
+            try:
+                await host.send(
+                    InviteCreate(
+                        role=Role.PARTICIPANT,
+                        ttl_s=300,
+                        client_request_id=self._invite_request_id,
+                    )
+                )
+                async with asyncio.timeout(JOIN_TIMEOUT_S):
+                    return await self._invite
+            finally:
+                self._invite = None
+                self._invite_request_id = None
+
+    async def _drain(self, client: SessionClient, welcomed: asyncio.Event, person: Person) -> None:
+        with suppress(CommandRejected):
+            async for event in client.events():
+                if isinstance(event, SessionWelcome):
+                    self._store.add_guest(self.room, event.participant.id, person.id)
+                    welcomed.set()
+
+    async def _drop_guests(self) -> None:
+        guests, self._guests = self._guests, {}
+        for guest in guests.values():
+            guest.task.cancel()
+        for guest in guests.values():
+            with suppress(asyncio.CancelledError, Exception):
+                await guest.task
+
+
+def approval_notice(
+    approval: ApprovalView, short: str | None, *, outcome: str = "", where: str = ""
+) -> Notice:
+    """What the agent asks to do, and the buttons to answer it while it waits. `where` names the
+    project when the chat does not follow the session, so the message says whose request it is."""
+    call = approval.call
+    here = f" in `{where}`" if where else ""
+    if approval.folder is not None:
+        access = "read and write" if approval.folder.write else "read"
+        title = f"**🔐 The agent{here} asks to {access} a folder outside the project**"
+        subject = approval.folder.folder
+    else:
+        what = RISKY.get(call.name, f"use `{call.name}`")
+        title = f"**🔐 The agent{here} wants to {what}**"
+        subject = call.subject
+    warnings = [f"⚠️ {warning}" for warning in approval.warnings]
+    lines = [title, *([_block(subject)] if subject else []), *warnings]
+    whole = len("\n\n".join(lines)) <= MAX_APPROVAL
+    if not whole:
+        lines = [
+            title,
+            _block(f"{subject[:CUT_SUBJECT]}\n… (cut)"),
+            *(["\n".join(warnings)[:400]] if warnings else []),
+            "**Too long to show here in full.** Allow it in the terminal or the web client.",
+        ]
+    if outcome:
+        lines.append(outcome)
+    choices: tuple[tuple[Choice, ...], ...] = ()
+    if short is not None and not outcome:
+        reject = (Choice("⛔ Reject", f"ap:{short}:{ApprovalDecision.REJECT.value}", Tone.DANGER),)
+        if approval.folder is not None:
+            first = (
+                Choice("📖 Read", f"ap:{short}:{ApprovalDecision.READ.value}", Tone.PRIMARY),
+                Choice("✏️ Read and write", f"ap:{short}:{ApprovalDecision.WRITE.value}", Tone.GOOD),
+            )
+        else:
+            first = (
+                Choice("✅ Allow", f"ap:{short}:{ApprovalDecision.ONCE.value}", Tone.GOOD),
+                Choice("Always", f"ap:{short}:{ApprovalDecision.ALWAYS.value}", Tone.PRIMARY),
+            )
+        choices = (first, reject) if whole else (reject,)
+    return Notice("\n\n".join(lines), choices)
+
+
+def _block(text: str) -> str:
+    fence = "````" if "```" in text else "```"
+    return f"{fence}\n{text}\n{fence}"
+
+
+def _gist(text: str) -> str:
+    """The start of an answer, short enough for an alert and with its code fences closed."""
+    text = text.strip()
+    if len(text) > GIST:
+        text = text[:GIST].rstrip() + "…"
+    if text.count("```") % 2:
+        text += "\n```"
+    return text
